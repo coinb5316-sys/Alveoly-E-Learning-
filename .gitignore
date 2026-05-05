@@ -26,3 +26,13 @@ Thumbs.db
 
 # Render
 .render/
+# Large media files
+*.mp4
+*.mov
+*.avi
+*.mkv
+frontend/public/images/*.mp4
+frontend/public/images/*.jpg
+frontend/src/assets/*.jpg
+frontend/src/assets/*.png
+frontend/public/*.jpg
