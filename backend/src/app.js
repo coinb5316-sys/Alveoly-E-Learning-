@@ -1,0 +1,99 @@
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+
+import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import courseRoutes from "./routes/courseRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import subjectRoutes from "./routes/subjectRoutes.js";
+import manualAccessRoutes from "./routes/manualAccessRoutes.js";
+import planRoutes from "./routes/planRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+import questionRoutes from "./routes/questionRoutes.js";
+import statsRoutes from "./routes/statsRoutes.js";
+import studentRoutes from "./routes/studentRoutes.js";
+import testimonialRoutes from "./routes/testimonialRoutes.js";
+import messageRoutes from "./routes/messageRoutes.js";
+import contentRoutes from "./routes/contentRoutes.js";
+import lessonQuestionRoutes from "./routes/lessonQuestionRoutes.js";
+import contentPaymentRoutes from "./routes/contentPaymentRoutes.js";
+import examRoutes from "./routes/examRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
+import trialRoutes from "./routes/trialRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+
+const app = express();
+
+// ================= SECURITY (HELMET) =================
+app.use(
+  helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, // ✅ FIX Google login
+    crossOriginEmbedderPolicy: false, // 🔥 CRITICAL (prevents COEP error)
+  })
+);
+
+// ================= CORS =================
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://alveolyapexprep.academy",
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.error("❌ CORS blocked:", origin);
+      return callback(new Error("CORS not allowed"));
+    },
+    credentials: true,
+  })
+);
+
+// ================= EXTRA SAFETY (FORCE OVERRIDE) =================
+app.use((req, res, next) => {
+  // 🔥 Ensure nothing overrides this later
+  res.removeHeader("Cross-Origin-Embedder-Policy");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  next();
+});
+
+// ================= MIDDLEWARE =================
+app.use(express.json());
+
+// ================= ROUTES =================
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/courses", courseRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/subjects", subjectRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/plans", planRoutes);
+app.use("/api/manual-access", manualAccessRoutes);
+app.use("/api/questions", questionRoutes);
+app.use("/api/stat", statsRoutes);
+app.use("/api/student", studentRoutes);
+app.use("/api/testimonials", testimonialRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/content", contentRoutes);
+app.use("/api/content-payments", contentPaymentRoutes);
+app.use("/api/exam", examRoutes);
+app.use("/api/trial", trialRoutes);
+app.use("/api/lesson-quiz", lessonQuestionRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/notifications", notificationRoutes);
+
+// ================= HEALTH CHECK =================
+app.get("/", (req, res) => {
+  res.status(200).json({ status: "OK", message: "API is running 🚀" });
+});
+
+export default app;
