@@ -1,9 +1,10 @@
-// frontend/src/api/socket.js - Update with notification join
+// frontend/src/api/socket.js
 import { io } from "socket.io-client";
 
-const SERVER_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+// Use dedicated socket URL if available, fallback to API URL
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_APP_API_BASE_URL || "http://localhost:5000";
 
-const socket = io(SERVER_URL, {
+const socket = io(SOCKET_URL, {
   transports: ["websocket"],
   withCredentials: true,
   reconnection: true,
@@ -11,6 +12,8 @@ const socket = io(SERVER_URL, {
   reconnectionDelay: 1000,
   timeout: 20000,
 });
+
+// Rest of your code remains the same...
 
 socket.on("connect", () => {
   console.log("🟢 Connected:", socket.id);

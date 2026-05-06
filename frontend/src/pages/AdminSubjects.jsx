@@ -19,7 +19,7 @@ import {
 import axios from "../api/axios";
 import { io } from "socket.io-client";
 
-const socket = io("https://www.alveolye-learning.academy");
+const socket = io("https://alveoly-e-learning-of-health-api.onrender.com");
 
 const AdminSubjects = () => {
   const [courses, setCourses] = useState([]);
