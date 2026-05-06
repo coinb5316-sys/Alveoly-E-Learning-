@@ -1,4 +1,4 @@
-// controllers/authController.js - FIXED for production
+// controllers/authController.js - SIMPLIFIED VERSION
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import generateToken from "../utils/generateToken.js";
@@ -6,11 +6,8 @@ import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { createNotification } from "./notificationController.js";
 
-// Determine which Google Client ID to use based on environment
-const isProduction = process.env.NODE_ENV === "production";
-const GOOGLE_CLIENT_ID = isProduction 
-  ? process.env.GOOGLE_CLIENT_ID_PROD 
-  : process.env.GOOGLE_CLIENT_ID_DEV;
+// Use the same client ID for all environments (simpler)
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
@@ -23,7 +20,8 @@ export const googleLogin = async (req, res) => {
       return res.status(400).json({ message: "Google token required" });
     }
 
-    console.log("Google login attempt with client ID:", GOOGLE_CLIENT_ID);
+    console.log("Google login attempt - Client ID used:", GOOGLE_CLIENT_ID);
+    console.log("Request origin:", req.headers.origin);
 
     const ticket = await client.verifyIdToken({
       idToken,
@@ -46,7 +44,6 @@ export const googleLogin = async (req, res) => {
         lastActivityAt: new Date()
       });
       
-      // Send welcome notification
       await createNotification(
         user._id,
         "student",
@@ -57,7 +54,6 @@ export const googleLogin = async (req, res) => {
         { action: "welcome", isNewUser: true }
       );
       
-      // Notify admins
       const adminUsers = await User.find({ role: "admin" });
       for (const admin of adminUsers) {
         await createNotification(
@@ -72,7 +68,6 @@ export const googleLogin = async (req, res) => {
       }
     }
 
-    // Record login
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
     const deviceInfo = req.headers['user-agent'];
     
@@ -91,9 +86,14 @@ export const googleLogin = async (req, res) => {
     res.json({ token, user, requiresCourse });
   } catch (err) {
     console.error("GOOGLE LOGIN ERROR:", err);
-    res.status(401).json({ message: "Google authentication failed: " + err.message });
+    res.status(401).json({ 
+      message: "Google authentication failed: " + err.message,
+      error: err.toString()
+    });
   }
 };
+
+// Rest of your functions remain the same...
 
 
 // ================= EMAIL/PASSWORD REGISTER =================
