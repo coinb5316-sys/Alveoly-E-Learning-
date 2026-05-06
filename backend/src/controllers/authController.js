@@ -1,4 +1,4 @@
-// controllers/authController.js - Updated with notifications
+// controllers/authController.js - FIXED for production
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import generateToken from "../utils/generateToken.js";
@@ -6,24 +6,32 @@ import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { createNotification } from "./notificationController.js";
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+// Determine which Google Client ID to use based on environment
+const isProduction = process.env.NODE_ENV === "production";
+const GOOGLE_CLIENT_ID = isProduction 
+  ? process.env.GOOGLE_CLIENT_ID_PROD 
+  : process.env.GOOGLE_CLIENT_ID_DEV;
+
+const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // ================= GOOGLE LOGIN =================
 export const googleLogin = async (req, res) => {
   try {
     const { idToken } = req.body;
 
-    if (!idToken)
+    if (!idToken) {
       return res.status(400).json({ message: "Google token required" });
+    }
 
-    const payload = await client
-      .verifyIdToken({
-        idToken,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      })
-      .then((ticket) => ticket.getPayload());
+    console.log("Google login attempt with client ID:", GOOGLE_CLIENT_ID);
 
-    const { email, name } = payload;
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name, picture } = payload;
 
     let user = await User.findOne({ email });
     let isNewUser = false;
@@ -33,11 +41,12 @@ export const googleLogin = async (req, res) => {
       user = await User.create({ 
         name, 
         email,
+        avatar: picture,
         lastLoginAt: new Date(),
         lastActivityAt: new Date()
       });
       
-      // Send welcome notification to student
+      // Send welcome notification
       await createNotification(
         user._id,
         "student",
@@ -48,7 +57,7 @@ export const googleLogin = async (req, res) => {
         { action: "welcome", isNewUser: true }
       );
       
-      // Notify admins about new registration
+      // Notify admins
       const adminUsers = await User.find({ role: "admin" });
       for (const admin of adminUsers) {
         await createNotification(
@@ -63,7 +72,7 @@ export const googleLogin = async (req, res) => {
       }
     }
 
-    // Record login with IP and device info
+    // Record login
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
     const deviceInfo = req.headers['user-agent'];
     
@@ -82,9 +91,10 @@ export const googleLogin = async (req, res) => {
     res.json({ token, user, requiresCourse });
   } catch (err) {
     console.error("GOOGLE LOGIN ERROR:", err);
-    res.status(401).json({ message: "Invalid Google token" });
+    res.status(401).json({ message: "Google authentication failed: " + err.message });
   }
 };
+
 
 // ================= EMAIL/PASSWORD REGISTER =================
 export const register = async (req, res) => {
