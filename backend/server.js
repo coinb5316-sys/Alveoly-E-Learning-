@@ -21,8 +21,7 @@ const httpServer = createServer(app);
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
-  "https://alveolyapexprep.academy",
-  "https://www.alveolye-learning.academy",
+  "https://alveolye-learning.academy",
   "https://alveoly-e-learning-of-health-api.onrender.com", 
   CLIENT_URL,
 ].filter(Boolean);
