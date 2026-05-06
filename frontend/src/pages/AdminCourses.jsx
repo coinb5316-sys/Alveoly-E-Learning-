@@ -14,7 +14,7 @@ import {
 } from "react-icons/fa";
 import API from "../api/axios";
 
-const socket = io("http://localhost:5000");
+const socket = io("https://www.alveolye-learning.academy");
 
 const AdminCourses = () => {
   const [courses, setCourses] = useState([]);

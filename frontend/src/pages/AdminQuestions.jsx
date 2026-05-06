@@ -28,7 +28,7 @@ import {
 } from "react-icons/fa";
 import axios from "../api/axios";
 
-const socket = io("http://localhost:5000");
+const socket = io("https://www.alveolye-learning.academy");
 
 const AdminQuestions = () => {
   const [courses, setCourses] = useState([]);
