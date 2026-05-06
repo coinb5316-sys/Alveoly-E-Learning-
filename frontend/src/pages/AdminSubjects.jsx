@@ -1,4 +1,4 @@
-// AdminSubjects.jsx - Fixed JSX syntax errors
+// AdminSubjects.jsx - Fully updated with socket configuration
 import { useState, useEffect } from "react";
 import { 
   FaPlus, 
@@ -17,11 +17,10 @@ import {
   FaExclamationCircle
 } from "react-icons/fa";
 import axios from "../api/axios";
-import { io } from "socket.io-client";
-
-const socket = io("https://alveoly-e-learning-of-health-api.onrender.com");
+import initializeSocket, { getSocket } from "../config/socket";
 
 const AdminSubjects = () => {
+  const [socket, setSocket] = useState(null);
   const [courses, setCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [editing, setEditing] = useState(null);
@@ -44,26 +43,33 @@ const AdminSubjects = () => {
 
   // ================= FETCH =================
   useEffect(() => {
+    // Initialize socket connection
+    const newSocket = initializeSocket();
+    setSocket(newSocket);
+    
+    // Fetch initial data
     fetchData();
 
-    socket.on("subject:created", (data) => {
+    // Socket event listeners
+    newSocket.on("subject:created", (data) => {
       setSubjects((prev) => [data, ...prev]);
     });
 
-    socket.on("subject:updated", (updated) => {
+    newSocket.on("subject:updated", (updated) => {
       setSubjects((prev) =>
         prev.map((s) => (s._id === updated._id ? updated : s))
       );
     });
 
-    socket.on("subject:deleted", (_id) => {
+    newSocket.on("subject:deleted", (_id) => {
       setSubjects((prev) => prev.filter((s) => s._id !== _id));
     });
 
+    // Cleanup
     return () => {
-      socket.off("subject:created");
-      socket.off("subject:updated");
-      socket.off("subject:deleted");
+      newSocket.off("subject:created");
+      newSocket.off("subject:updated");
+      newSocket.off("subject:deleted");
     };
   }, []);
 
@@ -80,7 +86,7 @@ const AdminSubjects = () => {
       setUsers(usersRes.data);
       setManualAccessList(manualRes.data);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching data:", err);
     }
   };
 
@@ -107,7 +113,7 @@ const AdminSubjects = () => {
       setEditing(null);
       await fetchData();
     } catch (err) {
-      console.error(err);
+      console.error("Error adding subject:", err);
       alert(err.response?.data?.message || "Failed to add subject");
     } finally {
       setLoading(false);
@@ -134,7 +140,7 @@ const AdminSubjects = () => {
       setDuration(30);
       await fetchData();
     } catch (err) {
-      console.error(err);
+      console.error("Error unlocking subject:", err);
       alert(err.response?.data?.message || "Failed to unlock");
     } finally {
       setManualLoading(false);
@@ -148,7 +154,7 @@ const AdminSubjects = () => {
       await axios.delete(`/subjects/${_id}`);
       await fetchData();
     } catch (err) {
-      console.error(err);
+      console.error("Error deleting subject:", err);
       alert(err.response?.data?.message || "Failed to delete subject");
     }
   };
@@ -159,7 +165,7 @@ const AdminSubjects = () => {
       await axios.delete(`/manual-access/${id}`);
       await fetchData();
     } catch (err) {
-      console.error(err);
+      console.error("Error deleting access:", err);
     }
   };
 
@@ -168,7 +174,7 @@ const AdminSubjects = () => {
       await axios.patch(`/manual-access/${id}/toggle`);
       await fetchData();
     } catch (err) {
-      console.error(err);
+      console.error("Error toggling access:", err);
     }
   };
 
@@ -181,7 +187,7 @@ const AdminSubjects = () => {
       });
       await fetchData();
     } catch (err) {
-      console.error(err);
+      console.error("Error updating access:", err);
     }
   };
 
@@ -208,7 +214,7 @@ const AdminSubjects = () => {
       setForm({ name: "", courseId: "", isPaid: false, price: "" });
       await fetchData();
     } catch (err) {
-      console.error(err);
+      console.error("Error updating subject:", err);
       alert(err.response?.data?.message || "Failed to update subject");
     } finally {
       setLoading(false);

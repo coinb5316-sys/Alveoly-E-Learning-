@@ -1,47 +1,57 @@
-// api/axios.js
 import axios from "axios";
 
-// ✅ FIX: Use VITE_APP_API_BASE_URL (not VITE_API_URL)
-const API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+// Use production server URL - NO localhost
+const API_BASE_URL = "https://alveoly-e-learning-of-health-api.onrender.com";
+
 const API = axios.create({
-  baseURL: `${API_BASE_URL}/api`,  // This will be http://localhost:5000/api
+  baseURL: `${API_BASE_URL}/api`,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
+    "Accept": "application/json",
   },
+  timeout: 30000,
 });
 
-// ================= REQUEST INTERCEPTOR =================
+// Request interceptor
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log(`📤 API Request: ${config.method.toUpperCase()} ${config.url}`);
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    console.error("Request Error:", error);
+    return Promise.reject(error);
+  }
 );
 
-// ================= RESPONSE INTERCEPTOR =================
+// Response interceptor
 API.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    const message = err.response?.data?.message || "";
-
-    if (message.includes("logged out because your account was used on another device")) {
-      alert("⚠️ Your account was logged in on another device.");
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
-    } else if (err.response?.status === 401) {
+  (response) => {
+    console.log(`📥 API Response: ${response.status} from ${response.config.url}`);
+    return response;
+  },
+  (error) => {
+    console.error("Response Error:", error.response?.status, error.message);
+    
+    if (error.code === "ERR_NETWORK") {
+      console.error("Network error - cannot connect to server");
+      alert("⚠️ Cannot connect to server. Please check your internet connection.");
+    }
+    
+    if (error.response?.status === 401) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.location.href = "/login";
     }
-
-    return Promise.reject(err);
+    
+    return Promise.reject(error);
   }
 );
 
 export default API;
+export { API_BASE_URL };

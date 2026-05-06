@@ -1,6 +1,5 @@
-// AdminCourses.jsx - Professional styling with dark mode support
+// AdminCourses.jsx - Fully updated with socket configuration
 import { useState, useEffect } from "react";
-import { io } from "socket.io-client";
 import { 
   FaPlus, 
   FaEdit, 
@@ -13,10 +12,10 @@ import {
   FaSpinner
 } from "react-icons/fa";
 import API from "../api/axios";
-
-const socket = io("https://alveoly-e-learning-of-health-api.onrender.com");
+import initializeSocket, { getSocket } from "../config/socket";
 
 const AdminCourses = () => {
+  const [socket, setSocket] = useState(null);
   const [courses, setCourses] = useState([]);
   const [form, setForm] = useState({ name: "" });
   const [editing, setEditing] = useState(null);
@@ -26,27 +25,33 @@ const AdminCourses = () => {
 
   // ================= FETCH =================
   useEffect(() => {
+    // Initialize socket connection
+    const newSocket = initializeSocket();
+    setSocket(newSocket);
+    
+    // Fetch courses
     fetchCourses();
 
     // Socket.IO listeners
-    socket.on("course:created", (course) => {
+    newSocket.on("course:created", (course) => {
       setCourses((prev) => [course, ...prev]);
     });
 
-    socket.on("course:updated", (updatedCourse) => {
+    newSocket.on("course:updated", (updatedCourse) => {
       setCourses((prev) =>
         prev.map((c) => (c._id === updatedCourse._id ? updatedCourse : c))
       );
     });
 
-    socket.on("course:deleted", (_id) => {
+    newSocket.on("course:deleted", (_id) => {
       setCourses((prev) => prev.filter((c) => c._id !== _id));
     });
 
+    // Cleanup
     return () => {
-      socket.off("course:created");
-      socket.off("course:updated");
-      socket.off("course:deleted");
+      newSocket.off("course:created");
+      newSocket.off("course:updated");
+      newSocket.off("course:deleted");
     };
   }, []);
 
@@ -82,7 +87,7 @@ const AdminCourses = () => {
       setForm({ name: "" });
       await fetchCourses();
     } catch (err) {
-      console.error(err);
+      console.error("Error adding course:", err);
       alert(err.response?.data?.message || "Failed to add course");
     } finally {
       setLoading(false);
@@ -97,7 +102,7 @@ const AdminCourses = () => {
       await API.delete(`/courses/${_id}`);
       setCourses((prev) => prev.filter((c) => c._id !== _id));
     } catch (err) {
-      console.error(err);
+      console.error("Error deleting course:", err);
       alert(err.response?.data?.message || "Failed to delete course");
     }
   };
@@ -119,7 +124,7 @@ const AdminCourses = () => {
       setForm({ name: "" });
       await fetchCourses();
     } catch (err) {
-      console.error(err);
+      console.error("Error updating course:", err);
       alert(err.response?.data?.message || "Failed to update course");
     } finally {
       setLoading(false);
@@ -289,7 +294,7 @@ const AdminCourses = () => {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Edit Modal */}
       {editing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md relative shadow-2xl animate-scaleIn">

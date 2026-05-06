@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import API from "../api/axios";
-import socket from "../api/socket.js";
+import socket from "../config/socket.js";
 
 const AuthContext = createContext();
 

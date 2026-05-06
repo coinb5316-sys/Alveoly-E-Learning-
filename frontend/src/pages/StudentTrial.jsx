@@ -1,7 +1,7 @@
 // StudentTrial.jsx - Fixed results view with proper data handling
 import { useState, useEffect } from "react";
 import axios from "../api/axios";
-import socket from "../api/socket";
+import socket from "../config/socket";
 import { useAuth } from "../context/AuthContext";
 import { useParams, useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";

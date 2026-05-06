@@ -1,6 +1,5 @@
 // AdminQuestions.jsx - Professional styling with dark mode support
 import { useState, useEffect } from "react";
-import { io } from "socket.io-client";
 import {
   FaEdit,
   FaTrash,
@@ -27,10 +26,10 @@ import {
   FaChevronRight
 } from "react-icons/fa";
 import axios from "../api/axios";
-
-const socket = io("https://alveoly-e-learning-of-health-api.onrender.com");
+import initializeSocket, { getSocket } from "../config/socket";
 
 const AdminQuestions = () => {
+  const [socket, setSocket] = useState(null);
   const [courses, setCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [questions, setQuestions] = useState([]);
@@ -64,22 +63,29 @@ const AdminQuestions = () => {
   const examTimes = Array.from({ length: 14 }, (_, i) => (i + 1) * 15);
 
   useEffect(() => {
+    // Initialize socket connection
+    const newSocket = initializeSocket();
+    setSocket(newSocket);
+    
+    // Fetch initial data
     fetchCourses();
     fetchSubjects();
     fetchQuestions();
 
-    socket.on("question:created", (q) => setQuestions((prev) => [q, ...prev]));
-    socket.on("question:updated", (q) =>
+    // Socket event listeners
+    newSocket.on("question:created", (q) => setQuestions((prev) => [q, ...prev]));
+    newSocket.on("question:updated", (q) =>
       setQuestions((prev) => prev.map((item) => (item._id === q._id ? q : item)))
     );
-    socket.on("question:deleted", (_id) =>
+    newSocket.on("question:deleted", (_id) =>
       setQuestions((prev) => prev.filter((q) => q._id !== _id))
     );
 
+    // Cleanup
     return () => {
-      socket.off("question:created");
-      socket.off("question:updated");
-      socket.off("question:deleted");
+      newSocket.off("question:created");
+      newSocket.off("question:updated");
+      newSocket.off("question:deleted");
     };
   }, []);
 
@@ -88,7 +94,7 @@ const AdminQuestions = () => {
       const res = await axios.get("/courses");
       setCourses(res.data);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching courses:", err);
     }
   };
 
@@ -99,7 +105,7 @@ const AdminQuestions = () => {
       const res = await axios.get(url);
       setSubjects(res.data);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching subjects:", err);
     }
   };
 
@@ -108,7 +114,7 @@ const AdminQuestions = () => {
       const res = await axios.get("/questions");
       setQuestions(res.data);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching questions:", err);
     }
   };
 
@@ -240,7 +246,7 @@ const AdminQuestions = () => {
       });
       fetchQuestions();
     } catch (err) {
-      console.error(err);
+      console.error("Error submitting questions:", err);
       alert("Failed to submit questions");
     } finally {
       setLoading(false);
@@ -279,7 +285,7 @@ const AdminQuestions = () => {
       await axios.delete(`/questions/${_id}`);
       fetchQuestions();
     } catch (err) {
-      console.error(err);
+      console.error("Error deleting question:", err);
     }
   };
 
