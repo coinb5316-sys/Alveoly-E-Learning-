@@ -39,7 +39,7 @@ import StudentTrial from "./pages/StudentTrial";
 import StudentProgress from "./pages/StudentProgress";
 import StudentTestimonials from "./pages/StudentTestimonials";
 import AdminTestimonials from "./pages/AdminTestimonials";
-import AdminInbox from "./pages/AdminInBox";
+import AdminInbox from "./pages/AdminInbox";
 import ContentPaymentSuccess from "./pages/ContentPaymentSucess";
 import StudentContentPayments from "./pages/StudentContentPayments";
 import AdminContentPayments from "./pages/AdminContentPayments";
