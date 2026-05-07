@@ -4,8 +4,8 @@ import { io } from "socket.io-client";
 const SOCKET_URL = "https://alveoly-e-learning-of-health-api.onrender.com";
 
 let socket = null;
-let reconnectAttempts = 0;
 
+// Create and initialize the socket instance
 export const initializeSocket = () => {
   if (socket && socket.connected) {
     console.log("Socket already connected");
@@ -27,35 +27,19 @@ export const initializeSocket = () => {
 
   socket.on("connect", () => {
     console.log("✅ Socket.IO connected! ID:", socket.id);
-    reconnectAttempts = 0;
   });
 
   socket.on("connect_error", (error) => {
-    reconnectAttempts++;
-    console.error(`❌ Socket.IO error (attempt ${reconnectAttempts}):`, error.message);
-    
-    // Only log, don't alert
-    if (reconnectAttempts === 5) {
-      console.warn("⚠️ Still having connection issues. Check your network.");
-    }
+    console.error("❌ Socket.IO error:", error.message);
   });
 
   socket.on("disconnect", (reason) => {
     console.log("Socket.IO disconnected:", reason);
   });
 
-  socket.on("reconnect", (attemptNumber) => {
-    console.log("Socket.IO reconnected after", attemptNumber, "attempts");
-  });
-
   return socket;
 };
 
-export const getSocket = () => {
-  if (!socket) {
-    return initializeSocket();
-  }
-  return socket;
-};
-
-export default initializeSocket;
+// ✅ IMPORTANT: Create and export a socket instance that has connect() method
+const socketInstance = initializeSocket();
+export default socketInstance;

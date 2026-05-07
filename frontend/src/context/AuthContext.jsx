@@ -1,26 +1,33 @@
+// src/context/AuthContext.jsx - COMPLETELY FIXED
 import { createContext, useContext, useState, useEffect } from "react";
 import API from "../api/axios";
-import socket from "../config/socket.js";
+import { initializeSocket } from "../config/socket.js";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [socket, setSocket] = useState(null);
 
   // ================= SOCKET =================
   const connectSocket = (userData) => {
     if (!userData?._id) return;
-
-    if (!socket.connected) {
-      socket.connect();
+    
+    // Initialize socket properly
+    const socketInstance = initializeSocket();
+    setSocket(socketInstance);
+    
+    // Make sure socket is connected
+    if (socketInstance && !socketInstance.connected) {
+      socketInstance.connect();
     }
 
-    socket.emit("join:user", userData._id);
+    socketInstance.emit("join:user", userData._id);
   };
 
   const disconnectSocket = () => {
-    if (socket.connected) {
+    if (socket && socket.connected) {
       socket.disconnect();
     }
   };
@@ -46,6 +53,7 @@ export const AuthProvider = ({ children }) => {
 
       if (!token) {
         setUser(null);
+        setLoading(false);
         return;
       }
 
@@ -54,7 +62,7 @@ export const AuthProvider = ({ children }) => {
       connectSocket(res.data);
     } catch (err) {
       console.error("Fetch user error:", err);
-      clearAuth(); // ✅ clean reset on failure
+      clearAuth();
     } finally {
       setLoading(false);
     }
@@ -62,6 +70,10 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     fetchUser();
+    
+    return () => {
+      disconnectSocket();
+    };
   }, []);
 
   // ================= LOGIN =================
@@ -94,18 +106,18 @@ export const AuthProvider = ({ children }) => {
 
   // ================= GOOGLE LOGIN =================
   const googleLogin = async (idToken) => {
-  try {
-    const res = await API.post("/auth/google-login", { idToken });
-    const { token, user: userData, requiresCourse } = res.data;
+    try {
+      const res = await API.post("/auth/google-login", { idToken });
+      const { token, user: userData, requiresCourse } = res.data;
 
-    setAuth(token, userData);
+      setAuth(token, userData);
 
-    return { user: userData, requiresCourse }; // ✅ FIX
-  } catch (err) {
-    console.error("Google login error:", err);
-    throw err;
-  }
-};
+      return { user: userData, requiresCourse };
+    } catch (err) {
+      console.error("Google login error:", err);
+      throw err;
+    }
+  };
 
   // ================= LOGOUT =================
   const logout = () => {
@@ -121,7 +133,7 @@ export const AuthProvider = ({ children }) => {
         register,
         googleLogin,
         logout,
-        setUser, // optional (keep if needed elsewhere)
+        setUser,
       }}
     >
       {children}
