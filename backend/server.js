@@ -18,11 +18,13 @@ const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 const httpServer = createServer(app);
 
 // ================= SOCKET.IO =================
+// server.js - Update the allowedOrigins
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "https://alveolye-learning.academy",
-  "https://alveoly-e-learning-of-health-api.onrender.com", 
+  "https://www.alveolye-learning.academy",  // ← ADD THIS
+  "https://alveoly-e-learning-of-health-api.onrender.com",
   CLIENT_URL,
 ].filter(Boolean);
 
