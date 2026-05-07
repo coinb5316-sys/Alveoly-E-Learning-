@@ -47,21 +47,16 @@ const allowedOrigins = [
 
 console.log("✅ CORS Allowed Origins:", allowedOrigins);
 
+// CORS middleware
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl)
-      if (!origin) {
-        return callback(null, true);
-      }
-      
+      if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      
       console.warn(`❌ CORS blocked origin: ${origin}`);
-      // For now, allow it anyway to fix the issue
-      return callback(null, true);
+      return callback(null, true); // Allow anyway for now
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -75,8 +70,9 @@ app.use(
   })
 );
 
-// Handle preflight requests
-app.options("*", cors());
+// ================= REMOVE THIS - It's causing the error! =================
+// DO NOT use app.options('*', cors()) - this causes the path-to-regexp error
+// Instead, let the cors middleware handle OPTIONS automatically
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
@@ -108,6 +104,12 @@ app.use("/api/notifications", notificationRoutes);
 // ================= HEALTH CHECK =================
 app.get("/", (req, res) => {
   res.status(200).json({ status: "OK", message: "API is running 🚀" });
+});
+
+// ================= 404 Handler - Use proper syntax =================
+// This is the CORRECT way to handle 404s - NOT using '*'
+app.use((req, res) => {
+  res.status(404).json({ message: `Route ${req.method} ${req.url} not found` });
 });
 
 // ================= ERROR HANDLER =================
