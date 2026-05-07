@@ -1,8 +1,10 @@
+// src/config/socket.js
 import { io } from "socket.io-client";
 
 const SOCKET_URL = "https://alveoly-e-learning-of-health-api.onrender.com";
 
 let socket = null;
+let reconnectAttempts = 0;
 
 export const initializeSocket = () => {
   if (socket && socket.connected) {
@@ -14,29 +16,32 @@ export const initializeSocket = () => {
   
   socket = io(SOCKET_URL, {
     transports: ["polling", "websocket"],
-    withCredentials: true,
+    withCredentials: false,
     reconnection: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    timeout: 20000,
+    timeout: 30000,
     autoConnect: true,
   });
 
   socket.on("connect", () => {
     console.log("✅ Socket.IO connected! ID:", socket.id);
-    console.log("Transport:", socket.io.engine.transport.name);
+    reconnectAttempts = 0;
   });
 
   socket.on("connect_error", (error) => {
-    console.error("❌ Socket.IO connection error:", error.message);
+    reconnectAttempts++;
+    console.error(`❌ Socket.IO error (attempt ${reconnectAttempts}):`, error.message);
+    
+    // Only log, don't alert
+    if (reconnectAttempts === 5) {
+      console.warn("⚠️ Still having connection issues. Check your network.");
+    }
   });
 
   socket.on("disconnect", (reason) => {
     console.log("Socket.IO disconnected:", reason);
-    if (reason === "io server disconnect") {
-      socket.connect();
-    }
   });
 
   socket.on("reconnect", (attemptNumber) => {
@@ -51,14 +56,6 @@ export const getSocket = () => {
     return initializeSocket();
   }
   return socket;
-};
-
-export const disconnectSocket = () => {
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-    console.log("Socket disconnected manually");
-  }
 };
 
 export default initializeSocket;

@@ -1,26 +1,43 @@
+// api/axios.js
 import axios from "axios";
 
-// Use production server URL - NO localhost
 const API_BASE_URL = "https://alveoly-e-learning-of-health-api.onrender.com";
+
+console.log("🚀 API Base URL:", API_BASE_URL);
 
 const API = axios.create({
   baseURL: `${API_BASE_URL}/api`,
-  withCredentials: true,
+  withCredentials: false,
   headers: {
     "Content-Type": "application/json",
     "Accept": "application/json",
   },
-  timeout: 30000,
+  timeout: 60000,
 });
 
-// Request interceptor
+// Don't show network errors too frequently
+let lastNetworkErrorTime = 0;
+let networkErrorCount = 0;
+
+const showNetworkError = () => {
+  const now = Date.now();
+  // Only show error every 10 seconds max, and only 3 times
+  if (now - lastNetworkErrorTime > 10000 && networkErrorCount < 3) {
+    lastNetworkErrorTime = now;
+    networkErrorCount++;
+    console.warn("⚠️ Network connection issue detected");
+    // You can show a non-intrusive toast instead of alert
+    // For now, just log to console
+  }
+};
+
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log(`📤 API Request: ${config.method.toUpperCase()} ${config.url}`);
+    console.log(`📤 ${config.method.toUpperCase()} ${config.url}`);
     return config;
   },
   (error) => {
@@ -29,24 +46,23 @@ API.interceptors.request.use(
   }
 );
 
-// Response interceptor
 API.interceptors.response.use(
   (response) => {
-    console.log(`📥 API Response: ${response.status} from ${response.config.url}`);
+    console.log(`📥 ${response.status} ${response.config.url}`);
+    networkErrorCount = 0; // Reset on successful response
     return response;
   },
   (error) => {
-    console.error("Response Error:", error.response?.status, error.message);
-    
     if (error.code === "ERR_NETWORK") {
-      console.error("Network error - cannot connect to server");
-      alert("⚠️ Cannot connect to server. Please check your internet connection.");
-    }
-    
-    if (error.response?.status === 401) {
+      console.error("❌ Network Error - Cannot reach server");
+      console.error("   URL:", error.config?.url);
+      showNetworkError();
+    } else if (error.response?.status === 401) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.location.href = "/login";
+    } else if (error.response) {
+      console.error(`❌ ${error.response.status} Error:`, error.response.data?.message);
     }
     
     return Promise.reject(error);
