@@ -44,6 +44,7 @@ import ContentPaymentSuccess from "./pages/ContentPaymentSucess";
 import StudentContentPayments from "./pages/StudentContentPayments";
 import AdminContentPayments from "./pages/AdminContentPayments";
 import PlanPaymentSuccess from "./pages/PlanPaymentSuccess";
+import SubjectPaymentSuccess from "./pages/SubjectPaymentSuccess";
 
 
 function App() {
@@ -93,6 +94,7 @@ function App() {
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/content-payment-success" element={<ContentPaymentSuccess />} />
           <Route path="/plan-payment-success" element={<PlanPaymentSuccess />} />
+          <Route path="/subject-payment-success" element={<SubjectPaymentSuccess />} />
           
           {/* Protected Routes - Now inside Routes */}
           <Route
