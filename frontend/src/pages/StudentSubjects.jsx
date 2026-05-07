@@ -1,8 +1,8 @@
-// StudentSubjects.jsx - Fixed badge positioning and text wrapping
+// StudentSubjects.jsx - Fully updated with proper socket initialization
 import { useEffect, useState } from "react"; 
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
-import socket from "../config/socket";
+import { initializeSocket } from "../config/socket";
 import { useAuth } from "../context/AuthContext";
 import {
   Lock,
@@ -34,6 +34,7 @@ const StudentSubjects = () => {
   const [courseId, setCourseId] = useState(null);
   const [courseName, setCourseName] = useState("");
   const [hoveredSubject, setHoveredSubject] = useState(null);
+  const [socket, setSocket] = useState(null);
 
   const [payments, setPayments] = useState([]);
   const [now, setNow] = useState(new Date());
@@ -54,7 +55,7 @@ const StudentSubjects = () => {
         const res = await axios.get("/manual-access/mine");
         setManualAccess(res.data || []);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching manual access:", err);
       }
     };
     fetchManualAccess();
@@ -71,7 +72,8 @@ const StudentSubjects = () => {
           const res = await axios.get(`/courses/${courseFromUrl}`);
           setCourseName(res.data.name);
         } catch (err) {
-          console.error(err);
+          console.error("Error fetching course name:", err);
+          setCourseName("Course");
         }
       };
       fetchCourseName();
@@ -79,7 +81,7 @@ const StudentSubjects = () => {
       if (typeof user.courseId === "string") {
         setCourseId(user.courseId);
         setCourseName(user.courseIdName || "My Course");
-      } else if (user.courseId._id) {
+      } else if (user.courseId?._id) {
         setCourseId(user.courseId._id);
         setCourseName(user.courseId.name);
       }
@@ -93,7 +95,7 @@ const StudentSubjects = () => {
         const res = await axios.get("/payments/mine");
         setPayments(res.data || []);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching payments:", err);
       }
     };
     fetchPayments();
@@ -135,12 +137,16 @@ const StudentSubjects = () => {
     return !!subjectPayment || !!manual;
   };
 
-  // ================= FETCH SUBJECTS =================
+  // ================= FETCH SUBJECTS WITH SOCKET =================
   useEffect(() => {
     if (!courseId) {
       setFetching(false);
       return;
     }
+
+    // Initialize socket
+    const newSocket = initializeSocket();
+    setSocket(newSocket);
 
     const fetchSubjects = async () => {
       try {
@@ -148,7 +154,7 @@ const StudentSubjects = () => {
         const res = await axios.get(`/subjects?course=${courseId}`);
         setSubjects(res.data || []);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching subjects:", err);
         setSubjects([]);
       } finally {
         setFetching(false);
@@ -157,36 +163,42 @@ const StudentSubjects = () => {
 
     fetchSubjects();
 
-    socket.on("subject:created", (subj) => {
+    // Socket event listeners
+    newSocket.on("subject:created", (subj) => {
       if (subj.courseId?.toString() === courseId) {
         setSubjects((prev) => [subj, ...prev]);
       }
     });
 
-    socket.on("subject:updated", (subj) => {
+    newSocket.on("subject:updated", (subj) => {
       setSubjects((prev) =>
         prev.map((s) => (s._id === subj._id ? subj : s))
       );
     });
 
-    socket.on("subject:deleted", (_id) => {
+    newSocket.on("subject:deleted", (_id) => {
       setSubjects((prev) => prev.filter((s) => s._id !== _id));
     });
 
-    socket.on("manualAccess:updated", () => {
+    newSocket.on("manualAccess:updated", () => {
+      // Refresh manual access
       axios.get("/manual-access/mine").then((res) => {
         setManualAccess(res.data || []);
       });
+      // Refresh subjects to update unlock status
       axios.get(`/subjects?course=${courseId}`).then((res) => {
         setSubjects(res.data || []);
       });
     });
 
+    // Cleanup
     return () => {
-      socket.off("subject:created");
-      socket.off("subject:updated");
-      socket.off("subject:deleted");
-      socket.off("manualAccess:updated");
+      if (newSocket) {
+        newSocket.off("subject:created");
+        newSocket.off("subject:updated");
+        newSocket.off("subject:deleted");
+        newSocket.off("manualAccess:updated");
+      }
     };
   }, [courseId]);
 
@@ -201,8 +213,8 @@ const StudentSubjects = () => {
         window.location.href = res.data.authorizationUrl;
       }
     } catch (err) {
-      console.error(err);
-      alert("Payment failed");
+      console.error("Payment error:", err);
+      alert(err.response?.data?.message || "Payment failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -215,6 +227,7 @@ const StudentSubjects = () => {
 
   // Helper function to truncate text
   const truncateText = (text, maxLength = 50) => {
+    if (!text) return "";
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
   };
@@ -331,6 +344,12 @@ const StudentSubjects = () => {
             <p className="text-gray-500 dark:text-gray-400 max-w-md">
               Subjects for this course will appear here once they're added.
             </p>
+            <button
+              onClick={() => navigate("/student/courses")}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Back to Courses
+            </button>
           </div>
         </div>
       )}
@@ -348,7 +367,7 @@ const StudentSubjects = () => {
                 onMouseLeave={() => setHoveredSubject(null)}
                 className={`group relative rounded-xl border transition-all duration-300 overflow-hidden flex flex-col ${
                   unlocked
-                    ? "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:shadow-xl hover:-translate-y-1"
+                    ? "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:shadow-xl hover:-translate-y-1 cursor-pointer"
                     : "border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30"
                 }`}
               >
@@ -416,7 +435,7 @@ const StudentSubjects = () => {
                         <button
                           onClick={() => handleUnlock(subject)}
                           disabled={loading}
-                          className="w-full py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 text-sm"
+                          className="w-full py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 text-sm disabled:opacity-50"
                         >
                           {loading ? (
                             <Loader2 className="h-4 w-4 animate-spin" />

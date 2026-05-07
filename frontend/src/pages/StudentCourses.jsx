@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../api/axios";
-import { io } from "socket.io-client";
+import { initializeSocket } from "../config/socket"; // ✅ FIXED import
 import {
   BookOpen,
   ChevronRight,
@@ -22,35 +22,38 @@ import {
   Zap
 } from "lucide-react";
 
-const socket = io("http://localhost:5000");
-
 const StudentCourses = () => {
   const navigate = useNavigate();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hoveredCourse, setHoveredCourse] = useState(null);
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
+    // ✅ Initialize socket properly
+    const newSocket = initializeSocket();
+    setSocket(newSocket);
+    
     fetchCourses();
 
-    socket.on("course:created", (course) => {
+    newSocket.on("course:created", (course) => {
       setCourses((prev) => [course, ...prev]);
     });
 
-    socket.on("course:updated", (updated) => {
+    newSocket.on("course:updated", (updated) => {
       setCourses((prev) =>
         prev.map((c) => (c._id === updated._id ? updated : c))
       );
     });
 
-    socket.on("course:deleted", (_id) => {
+    newSocket.on("course:deleted", (_id) => {
       setCourses((prev) => prev.filter((c) => c._id !== _id));
     });
 
     return () => {
-      socket.off("course:created");
-      socket.off("course:updated");
-      socket.off("course:deleted");
+      newSocket.off("course:created");
+      newSocket.off("course:updated");
+      newSocket.off("course:deleted");
     };
   }, []);
 
@@ -68,7 +71,6 @@ const StudentCourses = () => {
 
   // Mock stats - replace with actual data from API
   const getCourseStats = (courseId) => {
-    // This would come from your API
     return {
       subjects: Math.floor(Math.random() * 20) + 5,
       students: Math.floor(Math.random() * 500) + 50,
