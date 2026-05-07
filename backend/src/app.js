@@ -47,16 +47,21 @@ const allowedOrigins = [
 
 console.log("✅ CORS Allowed Origins:", allowedOrigins);
 
-// CORS middleware
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin) {
+        return callback(null, true);
+      }
+      
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
+      
       console.warn(`❌ CORS blocked origin: ${origin}`);
-      return callback(null, true); // Allow anyway for now
+      // For now, allow it anyway to fix the issue
+      return callback(null, true);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -70,9 +75,8 @@ app.use(
   })
 );
 
-// ================= REMOVE THIS - It's causing the error! =================
-// DO NOT use app.options('*', cors()) - this causes the path-to-regexp error
-// Instead, let the cors middleware handle OPTIONS automatically
+// ================= ❌ REMOVE THIS LINE =================
+// app.options("*", cors());  // DELETE THIS - IT'S CAUSING THE ERROR!
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
