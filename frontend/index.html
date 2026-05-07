@@ -38,7 +38,7 @@
       name="twitter:description"
       content="World-class health and sciences education with flexible online learning, expert-led courses, and career-focused programs."
     />
-    <meta name="twitter:image" content="https://alveolyelearning.academy/logo.png" />
+    <meta name="twitter:image" content="https://alveolye-learning.academy/logo.png" />
 
     <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json">
@@ -46,8 +46,8 @@
         "@context": "https://schema.org",
         "@type": "EducationalOrganization",
         "name": "Alveoly E-Learning Academy of Health and Sciences",
-        "url": "https://alveolyelearning.academy",
-        "logo": "https://alveolyelearning.academy/logo.png",
+        "url": "https://alveolye-learning.academy",
+        "logo": "https://alveolye-learning.academy/logo.png",
         "description": "Premier online academy for health and sciences education",
         "sameAs": [
           "https://www.facebook.com/alveolyelearning",
@@ -64,6 +64,54 @@
     <!-- Preload critical assets -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- FORCE OVERRIDE - Fix all localhost connections -->
+    <script>
+      // Force all WebSocket connections to use production server
+      (function() {
+        const PROD_URL = 'https://alveoly-e-learning-of-health-api.onrender.com';
+        const PROD_WS_URL = 'wss://alveoly-e-learning-of-health-api.onrender.com';
+        
+        console.log('🔧 Force fix: Redirecting all connections to production');
+        
+        // Override WebSocket
+        const OriginalWebSocket = window.WebSocket;
+        window.WebSocket = function(url, protocols) {
+          if (url && (url.includes('localhost:5000') || url.includes('ws://localhost'))) {
+            url = url.replace('ws://localhost:5000', PROD_WS_URL);
+            url = url.replace('http://localhost:5000', PROD_URL);
+            console.log('✅ Fixed WebSocket URL:', url);
+          }
+          return new OriginalWebSocket(url, protocols);
+        };
+        
+        // Override fetch
+        const OriginalFetch = window.fetch;
+        window.fetch = function(url, options) {
+          if (typeof url === 'string' && url.includes('localhost:5000')) {
+            url = url.replace('http://localhost:5000', PROD_URL);
+            console.log('✅ Fixed fetch URL:', url);
+          }
+          return OriginalFetch(url, options);
+        };
+        
+        // Override XMLHttpRequest
+        const OriginalXHROpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+          if (typeof url === 'string' && url.includes('localhost:5000')) {
+            url = url.replace('http://localhost:5000', PROD_URL);
+            console.log('✅ Fixed XHR URL:', url);
+          }
+          return OriginalXHROpen.call(this, method, url, async, user, password);
+        };
+        
+        // Set global variables
+        window.__API_URL__ = PROD_URL;
+        window.__SOCKET_URL__ = PROD_URL;
+        
+        console.log('✅ Force fix applied successfully');
+      })();
+    </script>
   </head>
 
   <body>
