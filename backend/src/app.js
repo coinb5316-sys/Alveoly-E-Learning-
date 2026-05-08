@@ -38,15 +38,16 @@ app.use(
 );
 
 // ================= CORS - FIXED =================
+// Find this section in your app.js
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "https://alveolye-learning.academy",
   "https://www.alveolye-learning.academy",
   "https://alveoly-platform.onrender.com",
+  "https://alveoly-platform-1.onrender.com",
   process.env.CLIENT_URL,
 ].filter(Boolean);
-
 console.log("✅ CORS Allowed Origins:", allowedOrigins);
 
 app.use(

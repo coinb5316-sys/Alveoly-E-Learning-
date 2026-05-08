@@ -23,8 +23,9 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "https://alveolye-learning.academy",
-  "https://www.alveolye-learning.academy",  // ← ADD THIS
+  "https://www.alveolye-learning.academy",
   "https://alveoly-platform.onrender.com",
+  "https://alveoly-platform-1.onrender.com",
   CLIENT_URL,
 ].filter(Boolean);
 
