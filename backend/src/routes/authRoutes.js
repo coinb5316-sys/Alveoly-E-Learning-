@@ -7,13 +7,16 @@ import {
   resetPassword,
   forgotPassword,
   googleLogin,
+  registerLecturer,
 } from "../controllers/authController.js";
-import { protect } from "../middleware/authMiddleware.js";
+import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // EMAIL AUTH
 router.post("/register", register);
+// In authRoutes.js
+router.post("/register-lecturer", protect, adminOnly, registerLecturer);
 router.post("/login", login);
 router.put("/me/course", protect, assignCourse);
 router.get("/me", protect, getMyInfo);

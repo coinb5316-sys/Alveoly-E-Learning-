@@ -161,6 +161,64 @@ export const register = async (req, res) => {
   }
 };
 
+
+// Add to authController.js
+export const registerLecturer = async (req, res) => {
+  try {
+    const { name, email, password, department, title, specialization } = req.body;
+    
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email, and password are required" });
+    }
+    
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ message: "User already exists with this email" });
+    }
+    
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: "lecturer",
+      lecturerInfo: {
+        department: department || "",
+        title: title || "",
+        specialization: specialization || "",
+        isActive: true,
+        hireDate: new Date()
+      }
+    });
+    
+    // Send welcome notification
+    await createNotification(
+      user._id,
+      "lecturer",
+      "success",
+      "Welcome to Alveoly! 🎉",
+      `Welcome ${name}! You have been added as a lecturer.`,
+      "/lecturer/dashboard",
+      { action: "welcome" }
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: "Lecturer created successfully",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    console.error("Register lecturer error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // ================= EMAIL/PASSWORD LOGIN =================
 export const login = async (req, res) => {
   try {
