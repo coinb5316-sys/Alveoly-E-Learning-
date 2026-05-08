@@ -1,4 +1,4 @@
-// AdminUsers.jsx - Fixed table structure
+// AdminUsers.jsx - Updated with Lecturer role support
 import { useEffect, useState } from "react";
 import { 
   FaTrash, 
@@ -11,7 +11,12 @@ import {
   FaUserCheck,
   FaSpinner,
   FaShieldAlt,
-  FaUserGraduate
+  FaUserGraduate,
+  FaChalkboardTeacher,
+  FaUserPlus,
+  FaEdit,
+  FaCheck,
+  FaTimes
 } from "react-icons/fa";
 import axios from "../api/axios";
 
@@ -21,6 +26,15 @@ const AdminUsers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [showAddLecturerModal, setShowAddLecturerModal] = useState(false);
+  const [newLecturer, setNewLecturer] = useState({
+    name: "",
+    email: "",
+    password: "",
+    department: "",
+    title: "Dr.",
+    specialization: ""
+  });
 
   // ================= FETCH USERS =================
   const fetchUsers = async () => {
@@ -48,6 +62,7 @@ const AdminUsers = () => {
       setUsers((prev) =>
         prev.map((u) => (u._id === id ? { ...u, role } : u))
       );
+      alert(`User role updated to ${role}`);
     } catch (err) {
       console.error(err);
       alert("Failed to update role");
@@ -56,7 +71,7 @@ const AdminUsers = () => {
     }
   };
 
-  // ================= DELETE =================
+  // ================= DELETE USER =================
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
 
@@ -64,9 +79,35 @@ const AdminUsers = () => {
       setLoading(true);
       await axios.delete(`/users/${id}`);
       setUsers((prev) => prev.filter((u) => u._id !== id));
+      alert("User deleted successfully");
     } catch (err) {
       console.error(err);
       alert("Failed to delete user");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ================= ADD LECTURER =================
+  const handleAddLecturer = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      await axios.post("/auth/register-lecturer", newLecturer);
+      alert("Lecturer added successfully!");
+      setShowAddLecturerModal(false);
+      setNewLecturer({
+        name: "",
+        email: "",
+        password: "",
+        department: "",
+        title: "Dr.",
+        specialization: ""
+      });
+      fetchUsers();
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to add lecturer");
     } finally {
       setLoading(false);
     }
@@ -83,8 +124,29 @@ const AdminUsers = () => {
   // Stats
   const totalUsers = users.length;
   const adminCount = users.filter(u => u.role === "admin").length;
+  const lecturerCount = users.filter(u => u.role === "lecturer").length;
   const studentCount = users.filter(u => u.role === "student").length;
   const activeUsers = users.length;
+
+  // Get role badge style
+  const getRoleBadgeStyle = (role) => {
+    switch(role) {
+      case "admin":
+        return "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800";
+      case "lecturer":
+        return "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800";
+      default:
+        return "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800";
+    }
+  };
+
+  const getRoleIcon = (role) => {
+    switch(role) {
+      case "admin": return <FaShieldAlt className="h-3.5 w-3.5" />;
+      case "lecturer": return <FaChalkboardTeacher className="h-3.5 w-3.5" />;
+      default: return <FaUserGraduate className="h-3.5 w-3.5" />;
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -95,13 +157,20 @@ const AdminUsers = () => {
             User Management
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Manage users, roles, and permissions across the platform
+            Manage students, lecturers, and administrators across the platform
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowAddLecturerModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <FaChalkboardTeacher className="h-4 w-4" />
+            <span className="text-sm font-medium">Add Lecturer</span>
+          </button>
+          <button
             onClick={() => fetchUsers()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
           >
             <FaUsers className="h-4 w-4" />
             <span className="text-sm font-medium">Refresh</span>
@@ -142,13 +211,13 @@ const AdminUsers = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Administrators</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Lecturers</p>
               <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                {adminCount}
+                {lecturerCount}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
-              <FaShieldAlt className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
+              <FaChalkboardTeacher className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
         </div>
@@ -156,13 +225,13 @@ const AdminUsers = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Active Users</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Administrators</p>
               <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                {activeUsers}
+                {adminCount}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center">
-              <FaUserCheck className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+            <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
+              <FaShieldAlt className="h-5 w-5 text-purple-600 dark:text-purple-400" />
             </div>
           </div>
         </div>
@@ -200,6 +269,7 @@ const AdminUsers = () => {
             >
               <option value="all">All Roles</option>
               <option value="student">Student</option>
+              <option value="lecturer">Lecturer</option>
               <option value="admin">Administrator</option>
             </select>
           </div>
@@ -256,13 +326,22 @@ const AdminUsers = () => {
                   <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                        <div className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${
+                          user.role === "admin" ? "from-purple-500 to-purple-600" :
+                          user.role === "lecturer" ? "from-blue-500 to-blue-600" :
+                          "from-green-500 to-green-600"
+                        }`}>
                           <span className="text-white font-semibold text-sm">
                             {user.name?.charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <span className="font-medium text-gray-900 dark:text-gray-100">
                           {user.name}
+                          {user.role === "lecturer" && user.lecturerInfo?.title && (
+                            <span className="text-xs text-gray-500 ml-1">
+                              ({user.lecturerInfo.title})
+                            </span>
+                          )}
                         </span>
                       </div>
                     </td>
@@ -276,23 +355,20 @@ const AdminUsers = () => {
                       <div className="flex items-center gap-2">
                         <FaGraduationCap className="h-3.5 w-3.5 text-gray-400" />
                         <span className="text-gray-600 dark:text-gray-400">
-                          {user.courseId?.name || "None"}
+                          {user.courseId?.name || (user.role === "lecturer" ? "N/A" : "None")}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <FaUserTag className="h-3.5 w-3.5 text-gray-400" />
+                        {getRoleIcon(user.role)}
                         <select
                           value={user.role}
                           onChange={(e) => handleRoleChange(user._id, e.target.value)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                            user.role === "admin"
-                              ? "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800"
-                              : "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
-                          } border`}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20 border ${getRoleBadgeStyle(user.role)}`}
                         >
                           <option value="student">Student</option>
+                          <option value="lecturer">Lecturer</option>
                           <option value="admin">Administrator</option>
                         </select>
                       </div>
@@ -323,7 +399,11 @@ const AdminUsers = () => {
               className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-lg transition-all"
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <div className={`h-12 w-12 rounded-xl bg-gradient-to-br flex items-center justify-center ${
+                  user.role === "admin" ? "from-purple-500 to-purple-600" :
+                  user.role === "lecturer" ? "from-blue-500 to-blue-600" :
+                  "from-green-500 to-green-600"
+                }`}>
                   <span className="text-white font-bold text-lg">
                     {user.name?.charAt(0).toUpperCase()}
                   </span>
@@ -337,12 +417,8 @@ const AdminUsers = () => {
                     {user.email}
                   </p>
                 </div>
-                <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  user.role === "admin"
-                    ? "bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400"
-                    : "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400"
-                }`}>
-                  {user.role === "admin" ? "Admin" : "Student"}
+                <div className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeStyle(user.role)}`}>
+                  {user.role === "admin" ? "Admin" : user.role === "lecturer" ? "Lecturer" : "Student"}
                 </div>
               </div>
 
@@ -351,22 +427,28 @@ const AdminUsers = () => {
                   <FaGraduationCap className="h-4 w-4 text-gray-400" />
                   <span className="text-gray-600 dark:text-gray-400">Course:</span>
                   <span className="text-gray-900 dark:text-gray-100 font-medium">
-                    {user.courseId?.name || "None"}
+                    {user.courseId?.name || (user.role === "lecturer" ? "N/A" : "None")}
                   </span>
                 </div>
+                {user.role === "lecturer" && user.lecturerInfo?.specialization && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <FaChalkboardTeacher className="h-4 w-4 text-gray-400" />
+                    <span className="text-gray-600 dark:text-gray-400">Specialization:</span>
+                    <span className="text-gray-900 dark:text-gray-100">
+                      {user.lecturerInfo.specialization}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2">
                 <select
                   value={user.role}
                   onChange={(e) => handleRoleChange(user._id, e.target.value)}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                    user.role === "admin"
-                      ? "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800"
-                      : "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
-                  } border`}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/20 border ${getRoleBadgeStyle(user.role)}`}
                 >
                   <option value="student">Student</option>
+                  <option value="lecturer">Lecturer</option>
                   <option value="admin">Administrator</option>
                 </select>
 
@@ -383,18 +465,127 @@ const AdminUsers = () => {
         </div>
       )}
 
-      {/* Results Summary */}
-      {!loading && filteredUsers.length > 0 && (
-        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-          <p>Showing {filteredUsers.length} of {users.length} users</p>
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm("")}
-              className="text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              Clear search
-            </button>
-          )}
+      {/* Add Lecturer Modal */}
+      {showAddLecturerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                Add New Lecturer
+              </h2>
+              <button
+                onClick={() => setShowAddLecturerModal(false)}
+                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <FaTimes className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddLecturer} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newLecturer.name}
+                  onChange={(e) => setNewLecturer({...newLecturer, name: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                  placeholder="e.g., Dr. John Smith"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={newLecturer.email}
+                  onChange={(e) => setNewLecturer({...newLecturer, email: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                  placeholder="lecturer@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Password *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newLecturer.password}
+                  onChange={(e) => setNewLecturer({...newLecturer, password: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                  placeholder="Minimum 6 characters"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Title
+                  </label>
+                  <select
+                    value={newLecturer.title}
+                    onChange={(e) => setNewLecturer({...newLecturer, title: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                  >
+                    <option>Dr.</option>
+                    <option>Prof.</option>
+                    <option>Mr.</option>
+                    <option>Mrs.</option>
+                    <option>Ms.</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Department
+                  </label>
+                  <input
+                    type="text"
+                    value={newLecturer.department}
+                    onChange={(e) => setNewLecturer({...newLecturer, department: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                    placeholder="e.g., Computer Science"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Specialization
+                </label>
+                <input
+                  type="text"
+                  value={newLecturer.specialization}
+                  onChange={(e) => setNewLecturer({...newLecturer, specialization: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+                  placeholder="e.g., Web Development, AI, Database"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddLecturerModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all"
+                >
+                  Add Lecturer
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
