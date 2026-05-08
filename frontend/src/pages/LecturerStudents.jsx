@@ -1,7 +1,7 @@
 // pages/lecturer/LecturerStudents.jsx
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import axios from "../../api/axios";
+import axios from "../api/axios";
 import {
   Users, Search, Filter, Mail, Phone, Calendar,
   TrendingUp, Award, Clock, Loader2, Eye,

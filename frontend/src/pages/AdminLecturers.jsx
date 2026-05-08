@@ -1,6 +1,6 @@
 // pages/admin/AdminLecturers.jsx
 import { useEffect, useState } from "react";
-import axios from "../../api/axios";
+import axios from "../api/axios";
 import {
   Users,
   UserPlus,

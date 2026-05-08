@@ -1,6 +1,6 @@
 // pages/lecturer/LecturerAttempts.jsx
 import { useEffect, useState } from "react";
-import axios from "../../api/axios";
+import axios from "../api/axios";
 import { Link } from "react-router-dom";
 import { 
   Eye, Search, Filter, Loader2, Users, Clock, 

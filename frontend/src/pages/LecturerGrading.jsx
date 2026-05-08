@@ -1,7 +1,7 @@
 // pages/lecturer/LecturerGrading.jsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "../../api/axios";
+import axios from "../api/axios";
 import { 
   ArrowLeft, Save, Send, User, Clock, Calendar,
   CheckCircle, XCircle, Award, FileText, MessageSquare,

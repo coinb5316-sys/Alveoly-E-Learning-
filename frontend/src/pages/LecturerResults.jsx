@@ -1,6 +1,6 @@
 // pages/lecturer/LecturerResults.jsx
 import { useEffect, useState } from "react";
-import axios from "../../api/axios";
+import axios from "../api/axios";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend
