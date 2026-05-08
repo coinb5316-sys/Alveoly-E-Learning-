@@ -1,7 +1,7 @@
 // pages/lecturer/LecturerProfile.jsx
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../context/AuthContext";
 import {
   User, Mail, Phone, Building, BookOpen, Award,
   Calendar, Edit2, Save, X, Loader2, Camera,
