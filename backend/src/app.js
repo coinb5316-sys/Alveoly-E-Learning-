@@ -23,6 +23,8 @@ import adminRoutes from "./routes/adminRoutes.js";
 import trialRoutes from "./routes/trialRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import lecturerRoutes from "./routes/lecturerRoutes.js";
+import studentLecturerRoutes from "./routes/studentLecturerRoutes.js";
 
 const app = express();
 
@@ -104,6 +106,8 @@ app.use("/api/lesson-quiz", lessonQuestionRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/lecturer", lecturerRoutes);
+app.use("/api/student/lecturer", studentLecturerRoutes);
 
 // ================= HEALTH CHECK =================
 app.get("/", (req, res) => {

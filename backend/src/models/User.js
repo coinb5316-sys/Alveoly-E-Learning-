@@ -1,4 +1,4 @@
-// models/User.js - Complete updated model
+// models/User.js - Updated with lecturer role
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -23,12 +23,25 @@ const userSchema = new mongoose.Schema(
     // ================= ROLE & COURSE =================
     role: {
       type: String,
-      enum: ["student", "admin"],
+      enum: ["student", "admin", "lecturer"], // Added "lecturer"
       default: "student",
     },
     courseId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Course",
+    },
+    
+    // ================= LECTURER SPECIFIC FIELDS =================
+    lecturerInfo: {
+      department: { type: String, default: "" },
+      title: { type: String, default: "" }, // Dr., Prof., Mr., Mrs.
+      specialization: { type: String, default: "" },
+      bio: { type: String, default: "" },
+      assignedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subject" }],
+      assignedCourses: [{ type: mongoose.Schema.Types.ObjectId, ref: "Course" }],
+      phoneNumber: { type: String, default: "" },
+      isActive: { type: Boolean, default: true },
+      hireDate: { type: Date, default: Date.now },
     },
 
     // ================= PASSWORD RESET =================
@@ -40,7 +53,7 @@ const userSchema = new mongoose.Schema(
     deviceInfo: String,
     lastLoginIP: String,
 
-    // ================= ANALYTICS & TRACKING (NEW) =================
+    // ================= ANALYTICS & TRACKING =================
     lastLoginAt: {
       type: Date,
       default: Date.now
@@ -92,14 +105,16 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// ================= INDEXES FOR BETTER QUERY PERFORMANCE =================
+// ================= INDEXES =================
 userSchema.index({ email: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ lastLoginAt: -1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ isActive: 1 });
+userSchema.index({ "lecturerInfo.assignedSubjects": 1 });
+userSchema.index({ "lecturerInfo.assignedCourses": 1 });
 
-// ================= VIRTUAL: Check if user is active (last 30 days) =================
+// ================= VIRTUAL: Check if user is active =================
 userSchema.virtual('isRecentlyActive').get(function() {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -125,7 +140,6 @@ userSchema.methods.recordLogin = async function(ip, deviceInfo) {
 // ================= METHOD: Update quiz stats =================
 userSchema.methods.updateQuizStats = async function(score) {
   this.totalQuizzesTaken += 1;
-  // Update average score
   this.averageScore = ((this.averageScore * (this.totalQuizzesTaken - 1)) + score) / this.totalQuizzesTaken;
   await this.save();
 };
@@ -140,7 +154,7 @@ userSchema.statics.getActiveUsersCount = async function(days = 30) {
   });
 };
 
-// ================= STATIC: Get user growth by period =================
+// ================= STATIC: Get user growth =================
 userSchema.statics.getUserGrowth = async function(startDate, endDate, groupBy = "day") {
   let groupFormat;
   switch (groupBy) {
