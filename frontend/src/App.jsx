@@ -46,6 +46,21 @@ import AdminContentPayments from "./pages/AdminContentPayments";
 import PlanPaymentSuccess from "./pages/PlanPaymentSuccess";
 import SubjectPaymentSuccess from "./pages/SubjectPaymentSuccess";
 
+// Lecturer Imports
+import LecturerLayout from "./layouts/LecturerLayout";
+import LecturerDashboard from "./pages/lecturer/LecturerDashboard";
+import LecturerContentList from "./pages/lecturer/LecturerContentList";
+import LecturerContentForm from "./pages/lecturer/LecturerContentForm";
+import LecturerAttempts from "./pages/lecturer/LecturerAttempts";
+import LecturerGrading from "./pages/lecturer/LecturerGrading";
+import LecturerResults from "./pages/lecturer/LecturerResults";
+import LecturerStudents from "./pages/lecturer/LecturerStudents";
+import LecturerStudentProgress from "./pages/lecturer/LecturerStudentProgress";
+import LecturerProfile from "./pages/lecturer/LecturerProfile";
+import LecturerSettings from "./pages/lecturer/LecturerSettings";
+import LecturerHelp from "./pages/lecturer/LecturerHelp";
+import AdminLecturers from "./pages/AdminLecturers";
+import AdminLecturerDetail from "./pages/AdminLecturerDetail";
 
 function App() {
   useEffect(() => {
@@ -80,7 +95,7 @@ function App() {
         />
         
         <Routes>
-          {/* Public Routes */}
+          {/* ==================== PUBLIC ROUTES ==================== */}
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
@@ -91,12 +106,14 @@ function App() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+          
+          {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/content-payment-success" element={<ContentPaymentSuccess />} />
           <Route path="/plan-payment-success" element={<PlanPaymentSuccess />} />
           <Route path="/subject-payment-success" element={<SubjectPaymentSuccess />} />
-          
-          {/* Protected Routes - Now inside Routes */}
+
+          {/* ==================== STUDENT ROUTES ==================== */}
           <Route
             path="/select-course"
             element={
@@ -107,54 +124,90 @@ function App() {
           />
 
           <Route
-          path="/student"
-          element={
-            <ProtectedRoute role="student">
-              <StudentLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<StudentDashboard />} />
-          <Route path="dashboard" element={<StudentDashboard />} />
-          <Route path="courses" element={<StudentCourses />} />
-          <Route path="subjects" element={<StudentSubjects />} />
-          <Route path="plans" element={<StudentPlans />} />
-          <Route path="payments" element={<StudentPayments />} />
-          <Route path="lessons/:subjectId" element={<StudentLessons />} />
-          <Route path="lessons/:lessonId/quiz" element={<LessonQuiz />} />
-          <Route path="exams/:courseId/:subjectId" element={<StudentExams />} />
-          <Route path="trial/:courseId/:subjectId" element={<StudentTrial />} />
-          <Route path="progress" element={<StudentProgress />} />
-          <Route path="testimonials" element={<StudentTestimonials />} />
-          <Route path="content-payment" element={<StudentContentPayments />} />
+            path="/student"
+            element={
+              <ProtectedRoute role="student">
+                <StudentLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<StudentDashboard />} />
+            <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="courses" element={<StudentCourses />} />
+            <Route path="subjects" element={<StudentSubjects />} />
+            <Route path="plans" element={<StudentPlans />} />
+            <Route path="payments" element={<StudentPayments />} />
+            <Route path="lessons/:subjectId" element={<StudentLessons />} />
+            <Route path="lessons/:lessonId/quiz" element={<LessonQuiz />} />
+            <Route path="exams/:courseId/:subjectId" element={<StudentExams />} />
+            <Route path="trial/:courseId/:subjectId" element={<StudentTrial />} />
+            <Route path="progress" element={<StudentProgress />} />
+            <Route path="testimonials" element={<StudentTestimonials />} />
+            <Route path="content-payment" element={<StudentContentPayments />} />
           </Route>
 
+          {/* ==================== ADMIN ROUTES ==================== */}
           <Route
-          path="/admin"
-          element={
-            <ProtectedRoute role="admin">
-              <AdminLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<AdminDashboard />} />
-          <Route path="courses" element={<AdminCourses />} />
-          <Route path="subjects" element={<AdminSubjects />} />
-          <Route path="questions" element={<AdminQuestions />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="plans" element={<AdminPlans />} />
-          <Route path="payments" element={<AdminPayments />} />
-          <Route path="performance" element={<PerformanceDashboard />} />
-          <Route path="content" element={<AdminContent />} />
-          <Route path="results" element={<AdminExamResults />} />
-          <Route path="testimonials" element={<AdminTestimonials />} />
-          <Route path="in-box" element={<AdminInbox />} />
-          <Route path="content-payment" element={<AdminContentPayments />} />
-        </Route>
+            path="/admin"
+            element={
+              <ProtectedRoute role="admin">
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<AdminDashboard />} />
+            <Route path="courses" element={<AdminCourses />} />
+            <Route path="subjects" element={<AdminSubjects />} />
+            <Route path="questions" element={<AdminQuestions />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="plans" element={<AdminPlans />} />
+            <Route path="payments" element={<AdminPayments />} />
+            <Route path="performance" element={<PerformanceDashboard />} />
+            <Route path="content" element={<AdminContent />} />
+            <Route path="results" element={<AdminExamResults />} />
+            <Route path="testimonials" element={<AdminTestimonials />} />
+            <Route path="in-box" element={<AdminInbox />} />
+            <Route path="content-payment" element={<AdminContentPayments />} />
+            <Route path="lecturers" element={<AdminLecturers />} />
+<Route path="lecturers/:id" element={<AdminLecturerDetail />} />
+          </Route>
 
-        
-          
-          {/* 404 Catch-all - MUST be last */}
+          {/* ==================== LECTURER ROUTES ==================== */}
+          <Route
+            path="/lecturer"
+            element={
+              <ProtectedRoute role="lecturer">
+                <LecturerLayout />
+              </ProtectedRoute>
+            }
+          >
+            {/* Dashboard */}
+            <Route index element={<LecturerDashboard />} />
+            <Route path="dashboard" element={<LecturerDashboard />} />
+            
+            {/* Content Management */}
+            <Route path="content" element={<LecturerContentList />} />
+            <Route path="content/create" element={<LecturerContentForm />} />
+            <Route path="content/:id/edit" element={<LecturerContentForm />} />
+            
+            {/* Assessment & Grading */}
+            <Route path="attempts" element={<LecturerAttempts />} />
+            <Route path="attempts/:attemptId" element={<LecturerGrading />} />
+            <Route path="grading" element={<LecturerGrading />} />
+            <Route path="results" element={<LecturerResults />} />
+            
+            {/* Student Management */}
+            <Route path="students" element={<LecturerStudents />} />
+            <Route path="students/:studentId/progress" element={<LecturerStudentProgress />} />
+            <Route path="progress" element={<LecturerStudentProgress />} />
+            
+            {/* Profile & Settings */}
+            <Route path="profile" element={<LecturerProfile />} />
+            <Route path="settings" element={<LecturerSettings />} />
+            <Route path="help" element={<LecturerHelp />} />
+          </Route>
+
+          {/* ==================== 404 CATCH-ALL ROUTE ==================== */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
@@ -175,7 +228,7 @@ const NotFoundPage = () => {
         </p>
         <button
           onClick={() => navigate("/")}
-          className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold px-8 py-3 rounded-lg transition-all duration-300"
+          className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold px-8 py-3 rounded-lg transition-all duration-300 hover:shadow-lg transform hover:scale-105"
         >
           Return to Home
         </button>

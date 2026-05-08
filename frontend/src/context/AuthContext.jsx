@@ -1,4 +1,4 @@
-// src/context/AuthContext.jsx - COMPLETELY FIXED
+// src/context/AuthContext.jsx - UPDATED with lecturer support
 import { createContext, useContext, useState, useEffect } from "react";
 import API from "../api/axios";
 import { initializeSocket } from "../config/socket.js";
@@ -14,16 +14,21 @@ export const AuthProvider = ({ children }) => {
   const connectSocket = (userData) => {
     if (!userData?._id) return;
     
-    // Initialize socket properly
     const socketInstance = initializeSocket();
     setSocket(socketInstance);
     
-    // Make sure socket is connected
     if (socketInstance && !socketInstance.connected) {
       socketInstance.connect();
     }
 
     socketInstance.emit("join:user", userData._id);
+    
+    // Emit role-specific join events
+    if (userData.role === "lecturer") {
+      socketInstance.emit("join:lecturer", userData._id);
+    } else if (userData.role === "admin") {
+      socketInstance.emit("join:admin", userData._id);
+    }
   };
 
   const disconnectSocket = () => {
@@ -32,7 +37,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= SET AUTH (CENTRALIZED) =================
+  // ================= SET AUTH =================
   const setAuth = (token, userData) => {
     localStorage.setItem("token", token);
     setUser(userData);
@@ -124,6 +129,18 @@ export const AuthProvider = ({ children }) => {
     clearAuth();
   };
 
+  // ================= HELPER METHODS =================
+  const isAdmin = () => user?.role === "admin";
+  const isLecturer = () => user?.role === "lecturer";
+  const isStudent = () => user?.role === "student";
+
+  const getDashboardPath = () => {
+    if (isAdmin()) return "/admin";
+    if (isLecturer()) return "/lecturer";
+    if (isStudent()) return "/student";
+    return "/login";
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -134,6 +151,14 @@ export const AuthProvider = ({ children }) => {
         googleLogin,
         logout,
         setUser,
+        // Helper methods
+        isAdmin,
+        isLecturer,
+        isStudent,
+        getDashboardPath,
+        // Role checks
+        isAuthenticated: !!user,
+        userRole: user?.role,
       }}
     >
       {children}
@@ -141,4 +166,10 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return context;
+};

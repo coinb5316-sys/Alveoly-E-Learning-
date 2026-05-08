@@ -28,6 +28,7 @@ import {
   FileText,
   Shield,
   Zap,
+  GraduationCap,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationPanel from "../components/NotificationPanel";
@@ -111,8 +112,8 @@ const AdminLayout = () => {
       { to: "/admin/users", label: "Users", icon: Users, color: "text-cyan-500" },
       { to: "/admin/payments", label: "Revenue", icon: DollarSign, color: "text-yellow-500" },
     ]},
-    { section: "AI & Content", items: [
-      { to: "/admin/ai", label: "AI Studio", icon: Bot, color: "text-pink-500" },
+    { section: "Content", items: [
+      { to: "/admin/lecturers", label: "Lecturers", icon: GraduationCap, color: "text-pink-500" },
       { to: "/admin/content-payment", label: "Content Payment", icon: DollarSign, color: "text-indigo-500" },
       { to: "/admin/plans", label: "Plans", icon: Zap, color: "text-red-500" },
       { to: "/admin/courses", label: "Courses", icon: Layers, color: "text-teal-500" },

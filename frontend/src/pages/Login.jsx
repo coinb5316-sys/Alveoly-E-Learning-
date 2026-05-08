@@ -1,4 +1,4 @@
-// src/pages/Login.jsx
+// src/pages/Login.jsx - UPDATED with lecturer redirect
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -24,8 +24,12 @@ const LoginPage = () => {
     setLoading(true);
     try {
       const user = await login(form);
+      
+      // ✅ Redirect based on role
       if (user?.role === "admin") {
         navigate("/admin");
+      } else if (user?.role === "lecturer") {
+        navigate("/lecturer");
       } else {
         navigate("/student/dashboard");
       }
@@ -36,7 +40,6 @@ const LoginPage = () => {
     }
   };
 
-  // ✅ FIXED: Check for admin role in Google login
   const handleGoogleAuth = async (credentialResponse) => {
     try {
       setGoogleLoading(true);
@@ -46,11 +49,13 @@ const LoginPage = () => {
       const res = await googleLogin(idToken);
       const userRole = res.user?.role;
       
-      console.log("Google login user:", res.user); // Debug log
+      console.log("Google login user:", res.user);
       
-      // ✅ Check if user is admin
+      // ✅ Check all roles
       if (userRole === "admin") {
         navigate("/admin");
+      } else if (userRole === "lecturer") {
+        navigate("/lecturer");
       } else if (res.requiresCourse) {
         navigate("/select-course");
       } else {
