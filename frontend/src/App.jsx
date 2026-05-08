@@ -47,18 +47,18 @@ import PlanPaymentSuccess from "./pages/PlanPaymentSuccess";
 import SubjectPaymentSuccess from "./pages/SubjectPaymentSuccess";
 
 // Lecturer Imports
-import LecturerLayout from "./layouts/LecturerLayout";
-import LecturerDashboard from "./pages/lecturer/LecturerDashboard";
-import LecturerContentList from "./pages/lecturer/LecturerContentList";
-import LecturerContentForm from "./pages/lecturer/LecturerContentForm";
-import LecturerAttempts from "./pages/lecturer/LecturerAttempts";
-import LecturerGrading from "./pages/lecturer/LecturerGrading";
-import LecturerResults from "./pages/lecturer/LecturerResults";
-import LecturerStudents from "./pages/lecturer/LecturerStudents";
-import LecturerStudentProgress from "./pages/lecturer/LecturerStudentProgress";
-import LecturerProfile from "./pages/lecturer/LecturerProfile";
-import LecturerSettings from "./pages/lecturer/LecturerSettings";
-import LecturerHelp from "./pages/lecturer/LecturerHelp";
+import LecturerLayout from "./pages/LecturerLayout";
+import LecturerDashboard from "./pages/LecturerDashboard";
+import LecturerContentList from "./pages/LecturerContentList";
+import LecturerContentForm from "./pages/LecturerContentForm";
+import LecturerAttempts from "./pages/LecturerAttempts";
+import LecturerGrading from "./pages/LecturerGrading";
+import LecturerResults from "./pages/LecturerResults";
+import LecturerStudents from "./pages/LecturerStudents";
+import LecturerStudentProgress from "./pages/LecturerStudentProgress";
+import LecturerProfile from "./pages/LecturerProfile";
+import LecturerSettings from "./pages/LecturerSettings";
+import LecturerHelp from "./pages/LecturerHelp";
 import AdminLecturers from "./pages/AdminLecturers";
 import AdminLecturerDetail from "./pages/AdminLecturerDetail";
 
