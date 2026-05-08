@@ -126,3 +126,37 @@ export const toggleLecturerStatus = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// controllers/adminLecturerController.js - Add missing function
+// Add this function to the existing file:
+
+export const removeLecturerAssignment = async (req, res) => {
+  try {
+    const { lecturerId } = req.params;
+    const { courseId, subjectId } = req.body;
+    
+    const lecturer = await User.findById(lecturerId);
+    if (!lecturer || lecturer.role !== "lecturer") {
+      return res.status(404).json({ message: "Lecturer not found" });
+    }
+    
+    if (courseId && lecturer.lecturerInfo?.assignedCourses) {
+      lecturer.lecturerInfo.assignedCourses = lecturer.lecturerInfo.assignedCourses.filter(
+        id => id.toString() !== courseId
+      );
+    }
+    
+    if (subjectId && lecturer.lecturerInfo?.assignedSubjects) {
+      lecturer.lecturerInfo.assignedSubjects = lecturer.lecturerInfo.assignedSubjects.filter(
+        id => id.toString() !== subjectId
+      );
+    }
+    
+    await lecturer.save();
+    
+    res.json({ success: true, message: "Assignment removed successfully" });
+  } catch (err) {
+    console.error("Remove assignment error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};

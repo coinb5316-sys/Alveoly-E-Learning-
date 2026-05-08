@@ -7,15 +7,9 @@ import {
   getExamDetails,  // Add this import
 } from "../controllers/adminController.js";
 // routes/adminRoutes.js - Add these endpoints
-import {
-  getLecturers,
-  getLecturerById,
-  getLecturerStats,
-  assignLecturer,
-  removeLecturerAssignment,
-  toggleLecturerStatus
-} from "../controllers/adminLecturerController.js";
+
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
+import { assignLecturer, getLecturerById, getLecturers, getLecturerStats, removeLecturerAssignment, toggleLecturerStatus } from "../controllers/adminLecturerController.js";
 
 const router = express.Router();
 
