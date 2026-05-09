@@ -50,46 +50,16 @@ export function clearQaCache() {
 
 // ================= COMPREHENSIVE DEFAULT ANSWERS =================
 const DEFAULT_ANSWERS = {
-  // Greetings
   "hello": "👋 Hello! Welcome to Alveoly E-Learning Academy! I'm your virtual assistant. How can I help you today?",
   "hi": "👋 Hi there! Great to see you at Alveoly! I'm here to help you with information about our health sciences programs.",
   "hey": "👋 Hey there! Welcome to Alveoly! Feel free to ask me anything about our courses, admissions, or programs.",
-  "good morning": "☀️ Good morning! Welcome to Alveoly E-Learning Academy! How can I assist you today?",
-  "good afternoon": "🌤️ Good afternoon! Thank you for visiting Alveoly! What would you like to know?",
-  "good evening": "🌙 Good evening! Welcome to Alveoly! Feel free to ask me anything!",
-  
-  // Help and Support
   "help": "🤝 **I'd be happy to help!**\n\n📚 **Courses & Programs**\n🎓 **Admissions**\n💰 **Fees & Financial Aid**\n📞 **Contact Support**\n\nJust type your question and I'll do my best to answer!",
-  "support": "🤝 **Our support team is here to help!**\n\n📧 Email: support@alveoly.com\n📱 Phone: +233 (0) 54 489 1862\n💬 Live chat: Available 24/7",
-  
-  // Courses and Programs
   "courses": "🎓 **Courses and Programs at Alveoly**\n\n**Undergraduate Programs:**\n• Bachelor of Science in Nursing\n• Bachelor of Public Health\n• Bachelor of Health Administration\n\n**Diploma Programs:**\n• Diploma in Pharmacy Technology\n• Diploma in Community Health\n\n**Certificate Programs:**\n• Healthcare Management\n• Health Informatics\n• Medical Coding\n\nWhich program interests you?",
-  
-  "programs": "🎓 **Academic Programs at Alveoly**\n\n**Degree Programs:** BSc Nursing, BSc Public Health, BSc Health Administration\n**Diploma Programs:** Pharmacy Technology, Community Health, Clinical Research\n**Certificate Programs:** Healthcare Management, Health Informatics, Medical Coding\n\nWould you like detailed information about any specific program?",
-  
-  // Admissions
   "admission": "📝 **Admission Process:**\n\n1️⃣ Create an Account\n2️⃣ Choose Your Program\n3️⃣ Complete Application\n4️⃣ Upload Documents\n5️⃣ Pay Application Fee (waived for early applicants!)\n6️⃣ Receive Decision\n\nNeed help with any step? I'm here to guide you!",
-  
-  "admissions": "📝 **Admission Requirements:**\n\n**Certificate Programs:** High school diploma or equivalent\n**Diploma Programs:** High school diploma with minimum GPA of 2.5\n**Degree Programs:** High school diploma with minimum GPA of 3.0\n\n**Application Deadlines:**\n• Fall Semester (Sept): July 31\n• Spring Semester (Jan): Nov 30\n• Summer Semester (May): Mar 31",
-  
-  // Fees and Payments
   "fee": "💰 **Tuition and Fees**\n\n**Certificate Programs:** $500 - $1,500\n**Diploma Programs:** $1,500 - $3,000\n**Degree Programs:** $3,000 - $8,000/year\n\n**Payment Options:**\n✅ Full payment (5% discount)\n✅ Installment plans\n✅ Scholarships available",
-  
-  "fees": "💰 **Tuition by Program:**\n\n• Certificate: $500 - $1,500\n• Diploma: $1,500 - $3,000\n• Degree: $3,000 - $8,000/year\n\n**Payment Plans:** Monthly installments available. Would you like more details?",
-  
-  "payment": "💳 **Payment Methods Accepted:**\n\n• Credit/Debit Cards (Visa, Mastercard)\n• Mobile Money (MTN, Vodafone, AirtelTigo)\n• Bank Transfer\n• PayPal\n\nNeed assistance with payment? Contact finance@alveoly.com",
-  
-  // Scholarships
-  "scholarship": "🎓 **Scholarship Opportunities:**\n\n**Merit Scholarship** (up to 50%)\n**Need-Based Grant** (up to 40%)\n**Early Bird Discount** (10% off)\n**Referral Scholarship** (15% off each)\n\nWould you like to know if you qualify?",
-  
-  // Contact Information
   "contact": "📞 **Contact Alveoly E-Learning Academy**\n\n📧 Email: support@alveoly.com\n📱 Phone: +233 (0) 54 489 1862\n💬 WhatsApp: +233 (0) 54 489 1862\n\n**Office Hours:** Mon-Fri, 9 AM - 6 PM GMT",
-  
-  // Thank you and farewell
   "thank": "🌟 You're very welcome! Is there anything else I can help with?",
-  "thanks": "🌟 You're very welcome! Feel free to reach out anytime.",
-  "bye": "👋 Goodbye! Thank you for visiting Alveoly E-Learning Academy! Have a wonderful day! 🎓",
-  "goodbye": "👋 Goodbye! We look forward to welcoming you to the Alveoly family! Take care!"
+  "bye": "👋 Goodbye! Thank you for visiting Alveoly E-Learning Academy! Have a wonderful day! 🎓"
 };
 
 // Find best answer for a question - Enhanced with default answers
@@ -97,7 +67,6 @@ async function findBestAnswer(question) {
   const normalizedQuestion = question.toLowerCase().trim();
   const qaList = await loadQaCache();
   
-  // First check if there's a match in the database
   if (qaList.length > 0) {
     const stopWords = ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'to', 'of', 'and', 'for', 'in', 'on', 'at', 'with', 'by'];
     const keywords = normalizedQuestion.split(/\s+/).filter(word => !stopWords.includes(word) && word.length > 2);
@@ -131,7 +100,6 @@ async function findBestAnswer(question) {
     }
   }
   
-  // No database match - check default answers
   if (DEFAULT_ANSWERS[normalizedQuestion]) {
     console.log(`✅ Default answer found for: "${normalizedQuestion}"`);
     return { answer: DEFAULT_ANSWERS[normalizedQuestion] };
@@ -184,12 +152,91 @@ export const io = new Server(httpServer, {
   httpCompression: false,
 });
 
-// ADD THIS LINE - Make io available to Express routes
+// Make io available to Express routes
 app.set("io", io);
 
 // Track connected users for analytics
 const connectedUsers = new Map();
 const unansweredQuestions = [];
+
+// ================= QA ROUTES (DIRECT IN SERVER.JS) =================
+// Get all Q&A
+app.get("/api/admin/qa/list", async (req, res) => {
+  try {
+    const list = await QA.find({}).sort({ createdAt: -1 });
+    res.json({ ok: true, list });
+  } catch (error) {
+    console.error("List error:", error);
+    res.status(500).json({ ok: false, message: error.message });
+  }
+});
+
+// Add Q&A
+app.post("/api/admin/qa/add", async (req, res) => {
+  try {
+    const { question, answer } = req.body;
+    if (!question || !answer) {
+      return res.status(400).json({ ok: false, message: "Question and answer required" });
+    }
+    
+    const qa = await QA.create({ question, answer });
+    await clearQaCache();
+    
+    if (io) {
+      io.to("admin").emit("qa_updated", { action: "add", qa });
+    }
+    
+    res.json({ ok: true, qa });
+  } catch (error) {
+    console.error("Add error:", error);
+    res.status(500).json({ ok: false, message: error.message });
+  }
+});
+
+// Update Q&A
+app.put("/api/admin/qa/update/:id", async (req, res) => {
+  try {
+    const { question, answer } = req.body;
+    const qa = await QA.findByIdAndUpdate(
+      req.params.id,
+      { question, answer, updatedAt: Date.now() },
+      { new: true }
+    );
+    if (!qa) {
+      return res.status(404).json({ ok: false, message: "Q&A not found" });
+    }
+    await clearQaCache();
+    
+    if (io) {
+      io.to("admin").emit("qa_updated", { action: "update", qa });
+    }
+    
+    res.json({ ok: true, qa });
+  } catch (error) {
+    console.error("Update error:", error);
+    res.status(500).json({ ok: false, message: error.message });
+  }
+});
+
+// Delete Q&A
+app.delete("/api/admin/qa/delete/:id", async (req, res) => {
+  try {
+    const qa = await QA.findByIdAndDelete(req.params.id);
+    if (!qa) {
+      return res.status(404).json({ ok: false, message: "Q&A not found" });
+    }
+    await clearQaCache();
+    
+    if (io) {
+      io.to("admin").emit("qa_updated", { action: "delete", id: req.params.id });
+    }
+    
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Delete error:", error);
+    res.status(500).json({ ok: false, message: error.message });
+  }
+});
 
 // ================= SOCKET.IO CONNECTION HANDLER =================
 io.on("connection", (socket) => {
@@ -203,7 +250,6 @@ io.on("connection", (socket) => {
     console.log("⬆️ Transport upgraded to websocket");
   });
 
-  // ================= USER AUTHENTICATION & ROOM JOINING =================
   socket.on("identify_user", (data) => {
     const { userId, userName, role } = data;
     currentUserId = userId;
@@ -226,7 +272,6 @@ io.on("connection", (socket) => {
     socket.emit("identified", { success: true, userId, role });
   });
 
-  // ================= NOTIFICATION ROOMS =================
   socket.on("join:notifications", (userId) => {
     if (userId) {
       socket.join(`user_${userId}`);
@@ -241,7 +286,6 @@ io.on("connection", (socket) => {
     socket.emit("joined:admin_notifications", { success: true });
   });
 
-  // ================= AI CHAT BOT WITH QA DATABASE =================
   socket.on("user_question", async (data) => {
     const { text, userName } = data;
     const questionText = text?.trim();
@@ -303,7 +347,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ================= ADMIN ANSWER TO STUDENT =================
   socket.on("admin_answer", (data) => {
     const { toSocketId, answer } = data;
     console.log(`📨 Admin answering to socket: ${toSocketId}`);
@@ -324,7 +367,6 @@ io.on("connection", (socket) => {
     socket.emit("answer_sent", { success: true, toSocketId });
   });
 
-  // ================= QA CACHE MANAGEMENT (Admin) =================
   socket.on("refresh_cache", async () => {
     if (currentUserRole === "admin") {
       await loadQaCache();
@@ -333,7 +375,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ================= DISCONNECT HANDLING =================
   socket.on("disconnect", (reason) => {
     console.log(`🔴 Client disconnected (${socket.id}):`, reason);
     connectedUsers.delete(socket.id);
@@ -447,4 +488,5 @@ httpServer.listen(PORT, async () => {
   console.log(`   - GET  /                Health check`);
   console.log(`   - GET  /socket-status   Socket.IO status`);
   console.log(`   - GET  /socket-stats    Detailed connection stats`);
+  console.log(`   - POST /api/admin/qa/add   Add QA (NEW)`);
 });
