@@ -25,6 +25,7 @@ import analyticsRoutes from "./routes/analyticsRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import lecturerRoutes from "./routes/lecturerRoutes.js";
 import studentLecturerRoutes from "./routes/studentLecturerRoutes.js";
+import qaRoutes from "./routes/qaRoutes.js";
 
 const app = express();
 
@@ -109,6 +110,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/lecturer", lecturerRoutes);
 app.use("/api/student/lecturer", studentLecturerRoutes);
+app.use("/api/admin/qa", qaRoutes);
 
 // ================= HEALTH CHECK =================
 app.get("/", (req, res) => {

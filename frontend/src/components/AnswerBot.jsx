@@ -1,4 +1,4 @@
-// AnswerBot.jsx
+// Updated AnswerBot.jsx - Fix emoji picker
 import React, { useEffect, useState, useRef } from "react";
 import socket, { identifyUser } from "../services/answerSocket";
 import EmojiPicker from "emoji-picker-react";
@@ -24,6 +24,8 @@ export default function AnswerBot({ userId, userName = "Student" }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const listRef = useRef(null);
   const emojiButtonRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+  const inputRef = useRef(null);
 
   // Socket setup
   useEffect(() => {
@@ -56,7 +58,8 @@ export default function AnswerBot({ userId, userName = "Student" }) {
 
     // Close emoji picker when clicking outside
     const handleClickOutside = (event) => {
-      if (emojiButtonRef.current && !emojiButtonRef.current.contains(event.target)) {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target) && 
+          emojiButtonRef.current && !emojiButtonRef.current.contains(event.target)) {
         setShowEmojiPicker(false);
       }
     };
@@ -84,6 +87,13 @@ export default function AnswerBot({ userId, userName = "Student" }) {
     }
   }, [open]);
 
+  // Focus input when chat opens
+  useEffect(() => {
+    if (open && inputRef.current) {
+      setTimeout(() => inputRef.current.focus(), 300);
+    }
+  }, [open]);
+
   const send = () => {
     if (!text.trim()) return;
     setMessages((prev) => [...prev, { sender: "user", text, timestamp: new Date() }]);
@@ -100,8 +110,13 @@ export default function AnswerBot({ userId, userName = "Student" }) {
   };
 
   const onEmojiClick = (emojiObject) => {
+    // This properly appends the emoji to the text
     setText((prevText) => prevText + emojiObject.emoji);
     setShowEmojiPicker(false);
+    // Focus back on input after emoji selection
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
   };
 
   const suggestedQuestions = [
@@ -258,10 +273,11 @@ export default function AnswerBot({ userId, userName = "Student" }) {
             </div>
 
             {/* Input Area */}
-            <div className="border-t border-gray-200 p-4 bg-white shadow-lg">
-              <div className="flex gap-2 relative">
+            <div className="border-t border-gray-200 p-4 bg-white shadow-lg relative">
+              <div className="flex gap-2">
                 <div className="flex-1 relative">
                   <input
+                    ref={inputRef}
                     type="text"
                     placeholder="Type your question..."
                     value={text}
@@ -289,20 +305,24 @@ export default function AnswerBot({ userId, userName = "Student" }) {
               <p className="text-xs text-gray-400 text-center mt-2">
                 Powered by AI • Fast responses
               </p>
-            </div>
 
-            {/* Emoji Picker */}
-            {showEmojiPicker && (
-              <div className="absolute bottom-24 left-0 md:left-auto md:right-0 z-[102]">
-                <EmojiPicker
-                  onEmojiClick={onEmojiClick}
-                  autoFocusSearch={false}
-                  theme="light"
-                  width="100%"
-                  height="400px"
-                />
-              </div>
-            )}
+              {/* Emoji Picker - Fixed positioning */}
+              {showEmojiPicker && (
+                <div 
+                  ref={emojiPickerRef}
+                  className="absolute bottom-full left-0 right-0 mb-2 z-[102]"
+                  style={{ maxHeight: "350px", overflow: "auto" }}
+                >
+                  <EmojiPicker
+                    onEmojiClick={onEmojiClick}
+                    autoFocusSearch={false}
+                    theme="light"
+                    width="100%"
+                    height="350px"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}
