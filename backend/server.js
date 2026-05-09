@@ -1,142 +1,24 @@
-// server.js - COMPLETELY FIXED VERSION
+// server.js - Complete Socket.IO configuration with notifications
 import express from "express";
-import cors from "cors";
-import helmet from "helmet";
 import dotenv from "dotenv";
-import mongoose from "mongoose";
+import connectDB from "./config/db.js";
+import app from "./src/app.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import QA from "./src/models/QAModel.js";
 
 dotenv.config();
 
-// ================= CREATE EXPRESS APP =================
-const app = express();
-
-// ================= CONNECT TO MONGODB =================
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log("✅ MongoDB Connected");
-  } catch (error) {
-    console.error("❌ MongoDB Connection Error:", error);
-    process.exit(1);
-  }
-};
+// ================= INIT =================
 connectDB();
 
-// ================= MIDDLEWARE =================
-// CORS - must be first
-app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://alveolye-learning.academy",
-    "https://www.alveolye-learning.academy",
-    "https://alveoly-platform.onrender.com",
-    "https://alveoly-platform-1.onrender.com",
-  ],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
-}));
-
-// Helmet
-app.use(helmet({
-  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
-  crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-}));
-
-// Body parsing
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ================= HEALTH CHECK =================
-app.get("/", (req, res) => {
-  res.status(200).json({ status: "OK", message: "API is running 🚀" });
-});
-
-// ================= QA ROUTES =================
-// Get all Q&A
-app.get("/api/admin/qa/list", async (req, res) => {
-  try {
-    const list = await QA.find({}).sort({ createdAt: -1 });
-    res.json({ ok: true, list });
-  } catch (error) {
-    console.error("List error:", error);
-    res.status(500).json({ ok: false, message: error.message });
-  }
-});
-
-// Add Q&A
-app.post("/api/admin/qa/add", async (req, res) => {
-  try {
-    const { question, answer } = req.body;
-    if (!question || !answer) {
-      return res.status(400).json({ ok: false, message: "Question and answer required" });
-    }
-    
-    const qa = await QA.create({ question, answer });
-    res.json({ ok: true, qa });
-  } catch (error) {
-    console.error("Add error:", error);
-    res.status(500).json({ ok: false, message: error.message });
-  }
-});
-
-// Update Q&A
-app.put("/api/admin/qa/update/:id", async (req, res) => {
-  try {
-    const { question, answer } = req.body;
-    const qa = await QA.findByIdAndUpdate(
-      req.params.id,
-      { question, answer, updatedAt: Date.now() },
-      { new: true }
-    );
-    if (!qa) {
-      return res.status(404).json({ ok: false, message: "Q&A not found" });
-    }
-    res.json({ ok: true, qa });
-  } catch (error) {
-    console.error("Update error:", error);
-    res.status(500).json({ ok: false, message: error.message });
-  }
-});
-
-// Delete Q&A
-app.delete("/api/admin/qa/delete/:id", async (req, res) => {
-  try {
-    const qa = await QA.findByIdAndDelete(req.params.id);
-    if (!qa) {
-      return res.status(404).json({ ok: false, message: "Q&A not found" });
-    }
-    res.json({ ok: true });
-  } catch (error) {
-    console.error("Delete error:", error);
-    res.status(500).json({ ok: false, message: error.message });
-  }
-});
-
-// ================= 404 HANDLER =================
-app.use((req, res) => {
-  res.status(404).json({ message: `Route ${req.method} ${req.url} not found` });
-});
-
-// ================= ERROR HANDLER =================
-app.use((err, req, res, next) => {
-  console.error("❌ Error:", err.message);
-  console.error(err.stack);
-  res.status(500).json({ message: err.message || "Internal Server Error" });
-});
+const PORT = process.env.PORT || 5000;
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
 // ================= HTTP SERVER =================
-const PORT = process.env.PORT || 5000;
 const httpServer = createServer(app);
 
 // ================= SOCKET.IO =================
-const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
-
+// server.js - Update the allowedOrigins
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
@@ -147,14 +29,19 @@ const allowedOrigins = [
   CLIENT_URL,
 ].filter(Boolean);
 
+console.log("Socket.IO allowed origins:", allowedOrigins);
+
 export const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl)
       if (!origin) return callback(null, true);
+      
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         console.warn(`⚠️ Socket.IO blocked origin: ${origin}`);
+        // Still allow for development
         callback(null, true);
       }
     },
@@ -162,73 +49,170 @@ export const io = new Server(httpServer, {
     credentials: true,
   },
   transports: ["polling", "websocket"],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  connectTimeout: 45000,
+  allowUpgrades: true,
+  perMessageDeflate: false,
+  httpCompression: false,
 });
 
-const unansweredQuestions = [];
-
+// ================= SOCKET.IO CONNECTION HANDLER =================
 io.on("connection", (socket) => {
   console.log("🟢 Client connected:", socket.id);
+  console.log("📡 Transport:", socket.conn.transport.name);
 
-  socket.on("identify_user", (data) => {
-    const { userId, userName, role } = data;
-    socket.join(`user_${userId}`);
-    console.log(`👤 User identified: ${userName} (${role}) - ID: ${userId}`);
-    
-    if (role === "admin") {
-      socket.join("admin");
-      io.to("admin").emit("unanswered_questions_batch", unansweredQuestions);
+  // Handle upgrade to websocket
+  socket.on("upgrade", () => {
+    console.log("⬆️ Transport upgraded to websocket");
+  });
+
+  // ================= USER ROOM JOINING =================
+  socket.on("join:user", (userId) => {
+    if (!userId) return;
+    socket.join(userId);
+    console.log(`👤 User ${userId} joined room: ${userId}`);
+    socket.emit("joined:user", { userId, success: true });
+  });
+
+  socket.on("join:admin", () => {
+    socket.join("admin");
+    console.log("🛠️ Admin joined admin room");
+    socket.emit("joined:admin", { success: true });
+  });
+
+  // ================= NOTIFICATION ROOMS =================
+  socket.on("join:notifications", (userId) => {
+    if (userId) {
+      socket.join(`user_${userId}`);
+      console.log(`📢 User ${userId} joined notification room`);
+      socket.emit("joined:notifications", { success: true });
     }
   });
 
+  socket.on("join:admin_notifications", () => {
+    socket.join("admin_notifications");
+    console.log("📢 Admin joined admin notification room");
+    socket.emit("joined:admin_notifications", { success: true });
+  });
+
+  // ================= AI CHAT BOT =================
   socket.on("user_question", (data) => {
-    const { text, userName } = data;
-    console.log(`💬 Question from ${userName}: "${text.substring(0, 100)}"`);
+    console.log(`💬 Question from ${data.userName}: ${data.text}`);
     socket.emit("bot_typing");
     
     setTimeout(() => {
       socket.emit("bot_reply", {
-        text: `Thank you for your question, ${userName}! Our team will get back to you shortly.`,
-        timestamp: new Date()
+        text: `Thank you for your question: "${data.text}". Our team will get back to you soon!`,
+        timestamp: new Date(),
       });
-    }, 800);
-    
-    const unansweredQ = {
-      id: Date.now(),
-      text: text,
-      userName: userName || "Anonymous",
-      socketId: socket.id,
-      createdAt: new Date(),
-      status: "pending"
-    };
-    unansweredQuestions.push(unansweredQ);
-    io.to("admin").emit("unanswered_question", unansweredQ);
+    }, 1000);
   });
 
-  socket.on("admin_answer", (data) => {
-    const { toSocketId, answer } = data;
-    console.log(`📨 Admin answering to socket: ${toSocketId}`);
-    io.to(toSocketId).emit("admin_answer_reply", {
-      text: answer,
-      timestamp: new Date()
-    });
-  });
-
-  socket.on("refresh_cache", () => {
-    console.log("🔄 Cache refresh requested by admin");
-  });
-
+  // ================= DISCONNECT HANDLING =================
   socket.on("disconnect", (reason) => {
     console.log(`🔴 Client disconnected (${socket.id}):`, reason);
   });
+
+  socket.on("error", (err) => {
+    console.error("❌ Socket error:", err.message);
+  });
+  
+  socket.on("connect_error", (err) => {
+    console.error("❌ Connection error:", err.message);
+  });
+});
+
+// ================= HELPER FUNCTION TO EMIT NOTIFICATIONS =================
+export const emitNotification = (userId, notification) => {
+  // Emit to specific user's room
+  io.to(userId.toString()).emit("new_notification", notification);
+  io.to(`user_${userId}`).emit("new_notification", notification);
+};
+
+export const emitAdminNotification = (notification) => {
+  // Emit to admin room
+  io.to("admin").emit("new_admin_notification", notification);
+  io.to("admin_notifications").emit("new_admin_notification", notification);
+};
+
+export const emitToRoom = (room, event, data) => {
+  io.to(room).emit(event, data);
+};
+
+export const emitToAll = (event, data) => {
+  io.emit(event, data);
+};
+
+// ================= HEALTH CHECK =================
+app.get("/", (req, res) => {
+  res.status(200).json({ 
+    status: "OK", 
+    message: "API is running 🚀",
+    socket: "Socket.IO server is ready"
+  });
+});
+
+// ================= SOCKET STATUS ENDPOINT =================
+app.get("/socket-status", (req, res) => {
+  const rooms = {};
+  const roomMap = io.sockets.adapter.rooms;
+  
+  for (const [room, set] of roomMap.entries()) {
+    if (!rooms[room]) {
+      rooms[room] = set.size;
+    }
+  }
+  
+  res.json({
+    status: "healthy",
+    connections: io.engine.clientsCount,
+    transports: ["polling", "websocket"],
+    rooms: rooms,
+    allowedOrigins: allowedOrigins,
+  });
+});
+
+// ================= CONNECTION STATS ENDPOINT =================
+app.get("/socket-stats", (req, res) => {
+  const connectedSockets = [];
+  const socketMap = io.sockets.sockets;
+  
+  for (const [id, socket] of socketMap) {
+    connectedSockets.push({
+      id: id,
+      rooms: Array.from(socket.rooms),
+      connected: socket.connected
+    });
+  }
+  
+  res.json({
+    totalConnections: io.engine.clientsCount,
+    socketCount: connectedSockets.length,
+    sockets: connectedSockets.slice(0, 50), // Limit to 50 for performance
+  });
+});
+
+// ================= GLOBAL ERROR HANDLER =================
+app.use((err, req, res, next) => {
+  console.error("🔥 Server Error:", err.message);
+  console.error(err.stack);
+  res.status(500).json({ message: err.message || "Internal Server Error" });
 });
 
 // ================= START SERVER =================
 httpServer.listen(PORT, () => {
   console.log(`\n🚀 Server running on port ${PORT}`);
   console.log(`🔗 http://localhost:${PORT}`);
-  console.log(`\n📢 QA API endpoints:`);
-  console.log(`   - GET  /api/admin/qa/list   - Get all Q&A`);
-  console.log(`   - POST /api/admin/qa/add    - Add new Q&A`);
-  console.log(`   - PUT  /api/admin/qa/update/:id - Update Q&A`);
-  console.log(`   - DELETE /api/admin/qa/delete/:id - Delete Q&A`);
+  console.log(`📡 Socket.IO server ready`);
+  console.log(`✅ Transports: polling, websocket`);
+  console.log(`✅ Allowed origins:`, allowedOrigins);
+  console.log(`\n📢 Notification rooms ready:`);
+  console.log(`   - User rooms: user_{userId}`);
+  console.log(`   - Admin rooms: admin, admin_notifications`);
+  console.log(`\n🌐 API endpoints:`);
+  console.log(`   - GET  /                Health check`);
+  console.log(`   - GET  /socket-status   Socket.IO status`);
+  console.log(`   - GET  /socket-stats    Detailed connection stats`);
 });
