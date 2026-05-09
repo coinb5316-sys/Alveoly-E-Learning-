@@ -5,7 +5,6 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import kalveoBg from "../images/kalveo-bg.jpg";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import AnswerBot from "../components/AnswerBot";
 import API from "../api/axios";
 
 import {
@@ -28,6 +27,7 @@ import {
   FaQuoteRight,
   FaSpinner,
 } from "react-icons/fa";
+import SmartChatBot from "../components/SmartChatBot";
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -585,10 +585,7 @@ const HomePage = () => {
 
       <Footer />
       
-      <AnswerBot 
-        userId={userInfo.userId}
-        userName={userInfo.userName}
-      />
+      <SmartChatBot userId={userInfo.userId} userName={userInfo.userName} />
     </div>
   );
 };

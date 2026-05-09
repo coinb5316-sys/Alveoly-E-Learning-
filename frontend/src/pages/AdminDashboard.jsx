@@ -32,7 +32,8 @@ import {
   LineChart,
   Line
 } from "recharts";
-import AdminAnswerBot from "../components/AdminAnswerBot";
+import AdminSmartBot from "../components/AdminSmartBot";
+
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
@@ -362,7 +363,7 @@ const AdminDashboard = () => {
                 </p>
               </div>
             </div>
-            <AdminAnswerBot/>
+            <AdminSmartBot />
           </div>
         </>
       )}
