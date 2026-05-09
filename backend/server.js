@@ -6,6 +6,7 @@ import app from "./src/app.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import mongoose from "mongoose";
+import FAQ from "./src/models/FAQ.js";
 
 dotenv.config();
 
@@ -19,7 +20,6 @@ const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 const httpServer = createServer(app);
 
 // ================= SOCKET.IO =================
-// server.js - Update the allowedOrigins
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
@@ -35,14 +35,11 @@ console.log("Socket.IO allowed origins:", allowedOrigins);
 export const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl)
       if (!origin) return callback(null, true);
-      
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         console.warn(`⚠️ Socket.IO blocked origin: ${origin}`);
-        // Still allow for development
         callback(null, true);
       }
     },
@@ -59,12 +56,117 @@ export const io = new Server(httpServer, {
   httpCompression: false,
 });
 
+// ================= FAQ API ROUTES (DIRECT IN SERVER.JS) =================
+// Get all FAQs
+app.get("/api/faqs", async (req, res) => {
+  try {
+    const faqs = await FAQ.find({ isActive: true }).sort({ createdAt: -1 });
+    res.json({ success: true, data: faqs });
+  } catch (error) {
+    console.error("Get FAQs error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Search FAQs
+app.get("/api/faqs/search", async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.json({ success: true, data: [] });
+    const searchTerm = q.toLowerCase().trim();
+    const keywords = searchTerm.split(/\s+/).filter(w => w.length > 2);
+    const faqs = await FAQ.find({
+      isActive: true,
+      $or: [
+        { question: { $regex: searchTerm, $options: 'i' } },
+        { answer: { $regex: searchTerm, $options: 'i' } },
+        { keywords: { $in: keywords } }
+      ]
+    }).limit(5);
+    for (const faq of faqs) { faq.views += 1; await faq.save(); }
+    res.json({ success: true, data: faqs });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get single FAQ
+app.get("/api/faqs/:id", async (req, res) => {
+  try {
+    const faq = await FAQ.findById(req.params.id);
+    if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
+    res.json({ success: true, data: faq });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Create FAQ (Admin)
+app.post("/api/faqs", async (req, res) => {
+  try {
+    const { question, answer, category } = req.body;
+    if (!question || !answer) {
+      return res.status(400).json({ success: false, message: "Question and answer required" });
+    }
+    const existing = await FAQ.findOne({ question });
+    if (existing) {
+      return res.status(400).json({ success: false, message: "FAQ already exists" });
+    }
+    const faq = await FAQ.create({ question, answer, category: category || "general" });
+    res.status(201).json({ success: true, data: faq, message: "FAQ created successfully" });
+  } catch (error) {
+    console.error("Create FAQ error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update FAQ (Admin)
+app.put("/api/faqs/:id", async (req, res) => {
+  try {
+    const { question, answer, category, isActive } = req.body;
+    const faq = await FAQ.findByIdAndUpdate(
+      req.params.id,
+      { question, answer, category, isActive },
+      { new: true, runValidators: true }
+    );
+    if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
+    res.json({ success: true, data: faq, message: "FAQ updated successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete FAQ (Admin)
+app.delete("/api/faqs/:id", async (req, res) => {
+  try {
+    const faq = await FAQ.findByIdAndDelete(req.params.id);
+    if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
+    res.json({ success: true, message: "FAQ deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Mark FAQ as helpful/unhelpful
+app.post("/api/faqs/:id/helpful", async (req, res) => {
+  try {
+    const { helpful } = req.body;
+    const faq = await FAQ.findById(req.params.id);
+    if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
+    if (helpful === true) faq.helpful.yes += 1;
+    else if (helpful === false) faq.helpful.no += 1;
+    await faq.save();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ================= SOCKET.IO CONNECTION HANDLER =================
 io.on("connection", (socket) => {
   console.log("🟢 Client connected:", socket.id);
   console.log("📡 Transport:", socket.conn.transport.name);
 
-  // Handle upgrade to websocket
   socket.on("upgrade", () => {
     console.log("⬆️ Transport upgraded to websocket");
   });
@@ -98,9 +200,8 @@ io.on("connection", (socket) => {
     socket.emit("joined:admin_notifications", { success: true });
   });
 
-    // ================= SMART CHAT BOT WITH FAQ DATABASE =================
+  // ================= SMART CHAT BOT WITH FAQ DATABASE =================
   let userSession = null;
-  const FAQ = mongoose.model("FAQ");
   
   socket.on("bot:identify", (data) => {
     userSession = { userId: data.userId, userName: data.userName, role: data.role || "user", connectedAt: new Date() };
@@ -209,13 +310,11 @@ io.on("connection", (socket) => {
 
 // ================= HELPER FUNCTION TO EMIT NOTIFICATIONS =================
 export const emitNotification = (userId, notification) => {
-  // Emit to specific user's room
   io.to(userId.toString()).emit("new_notification", notification);
   io.to(`user_${userId}`).emit("new_notification", notification);
 };
 
 export const emitAdminNotification = (notification) => {
-  // Emit to admin room
   io.to("admin").emit("new_admin_notification", notification);
   io.to("admin_notifications").emit("new_admin_notification", notification);
 };
@@ -273,7 +372,7 @@ app.get("/socket-stats", (req, res) => {
   res.json({
     totalConnections: io.engine.clientsCount,
     socketCount: connectedSockets.length,
-    sockets: connectedSockets.slice(0, 50), // Limit to 50 for performance
+    sockets: connectedSockets.slice(0, 50),
   });
 });
 
@@ -298,4 +397,8 @@ httpServer.listen(PORT, () => {
   console.log(`   - GET  /                Health check`);
   console.log(`   - GET  /socket-status   Socket.IO status`);
   console.log(`   - GET  /socket-stats    Detailed connection stats`);
+  console.log(`   - GET  /api/faqs         Get all FAQs`);
+  console.log(`   - POST /api/faqs        Create FAQ`);
+  console.log(`   - PUT  /api/faqs/:id    Update FAQ`);
+  console.log(`   - DELETE /api/faqs/:id  Delete FAQ`);
 });
