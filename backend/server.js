@@ -5,6 +5,7 @@ import connectDB from "./config/db.js";
 import app from "./src/app.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import mongoose from "mongoose";
 
 dotenv.config();
 
@@ -97,17 +98,99 @@ io.on("connection", (socket) => {
     socket.emit("joined:admin_notifications", { success: true });
   });
 
-  // ================= AI CHAT BOT =================
-  socket.on("user_question", (data) => {
-    console.log(`💬 Question from ${data.userName}: ${data.text}`);
-    socket.emit("bot_typing");
+    // ================= SMART CHAT BOT WITH FAQ DATABASE =================
+  let userSession = null;
+  const FAQ = mongoose.model("FAQ");
+  
+  socket.on("bot:identify", (data) => {
+    userSession = { userId: data.userId, userName: data.userName, role: data.role || "user", connectedAt: new Date() };
+    console.log(`🤖 Bot identified: ${data.userName}`);
+    socket.emit("bot:ready", { message: "Bot ready!" });
+  });
+  
+  socket.on("bot:question", async (data) => {
+    const { text, userName } = data;
+    const questionText = text?.trim();
+    if (!questionText) {
+      socket.emit("bot:reply", { text: "Please enter a question.", isAuto: true, timestamp: new Date() });
+      return;
+    }
+    console.log(`🤖 Question: "${questionText.substring(0, 100)}"`);
+    socket.emit("bot:typing", { isTyping: true });
     
-    setTimeout(() => {
-      socket.emit("bot_reply", {
-        text: `Thank you for your question: "${data.text}". Our team will get back to you soon!`,
-        timestamp: new Date(),
-      });
-    }, 1000);
+    try {
+      const searchTerm = questionText.toLowerCase().trim();
+      const keywords = searchTerm.split(/\s+/).filter(w => w.length > 2);
+      const faqs = await FAQ.find({
+        isActive: true,
+        $or: [
+          { question: { $regex: searchTerm, $options: 'i' } },
+          { answer: { $regex: searchTerm, $options: 'i' } },
+          { keywords: { $in: keywords } }
+        ]
+      }).limit(2);
+      
+      let reply;
+      if (faqs && faqs.length > 0) {
+        const bestMatch = faqs[0];
+        reply = `📚 **Answer:**\n\n${bestMatch.answer}`;
+        bestMatch.views += 1;
+        await bestMatch.save();
+      } else {
+        const lowerText = questionText.toLowerCase();
+        if (lowerText.includes("hello") || lowerText.includes("hi")) {
+          reply = "👋 Hello! Welcome to Alveoly! How can I help you today?";
+        } else if (lowerText.includes("course") || lowerText.includes("program")) {
+          reply = "🎓 We offer Nursing, Public Health, Pharmacy, and more. Which interests you?";
+        } else if (lowerText.includes("admission") || lowerText.includes("apply")) {
+          reply = "📝 Apply online through our website! Need step-by-step guidance?";
+        } else if (lowerText.includes("fee") || lowerText.includes("cost")) {
+          reply = "💰 Certificates from $500, Diplomas from $1,500, Degrees from $3,000/year.";
+        } else if (lowerText.includes("contact") || lowerText.includes("support")) {
+          reply = "📞 Email: support@alveoly.com | Phone: +233 (0) 54 489 1862";
+        } else if (lowerText.includes("thank")) {
+          reply = "🌟 You're welcome! Anything else I can help with?";
+        } else if (lowerText.includes("bye")) {
+          reply = "👋 Goodbye! Have a great day!";
+        } else {
+          if (!global.pendingQuestions) global.pendingQuestions = [];
+          global.pendingQuestions.push({
+            id: Date.now(), text: questionText, userName: userName || "Anonymous",
+            socketId: socket.id, timestamp: new Date(), status: "pending"
+          });
+          io.to("admin").emit("admin:unanswered", global.pendingQuestions[global.pendingQuestions.length - 1]);
+          reply = "📝 Thanks! I've notified our team. They'll respond shortly.";
+        }
+      }
+      setTimeout(() => {
+        socket.emit("bot:reply", { text: reply, isAuto: true, timestamp: new Date() });
+        socket.emit("bot:typing", { isTyping: false });
+      }, 500);
+    } catch (error) {
+      console.error("Bot error:", error);
+      socket.emit("bot:reply", { text: "Having trouble. Please contact support.", error: true, timestamp: new Date() });
+      socket.emit("bot:typing", { isTyping: false });
+    }
+  });
+  
+  socket.on("bot:admin-reply", (data) => {
+    const { toSocketId, answer, questionId } = data;
+    console.log(`📨 Admin replying to: ${toSocketId}`);
+    if (global.pendingQuestions) {
+      const idx = global.pendingQuestions.findIndex(q => q.id === questionId);
+      if (idx !== -1) {
+        global.pendingQuestions[idx].status = "answered";
+        global.pendingQuestions[idx].answer = answer;
+        io.to("admin").emit("bot:question-answered", global.pendingQuestions[idx]);
+      }
+    }
+    io.to(toSocketId).emit("bot:admin-reply", { text: answer, isAdmin: true, timestamp: new Date() });
+  });
+  
+  socket.on("bot:get-pending", () => {
+    if (global.pendingQuestions?.length) {
+      socket.emit("bot:pending-questions", global.pendingQuestions.filter(q => q.status === "pending"));
+    }
   });
 
   // ================= DISCONNECT HANDLING =================
