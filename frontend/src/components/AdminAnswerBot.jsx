@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-// ✅ IMPORT your configured API instance (NOT plain axios)
 import API from "../api/axios";
 import socket, {
   onUnansweredQuestion,
@@ -19,13 +18,10 @@ export default function AdminAnswerBot() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Identify as admin
     socket.emit("identify_user", { role: "admin" });
-
     fetchList();
     onUnansweredQuestion((q) => setIncoming((prev) => [q, ...prev]));
     onQaUpdated(fetchList);
-
     return () => {
       socket.off("unanswered_question");
       socket.off("qa_updated");
@@ -34,13 +30,11 @@ export default function AdminAnswerBot() {
 
   async function fetchList() {
     try {
-      const res = await API.get("/api/admin/qa/list");
+      // ✅ REMOVED duplicate /api - now correct
+      const res = await API.get("/admin/qa/list");
       if (res.data?.ok) setQaList(res.data.list);
     } catch (err) {
       console.error("Fetch list error:", err);
-      if (err.response?.status === 401) {
-        console.log("Authentication required - please log in again");
-      }
     }
   }
 
@@ -49,10 +43,12 @@ export default function AdminAnswerBot() {
     setLoading(true);
     try {
       if (editId) {
-        await API.put(`/api/admin/qa/update/${editId}`, { question: qText, answer: aText });
+        // ✅ REMOVED duplicate /api
+        await API.put(`/admin/qa/update/${editId}`, { question: qText, answer: aText });
         setEditId(null);
       } else {
-        await API.post("/api/admin/qa/add", { question: qText, answer: aText });
+        // ✅ REMOVED duplicate /api
+        await API.post("/admin/qa/add", { question: qText, answer: aText });
       }
       setQText("");
       setAText("");
@@ -70,7 +66,8 @@ export default function AdminAnswerBot() {
   async function deleteQa(id) {
     if (!window.confirm("Are you sure you want to delete this Q&A?")) return;
     try {
-      await API.delete(`/api/admin/qa/delete/${id}`);
+      // ✅ REMOVED duplicate /api
+      await API.delete(`/admin/qa/delete/${id}`);
       await fetchList();
       refreshAnswerBotCache();
       alert("Q&A deleted successfully");
@@ -93,6 +90,7 @@ export default function AdminAnswerBot() {
     setTab("add");
   }
 
+  // Rest of your JSX remains exactly the same...
   return (
     <>
       {/* Floating Action Button */}

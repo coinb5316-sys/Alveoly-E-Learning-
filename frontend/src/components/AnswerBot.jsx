@@ -1,4 +1,4 @@
-// Updated AnswerBot.jsx - Fix emoji picker
+// Updated AnswerBot.jsx - Complete with admin reply handling
 import React, { useEffect, useState, useRef } from "react";
 import socket, { identifyUser } from "../services/answerSocket";
 import EmojiPicker from "emoji-picker-react";
@@ -39,9 +39,29 @@ export default function AnswerBot({ userId, userName = "Student" }) {
       setIsConnecting(false);
     }
 
+    // Listen for bot replies (automated answers)
     socket.on("bot_reply", (payload) => {
       setIsTyping(false);
-      setMessages((prev) => [...prev, { sender: "bot", text: payload.text, timestamp: new Date() }]);
+      setMessages((prev) => [...prev, { 
+        sender: "bot", 
+        text: payload.text, 
+        timestamp: new Date(),
+        isAdminReply: false 
+      }]);
+      if (!open) {
+        setUnreadCount((prev) => prev + 1);
+      }
+    });
+
+    // ✅ Listen for admin direct replies
+    socket.on("admin_answer_reply", (payload) => {
+      setIsTyping(false);
+      setMessages((prev) => [...prev, { 
+        sender: "bot", 
+        text: `📢 **Admin Response:**\n\n${payload.text}`, 
+        timestamp: new Date(),
+        isAdminReply: true 
+      }]);
       if (!open) {
         setUnreadCount((prev) => prev + 1);
       }
@@ -68,6 +88,7 @@ export default function AnswerBot({ userId, userName = "Student" }) {
     return () => {
       socket.off("bot_reply");
       socket.off("bot_typing");
+      socket.off("admin_answer_reply");
       socket.off("connect_error");
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -110,10 +131,8 @@ export default function AnswerBot({ userId, userName = "Student" }) {
   };
 
   const onEmojiClick = (emojiObject) => {
-    // This properly appends the emoji to the text
     setText((prevText) => prevText + emojiObject.emoji);
     setShowEmojiPicker(false);
-    // Focus back on input after emoji selection
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -225,7 +244,9 @@ export default function AnswerBot({ userId, userName = "Student" }) {
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-md ${
                       msg.sender === "user" 
                         ? "bg-gradient-to-r from-green-500 to-emerald-500" 
-                        : "bg-gradient-to-r from-blue-500 to-purple-500"
+                        : msg.isAdminReply 
+                          ? "bg-gradient-to-r from-orange-500 to-red-500"
+                          : "bg-gradient-to-r from-blue-500 to-purple-500"
                     }`}>
                       {msg.sender === "user" ? (
                         <FaUser className="text-white text-sm" />
@@ -239,13 +260,18 @@ export default function AnswerBot({ userId, userName = "Student" }) {
                       <div className={`px-4 py-2.5 rounded-2xl ${
                         msg.sender === "user"
                           ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-br-sm shadow-md"
-                          : "bg-white text-gray-800 shadow-md rounded-bl-sm border border-gray-100"
+                          : msg.isAdminReply
+                            ? "bg-orange-50 dark:bg-orange-950/20 text-gray-800 shadow-md rounded-bl-sm border border-orange-200 dark:border-orange-800"
+                            : "bg-white text-gray-800 shadow-md rounded-bl-sm border border-gray-100"
                       }`}>
-                        <p className="text-sm leading-relaxed break-words">{msg.text}</p>
+                        <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{msg.text}</p>
                       </div>
                       {msg.timestamp && (
                         <p className={`text-xs text-gray-400 mt-1 px-1 ${msg.sender === "user" ? "text-right" : "text-left"}`}>
                           {formatTime(msg.timestamp)}
+                          {msg.isAdminReply && (
+                            <span className="ml-2 text-xs text-orange-500">✓ Admin response</span>
+                          )}
                         </p>
                       )}
                     </div>
