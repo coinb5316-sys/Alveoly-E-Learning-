@@ -27,6 +27,8 @@ const allowedOrigins = [
   "https://www.alveolye-learning.academy",
   "https://alveoly-platform.onrender.com",
   "https://alveoly-platform-1.onrender.com",
+  "https://alveoly-platform-zp2p.onrender.com",
+  "https://alveoly-platform-sunu.onrender.com",
   CLIENT_URL,
 ].filter(Boolean);
 
