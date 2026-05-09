@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+// ✅ IMPORT your configured API instance (NOT plain axios)
+import API from "../api/axios";
 import socket, {
   onUnansweredQuestion,
   onQaUpdated,
   sendAdminAnswer,
   refreshAnswerBotCache,
 } from "../services/answerSocket";
-
-const API = import.meta.env.VITE_APP_API_BASE_URL || "http://localhost:5000";
 
 export default function AdminAnswerBot() {
   const [open, setOpen] = useState(false);
@@ -17,24 +16,10 @@ export default function AdminAnswerBot() {
   const [aText, setAText] = useState("");
   const [tab, setTab] = useState("incoming");
   const [editId, setEditId] = useState(null);
-  const [isDark, setIsDark] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Check for dark mode preference
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    setIsDark(isDarkMode);
-
-    // Observe dark mode changes
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.attributeName === 'class') {
-          setIsDark(document.documentElement.classList.contains('dark'));
-        }
-      });
-    });
-    observer.observe(document.documentElement, { attributes: true });
-
-    // Identify admin
+    // Identify as admin
     socket.emit("identify_user", { role: "admin" });
 
     fetchList();
@@ -44,45 +29,51 @@ export default function AdminAnswerBot() {
     return () => {
       socket.off("unanswered_question");
       socket.off("qa_updated");
-      observer.disconnect();
     };
   }, []);
 
   async function fetchList() {
     try {
-      const res = await axios.get(`${API}/api/admin/qa/list`);
+      const res = await API.get("/api/admin/qa/list");
       if (res.data?.ok) setQaList(res.data.list);
     } catch (err) {
-      console.error(err);
+      console.error("Fetch list error:", err);
+      if (err.response?.status === 401) {
+        console.log("Authentication required - please log in again");
+      }
     }
   }
 
   async function saveQa() {
-    if (!qText.trim() || !aText.trim()) return alert("Fill both fields");
+    if (!qText.trim() || !aText.trim()) return alert("Please fill both fields");
+    setLoading(true);
     try {
       if (editId) {
-        await axios.put(`${API}/api/admin/qa/update/${editId}`, { question: qText, answer: aText });
+        await API.put(`/api/admin/qa/update/${editId}`, { question: qText, answer: aText });
         setEditId(null);
       } else {
-        await axios.post(`${API}/api/admin/qa/add`, { question: qText, answer: aText });
+        await API.post("/api/admin/qa/add", { question: qText, answer: aText });
       }
       setQText("");
       setAText("");
-      fetchList();
+      await fetchList();
       refreshAnswerBotCache();
       alert(`Q&A ${editId ? "updated" : "added"} successfully`);
     } catch (err) {
       console.error(err);
-      alert("Failed to save Q&A");
+      alert(err.response?.data?.message || "Failed to save Q&A");
+    } finally {
+      setLoading(false);
     }
   }
 
   async function deleteQa(id) {
     if (!window.confirm("Are you sure you want to delete this Q&A?")) return;
     try {
-      await axios.delete(`${API}/api/admin/qa/delete/${id}`);
-      fetchList();
+      await API.delete(`/api/admin/qa/delete/${id}`);
+      await fetchList();
       refreshAnswerBotCache();
+      alert("Q&A deleted successfully");
     } catch (err) {
       console.error(err);
       alert("Failed to delete Q&A");
@@ -198,7 +189,7 @@ export default function AdminAnswerBot() {
                           <div className="flex gap-2">
                             <button
                               onClick={() => {
-                                const answer = window.prompt("Write answer:", "");
+                                const answer = window.prompt("Write your answer:", "");
                                 if (answer) replyTo(inc.socketId, answer);
                               }}
                               className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-1"
@@ -243,9 +234,10 @@ export default function AdminAnswerBot() {
                   <div className="flex gap-3 pt-2">
                     <button
                       onClick={saveQa}
-                      className="flex-1 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200 transform hover:scale-[1.02]"
+                      disabled={loading}
+                      className="flex-1 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50"
                     >
-                      {editId ? "✏️ Update Q&A" : "➕ Add Q&A"}
+                      {loading ? "Saving..." : (editId ? "✏️ Update Q&A" : "➕ Add Q&A")}
                     </button>
                     {editId && (
                       <button
