@@ -1,4 +1,4 @@
-// server.js - Complete Socket.IO configuration with notifications
+// server.js - Cleaned version (FAQ routes removed - they are in faqRoutes.js)
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
@@ -56,112 +56,6 @@ export const io = new Server(httpServer, {
   allowUpgrades: true,
   perMessageDeflate: false,
   httpCompression: false,
-});
-
-// ================= FAQ API ROUTES (DIRECT IN SERVER.JS) =================
-// Get all FAQs
-app.get("/api/faqs", async (req, res) => {
-  try {
-    const faqs = await FAQ.find({ isActive: true }).sort({ createdAt: -1 });
-    res.json({ success: true, data: faqs });
-  } catch (error) {
-    console.error("Get FAQs error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Search FAQs
-app.get("/api/faqs/search", async (req, res) => {
-  try {
-    const { q } = req.query;
-    if (!q) return res.json({ success: true, data: [] });
-    const searchTerm = q.toLowerCase().trim();
-    const keywords = searchTerm.split(/\s+/).filter(w => w.length > 2);
-    const faqs = await FAQ.find({
-      isActive: true,
-      $or: [
-        { question: { $regex: searchTerm, $options: 'i' } },
-        { answer: { $regex: searchTerm, $options: 'i' } },
-        { keywords: { $in: keywords } }
-      ]
-    }).limit(5);
-    for (const faq of faqs) { faq.views += 1; await faq.save(); }
-    res.json({ success: true, data: faqs });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Get single FAQ
-app.get("/api/faqs/:id", async (req, res) => {
-  try {
-    const faq = await FAQ.findById(req.params.id);
-    if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
-    res.json({ success: true, data: faq });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Create FAQ (Admin)
-app.post("/api/faqs", async (req, res) => {
-  try {
-    const { question, answer, category } = req.body;
-    if (!question || !answer) {
-      return res.status(400).json({ success: false, message: "Question and answer required" });
-    }
-    const existing = await FAQ.findOne({ question });
-    if (existing) {
-      return res.status(400).json({ success: false, message: "FAQ already exists" });
-    }
-    const faq = await FAQ.create({ question, answer, category: category || "general" });
-    res.status(201).json({ success: true, data: faq, message: "FAQ created successfully" });
-  } catch (error) {
-    console.error("Create FAQ error:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Update FAQ (Admin)
-app.put("/api/faqs/:id", async (req, res) => {
-  try {
-    const { question, answer, category, isActive } = req.body;
-    const faq = await FAQ.findByIdAndUpdate(
-      req.params.id,
-      { question, answer, category, isActive },
-      { new: true, runValidators: true }
-    );
-    if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
-    res.json({ success: true, data: faq, message: "FAQ updated successfully" });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Delete FAQ (Admin)
-app.delete("/api/faqs/:id", async (req, res) => {
-  try {
-    const faq = await FAQ.findByIdAndDelete(req.params.id);
-    if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
-    res.json({ success: true, message: "FAQ deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Mark FAQ as helpful/unhelpful
-app.post("/api/faqs/:id/helpful", async (req, res) => {
-  try {
-    const { helpful } = req.body;
-    const faq = await FAQ.findById(req.params.id);
-    if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
-    if (helpful === true) faq.helpful.yes += 1;
-    else if (helpful === false) faq.helpful.no += 1;
-    await faq.save();
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
 });
 
 // ================= SOCKET.IO CONNECTION HANDLER =================
@@ -399,8 +293,4 @@ httpServer.listen(PORT, () => {
   console.log(`   - GET  /                Health check`);
   console.log(`   - GET  /socket-status   Socket.IO status`);
   console.log(`   - GET  /socket-stats    Detailed connection stats`);
-  console.log(`   - GET  /api/faqs         Get all FAQs`);
-  console.log(`   - POST /api/faqs        Create FAQ`);
-  console.log(`   - PUT  /api/faqs/:id    Update FAQ`);
-  console.log(`   - DELETE /api/faqs/:id  Delete FAQ`);
 });

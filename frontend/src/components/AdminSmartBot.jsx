@@ -3,7 +3,7 @@ import API from "../api/axios";
 import { io } from "socket.io-client";
 import { FaPlus, FaEdit, FaTrash, FaSearch, FaTimes, FaComments, FaEye, FaThumbsUp, FaSpinner } from "react-icons/fa";
 
-const SOCKET_URL = import.meta.env.VITE_APP_API_BASE_URL || "https://alveoly-platform.onrender.com";
+const SOCKET_URL = import.meta.env.VITE_APP_API_BASE_URL || "https://alveoly-platform-sunu.onrender.com";
 
 const AdminSmartBot = () => {
   const [faqs, setFaqs] = useState([]);

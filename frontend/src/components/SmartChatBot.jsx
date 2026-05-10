@@ -3,8 +3,7 @@ import { FaComments, FaTimes, FaPaperPlane, FaRobot, FaUser, FaSmile, FaSpinner 
 import EmojiPicker from "emoji-picker-react";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_APP_API_BASE_URL || "https://alveoly-platform.onrender.com";
-
+const SOCKET_URL = import.meta.env.VITE_APP_API_BASE_URL || "https://alveoly-platform-sunu.onrender.com";
 const SmartChatBot = ({ userId, userName = "Guest" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
