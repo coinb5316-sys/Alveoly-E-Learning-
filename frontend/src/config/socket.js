@@ -1,7 +1,7 @@
 // src/config/socket.js
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "https://alveoly-platform.onrender.com";
+const SOCKET_URL = "https://alveoly-platform-sunu.onrender.com";
 
 let socket = null;
 let reconnectAttempts = 0;
