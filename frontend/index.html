@@ -4,121 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 
-    <!-- Primary Meta Tags -->
     <title>Alveoly E-Learning Academy - Health & Sciences Education</title>
-    <meta
-      name="description"
-      content="Alveoly E-Learning Academy offers world-class health and sciences education with flexible online learning, expert-led courses, and career-focused programs."
-    />
+    <meta name="description" content="Alveoly E-Learning Academy offers world-class health and sciences education..." />
     <link rel="canonical" href="https://alveolyelearning.academy" />
 
-    <!-- Favicon / Icons -->
     <link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/logo.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/logo.png" />
 
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-    <!-- Open Graph / Social Media -->
-    <meta property="og:title" content="Alveoly E-Learning Academy - Health & Sciences Education" />
-    <meta
-      property="og:description"
-      content="World-class health and sciences education with flexible online learning, expert-led courses, and career-focused programs."
-    />
-    <meta property="og:image" content="https://alveolyelearning.academy/logo.png" />
-    <meta property="og:url" content="https://alveolyelearning.academy" />
-    <meta property="og:type" content="website" />
-
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Alveoly E-Learning Academy - Health & Sciences Education" />
-    <meta
-      name="twitter:description"
-      content="World-class health and sciences education with flexible online learning, expert-led courses, and career-focused programs."
-    />
-    <meta name="twitter:image" content="https://alveolye-learning.academy/logo.png" />
-
-    <!-- Structured Data (JSON-LD) -->
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "EducationalOrganization",
-        "name": "Alveoly E-Learning Academy of Health and Sciences",
-        "url": "https://alveolye-learning.academy",
-        "logo": "https://alveolye-learning.academy/logo.png",
-        "description": "Premier online academy for health and sciences education",
-        "sameAs": [
-          "https://www.facebook.com/alveolyelearning",
-          "https://twitter.com/alveolyehealth",
-          "https://www.linkedin.com/company/alveoly-health-sciences"
-        ],
-        "address": {
-          "@type": "PostalAddress",
-          "addressCountry": "GH"
-        }
-      }
-    </script>
-
-    <!-- Preload critical assets -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    
-    <!-- FORCE OVERRIDE - Fix all localhost connections -->
-    <script>
-      // Force all WebSocket connections to use production server
-      (function() {
-        const PROD_URL = 'https://alveoly-e-learning-of-health-api.onrender.com';
-        const PROD_WS_URL = 'wss://alveoly-e-learning-of-health-api.onrender.com';
-        
-        console.log('🔧 Force fix: Redirecting all connections to production');
-        
-        // Override WebSocket
-        const OriginalWebSocket = window.WebSocket;
-        window.WebSocket = function(url, protocols) {
-          if (url && (url.includes('localhost:5000') || url.includes('ws://localhost'))) {
-            url = url.replace('ws://localhost:5000', PROD_WS_URL);
-            url = url.replace('http://localhost:5000', PROD_URL);
-            console.log('✅ Fixed WebSocket URL:', url);
-          }
-          return new OriginalWebSocket(url, protocols);
-        };
-        
-        // Override fetch
-        const OriginalFetch = window.fetch;
-        window.fetch = function(url, options) {
-          if (typeof url === 'string' && url.includes('localhost:5000')) {
-            url = url.replace('http://localhost:5000', PROD_URL);
-            console.log('✅ Fixed fetch URL:', url);
-          }
-          return OriginalFetch(url, options);
-        };
-        
-        // Override XMLHttpRequest
-        const OriginalXHROpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
-          if (typeof url === 'string' && url.includes('localhost:5000')) {
-            url = url.replace('http://localhost:5000', PROD_URL);
-            console.log('✅ Fixed XHR URL:', url);
-          }
-          return OriginalXHROpen.call(this, method, url, async, user, password);
-        };
-        
-        // Set global variables
-        window.__API_URL__ = PROD_URL;
-        window.__SOCKET_URL__ = PROD_URL;
-        
-        console.log('✅ Force fix applied successfully');
-      })();
-    </script>
+    <!-- REMOVE THE FORCE FIX SCRIPT COMPLETELY -->
   </head>
 
   <body>
-    <!-- ROOT DIV FOR REACT -->
     <div id="root"></div>
-
-    <!-- MAIN REACT ENTRY -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
