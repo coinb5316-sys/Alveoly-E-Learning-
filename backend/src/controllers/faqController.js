@@ -17,7 +17,6 @@ export const getFAQById = async (req, res) => {
     if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
     res.json({ success: true, data: faq });
   } catch (error) {
-    console.error("Get FAQ by ID error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -25,6 +24,8 @@ export const getFAQById = async (req, res) => {
 export const createFAQ = async (req, res) => {
   try {
     const { question, answer, category } = req.body;
+    
+    console.log("📝 Received FAQ data:", { question, answer, category });
     
     if (!question || !answer) {
       return res.status(400).json({ success: false, message: "Question and answer are required" });
@@ -36,26 +37,22 @@ export const createFAQ = async (req, res) => {
       return res.status(400).json({ success: false, message: "FAQ with this question already exists" });
     }
     
-    // Create FAQ without createdBy to avoid User reference issues
-    const faqData = {
-      question,
-      answer,
+    // Create FAQ - simplified without createdBy to avoid issues
+    const faq = new FAQ({
+      question: question.trim(),
+      answer: answer.trim(),
       category: category || "general",
       isActive: true,
       views: 0,
       helpful: { yes: 0, no: 0 }
-    };
+    });
     
-    // Only add createdBy if user exists and is authenticated
-    if (req.user && req.user._id) {
-      faqData.createdBy = req.user._id;
-    }
+    const savedFaq = await faq.save();
+    console.log("✅ FAQ saved successfully:", savedFaq._id);
     
-    const faq = await FAQ.create(faqData);
-    
-    res.status(201).json({ success: true, data: faq, message: "FAQ created successfully" });
+    res.status(201).json({ success: true, data: savedFaq, message: "FAQ created successfully" });
   } catch (error) {
-    console.error("Create FAQ error:", error);
+    console.error("❌ Create FAQ error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -64,21 +61,18 @@ export const updateFAQ = async (req, res) => {
   try {
     const { question, answer, category, isActive } = req.body;
     
-    const updateData = { updatedAt: Date.now() };
-    if (question !== undefined) updateData.question = question;
-    if (answer !== undefined) updateData.answer = answer;
-    if (category !== undefined) updateData.category = category;
-    if (isActive !== undefined) updateData.isActive = isActive;
-    
-    const faq = await FAQ.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
-    
+    const faq = await FAQ.findById(req.params.id);
     if (!faq) {
       return res.status(404).json({ success: false, message: "FAQ not found" });
     }
+    
+    if (question !== undefined) faq.question = question;
+    if (answer !== undefined) faq.answer = answer;
+    if (category !== undefined) faq.category = category;
+    if (isActive !== undefined) faq.isActive = isActive;
+    faq.updatedAt = Date.now();
+    
+    await faq.save();
     
     res.json({ success: true, data: faq, message: "FAQ updated successfully" });
   } catch (error) {
@@ -117,7 +111,6 @@ export const searchFAQs = async (req, res) => {
       ]
     }).limit(5);
     
-    // Increment view count
     for (const faq of faqs) {
       faq.views += 1;
       await faq.save();
@@ -125,7 +118,6 @@ export const searchFAQs = async (req, res) => {
     
     res.json({ success: true, data: faqs });
   } catch (error) {
-    console.error("Search FAQs error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -134,20 +126,14 @@ export const markHelpful = async (req, res) => {
   try {
     const { helpful } = req.body;
     const faq = await FAQ.findById(req.params.id);
-    if (!faq) {
-      return res.status(404).json({ success: false, message: "FAQ not found" });
-    }
+    if (!faq) return res.status(404).json({ success: false, message: "FAQ not found" });
     
-    if (helpful === true) {
-      faq.helpful.yes += 1;
-    } else if (helpful === false) {
-      faq.helpful.no += 1;
-    }
+    if (helpful === true) faq.helpful.yes += 1;
+    else if (helpful === false) faq.helpful.no += 1;
     
     await faq.save();
     res.json({ success: true });
   } catch (error) {
-    console.error("Mark helpful error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
