@@ -1,51 +1,38 @@
-// LecturerContentForm.jsx
+// LecturerContentForm.jsx - Simplified create/edit form
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
+import toast, { Toaster } from "react-hot-toast";
 import {
   Save,
   X,
-  Plus,
-  Trash2,
   Upload,
   FileText,
-  Clock,
-  Target,
-  Lock,
-  Eye,
-  AlertCircle,
+  Video,
+  Image,
+  HelpCircle,
+  DollarSign,
   Loader2,
-  ChevronDown,
-  ChevronUp,
-  HelpCircle
+  ArrowLeft
 } from "lucide-react";
 
 const LecturerContentForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const queryParams = new URLSearchParams(location.search);
-  const defaultType = queryParams.get("type") || "lesson";
-
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [courses, setCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [file, setFile] = useState(null);
   const [formData, setFormData] = useState({
     title: "",
-    type: defaultType,
-    description: "",
+    type: "video",
     courseId: "",
     subjectId: "",
-    content: "",
-    questions: [],
-    timerMinutes: 0,
-    passMark: 70,
-    maxAttempts: 1,
-    isLocked: false,
-    orderIndex: 0
+    isPaid: false,
+    price: "",
+    thumbnail: null
   });
-  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     fetchCourses();
@@ -54,10 +41,11 @@ const LecturerContentForm = () => {
 
   const fetchCourses = async () => {
     try {
-      const res = await axios.get("/api/courses");
+      const res = await axios.get("/courses");
       setCourses(res.data);
     } catch (err) {
       console.error("Fetch courses error:", err);
+      toast.error("Failed to fetch courses");
     }
   };
 
@@ -66,10 +54,24 @@ const LecturerContentForm = () => {
       setLoading(true);
       const res = await axios.get(`/api/lecturer/content/${id}`);
       if (res.data.success) {
-        setFormData(res.data.content);
+        const content = res.data.content;
+        setFormData({
+          title: content.title,
+          type: content.type,
+          courseId: content.courseId || "",
+          subjectId: content.subjectId || "",
+          isPaid: content.isPaid,
+          price: content.price || "",
+          thumbnail: null
+        });
+        // Fetch subjects for the course
+        if (content.courseId) {
+          fetchSubjects(content.courseId);
+        }
       }
     } catch (err) {
       console.error("Fetch content error:", err);
+      toast.error("Failed to fetch content");
     } finally {
       setLoading(false);
     }
@@ -78,7 +80,7 @@ const LecturerContentForm = () => {
   const fetchSubjects = async (courseId) => {
     if (!courseId) return;
     try {
-      const res = await axios.get(`/api/subjects?courseId=${courseId}`);
+      const res = await axios.get(`/subjects?courseId=${courseId}`);
       setSubjects(res.data);
     } catch (err) {
       console.error("Fetch subjects error:", err);
@@ -86,82 +88,86 @@ const LecturerContentForm = () => {
   };
 
   const handleChange = (e) => {
-    const { name, value, type: inputType, checked } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: inputType === "checkbox" ? checked : value
+      [name]: type === "checkbox" ? checked : value
     }));
+    
     if (name === "courseId") {
       setFormData(prev => ({ ...prev, subjectId: "" }));
       fetchSubjects(value);
     }
   };
 
-  const handleQuestionChange = (index, field, value) => {
-    const updatedQuestions = [...formData.questions];
-    updatedQuestions[index][field] = value;
-    setFormData(prev => ({ ...prev, questions: updatedQuestions }));
-  };
-
-  const addQuestion = () => {
-    setFormData(prev => ({
-      ...prev,
-      questions: [
-        ...prev.questions,
-        {
-          question: "",
-          options: ["", "", "", ""],
-          correctAnswer: "",
-          points: 1,
-          rationale: "",
-          type: "multiple-choice"
-        }
-      ]
-    }));
-  };
-
-  const removeQuestion = (index) => {
-    const updatedQuestions = formData.questions.filter((_, i) => i !== index);
-    setFormData(prev => ({ ...prev, questions: updatedQuestions }));
-  };
-
-  const handleOptionChange = (qIndex, optIndex, value) => {
-    const updatedQuestions = [...formData.questions];
-    updatedQuestions[qIndex].options[optIndex] = value;
-    setFormData(prev => ({ ...prev, questions: updatedQuestions }));
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.title) newErrors.title = "Title is required";
-    if (!formData.courseId) newErrors.courseId = "Course is required";
-    if (!formData.subjectId) newErrors.subjectId = "Subject is required";
-    
-    if (formData.type !== "lesson" && formData.questions.length === 0) {
-      newErrors.questions = "At least one question is required";
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    
+    if (!formData.title) {
+      toast.error("Please enter a title");
+      return;
+    }
+    
+    if (!formData.courseId) {
+      toast.error("Please select a course");
+      return;
+    }
+    
+    if (!formData.subjectId) {
+      toast.error("Please select a subject");
+      return;
+    }
+    
+    if (formData.type !== "quiz" && !file && !id) {
+      toast.error("Please select a file to upload");
+      return;
+    }
     
     setSaving(true);
+    const submitData = new FormData();
+    submitData.append("title", formData.title);
+    submitData.append("type", formData.type);
+    submitData.append("courseId", formData.courseId);
+    submitData.append("subjectId", formData.subjectId);
+    submitData.append("isPaid", formData.isPaid);
+    submitData.append("price", formData.price);
+    
+    if (file) submitData.append("file", file);
+    if (formData.thumbnail) submitData.append("thumbnail", formData.thumbnail);
+    
+    if (formData.type === "quiz") {
+      submitData.append("quizTimerMinutes", "0");
+      submitData.append("quizPassMark", "70");
+    }
+    
     try {
       if (id) {
-        await axios.put(`/api/lecturer/content/${id}`, formData);
+        await axios.put(`/api/lecturer/content/${id}`, submitData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        toast.success("Content updated successfully");
       } else {
-        await axios.post("/api/lecturer/content", formData);
+        await axios.post("/api/lecturer/content", submitData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        toast.success("Content created successfully");
       }
       navigate("/lecturer/content");
     } catch (err) {
       console.error("Save error:", err);
-      alert(err.response?.data?.message || "Failed to save content");
+      toast.error(err.response?.data?.message || "Failed to save content");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const getTypeIcon = (type) => {
+    switch(type) {
+      case "video": return <Video className="h-5 w-5" />;
+      case "image": return <Image className="h-5 w-5" />;
+      case "pdf": return <FileText className="h-5 w-5" />;
+      case "quiz": return <HelpCircle className="h-5 w-5" />;
+      default: return <FileText className="h-5 w-5" />;
     }
   };
 
@@ -174,16 +180,27 @@ const LecturerContentForm = () => {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto">
+    <form onSubmit={handleSubmit} className="space-y-6 max-w-3xl mx-auto">
+      <Toaster position="top-right" />
+      
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-            {id ? "Edit Content" : `Create New ${formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}`}
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Fill in the details below to create engaging content for your students
-          </p>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => navigate("/lecturer/content")}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {id ? "Edit Content" : "Create New Content"}
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Upload learning materials for your students
+            </p>
+          </div>
         </div>
         <div className="flex gap-3">
           <button
@@ -196,274 +213,164 @@ const LecturerContentForm = () => {
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "Saving..." : "Save Content"}
+            {saving ? "Saving..." : (id ? "Update" : "Create")}
           </button>
         </div>
       </div>
 
-      {/* Basic Info */}
-      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Basic Information</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Title *
-            </label>
-            <input
-              type="text"
-              name="title"
-              value={formData.title}
-              onChange={handleChange}
-              placeholder="Enter content title"
-              className={`w-full px-4 py-2 rounded-lg border ${errors.title ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-            />
-            {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Description
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows="3"
-              placeholder="Describe what students will learn"
-              className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Course *
-              </label>
-              <select
-                name="courseId"
-                value={formData.courseId}
-                onChange={handleChange}
-                className={`w-full px-4 py-2 rounded-lg border ${errors.courseId ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} bg-white dark:bg-gray-800`}
-              >
-                <option value="">Select a course</option>
-                {courses.map(course => (
-                  <option key={course._id} value={course._id}>{course.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Subject *
-              </label>
-              <select
-                name="subjectId"
-                value={formData.subjectId}
-                onChange={handleChange}
-                className={`w-full px-4 py-2 rounded-lg border ${errors.subjectId ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} bg-white dark:bg-gray-800`}
-              >
-                <option value="">Select a subject</option>
-                {subjects.map(subject => (
-                  <option key={subject._id} value={subject._id}>{subject.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+      {/* Form Content */}
+      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-5">
+        {/* Title */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Title *
+          </label>
+          <input
+            type="text"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            placeholder="Enter content title"
+            className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
         </div>
-      </div>
 
-      {/* Content Settings */}
-      {formData.type !== "lesson" && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Assessment Settings</h2>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                <Clock className="inline h-3 w-3 mr-1" />
-                Timer (minutes)
-              </label>
-              <input
-                type="number"
-                name="timerMinutes"
-                value={formData.timerMinutes}
-                onChange={handleChange}
-                min="0"
-                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-              />
-              <p className="text-xs text-gray-500 mt-1">0 = No time limit</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                <Target className="inline h-3 w-3 mr-1" />
-                Pass Mark (%)
-              </label>
-              <input
-                type="number"
-                name="passMark"
-                value={formData.passMark}
-                onChange={handleChange}
-                min="0"
-                max="100"
-                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Max Attempts
-              </label>
-              <input
-                type="number"
-                name="maxAttempts"
-                value={formData.maxAttempts}
-                onChange={handleChange}
-                min="1"
-                className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Questions Section */}
-      {formData.type !== "lesson" && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Questions</h2>
-            <button
-              type="button"
-              onClick={addQuestion}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-50 dark:bg-blue-950/30 text-blue-600 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-            >
-              <Plus className="h-3 w-3" />
-              Add Question
-            </button>
-          </div>
-          {errors.questions && <p className="text-xs text-red-500 mb-4">{errors.questions}</p>}
-          
-          <div className="space-y-6">
-            {formData.questions.map((question, qIndex) => (
-              <div key={qIndex} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-4">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Question {qIndex + 1}
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => removeQuestion(qIndex)}
-                    className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20"
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  <textarea
-                    value={question.question}
-                    onChange={(e) => handleQuestionChange(qIndex, "question", e.target.value)}
-                    placeholder="Enter your question"
-                    rows="2"
-                    className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500"
-                  />
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm text-gray-600 dark:text-gray-400">Options</label>
-                    {question.options.map((option, optIndex) => (
-                      <div key={optIndex} className="flex items-center gap-2">
-                        <span className="w-6 text-sm font-medium text-gray-500">
-                          {String.fromCharCode(65 + optIndex)}.
-                        </span>
-                        <input
-                          type="text"
-                          value={option}
-                          onChange={(e) => handleOptionChange(qIndex, optIndex, e.target.value)}
-                          placeholder={`Option ${String.fromCharCode(65 + optIndex)}`}
-                          className="flex-1 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                        Correct Answer
-                      </label>
-                      <select
-                        value={question.correctAnswer}
-                        onChange={(e) => handleQuestionChange(qIndex, "correctAnswer", e.target.value)}
-                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-                      >
-                        <option value="">Select correct answer</option>
-                        {question.options.map((_, optIndex) => (
-                          <option key={optIndex} value={String.fromCharCode(65 + optIndex)}>
-                            {String.fromCharCode(65 + optIndex)} - {question.options[optIndex] || `Option ${String.fromCharCode(65 + optIndex)}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                        Points
-                      </label>
-                      <input
-                        type="number"
-                        value={question.points}
-                        onChange={(e) => handleQuestionChange(qIndex, "points", parseInt(e.target.value))}
-                        min="1"
-                        className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                      Rationale/Explanation (Optional)
-                    </label>
-                    <textarea
-                      value={question.rationale}
-                      onChange={(e) => handleQuestionChange(qIndex, "rationale", e.target.value)}
-                      placeholder="Explain why this answer is correct"
-                      rows="2"
-                      className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
+        {/* Type */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Content Type *
+          </label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {["video", "image", "pdf", "quiz"].map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, type }))}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border transition-all ${
+                  formData.type === type
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-600"
+                    : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                }`}
+              >
+                {getTypeIcon(type)}
+                <span className="capitalize">{type}</span>
+              </button>
             ))}
           </div>
-          
-          {formData.questions.length === 0 && (
-            <div className="text-center py-8">
-              <HelpCircle className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-500">No questions added yet</p>
-              <button
-                type="button"
-                onClick={addQuestion}
-                className="text-blue-600 text-sm mt-2"
-              >
-                Add your first question
-              </button>
+        </div>
+
+        {/* Course & Subject */}
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Course *
+            </label>
+            <select
+              name="courseId"
+              value={formData.courseId}
+              onChange={handleChange}
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select a course</option>
+              {courses.map(course => (
+                <option key={course._id} value={course._id}>{course.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Subject *
+            </label>
+            <select
+              name="subjectId"
+              value={formData.subjectId}
+              onChange={handleChange}
+              disabled={!formData.courseId}
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              <option value="">Select a subject</option>
+              {subjects.map(subject => (
+                <option key={subject._id} value={subject._id}>{subject.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Premium Toggle */}
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              name="isPaid"
+              checked={formData.isPaid}
+              onChange={handleChange}
+              className="rounded border-gray-300 dark:border-gray-600"
+            />
+            Premium Content
+          </label>
+          {formData.isPaid && (
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="number"
+                name="price"
+                placeholder="Price"
+                value={formData.price}
+                onChange={handleChange}
+                className="pl-10 pr-4 py-2 w-32 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+              />
             </div>
           )}
         </div>
-      )}
 
-      {/* Lesson Content */}
-      {formData.type === "lesson" && (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Lesson Content</h2>
-          <textarea
-            name="content"
-            value={formData.content}
-            onChange={handleChange}
-            rows="15"
-            placeholder="Write your lesson content here. You can use HTML for formatting..."
-            className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 font-mono text-sm"
+        {/* File Upload (for non-quiz) */}
+        {formData.type !== "quiz" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Content File {!id && "*"}
+            </label>
+            <input
+              type="file"
+              accept={formData.type === "video" ? "video/*" : formData.type === "image" ? "image/*" : "application/pdf"}
+              onChange={(e) => setFile(e.target.files[0])}
+              className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
+            />
+          </div>
+        )}
+
+        {/* Thumbnail */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Thumbnail (Optional)
+          </label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFormData(prev => ({ ...prev, thumbnail: e.target.files[0] }))}
+            className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
           />
         </div>
-      )}
+
+        {/* Quiz Info */}
+        {formData.type === "quiz" && (
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <HelpCircle className="h-5 w-5 text-purple-600" />
+              <div>
+                <p className="text-sm font-medium text-purple-700 dark:text-purple-400">
+                  Quiz Created Successfully
+                </p>
+                <p className="text-xs text-purple-600 dark:text-purple-500 mt-0.5">
+                  After creation, you'll be able to add questions and configure quiz settings
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </form>
   );
 };

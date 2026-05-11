@@ -1,52 +1,57 @@
-// LecturerContentList.jsx
+// LecturerContentList.jsx - Same UI as AdminContent
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 import { Link } from "react-router-dom";
+import toast, { Toaster } from "react-hot-toast";
 import {
   Search,
-  Filter,
   Plus,
   Edit,
   Trash2,
   Eye,
-  EyeOff,
-  Copy,
-  MoreVertical,
   FileText,
-  ClipboardList,
-  Star,
-  FileQuestion,
+  Video,
+  Image,
+  HelpCircle,
+  File,
   Calendar,
-  TrendingUp,
-  ChevronLeft,
-  ChevronRight,
-  Loader2
+  BookOpen,
+  DollarSign,
+  Loader2,
+  X
 } from "lucide-react";
 
 const LecturerContentList = () => {
-  const [content, setContent] = useState([]);
+  const [contents, setContents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState({ type: "", status: "", search: "" });
+  const [filter, setFilter] = useState({ type: "", search: "" });
   const [showDeleteModal, setShowDeleteModal] = useState(null);
+  const [viewer, setViewer] = useState({
+    open: false,
+    type: "",
+    url: "",
+    title: "",
+  });
 
   useEffect(() => {
-    fetchContent();
+    fetchContents();
   }, [filter]);
 
-  const fetchContent = async () => {
+  const fetchContents = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (filter.type) params.append("type", filter.type);
-      if (filter.status !== "") params.append("isPublished", filter.status === "published");
       if (filter.search) params.append("search", filter.search);
       
+      // Lecturer gets their own content only
       const res = await axios.get(`/api/lecturer/content?${params.toString()}`);
       if (res.data.success) {
-        setContent(res.data.content);
+        setContents(res.data.content);
       }
     } catch (err) {
       console.error("Fetch content error:", err);
+      toast.error("Failed to fetch content");
     } finally {
       setLoading(false);
     }
@@ -55,44 +60,66 @@ const LecturerContentList = () => {
   const handleDelete = async (id) => {
     try {
       await axios.delete(`/api/lecturer/content/${id}`);
-      fetchContent();
+      fetchContents();
       setShowDeleteModal(null);
+      toast.success("Content deleted successfully");
     } catch (err) {
       console.error("Delete error:", err);
+      toast.error("Delete failed");
     }
   };
 
-  const handlePublish = async (id, isPublished) => {
-    try {
-      await axios.patch(`/api/lecturer/content/${id}/publish`, { isPublished: !isPublished });
-      fetchContent();
-    } catch (err) {
-      console.error("Publish error:", err);
+  const openViewer = (content) => {
+    if (content.type === "quiz") {
+      // Navigate to quiz viewer or open modal
+      return;
     }
+    setViewer({
+      open: true,
+      type: content.type,
+      url: content.fileUrl,
+      title: content.title,
+    });
+  };
+
+  const closeViewer = () => {
+    setViewer({ open: false, type: "", url: "", title: "" });
   };
 
   const getTypeIcon = (type) => {
-    const icons = {
-      lesson: <FileText className="h-5 w-5 text-blue-500" />,
-      exam: <ClipboardList className="h-5 w-5 text-purple-500" />,
-      practice: <Star className="h-5 w-5 text-green-500" />,
-      assignment: <FileQuestion className="h-5 w-5 text-orange-500" />
-    };
-    return icons[type] || <FileText className="h-5 w-5 text-gray-500" />;
+    switch(type) {
+      case "video": return <Video className="h-4 w-4" />;
+      case "pdf": return <FileText className="h-4 w-4" />;
+      case "image": return <Image className="h-4 w-4" />;
+      case "quiz": return <HelpCircle className="h-4 w-4" />;
+      default: return <File className="h-4 w-4" />;
+    }
+  };
+
+  const getTypeColor = (type) => {
+    switch(type) {
+      case "video": return "from-blue-500 to-cyan-600";
+      case "pdf": return "from-red-500 to-rose-600";
+      case "image": return "from-green-500 to-emerald-600";
+      case "quiz": return "from-purple-500 to-indigo-600";
+      default: return "from-gray-500 to-gray-600";
+    }
   };
 
   const getTypeBadge = (type) => {
     const badges = {
-      lesson: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
-      exam: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400",
-      practice: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
-      assignment: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+      video: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+      pdf: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400",
+      image: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
+      quiz: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
     };
     return badges[type] || "bg-gray-100 dark:bg-gray-800 text-gray-700";
   };
 
   return (
     <div className="space-y-6">
+      <Toaster position="top-right" />
+      
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -100,7 +127,7 @@ const LecturerContentList = () => {
             My Content
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Manage your lessons, exams, practice materials, and assignments
+            Manage your uploaded learning materials
           </p>
         </div>
         <Link
@@ -108,7 +135,7 @@ const LecturerContentList = () => {
           className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-200"
         >
           <Plus className="h-4 w-4" />
-          Create New Content
+          Create Content
         </Link>
       </div>
 
@@ -131,26 +158,17 @@ const LecturerContentList = () => {
             className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
           >
             <option value="">All Types</option>
-            <option value="lesson">Lessons</option>
-            <option value="exam">Exams</option>
-            <option value="practice">Practice</option>
-            <option value="assignment">Assignments</option>
-          </select>
-          <select
-            value={filter.status}
-            onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-            className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
-          >
-            <option value="">All Status</option>
-            <option value="published">Published</option>
-            <option value="draft">Draft</option>
+            <option value="video">Videos</option>
+            <option value="image">Images</option>
+            <option value="pdf">PDFs</option>
+            <option value="quiz">Quizzes</option>
           </select>
         </div>
         <button
-          onClick={fetchContent}
+          onClick={() => setFilter({ type: "", search: "" })}
           className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
         >
-          Refresh
+          Clear Filters
         </button>
       </div>
 
@@ -159,84 +177,102 @@ const LecturerContentList = () => {
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
         </div>
-      ) : content.length === 0 ? (
-        <div className="text-center py-12">
-          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">No content found</p>
-          <Link to="/lecturer/content/create" className="text-blue-600 mt-2 inline-block">
-            Create your first content →
-          </Link>
+      ) : contents.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
+          <div className="flex flex-col items-center">
+            <div className="h-20 w-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+              <File className="h-10 w-10 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              No Content Yet
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 max-w-md">
+              Create your first learning material to get started
+            </p>
+            <Link
+              to="/lecturer/content/create"
+              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
+            >
+              Create Content
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="grid gap-4">
-          {content.map((item) => (
+          {contents.map((content) => (
             <div
-              key={item._id}
+              key={content._id}
               className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 hover:shadow-md transition-all"
             >
               <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800">
-                    {getTypeIcon(item.type)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                        {item.title}
-                      </h3>
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${getTypeBadge(item.type)} capitalize`}>
-                        {item.type}
-                      </span>
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${item.isPublished ? 'bg-green-100 dark:bg-green-900/30 text-green-700' : 'bg-gray-100 dark:bg-gray-800 text-gray-600'}`}>
-                        {item.isPublished ? 'Published' : 'Draft'}
-                      </span>
-                    </div>
-                    {item.description && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                        {item.description}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-4 mt-3">
-                      <div className="flex items-center gap-1 text-xs text-gray-500">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(item.createdAt).toLocaleDateString()}
+                <div className="flex items-start gap-4 flex-1">
+                  {/* Thumbnail */}
+                  <div className={`w-24 h-24 rounded-lg bg-gradient-to-br ${getTypeColor(content.type)} flex-shrink-0 overflow-hidden`}>
+                    {content.type === "quiz" ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center">
+                        <HelpCircle className="text-white/80 text-3xl" />
                       </div>
-                      {item.questions && (
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <FileQuestion className="h-3 w-3" />
-                          {item.questions.length} questions
-                        </div>
+                    ) : content.thumbnailUrl ? (
+                      <img
+                        src={content.thumbnailUrl}
+                        className="w-full h-full object-cover"
+                        alt={content.title}
+                        onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        {getTypeIcon(content.type)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                        {content.title}
+                      </h3>
+                      <span className={`px-2 py-0.5 text-xs rounded-full ${getTypeBadge(content.type)} capitalize`}>
+                        {content.type}
+                      </span>
+                      {content.isPaid && (
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700">
+                          ₵{content.price}
+                        </span>
                       )}
-                      {item.views > 0 && (
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <TrendingUp className="h-3 w-3" />
-                          {item.views} views
-                        </div>
-                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(content.createdAt).toLocaleDateString()}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <BookOpen className="h-3 w-3" />
+                        {content.subjectId?.name || content.courseId?.name || "Unlinked"}
+                      </div>
                     </div>
                   </div>
                 </div>
+
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => handlePublish(item._id, item.isPublished)}
+                    onClick={() => openViewer(content)}
                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    title={item.isPublished ? "Unpublish" : "Publish"}
+                    title="View"
                   >
-                    {item.isPublished ? (
-                      <EyeOff className="h-4 w-4 text-gray-500" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-gray-500" />
-                    )}
+                    <Eye className="h-4 w-4 text-gray-500" />
                   </button>
                   <Link
-                    to={`/lecturer/content/${item._id}/edit`}
+                    to={`/lecturer/content/${content._id}/edit`}
                     className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="Edit"
                   >
                     <Edit className="h-4 w-4 text-gray-500" />
                   </Link>
                   <button
-                    onClick={() => setShowDeleteModal(item)}
+                    onClick={() => setShowDeleteModal(content)}
                     className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+                    title="Delete"
                   >
                     <Trash2 className="h-4 w-4 text-red-500" />
                   </button>
@@ -276,6 +312,33 @@ const LecturerContentList = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Media Viewer */}
+      {viewer.open && (
+        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col">
+          <div className="flex justify-between items-center p-4 text-white bg-black/50 flex-shrink-0">
+            <h3 className="text-lg font-semibold">{viewer.title}</h3>
+            <button onClick={closeViewer} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-4 min-h-0">
+            {viewer.type === "video" && (
+              <video src={viewer.url} controls autoPlay className="max-w-full max-h-full rounded-lg" />
+            )}
+            {viewer.type === "image" && (
+              <img src={viewer.url} alt={viewer.title} className="max-w-full max-h-full rounded-lg" />
+            )}
+            {viewer.type === "pdf" && (
+              <iframe
+                src={`https://docs.google.com/gview?url=${encodeURIComponent(viewer.url)}&embedded=true`}
+                title={viewer.title}
+                className="w-full h-full rounded-lg"
+              />
+            )}
           </div>
         </div>
       )}
