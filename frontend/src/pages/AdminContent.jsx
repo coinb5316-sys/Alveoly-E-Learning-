@@ -1,4 +1,4 @@
-// AdminContent.jsx
+// AdminContent.jsx - Admin sees ALL content with same card layout as Lecturer
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -28,15 +28,14 @@ import {
   Save,
   CircleHelp,
   Search,
-  Filter,
   Calendar,
-  TrendingUp,
-  EyeOff
+  TrendingUp
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-// Quiz Editor Component
+// Quiz Editor Component (same as before)
 const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => {
+  // ... (keep your existing StandaloneQuizEditor component exactly as is)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -199,7 +198,6 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Quiz Settings */}
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <Clock className="h-5 w-5 text-blue-500" />
@@ -243,7 +241,6 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
             </div>
           </div>
 
-          {/* Question Form */}
           <div id="question-form" className="bg-gray-50 dark:bg-gray-800/30 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               {editingIndex !== null ? <Edit className="h-5 w-5 text-yellow-500" /> : <Plus className="h-5 w-5 text-blue-500" />}
@@ -334,7 +331,6 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
             </div>
           </div>
 
-          {/* Questions List */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">Questions List</h3>
@@ -416,7 +412,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
   );
 };
 
-// Main AdminContent Component - Unified with Lecturer UI
+// Main AdminContent Component - Same UI as Lecturer but fetches ALL content
 const AdminContent = () => {
   const [courses, setCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -638,16 +634,6 @@ const AdminContent = () => {
     }
   };
 
-  const getTypeColor = (type) => {
-    switch(type) {
-      case "video": return "from-blue-500 to-cyan-600";
-      case "pdf": return "from-red-500 to-rose-600";
-      case "image": return "from-green-500 to-emerald-600";
-      case "quiz": return "from-purple-500 to-indigo-600";
-      default: return "from-gray-500 to-gray-600";
-    }
-  };
-
   const getTypeBadge = (type) => {
     const badges = {
       video: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
@@ -662,7 +648,7 @@ const AdminContent = () => {
     <div className="space-y-6">
       <Toaster position="top-right" />
       
-      {/* Page Header */}
+      {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
@@ -673,10 +659,7 @@ const AdminContent = () => {
           </p>
         </div>
         <button
-          onClick={() => {
-            resetForm();
-            document.getElementById('upload-form')?.scrollIntoView({ behavior: 'smooth' });
-          }}
+          onClick={() => document.getElementById('upload-form')?.scrollIntoView({ behavior: 'smooth' })}
           className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-200"
         >
           <Plus className="h-4 w-4" />
@@ -684,7 +667,40 @@ const AdminContent = () => {
         </button>
       </div>
 
-      {/* Upload Form */}
+      {/* Filters - Same as Lecturer */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search content..."
+              value={filter.search}
+              onChange={(e) => setFilter({ ...filter, search: e.target.value })}
+              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <select
+            value={filter.type}
+            onChange={(e) => setFilter({ ...filter, type: e.target.value })}
+            className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
+          >
+            <option value="">All Types</option>
+            <option value="video">Videos</option>
+            <option value="image">Images</option>
+            <option value="pdf">PDFs</option>
+            <option value="quiz">Quizzes</option>
+          </select>
+        </div>
+        <button
+          onClick={() => setFilter({ type: "", search: "" })}
+          className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        >
+          Clear Filters
+        </button>
+      </div>
+
+      {/* Upload Form - Same as what Lecturer Content Form should have */}
       <div id="upload-form" className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
@@ -717,16 +733,22 @@ const AdminContent = () => {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Content Type *
               </label>
-              <select
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              >
-                <option value="video">🎥 Video</option>
-                <option value="image">🖼 Image</option>
-                <option value="pdf">📄 PDF</option>
-                <option value="quiz">📝 Quiz</option>
-              </select>
+              <div className="grid grid-cols-4 gap-2">
+                {["video", "image", "pdf", "quiz"].map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setForm({ ...form, type })}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
+                      form.type === type
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -853,40 +875,7 @@ const AdminContent = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search content..."
-              value={filter.search}
-              onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <select
-            value={filter.type}
-            onChange={(e) => setFilter({ ...filter, type: e.target.value })}
-            className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
-          >
-            <option value="">All Types</option>
-            <option value="video">Videos</option>
-            <option value="image">Images</option>
-            <option value="pdf">PDFs</option>
-            <option value="quiz">Quizzes</option>
-          </select>
-        </div>
-        <button
-          onClick={() => setFilter({ type: "", search: "" })}
-          className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-        >
-          Clear Filters
-        </button>
-      </div>
-
-      {/* Content Grid */}
+      {/* Content List - Same UI but fetches ALL content */}
       <div>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Content Library</h2>
@@ -917,12 +906,8 @@ const AdminContent = () => {
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4 flex-1">
                     {/* Thumbnail */}
-                    <div className={`w-24 h-24 rounded-lg bg-gradient-to-br ${getTypeColor(content.type)} flex-shrink-0 overflow-hidden`}>
-                      {content.type === "quiz" ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center">
-                          <HelpCircle className="text-white/80 text-3xl" />
-                        </div>
-                      ) : content.thumbnailUrl ? (
+                    <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex-shrink-0 overflow-hidden">
+                      {content.thumbnailUrl ? (
                         <img
                           src={content.thumbnailUrl}
                           className="w-full h-full object-cover"

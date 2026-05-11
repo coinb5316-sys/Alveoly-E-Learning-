@@ -1,4 +1,4 @@
-// LecturerContentList.jsx - Same UI as AdminContent
+// LecturerContentList.jsx - Same card UI as AdminContent but fetches lecturer's own content
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 import { Link } from "react-router-dom";
@@ -44,7 +44,7 @@ const LecturerContentList = () => {
       if (filter.type) params.append("type", filter.type);
       if (filter.search) params.append("search", filter.search);
       
-      // Lecturer gets their own content only
+      // Lecturer fetches only their own content
       const res = await axios.get(`/api/lecturer/content?${params.toString()}`);
       if (res.data.success) {
         setContents(res.data.content);
@@ -96,16 +96,6 @@ const LecturerContentList = () => {
     }
   };
 
-  const getTypeColor = (type) => {
-    switch(type) {
-      case "video": return "from-blue-500 to-cyan-600";
-      case "pdf": return "from-red-500 to-rose-600";
-      case "image": return "from-green-500 to-emerald-600";
-      case "quiz": return "from-purple-500 to-indigo-600";
-      default: return "from-gray-500 to-gray-600";
-    }
-  };
-
   const getTypeBadge = (type) => {
     const badges = {
       video: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
@@ -139,7 +129,7 @@ const LecturerContentList = () => {
         </Link>
       </div>
 
-      {/* Filters */}
+      {/* Filters - Same as Admin */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 gap-3">
           <div className="relative flex-1 max-w-sm">
@@ -172,7 +162,7 @@ const LecturerContentList = () => {
         </button>
       </div>
 
-      {/* Content List */}
+      {/* Content List - Same card UI as Admin */}
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
@@ -207,12 +197,8 @@ const LecturerContentList = () => {
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
                   {/* Thumbnail */}
-                  <div className={`w-24 h-24 rounded-lg bg-gradient-to-br ${getTypeColor(content.type)} flex-shrink-0 overflow-hidden`}>
-                    {content.type === "quiz" ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center">
-                        <HelpCircle className="text-white/80 text-3xl" />
-                      </div>
-                    ) : content.thumbnailUrl ? (
+                  <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex-shrink-0 overflow-hidden">
+                    {content.thumbnailUrl ? (
                       <img
                         src={content.thumbnailUrl}
                         className="w-full h-full object-cover"
