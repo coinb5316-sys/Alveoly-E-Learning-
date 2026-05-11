@@ -543,6 +543,12 @@ const refreshContent = async () => {
                   }`}>
                     {content.title}
                   </h3>
+
+                  {/* Add this after the h3 title in the content card */}
+<div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mt-1">
+  <GraduationCap className="h-3 w-3" />
+  <span>By: {content.lecturerName || "Admin"}</span>
+</div>
                   
                   <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                     <Clock className="h-3 w-3" />

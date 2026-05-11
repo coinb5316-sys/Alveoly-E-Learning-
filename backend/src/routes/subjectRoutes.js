@@ -1,3 +1,4 @@
+// routes/subjectRoutes.js
 import express from "express";
 import {
   getSubjects,
@@ -7,31 +8,23 @@ import {
   getSubjectById,
   getSubjectsPublic,
 } from "../controllers/subjectController.js";
-
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import { requireSubjectAccess } from "../middleware/accessMiddleware.js";
-
 
 const router = express.Router();
 
 /**
- * ================= STUDENT ACCESS =================
- * Must have:
- * - Logged in
- * - Active (non-expired) plan
+ * ================= ALL AUTHENTICATED USERS (including lecturers) =================
  */
 router.get("/", protect, getSubjects);
-router.get("/", getSubjectsPublic);
+router.get("/public", getSubjectsPublic);
 router.get("/:subjectId", protect, requireSubjectAccess, getSubjectById);
 
 /**
  * ================= ADMIN ACCESS =================
- * Admin can manage subjects without plan restriction
  */
 router.post("/", protect, adminOnly, createSubject);
-
 router.put("/:id", protect, adminOnly, updateSubject);
-
 router.delete("/:id", protect, adminOnly, deleteSubject);
 
 export default router;

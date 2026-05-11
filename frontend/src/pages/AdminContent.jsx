@@ -949,6 +949,12 @@ const AdminContent = () => {
                     </div>
                   </div>
 
+                  {/* After the subject info, add lecturer info */}
+<div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+  <GraduationCap className="h-3 w-3" />
+  <span>By: {content.lecturerName || "Admin"}</span>
+</div>
+
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => openViewer(content)}
