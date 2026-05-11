@@ -51,32 +51,33 @@ const LecturerContentForm = () => {
   };
 
   const fetchContent = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get(`/api/lecturer/content/${id}`);
-      if (res.data.success) {
-        const content = res.data.content;
-        setFormData({
-          title: content.title,
-          type: content.type,
-          linkType: content.subjectId ? "subject" : "course",
-          courseId: content.courseId || "",
-          subjectId: content.subjectId || "",
-          isPaid: content.isPaid,
-          price: content.price || "",
-          thumbnail: null
-        });
-        if (content.courseId) {
-          fetchSubjects(content.courseId);
-        }
+  try {
+    setLoading(true);
+    // ✅ Remove /api prefix - just use /lecturer/content
+    const res = await axios.get(`/lecturer/content/${id}`);
+    if (res.data.success) {
+      const content = res.data.content;
+      setFormData({
+        title: content.title,
+        type: content.type,
+        linkType: content.subjectId ? "subject" : "course",
+        courseId: content.courseId || "",
+        subjectId: content.subjectId || "",
+        isPaid: content.isPaid,
+        price: content.price || "",
+        thumbnail: null
+      });
+      if (content.courseId) {
+        fetchSubjects(content.courseId);
       }
-    } catch (err) {
-      console.error("Fetch content error:", err);
-      toast.error("Failed to fetch content");
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (err) {
+    console.error("Fetch content error:", err);
+    toast.error("Failed to fetch content");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchSubjects = async (courseId) => {
     if (!courseId) return;
@@ -102,73 +103,75 @@ const LecturerContentForm = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.title) {
-      toast.error("Please enter a title");
-      return;
-    }
-    
-    if (formData.linkType === "subject" && !formData.subjectId) {
-      toast.error("Please select a subject");
-      return;
-    }
-    
-    if (formData.linkType === "course" && !formData.courseId) {
-      toast.error("Please select a course");
-      return;
-    }
-    
-    if (formData.type !== "quiz" && !file && !id) {
-      toast.error("Please select a file to upload");
-      return;
-    }
-    
-    setSaving(true);
-    const submitData = new FormData();
-    submitData.append("title", formData.title);
-    submitData.append("type", formData.type);
-    
-    if (file && formData.type !== "quiz") {
-      submitData.append("file", file);
-    }
-    
-    if (formData.thumbnail) submitData.append("thumbnail", formData.thumbnail);
+  e.preventDefault();
+  
+  if (!formData.title) {
+    toast.error("Please enter a title");
+    return;
+  }
+  
+  if (formData.linkType === "subject" && !formData.subjectId) {
+    toast.error("Please select a subject");
+    return;
+  }
+  
+  if (formData.linkType === "course" && !formData.courseId) {
+    toast.error("Please select a course");
+    return;
+  }
+  
+  if (formData.type !== "quiz" && !file && !id) {
+    toast.error("Please select a file to upload");
+    return;
+  }
+  
+  setSaving(true);
+  const submitData = new FormData();
+  submitData.append("title", formData.title);
+  submitData.append("type", formData.type);
+  
+  if (file && formData.type !== "quiz") {
+    submitData.append("file", file);
+  }
+  
+  if (formData.thumbnail) submitData.append("thumbnail", formData.thumbnail);
 
-    if (formData.linkType === "subject") {
-      submitData.append("subjectId", formData.subjectId);
+  if (formData.linkType === "subject") {
+    submitData.append("subjectId", formData.subjectId);
+  } else {
+    submitData.append("courseId", formData.courseId);
+  }
+  
+  submitData.append("isPaid", formData.isPaid);
+  submitData.append("price", formData.price);
+  
+  if (formData.type === "quiz") {
+    submitData.append("quizTimerMinutes", "0");
+    submitData.append("quizPassMark", "70");
+  }
+  
+  try {
+    if (id) {
+      // ✅ Remove /api prefix
+      await axios.put(`/lecturer/content/${id}`, submitData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      toast.success("Content updated successfully");
     } else {
-      submitData.append("courseId", formData.courseId);
+      // ✅ Remove /api prefix
+      await axios.post("/lecturer/content", submitData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      toast.success("Content created successfully");
     }
-    
-    submitData.append("isPaid", formData.isPaid);
-    submitData.append("price", formData.price);
-    
-    if (formData.type === "quiz") {
-      submitData.append("quizTimerMinutes", "0");
-      submitData.append("quizPassMark", "70");
-    }
-    
-    try {
-      if (id) {
-        await axios.put(`/api/lecturer/content/${id}`, submitData, {
-          headers: { "Content-Type": "multipart/form-data" }
-        });
-        toast.success("Content updated successfully");
-      } else {
-        await axios.post("/api/lecturer/content", submitData, {
-          headers: { "Content-Type": "multipart/form-data" }
-        });
-        toast.success("Content created successfully");
-      }
-      navigate("/lecturer/content");
-    } catch (err) {
-      console.error("Save error:", err);
-      toast.error(err.response?.data?.message || "Failed to save content");
-    } finally {
-      setSaving(false);
-    }
-  };
+    navigate("/lecturer/content");
+  } catch (err) {
+    console.error("Save error:", err);
+    toast.error(err.response?.data?.message || "Failed to save content");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const getTypeIcon = (type) => {
     switch(type) {

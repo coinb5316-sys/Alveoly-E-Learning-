@@ -37,37 +37,40 @@ const LecturerContentList = () => {
     fetchContents();
   }, [filter]);
 
-  const fetchContents = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (filter.type) params.append("type", filter.type);
-      if (filter.search) params.append("search", filter.search);
-      
-      // Lecturer fetches only their own content
-      const res = await axios.get(`/api/lecturer/content?${params.toString()}`);
-      if (res.data.success) {
-        setContents(res.data.content);
-      }
-    } catch (err) {
-      console.error("Fetch content error:", err);
-      toast.error("Failed to fetch content");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // LecturerContentList.jsx - Fix the API endpoints
 
-  const handleDelete = async (id) => {
-    try {
-      await axios.delete(`/api/lecturer/content/${id}`);
-      fetchContents();
-      setShowDeleteModal(null);
-      toast.success("Content deleted successfully");
-    } catch (err) {
-      console.error("Delete error:", err);
-      toast.error("Delete failed");
+const fetchContents = async () => {
+  try {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (filter.type) params.append("type", filter.type);
+    if (filter.search) params.append("search", filter.search);
+    
+    // ✅ Remove /api prefix
+    const res = await axios.get(`/lecturer/content?${params.toString()}`);
+    if (res.data.success) {
+      setContents(res.data.content);
     }
-  };
+  } catch (err) {
+    console.error("Fetch content error:", err);
+    toast.error("Failed to fetch content");
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleDelete = async (id) => {
+  try {
+    // ✅ Remove /api prefix
+    await axios.delete(`/lecturer/content/${id}`);
+    fetchContents();
+    setShowDeleteModal(null);
+    toast.success("Content deleted successfully");
+  } catch (err) {
+    console.error("Delete error:", err);
+    toast.error("Delete failed");
+  }
+};
 
   const openViewer = (content) => {
     if (content.type === "quiz") {
