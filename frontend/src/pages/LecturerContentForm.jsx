@@ -79,17 +79,21 @@ const LecturerContentForm = () => {
   }
 };
 
-  const fetchSubjects = async (courseId) => {
-    if (!courseId) return;
-    try {
-      const res = await axios.get(`/subjects?courseId=${courseId}`);
-      setSubjects(res.data);
-    } catch (err) {
-      console.error("Fetch subjects error:", err);
-    }
-  };
+  // LecturerContentForm.jsx - Fix fetchSubjects
+const fetchSubjects = async (courseId) => {
+  if (!courseId) return;
+  try {
+    // ✅ CHANGE: Use 'course' parameter instead of 'courseId'
+    const res = await axios.get(`/subjects?course=${courseId}`);
+    console.log("Subjects fetched:", res.data);
+    setSubjects(res.data);
+  } catch (err) {
+    console.error("Fetch subjects error:", err);
+    toast.error("Failed to fetch subjects");
+  }
+};
 
-  const handleChange = (e) => {
+ const handleChange = (e) => {
   const { name, value, type, checked } = e.target;
   setFormData(prev => ({
     ...prev,
@@ -98,10 +102,10 @@ const LecturerContentForm = () => {
   
   if (name === "courseId") {
     setFormData(prev => ({ ...prev, subjectId: "" }));
+    // ✅ This will now work correctly
     fetchSubjects(value);
   }
   
-  // ✅ Add this: When subject is selected, also set the courseId from that subject
   if (name === "subjectId") {
     const selectedSubject = subjects.find(s => s._id === value);
     if (selectedSubject && selectedSubject.courseId) {
