@@ -39,6 +39,8 @@ const LecturerContentList = () => {
 
   // LecturerContentList.jsx - Fix the API endpoints
 
+// LecturerContentList.jsx - Fix API endpoints
+
 const fetchContents = async () => {
   try {
     setLoading(true);
@@ -46,8 +48,8 @@ const fetchContents = async () => {
     if (filter.type) params.append("type", filter.type);
     if (filter.search) params.append("search", filter.search);
     
-    // ✅ Remove /api prefix
-    const res = await axios.get(`/lecturer/content?${params.toString()}`);
+    // ✅ Add /content prefix
+    const res = await axios.get(`/content/lecturer/content?${params.toString()}`);
     if (res.data.success) {
       setContents(res.data.content);
     }
@@ -61,8 +63,8 @@ const fetchContents = async () => {
 
 const handleDelete = async (id) => {
   try {
-    // ✅ Remove /api prefix
-    await axios.delete(`/lecturer/content/${id}`);
+    // ✅ Add /content prefix
+    await axios.delete(`/content/lecturer/content/${id}`);
     fetchContents();
     setShowDeleteModal(null);
     toast.success("Content deleted successfully");

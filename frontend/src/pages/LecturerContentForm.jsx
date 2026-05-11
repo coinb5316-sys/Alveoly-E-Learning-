@@ -54,7 +54,7 @@ const LecturerContentForm = () => {
   try {
     setLoading(true);
     // ✅ Remove /api prefix - just use /lecturer/content
-    const res = await axios.get(`/lecturer/content/${id}`);
+    const res = await axios.get(`/content/lecturer/content/${id}`);
     if (res.data.success) {
       const content = res.data.content;
       setFormData({
@@ -90,19 +90,29 @@ const LecturerContentForm = () => {
   };
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value
-    }));
-    
-    if (name === "courseId") {
-      setFormData(prev => ({ ...prev, subjectId: "" }));
-      fetchSubjects(value);
+  const { name, value, type, checked } = e.target;
+  setFormData(prev => ({
+    ...prev,
+    [name]: type === "checkbox" ? checked : value
+  }));
+  
+  if (name === "courseId") {
+    setFormData(prev => ({ ...prev, subjectId: "" }));
+    fetchSubjects(value);
+  }
+  
+  // ✅ Add this: When subject is selected, also set the courseId from that subject
+  if (name === "subjectId") {
+    const selectedSubject = subjects.find(s => s._id === value);
+    if (selectedSubject && selectedSubject.courseId) {
+      setFormData(prev => ({ ...prev, courseId: selectedSubject.courseId }));
     }
-  };
+  }
+};
 
-  const handleSubmit = async (e) => {
+  // LecturerContentForm.jsx - COMPLETE FIXED handleSubmit
+
+const handleSubmit = async (e) => {
   e.preventDefault();
   
   if (!formData.title) {
@@ -138,6 +148,16 @@ const LecturerContentForm = () => {
 
   if (formData.linkType === "subject") {
     submitData.append("subjectId", formData.subjectId);
+    // ✅ IMPORTANT: Also send courseId when using subject
+    if (formData.courseId) {
+      submitData.append("courseId", formData.courseId);
+    } else {
+      // Find the courseId from the selected subject
+      const selectedSubject = subjects.find(s => s._id === formData.subjectId);
+      if (selectedSubject && selectedSubject.courseId) {
+        submitData.append("courseId", selectedSubject.courseId);
+      }
+    }
   } else {
     submitData.append("courseId", formData.courseId);
   }
@@ -152,14 +172,12 @@ const LecturerContentForm = () => {
   
   try {
     if (id) {
-      // ✅ Remove /api prefix
-      await axios.put(`/lecturer/content/${id}`, submitData, {
+      await axios.put(`/content/lecturer/content/${id}`, submitData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       toast.success("Content updated successfully");
     } else {
-      // ✅ Remove /api prefix
-      await axios.post("/lecturer/content", submitData, {
+      await axios.post("/content/lecturer/content", submitData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       toast.success("Content created successfully");
