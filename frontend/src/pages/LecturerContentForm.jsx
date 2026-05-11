@@ -1,4 +1,4 @@
-// LecturerContentForm.jsx - Same upload UI as AdminContent's upload form
+// LecturerContentForm.jsx - Complete working version with same UI as Admin
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -35,165 +35,161 @@ const LecturerContentForm = () => {
     thumbnail: null
   });
 
+  // Fetch courses on mount - SAME as Admin
   useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const res = await axios.get("/courses");
+        console.log("Courses loaded:", res.data);
+        setCourses(res.data);
+      } catch (err) {
+        console.error("Fetch courses error:", err);
+        toast.error("Failed to fetch courses");
+      }
+    };
     fetchCourses();
-    if (id) fetchContent();
+  }, []);
+
+  // Fetch content if editing
+  useEffect(() => {
+    if (id) {
+      fetchContent();
+    }
   }, [id]);
 
-  const fetchCourses = async () => {
+  // Fetch subjects when course changes - SAME as Admin
+  const fetchSubjects = async (courseId) => {
+    if (!courseId) {
+      setSubjects([]);
+      return;
+    }
     try {
-      const res = await axios.get("/courses");
-      setCourses(res.data);
+      console.log("Fetching subjects for course:", courseId);
+      const res = await axios.get(`/subjects?courseId=${courseId}`);
+      console.log("Subjects loaded:", res.data);
+      setSubjects(res.data);
     } catch (err) {
-      console.error("Fetch courses error:", err);
-      toast.error("Failed to fetch courses");
+      console.error("Fetch subjects error:", err);
+      toast.error("Failed to fetch subjects");
     }
   };
 
   const fetchContent = async () => {
-  try {
-    setLoading(true);
-    // ✅ Remove /api prefix - just use /lecturer/content
-    const res = await axios.get(`/content/lecturer/content/${id}`);
-    if (res.data.success) {
-      const content = res.data.content;
-      setFormData({
-        title: content.title,
-        type: content.type,
-        linkType: content.subjectId ? "subject" : "course",
-        courseId: content.courseId || "",
-        subjectId: content.subjectId || "",
-        isPaid: content.isPaid,
-        price: content.price || "",
-        thumbnail: null
-      });
-      if (content.courseId) {
-        fetchSubjects(content.courseId);
+    try {
+      setLoading(true);
+      const res = await axios.get(`/content/lecturer/content/${id}`);
+      if (res.data.success) {
+        const content = res.data.content;
+        setFormData({
+          title: content.title,
+          type: content.type,
+          linkType: content.subjectId ? "subject" : "course",
+          courseId: content.courseId || "",
+          subjectId: content.subjectId || "",
+          isPaid: content.isPaid,
+          price: content.price || "",
+          thumbnail: null
+        });
+        if (content.courseId) {
+          await fetchSubjects(content.courseId);
+        }
       }
+    } catch (err) {
+      console.error("Fetch content error:", err);
+      toast.error("Failed to fetch content");
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error("Fetch content error:", err);
-    toast.error("Failed to fetch content");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
-  // LecturerContentForm.jsx - Fix fetchSubjects
-const fetchSubjects = async (courseId) => {
-  if (!courseId) return;
-  try {
-    // ✅ CHANGE: Use 'course' parameter instead of 'courseId'
-    const res = await axios.get(`/subjects?course=${courseId}`);
-    console.log("Subjects fetched:", res.data);
-    setSubjects(res.data);
-  } catch (err) {
-    console.error("Fetch subjects error:", err);
-    toast.error("Failed to fetch subjects");
-  }
-};
-
- const handleChange = (e) => {
-  const { name, value, type, checked } = e.target;
-  setFormData(prev => ({
-    ...prev,
-    [name]: type === "checkbox" ? checked : value
-  }));
-  
-  if (name === "courseId") {
-    setFormData(prev => ({ ...prev, subjectId: "" }));
-    // ✅ This will now work correctly
-    fetchSubjects(value);
-  }
-  
-  if (name === "subjectId") {
-    const selectedSubject = subjects.find(s => s._id === value);
-    if (selectedSubject && selectedSubject.courseId) {
-      setFormData(prev => ({ ...prev, courseId: selectedSubject.courseId }));
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value
+    }));
+    
+    if (name === "courseId") {
+      setFormData(prev => ({ ...prev, subjectId: "" }));
+      fetchSubjects(value);
     }
-  }
-};
+  };
 
-  // LecturerContentForm.jsx - COMPLETE FIXED handleSubmit
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.title) {
+      toast.error("Please enter a title");
+      return;
+    }
+    
+    if (formData.linkType === "subject" && !formData.subjectId) {
+      toast.error("Please select a subject");
+      return;
+    }
+    
+    if (formData.linkType === "course" && !formData.courseId) {
+      toast.error("Please select a course");
+      return;
+    }
+    
+    if (formData.type !== "quiz" && !file && !id) {
+      toast.error("Please select a file to upload");
+      return;
+    }
+    
+    setSaving(true);
+    const submitData = new FormData();
+    submitData.append("title", formData.title);
+    submitData.append("type", formData.type);
+    
+    if (file && formData.type !== "quiz") {
+      submitData.append("file", file);
+    }
+    
+    if (formData.thumbnail) {
+      submitData.append("thumbnail", formData.thumbnail);
+    }
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  if (!formData.title) {
-    toast.error("Please enter a title");
-    return;
-  }
-  
-  if (formData.linkType === "subject" && !formData.subjectId) {
-    toast.error("Please select a subject");
-    return;
-  }
-  
-  if (formData.linkType === "course" && !formData.courseId) {
-    toast.error("Please select a course");
-    return;
-  }
-  
-  if (formData.type !== "quiz" && !file && !id) {
-    toast.error("Please select a file to upload");
-    return;
-  }
-  
-  setSaving(true);
-  const submitData = new FormData();
-  submitData.append("title", formData.title);
-  submitData.append("type", formData.type);
-  
-  if (file && formData.type !== "quiz") {
-    submitData.append("file", file);
-  }
-  
-  if (formData.thumbnail) submitData.append("thumbnail", formData.thumbnail);
-
-  if (formData.linkType === "subject") {
-    submitData.append("subjectId", formData.subjectId);
-    // ✅ IMPORTANT: Also send courseId when using subject
-    if (formData.courseId) {
-      submitData.append("courseId", formData.courseId);
-    } else {
-      // Find the courseId from the selected subject
+    if (formData.linkType === "subject") {
+      submitData.append("subjectId", formData.subjectId);
+      // Get courseId from selected subject
       const selectedSubject = subjects.find(s => s._id === formData.subjectId);
       if (selectedSubject && selectedSubject.courseId) {
         submitData.append("courseId", selectedSubject.courseId);
       }
-    }
-  } else {
-    submitData.append("courseId", formData.courseId);
-  }
-  
-  submitData.append("isPaid", formData.isPaid);
-  submitData.append("price", formData.price);
-  
-  if (formData.type === "quiz") {
-    submitData.append("quizTimerMinutes", "0");
-    submitData.append("quizPassMark", "70");
-  }
-  
-  try {
-    if (id) {
-      await axios.put(`/content/lecturer/content/${id}`, submitData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-      toast.success("Content updated successfully");
     } else {
-      await axios.post("/content/lecturer/content", submitData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-      toast.success("Content created successfully");
+      submitData.append("courseId", formData.courseId);
     }
-    navigate("/lecturer/content");
-  } catch (err) {
-    console.error("Save error:", err);
-    toast.error(err.response?.data?.message || "Failed to save content");
-  } finally {
-    setSaving(false);
-  }
-};
+    
+    submitData.append("isPaid", formData.isPaid);
+    submitData.append("price", formData.price);
+    
+    if (formData.type === "quiz") {
+      submitData.append("quizTimerMinutes", "0");
+      submitData.append("quizPassMark", "70");
+    }
+    
+    try {
+      if (id) {
+        await axios.put(`/content/lecturer/content/${id}`, submitData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        toast.success("Content updated successfully");
+      } else {
+        await axios.post("/content/lecturer/content", submitData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        toast.success("Content created successfully");
+      }
+      navigate("/lecturer/content");
+    } catch (err) {
+      console.error("Save error:", err);
+      toast.error(err.response?.data?.message || "Failed to save content");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const getTypeIcon = (type) => {
     switch(type) {
@@ -272,52 +268,100 @@ const handleSubmit = async (e) => {
         </div>
 
         <div className="grid gap-5">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Title *
-              </label>
-              <input
-                placeholder="Enter content title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Content Type *
-              </label>
-              <div className="grid grid-cols-4 gap-2">
-                {["video", "image", "pdf", "quiz"].map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, type })}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-                      formData.type === type
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
+          {/* Title Field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Title *
+            </label>
+            <input
+              placeholder="Enter content title"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            />
+          </div>
+
+          {/* Content Type Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Content Type *
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {["video", "image", "pdf", "quiz"].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, type })}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
+                    formData.type === type
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
             </div>
           </div>
 
+          {/* Link Type Selection */}
           <div className="grid md:grid-cols-2 gap-4">
-            <select
-              value={formData.linkType}
-              onChange={(e) => setFormData({ ...formData, linkType: e.target.value })}
-              className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            >
-              <option value="subject">Attach to Subject</option>
-              <option value="course">Attach to Course</option>
-            </select>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Link To *
+              </label>
+              <select
+                value={formData.linkType}
+                onChange={(e) => setFormData({ ...formData, linkType: e.target.value, courseId: "", subjectId: "" })}
+                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              >
+                <option value="subject">Attach to Subject</option>
+                <option value="course">Attach to Course</option>
+              </select>
+            </div>
 
             {formData.linkType === "subject" ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Select Course *
+                </label>
+                <select
+                  value={formData.courseId}
+                  onChange={(e) => handleChange({ target: { name: "courseId", value: e.target.value } })}
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="">Select Course</option>
+                  {courses.map((c) => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Select Course *
+                </label>
+                <select
+                  value={formData.courseId}
+                  onChange={(e) => handleChange(e)}
+                  name="courseId"
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="">Select Course</option>
+                  {courses.map((c) => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Subject Selection (only when linkType is subject) */}
+          {formData.linkType === "subject" && formData.courseId && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Select Subject *
+              </label>
               <select
                 value={formData.subjectId}
                 onChange={(e) => setFormData({ ...formData, subjectId: e.target.value })}
@@ -328,20 +372,10 @@ const handleSubmit = async (e) => {
                   <option key={s._id} value={s._id}>{s.name}</option>
                 ))}
               </select>
-            ) : (
-              <select
-                value={formData.courseId}
-                onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              >
-                <option value="">Select Course</option>
-                {courses.map((c) => (
-                  <option key={c._id} value={c._id}>{c.name}</option>
-                ))}
-              </select>
-            )}
-          </div>
+            </div>
+          )}
 
+          {/* Premium Content Toggle */}
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input
@@ -367,6 +401,7 @@ const handleSubmit = async (e) => {
             )}
           </div>
 
+          {/* File Upload for non-quiz content */}
           {formData.type !== "quiz" && (
             <div className="grid md:grid-cols-2 gap-4">
               <div>
@@ -394,6 +429,7 @@ const handleSubmit = async (e) => {
             </div>
           )}
 
+          {/* Quiz Info */}
           {formData.type === "quiz" && (
             <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 rounded-xl p-4">
               <div className="flex items-center gap-3">
@@ -402,7 +438,7 @@ const handleSubmit = async (e) => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-purple-700 dark:text-purple-400">
-                    Quiz Content Created
+                    Quiz Content
                   </p>
                   <p className="text-xs text-purple-600 dark:text-purple-500 mt-0.5">
                     After creating the quiz, you'll be able to add questions, set timer, and configure pass mark.
