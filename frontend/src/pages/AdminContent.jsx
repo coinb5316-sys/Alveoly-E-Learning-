@@ -1,4 +1,4 @@
-// AdminContent.jsx - Admin sees ALL content with same card layout as Lecturer
+// AdminContent.jsx - Fixed imports
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -26,16 +26,11 @@ import {
   Eye,
   Copy,
   Save,
-  CircleHelp,
-  Search,
-  Calendar,
-  TrendingUp
+  CircleHelp
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
-// Quiz Editor Component (same as before)
+// Quiz Editor Component
 const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => {
-  // ... (keep your existing StandaloneQuizEditor component exactly as is)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -198,6 +193,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Quiz Settings */}
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <Clock className="h-5 w-5 text-blue-500" />
@@ -241,6 +237,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
             </div>
           </div>
 
+          {/* Question Form */}
           <div id="question-form" className="bg-gray-50 dark:bg-gray-800/30 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               {editingIndex !== null ? <Edit className="h-5 w-5 text-yellow-500" /> : <Plus className="h-5 w-5 text-blue-500" />}
@@ -331,6 +328,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
             </div>
           </div>
 
+          {/* Questions List */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">Questions List</h3>
@@ -412,7 +410,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
   );
 };
 
-// Main AdminContent Component - Same UI as Lecturer but fetches ALL content
+// Main AdminContent Component
 const AdminContent = () => {
   const [courses, setCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -422,8 +420,7 @@ const AdminContent = () => {
   const [showQuizEditor, setShowQuizEditor] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState({ type: "", search: "" });
-  const [showDeleteModal, setShowDeleteModal] = useState(null);
+  const [showForm, setShowForm] = useState(false);
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -458,16 +455,11 @@ const AdminContent = () => {
       }
     };
     fetchData();
-    fetchContents();
   }, []);
 
   const fetchContents = async () => {
     try {
-      const params = new URLSearchParams();
-      if (filter.type) params.append("type", filter.type);
-      if (filter.search) params.append("search", filter.search);
-      
-      const res = await axios.get(`/content?${params.toString()}`);
+      const res = await axios.get("/content");
       setContents(res.data);
     } catch (err) {
       console.error("Error fetching contents:", err);
@@ -477,91 +469,96 @@ const AdminContent = () => {
 
   useEffect(() => {
     fetchContents();
-  }, [filter]);
+  }, []);
 
-  const handleUpload = async () => {
-    if (!form.title) {
-      toast.error("Please enter a title");
-      return;
-    }
+  // In AdminContent.jsx - Update handleUpload for quiz type
+const handleUpload = async () => {
+  if (!form.title) {
+    toast.error("Please enter a title");
+    return;
+  }
 
-    if (form.linkType === "subject" && !form.subjectId) {
-      toast.error("Please select a subject");
-      return;
-    }
-    
-    if (form.linkType === "course" && !form.courseId) {
-      toast.error("Please select a course");
-      return;
-    }
+  if (form.linkType === "subject" && !form.subjectId) {
+    toast.error("Please select a subject");
+    return;
+  }
+  
+  if (form.linkType === "course" && !form.courseId) {
+    toast.error("Please select a course");
+    return;
+  }
 
-    if (form.type !== "quiz" && !file && !editingId) {
-      toast.error("Please select a file to upload");
-      return;
-    }
+  // For quiz type, file is NOT required
+  if (form.type !== "quiz" && !file && !editingId) {
+    toast.error("Please select a file to upload");
+    return;
+  }
 
-    setLoading(true);
-    const formData = new FormData();
-    formData.append("title", form.title);
-    formData.append("type", form.type);
-    
-    if (file && form.type !== "quiz") {
-      formData.append("file", file);
-    }
-    
-    if (form.thumbnail) formData.append("thumbnail", form.thumbnail);
+  setLoading(true);
+  const formData = new FormData();
+  formData.append("title", form.title);
+  formData.append("type", form.type);
+  
+  // Only append file if it's not a quiz and file exists
+  if (file && form.type !== "quiz") {
+    formData.append("file", file);
+  }
+  
+  if (form.thumbnail) formData.append("thumbnail", form.thumbnail);
 
-    if (form.linkType === "subject") {
-      formData.append("subjectId", form.subjectId);
-      const selectedSubject = subjects.find(s => s._id === form.subjectId);
-      if (selectedSubject && selectedSubject.courseId) {
-        formData.append("courseId", selectedSubject.courseId);
-      } else {
-        toast.error("Selected subject is not associated with a course");
-        setLoading(false);
-        return;
-      }
+  if (form.linkType === "subject") {
+    formData.append("subjectId", form.subjectId);
+    const selectedSubject = subjects.find(s => s._id === form.subjectId);
+    if (selectedSubject && selectedSubject.courseId) {
+      formData.append("courseId", selectedSubject.courseId);
     } else {
-      formData.append("courseId", form.courseId);
-    }
-
-    formData.append("isPaid", form.isPaid);
-    formData.append("price", form.price);
-
-    if (form.type === "quiz") {
-      formData.append("quizTimerMinutes", "0");
-      formData.append("quizPassMark", "70");
-    }
-
-    try {
-      let res;
-      if (editingId) {
-        res = await axios.put(`/content/${editingId}`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        toast.success("Content updated");
-      } else {
-        res = await axios.post("/content/upload", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        toast.success("Uploaded successfully");
-      }
-
-      fetchContents();
-
-      if (form.type === "quiz" && res.data) {
-        setSelectedLesson(res.data);
-        setShowQuizEditor(true);
-      }
-
-      resetForm();
-    } catch (err) {
-      console.error("Upload error:", err);
-      toast.error("Operation failed: " + (err.response?.data?.message || err.message));
-    } finally {
+      toast.error("Selected subject is not associated with a course");
       setLoading(false);
+      return;
     }
-  };
+  } else {
+    formData.append("courseId", form.courseId);
+  }
+
+  formData.append("isPaid", form.isPaid);
+  formData.append("price", form.price);
+
+  // Add quiz-specific fields
+  if (form.type === "quiz") {
+    formData.append("quizTimerMinutes", "0");
+    formData.append("quizPassMark", "70");
+  }
+
+  try {
+    let res;
+    if (editingId) {
+      res = await axios.put(`/content/${editingId}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setContents((prev) => prev.map((c) => (c._id === editingId ? res.data : c)));
+      toast.success("Content updated");
+    } else {
+      res = await axios.post("/content/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setContents((prev) => [res.data, ...prev]);
+      toast.success("Uploaded successfully");
+    }
+
+    // If it's a quiz, open the quiz editor to add questions
+    if (form.type === "quiz" && res.data) {
+      setSelectedLesson(res.data);
+      setShowQuizEditor(true);
+    }
+
+    resetForm();
+  } catch (err) {
+    console.error("Upload error:", err);
+    toast.error("Operation failed: " + (err.response?.data?.message || err.message));
+  } finally {
+    setLoading(false);
+  }
+};
 
   const resetForm = () => {
     setForm({
@@ -576,13 +573,14 @@ const AdminContent = () => {
     });
     setFile(null);
     setEditingId(null);
+    setShowForm(false);
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this content? This action cannot be undone.")) return;
     try {
       await axios.delete(`/content/${id}`);
-      fetchContents();
-      setShowDeleteModal(null);
+      setContents((prev) => prev.filter((c) => c._id !== id));
       toast.success("Content deleted successfully");
     } catch (err) {
       console.error(err);
@@ -603,6 +601,7 @@ const AdminContent = () => {
       thumbnail: null,
     });
     setFile(null);
+    setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -634,93 +633,60 @@ const AdminContent = () => {
     }
   };
 
-  const getTypeBadge = (type) => {
-    const badges = {
-      video: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
-      pdf: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400",
-      image: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
-      quiz: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
-    };
-    return badges[type] || "bg-gray-100 dark:bg-gray-800 text-gray-700";
+  const getTypeColor = (type) => {
+    switch(type) {
+      case "video": return "from-blue-500 to-cyan-600";
+      case "pdf": return "from-red-500 to-rose-600";
+      case "image": return "from-green-500 to-emerald-600";
+      case "quiz": return "from-purple-500 to-indigo-600";
+      default: return "from-gray-500 to-gray-600";
+    }
   };
 
   return (
     <div className="space-y-6">
       <Toaster position="top-right" />
       
-      {/* Header */}
+      {/* Page Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
             Content Management
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Manage all learning materials, videos, PDFs, and quizzes
+            Upload and manage learning materials, videos, PDFs, and quizzes
           </p>
         </div>
         <button
-          onClick={() => document.getElementById('upload-form')?.scrollIntoView({ behavior: 'smooth' })}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-200"
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25"
         >
           <Plus className="h-4 w-4" />
-          Upload Content
+          {showForm ? "Cancel" : "Upload Content"}
         </button>
       </div>
 
-      {/* Filters - Same as Lecturer */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search content..."
-              value={filter.search}
-              onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+      {/* Upload Form */}
+      {showForm && (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <Upload className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {editingId ? "Edit Content" : "Upload New Content"}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {editingId ? "Update your existing content" : "Add new learning materials to the platform"}
+              </p>
+            </div>
           </div>
-          <select
-            value={filter.type}
-            onChange={(e) => setFilter({ ...filter, type: e.target.value })}
-            className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
-          >
-            <option value="">All Types</option>
-            <option value="video">Videos</option>
-            <option value="image">Images</option>
-            <option value="pdf">PDFs</option>
-            <option value="quiz">Quizzes</option>
-          </select>
-        </div>
-        <button
-          onClick={() => setFilter({ type: "", search: "" })}
-          className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-        >
-          Clear Filters
-        </button>
-      </div>
 
-      {/* Upload Form - Same as what Lecturer Content Form should have */}
-      <div id="upload-form" className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <Upload className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {editingId ? "Edit Content" : "Upload New Content"}
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {editingId ? "Update your existing content" : "Add new learning materials to the platform"}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-5">
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Title *
+                Title
               </label>
               <input
                 placeholder="Enter content title"
@@ -729,38 +695,28 @@ const AdminContent = () => {
                 className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Content Type *
-              </label>
-              <div className="grid grid-cols-4 gap-2">
-                {["video", "image", "pdf", "quiz"].map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setForm({ ...form, type })}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-                      form.type === type
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <select
-              value={form.linkType}
-              onChange={(e) => setForm({ ...form, linkType: e.target.value })}
-              className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            >
-              <option value="subject">Attach to Subject</option>
-              <option value="course">Attach to Course</option>
-            </select>
+            <div className="grid md:grid-cols-2 gap-4">
+              <select
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value })}
+                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              >
+                <option value="video">🎥 Video</option>
+                <option value="image">🖼 Image</option>
+                <option value="pdf">📄 PDF</option>
+                <option value="quiz">📝 Quiz</option>
+              </select>
+
+              <select
+                value={form.linkType}
+                onChange={(e) => setForm({ ...form, linkType: e.target.value })}
+                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              >
+                <option value="subject">Attach to Subject</option>
+                <option value="course">Attach to Course</option>
+              </select>
+            </div>
 
             {form.linkType === "subject" ? (
               <select
@@ -785,97 +741,97 @@ const AdminContent = () => {
                 ))}
               </select>
             )}
-          </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input
-                type="checkbox"
-                checked={form.isPaid}
-                onChange={(e) => setForm({ ...form, isPaid: e.target.checked })}
-                className="rounded border-gray-300 dark:border-gray-600"
-              />
-              Premium Content
-            </label>
-            {form.isPaid && (
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                 <input
-                  type="number"
-                  placeholder="Price"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  className="pl-10 pr-4 py-2 w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  type="checkbox"
+                  checked={form.isPaid}
+                  onChange={(e) => setForm({ ...form, isPaid: e.target.checked })}
+                  className="rounded border-gray-300 dark:border-gray-600"
                 />
-              </div>
-            )}
-          </div>
-
-          {form.type !== "quiz" && (
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Content File *
-                </label>
-                <input
-                  type="file"
-                  accept="video/*,image/*,application/pdf"
-                  onChange={(e) => setFile(e.target.files[0])}
-                  className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Thumbnail (Optional)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setForm({ ...form, thumbnail: e.target.files[0] })}
-                  className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
-                />
-              </div>
+                Premium Content
+              </label>
+              {form.isPaid && (
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="number"
+                    placeholder="Price"
+                    value={form.price}
+                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                    className="pl-10 pr-4 py-2 w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              )}
             </div>
-          )}
 
-          {form.type === "quiz" && (
-            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center">
-                  <HelpCircle className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            {form.type !== "quiz" && (
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Content File
+                  </label>
+                  <input
+                    type="file"
+                    accept="video/*,image/*,application/pdf"
+                    onChange={(e) => setFile(e.target.files[0])}
+                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
+                  />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-purple-700 dark:text-purple-400">
-                    Quiz Content Created
-                  </p>
-                  <p className="text-xs text-purple-600 dark:text-purple-500 mt-0.5">
-                    After creating the quiz, you'll be able to add questions, set timer, and configure pass mark.
-                  </p>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Thumbnail (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setForm({ ...form, thumbnail: e.target.files[0] })}
+                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
+                  />
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={handleUpload}
-              disabled={loading}
-              className="flex-1 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {loading ? "Processing..." : (editingId ? "Update Content" : "Upload Content")}
-            </button>
-            <button
-              onClick={resetForm}
-              className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all"
-            >
-              Clear
-            </button>
+            {form.type === "quiz" && (
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 rounded-xl p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center">
+                    <HelpCircle className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-purple-700 dark:text-purple-400">
+                      Quiz Content Created
+                    </p>
+                    <p className="text-xs text-purple-600 dark:text-purple-500 mt-0.5">
+                      After creating the quiz, you'll be able to add questions, set timer, and configure pass mark.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleUpload}
+                disabled={loading}
+                className="flex-1 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {loading ? "Processing..." : (editingId ? "Update Content" : "Upload Content")}
+              </button>
+              <button
+                onClick={resetForm}
+                className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Content List - Same UI but fetches ALL content */}
+      {/* Content Grid */}
       <div>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Content Library</h2>
@@ -894,89 +850,106 @@ const AdminContent = () => {
               <p className="text-gray-500 dark:text-gray-400 max-w-md">
                 Upload your first learning material to get started
               </p>
+              <button
+                onClick={() => setShowForm(true)}
+                className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
+              >
+                Upload Content
+              </button>
             </div>
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {contents.map((content) => (
               <div
                 key={content._id}
-                className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 hover:shadow-md transition-all"
+                onClick={() => openViewer(content)}
+                className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4 flex-1">
-                    {/* Thumbnail */}
-                    <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex-shrink-0 overflow-hidden">
-                      {content.thumbnailUrl ? (
-                        <img
-                          src={content.thumbnailUrl}
-                          className="w-full h-full object-cover"
-                          alt={content.title}
-                          onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          {getTypeIcon(content.type)}
-                        </div>
-                      )}
+                {/* Thumbnail */}
+                <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
+                  {content.type === "quiz" ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center">
+                      <HelpCircle className="text-white/80 text-5xl mb-2" />
+                      <span className="text-white font-medium text-sm">Quiz Content</span>
                     </div>
+                  ) : (
+                    <>
+                      <img
+                        src={content.thumbnailUrl || "/api/placeholder/400/200"}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                        alt={content.title}
+                        onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
+                      />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Eye className="h-12 w-12 text-white" />
+                      </div>
+                    </>
+                  )}
 
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap mb-2">
-                        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                          {content.title}
-                        </h3>
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${getTypeBadge(content.type)} capitalize`}>
-                          {content.type}
-                        </span>
-                        {content.isPaid && (
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700">
-                            ₵{content.price}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(content.createdAt).toLocaleDateString()}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <BookOpen className="h-3 w-3" />
-                          {content.subjectId?.name || content.courseId?.name || "Unlinked"}
-                        </div>
-                      </div>
-                    </div>
+                  {/* Type Badge */}
+                  <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
+                    {getTypeIcon(content.type)}
+                    <span className="capitalize">{content.type}</span>
                   </div>
 
-                  {/* After the subject info, add lecturer info */}
-<div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-  <GraduationCap className="h-3 w-3" />
-  <span>By: {content.lecturerName || "Admin"}</span>
-</div>
+                  {/* Price Badge */}
+                  {content.isPaid && (
+                    <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" />
+                      ₵{content.price}
+                    </div>
+                  )}
+                </div>
 
-                  <div className="flex items-center gap-1">
+                {/* Content Info */}
+                <div className="p-4">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    {content.title}
+                  </h3>
+                  
+                  {/* Meta Info */}
+                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    <span className="capitalize">{content.type}</span>
+                    <span>•</span>
+                    <span>{content.subjectId?.name || content.courseId?.name || "Unlinked"}</span>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => openViewer(content)}
-                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      title="View"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(content);
+                      }}
+                      className="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
                     >
-                      <Eye className="h-4 w-4 text-gray-500" />
+                      <Edit className="h-3.5 w-3.5" />
+                      Edit
                     </button>
                     <button
-                      onClick={() => handleEdit(content)}
-                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                      title="Edit"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(content._id);
+                      }}
+                      className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
                     >
-                      <Edit className="h-4 w-4 text-gray-500" />
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
                     </button>
-                    <button
-                      onClick={() => setShowDeleteModal(content)}
-                      className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </button>
+                    {content.type !== "quiz" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedLesson(content);
+                          setShowQuizEditor(true);
+                        }}
+                        className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Quiz
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -984,39 +957,6 @@ const AdminContent = () => {
           </div>
         )}
       </div>
-
-      {/* Delete Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6">
-            <div className="text-center">
-              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
-                <Trash2 className="h-6 w-6 text-red-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Delete Content
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                Are you sure you want to delete "{showDeleteModal.title}"? This action cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDeleteModal(null)}
-                  className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDelete(showDeleteModal._id)}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Media Viewer */}
       {viewer.open && viewer.type !== "quiz" && (
