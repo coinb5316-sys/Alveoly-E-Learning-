@@ -1,6 +1,4 @@
-// src/polyfills.js - Complete polyfills for WebRTC
-
-// Global object polyfill
+// src/polyfills.js - COMPLETE FIXED VERSION
 if (typeof global === 'undefined') {
   window.global = window;
   self.global = self;
@@ -11,7 +9,6 @@ if (typeof globalThis === 'undefined') {
   self.globalThis = self;
 }
 
-// Process polyfill
 if (typeof process === 'undefined') {
   window.process = {
     env: {},
@@ -36,43 +33,36 @@ if (typeof process === 'undefined') {
   };
 }
 
-// Buffer polyfill - dynamic import to avoid blocking
 if (typeof Buffer === 'undefined') {
-  import('buffer').then(module => {
-    window.Buffer = module.Buffer;
-    console.log('✅ Buffer polyfill loaded');
-  }).catch(err => {
-    console.warn('Buffer polyfill failed, using fallback');
-    window.Buffer = {
-      from: (data) => {
-        if (typeof data === 'string') {
-          return new TextEncoder().encode(data);
-        }
-        return new Uint8Array(data);
-      },
-      isBuffer: () => false,
-      alloc: (size) => new Uint8Array(size),
-      concat: (list) => {
-        let length = 0;
-        for (const buf of list) length += buf.length;
-        const result = new Uint8Array(length);
-        let offset = 0;
-        for (const buf of list) {
-          result.set(buf, offset);
-          offset += buf.length;
-        }
-        return result;
+  const textEncoder = new TextEncoder();
+  window.Buffer = {
+    from: (data) => {
+      if (typeof data === 'string') {
+        return textEncoder.encode(data);
       }
-    };
-  });
+      return new Uint8Array(data);
+    },
+    isBuffer: () => false,
+    alloc: (size) => new Uint8Array(size),
+    allocUnsafe: (size) => new Uint8Array(size),
+    concat: (list) => {
+      let length = 0;
+      for (const buf of list) length += buf.length;
+      const result = new Uint8Array(length);
+      let offset = 0;
+      for (const buf of list) {
+        result.set(buf, offset);
+        offset += buf.length;
+      }
+      return result;
+    }
+  };
 }
 
-// URL polyfill
 if (typeof window.URL === 'undefined') {
   window.URL = window.webkitURL || window.URL;
 }
 
-// CustomEvent polyfill
 if (typeof window.CustomEvent !== 'function') {
   function CustomEvent(event, params) {
     params = params || { bubbles: false, cancelable: false, detail: null };
@@ -84,7 +74,6 @@ if (typeof window.CustomEvent !== 'function') {
   CustomEvent.prototype = window.Event.prototype;
 }
 
-// MediaDevices API polyfill
 if (!navigator.mediaDevices) {
   navigator.mediaDevices = {};
 }
@@ -107,7 +96,6 @@ if (!navigator.mediaDevices.enumerateDevices) {
   };
 }
 
-// WebRTC polyfills
 if (!window.RTCPeerConnection) {
   window.RTCPeerConnection = window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
 }

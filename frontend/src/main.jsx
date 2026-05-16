@@ -1,4 +1,4 @@
-// frontend/src/main.jsx - PRODUCTION READY
+// src/main.jsx - COMPLETE FIXED VERSION FOR RENDER
 import './polyfills';
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -12,15 +12,13 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 // Fix for simple-peer "global is not defined" error
 if (typeof global === 'undefined') {
   window.global = window;
-  global = window;
 }
 
 if (typeof globalThis === 'undefined') {
   window.globalThis = window;
-  globalThis = window;
 }
 
-// Process polyfill for WebRTC libraries
+// Process polyfill for WebRTC libraries - NO REASSIGNMENT
 if (typeof process === 'undefined') {
   window.process = {
     env: {},
@@ -34,12 +32,10 @@ if (typeof process === 'undefined') {
     stderr: { write: () => {} },
     stdin: {},
   };
-  process = window.process;
 }
 
-// Buffer polyfill - FIXED: No top-level await
+// Buffer polyfill - SYNCHRONOUS ONLY
 if (typeof Buffer === 'undefined') {
-  // Synchronous fallback first
   const textEncoder = new TextEncoder();
   window.Buffer = {
     from: (data) => {
@@ -63,12 +59,6 @@ if (typeof Buffer === 'undefined') {
       return result;
     }
   };
-  
-  // Try to load the real buffer asynchronously
-  import('buffer').then(module => {
-    window.Buffer = module.Buffer;
-    console.log('✅ Buffer polyfill upgraded');
-  }).catch(() => {});
 }
 
 // URL polyfill for WebRTC
