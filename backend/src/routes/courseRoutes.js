@@ -10,6 +10,7 @@ import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+router.get("/", getCourses);
 // ✅ Allow authenticated users (including lecturers) to view courses
 router.get("/", protect, getCourses);
 router.post("/", protect, adminOnly, createCourse);

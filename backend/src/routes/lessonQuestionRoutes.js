@@ -10,26 +10,40 @@ import {
   allowRetake,
   getSubjectPerformance,
   deleteAttempt,
+  getStudentProgressForSubject,  // ← ADD THIS IMPORT
 } from "../controllers/lessonQuestionController.js";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Admin only routes
-router.post("/save", protect, adminOnly, saveLessonQuestions);
+// ================= ROUTES THAT NEED PERMISSION CHECKS IN CONTROLLER =================
+// Save quiz - permission checked in controller (admin or content creator)
+router.post("/save", protect, saveLessonQuestions);
+
+// Get lesson performance - admin only
 router.get("/lesson/:lessonId/performance", protect, adminOnly, getLessonPerformance);
 
-// Routes accessible by both admin AND students (for checking if quiz exists)
-router.get("/lesson/:lessonId", protect, getLessonQuestions); // ← REMOVED adminOnly
+// Get lesson questions - both students and lecturers can view
+router.get("/lesson/:lessonId", protect, getLessonQuestions);
 
 // Student routes
 router.post("/start/:lessonId", protect, startLessonQuiz);
 router.post("/submit", protect, submitLessonQuiz);
+
+// ================= ROUTES WITH LECTURER ACCESS =================
+// Get subject performance - Admin OR Lecturer assigned to subject
+router.get("/subject/:subjectId/performance", protect, getSubjectPerformance);
+
+// Get student progress for a specific subject - Admin OR Lecturer assigned to subject
+router.get("/student/:studentId/subject/:subjectId/progress", protect, getStudentProgressForSubject);
+
+// Get student progress (all) - Admin only
 router.get("/student/:studentId/progress", protect, adminOnly, getStudentProgress);
-router.get("/student/:studentId/subject/:subjectId/progress", protect, adminOnly, getStudentProgress);
-// routes/lessonQuestionRoutes.js - Add this route
-router.post("/allow-retake/:attemptId", protect, adminOnly, allowRetake);
-router.get("/subject/:subjectId/performance", protect, adminOnly, getSubjectPerformance);
-router.delete("/attempt/:attemptId", protect, adminOnly, deleteAttempt);
+
+// Allow retake - Admin OR Lecturer assigned to subject
+router.post("/allow-retake/:attemptId", protect, allowRetake);
+
+// Delete attempt - Admin OR Lecturer assigned to subject
+router.delete("/attempt/:attemptId", protect, deleteAttempt);
 
 export default router;

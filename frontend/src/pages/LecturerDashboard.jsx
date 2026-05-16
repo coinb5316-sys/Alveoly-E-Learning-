@@ -1,6 +1,7 @@
-// LecturerDashboard.jsx
+// LecturerDashboard.jsx - FIXED with proper API endpoints
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
+import { Link } from "react-router-dom";
 import {
   LayoutDashboard,
   BookOpen,
@@ -34,7 +35,6 @@ import {
   MessageSquare,
   Settings
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 const LecturerDashboard = () => {
   const [stats, setStats] = useState({
@@ -58,15 +58,96 @@ const LecturerDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/api/lecturer/dashboard/stats");
       
-      if (res.data.success) {
-        setStats(res.data.stats);
-        setRecentContent(res.data.stats.recentContent || []);
-        setRecentAttempts(res.data.stats.recentAttempts || []);
+      // Fetch content stats - using existing endpoint
+      const contentRes = await axios.get("/content/lecturer");
+      const contents = contentRes.data || [];
+      
+      const totalContent = contents.length;
+      const publishedContent = contents.filter(c => c.isPublished).length;
+      const recentContentData = contents.slice(0, 5);
+      
+      // Fetch attempts stats - using grading endpoint
+      let attempts = [];
+      let gradingStats = { pending: 0, total: 0 };
+      
+      try {
+        const attemptsRes = await axios.get("/grading/pending");
+        if (attemptsRes.data && attemptsRes.data.submissions) {
+          attempts = attemptsRes.data.submissions || [];
+          gradingStats = attemptsRes.data.stats || { total: 0, pendingGrading: 0 };
+        }
+      } catch (err) {
+        console.log("Grading endpoint not available, trying alternate...");
+        // Try alternate endpoint
+        try {
+          const altRes = await axios.get("/lecturer/attempts");
+          if (altRes.data && altRes.data.attempts) {
+            attempts = altRes.data.attempts || [];
+          }
+        } catch (altErr) {
+          console.log("No attempts endpoint available");
+        }
       }
+      
+      const totalAttempts = attempts.length;
+      const completedAttempts = attempts.filter(a => a.status === "completed" || a.isGraded).length;
+      const pendingGrading = gradingStats.pendingGrading || attempts.filter(a => !a.isGraded && a.status === "completed").length;
+      
+      let averageScore = 0;
+      const gradedAttempts = attempts.filter(a => a.percentage && a.percentage > 0);
+      if (gradedAttempts.length > 0) {
+        averageScore = Math.round(gradedAttempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / gradedAttempts.length);
+      }
+      
+      // Fetch students count - using existing endpoint
+      let totalStudents = 0;
+      try {
+        const studentsRes = await axios.get("/lecturer/students");
+        if (studentsRes.data && studentsRes.data.students) {
+          totalStudents = studentsRes.data.students.length;
+        }
+      } catch (err) {
+        console.log("Students endpoint not available");
+      }
+      
+      // Set recent attempts
+      const recentAttemptsData = attempts.slice(0, 10).map(a => ({
+        _id: a._id,
+        studentName: a.studentName || a.userName || "Student",
+        contentTitle: a.lessonTitle || a.contentTitle || "Quiz",
+        percentage: a.percentage || 0,
+        isPassed: a.isPassed || false,
+        isGraded: a.isGraded || false,
+        status: a.status || "pending",
+        submittedAt: a.submittedAt || a.completedAt
+      }));
+      
+      setStats({
+        totalContent,
+        publishedContent,
+        totalAttempts,
+        completedAttempts,
+        pendingGrading,
+        averageScore,
+        totalStudents
+      });
+      
+      setRecentContent(recentContentData);
+      setRecentAttempts(recentAttemptsData);
+      
     } catch (err) {
       console.error("Dashboard error:", err);
+      // Set default values on error
+      setStats({
+        totalContent: 0,
+        publishedContent: 0,
+        totalAttempts: 0,
+        completedAttempts: 0,
+        pendingGrading: 0,
+        averageScore: 0,
+        totalStudents: 0
+      });
     } finally {
       setLoading(false);
     }
@@ -79,7 +160,8 @@ const LecturerDashboard = () => {
       subtext: `${stats.publishedContent} published`,
       icon: BookOpen, 
       color: "blue",
-      gradient: "from-blue-500 to-blue-600"
+      gradient: "from-blue-500 to-blue-600",
+      link: "/lecturer/content"
     },
     { 
       title: "Student Attempts", 
@@ -87,7 +169,8 @@ const LecturerDashboard = () => {
       subtext: `${stats.completedAttempts} completed`,
       icon: Users, 
       color: "green",
-      gradient: "from-green-500 to-emerald-600"
+      gradient: "from-green-500 to-emerald-600",
+      link: "/lecturer/attempts"
     },
     { 
       title: "Avg. Score", 
@@ -95,7 +178,8 @@ const LecturerDashboard = () => {
       subtext: "across all assessments",
       icon: TrendingUp, 
       color: "purple",
-      gradient: "from-purple-500 to-purple-600"
+      gradient: "from-purple-500 to-purple-600",
+      link: "/lecturer/results"
     },
     { 
       title: "Pending Grading", 
@@ -103,29 +187,29 @@ const LecturerDashboard = () => {
       subtext: "awaiting review",
       icon: Clock, 
       color: "orange",
-      gradient: "from-orange-500 to-orange-600"
+      gradient: "from-orange-500 to-orange-600",
+      link: "/lecturer/grading"
     },
   ];
 
   const getContentIcon = (type) => {
     switch(type) {
-      case "lesson": return <FileText className="h-4 w-4" />;
-      case "exam": return <ClipboardList className="h-4 w-4" />;
-      case "practice": return <Star className="h-4 w-4" />;
-      case "assignment": return <FileQuestion className="h-4 w-4" />;
+      case "video": return <Video className="h-4 w-4" />;
+      case "pdf": return <FileText className="h-4 w-4" />;
+      case "image": return <FileQuestion className="h-4 w-4" />;
+      case "quiz": return <Star className="h-4 w-4" />;
       default: return <BookOpen className="h-4 w-4" />;
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch(status) {
-      case "completed":
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"><CheckCircle className="h-3 w-3" /> Passed</span>;
-      case "failed":
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"><XCircle className="h-3 w-3" /> Failed</span>;
-      default:
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"><Clock className="h-3 w-3" /> Pending</span>;
+  const getStatusBadge = (attempt) => {
+    if (attempt.isGraded) {
+      if (attempt.isPassed) {
+        return { icon: <CheckCircle className="h-3 w-3" />, text: "Passed", color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" };
+      }
+      return { icon: <XCircle className="h-3 w-3" />, text: "Failed", color: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" };
     }
+    return { icon: <Clock className="h-3 w-3" />, text: "Pending", color: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" };
   };
 
   if (loading) {
@@ -169,8 +253,9 @@ const LecturerDashboard = () => {
             orange: "bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400",
           };
           return (
-            <div
+            <Link
               key={idx}
+              to={card.link}
               className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 transition-all hover:shadow-lg"
             >
               <div className="flex items-start justify-between">
@@ -190,7 +275,7 @@ const LecturerDashboard = () => {
                 </div>
               </div>
               <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${card.gradient} transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300`} />
-            </div>
+            </Link>
           );
         })}
       </div>
@@ -198,10 +283,10 @@ const LecturerDashboard = () => {
       {/* Quick Actions */}
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Create Lesson", icon: FileText, path: "/lecturer/content/create?type=lesson", color: "blue" },
-          { label: "Create Exam", icon: ClipboardList, path: "/lecturer/content/create?type=exam", color: "purple" },
-          { label: "Create Practice", icon: Star, path: "/lecturer/content/create?type=practice", color: "green" },
-          { label: "Grade Submissions", icon: MessageSquare, path: "/lecturer/grading", color: "orange" },
+          { label: "Create Content", icon: FileText, path: "/lecturer/content/create", color: "blue" },
+          { label: "Create Quiz", icon: Star, path: "/lecturer/content/create?type=quiz", color: "purple" },
+          { label: "Student Performance", icon: BarChart3, path: "/lecturer/attempts", color: "green" },
+          { label: "Grade Submissions", icon: MessageSquare, path: "/lecturer/grading", color: "orange", badge: stats.pendingGrading > 0 ? stats.pendingGrading : null },
         ].map((action, idx) => (
           <Link
             key={idx}
@@ -211,9 +296,14 @@ const LecturerDashboard = () => {
             <div className={`p-2 rounded-lg bg-${action.color}-50 dark:bg-${action.color}-950/30 text-${action.color}-600 dark:text-${action.color}-400`}>
               <action.icon className="h-4 w-4" />
             </div>
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
+            <span className="flex-1 text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white">
               {action.label}
             </span>
+            {action.badge && (
+              <span className="px-2 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full animate-pulse">
+                {action.badge}
+              </span>
+            )}
             <ChevronRight className="h-4 w-4 text-gray-400 ml-auto group-hover:translate-x-1 transition-transform" />
           </Link>
         ))}
@@ -252,7 +342,7 @@ const LecturerDashboard = () => {
                 <div key={content._id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg bg-${content.type === 'lesson' ? 'blue' : content.type === 'exam' ? 'purple' : 'green'}-50 dark:bg-${content.type === 'lesson' ? 'blue' : content.type === 'exam' ? 'purple' : 'green'}-950/30`}>
+                      <div className={`p-2 rounded-lg ${content.type === 'video' ? 'bg-blue-50 dark:bg-blue-950/30' : content.type === 'quiz' ? 'bg-purple-50 dark:bg-purple-950/30' : content.type === 'pdf' ? 'bg-red-50 dark:bg-red-950/30' : 'bg-green-50 dark:bg-green-950/30'}`}>
                         {getContentIcon(content.type)}
                       </div>
                       <div>
@@ -267,12 +357,9 @@ const LecturerDashboard = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Link to={`/lecturer/content/${content._id}/edit`} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                      <Link to={`/lecturer/content/edit/${content._id}`} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                         <Edit className="h-3.5 w-3.5 text-gray-500" />
                       </Link>
-                      <button className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <Eye className="h-3.5 w-3.5 text-gray-500" />
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -306,30 +393,45 @@ const LecturerDashboard = () => {
                 <p className="text-xs text-gray-400 mt-1">Student attempts will appear here</p>
               </div>
             ) : (
-              recentAttempts.map((attempt) => (
-                <div key={attempt._id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{attempt.studentName}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{attempt.contentTitle}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        {getStatusBadge(attempt.isPassed ? "completed" : attempt.status)}
-                        {attempt.percentage > 0 && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            Score: {Math.round(attempt.percentage)}%
+              recentAttempts.map((attempt) => {
+                const status = getStatusBadge(attempt);
+                return (
+                  <div key={attempt._id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{attempt.studentName || "Student"}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{attempt.contentTitle || "Quiz"}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
+                            {status.icon} {status.text}
                           </span>
-                        )}
+                          {attempt.percentage > 0 && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              Score: {Math.round(attempt.percentage)}%
+                            </span>
+                          )}
+                        </div>
                       </div>
+                      {!attempt.isGraded && (
+                        <Link
+                          to={`/lecturer/grading/${attempt._id}`}
+                          className="px-3 py-1.5 text-xs bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors"
+                        >
+                          Grade
+                        </Link>
+                      )}
+                      {attempt.isGraded && (
+                        <Link
+                          to={`/lecturer/results`}
+                          className="px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                        >
+                          View
+                        </Link>
+                      )}
                     </div>
-                    <Link
-                      to={`/lecturer/attempts/${attempt._id}`}
-                      className="px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      Review
-                    </Link>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -357,22 +459,22 @@ const LecturerDashboard = () => {
           </select>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="text-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20">
+          <Link to="/lecturer/content" className="text-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/40 transition-colors">
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalContent}</p>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Total Content</p>
-          </div>
-          <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-950/20">
+          </Link>
+          <Link to="/lecturer/students" className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-950/20 hover:bg-green-100 dark:hover:bg-green-950/40 transition-colors">
             <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.totalStudents}</p>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Active Students</p>
-          </div>
-          <div className="text-center p-4 rounded-lg bg-purple-50 dark:bg-purple-950/20">
+          </Link>
+          <Link to="/lecturer/attempts" className="text-center p-4 rounded-lg bg-purple-50 dark:bg-purple-950/20 hover:bg-purple-100 dark:hover:bg-purple-950/40 transition-colors">
             <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.totalAttempts}</p>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Total Attempts</p>
-          </div>
-          <div className="text-center p-4 rounded-lg bg-orange-50 dark:bg-orange-950/20">
+          </Link>
+          <Link to="/lecturer/results" className="text-center p-4 rounded-lg bg-orange-50 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors">
             <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{stats.completedAttempts}</p>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Completed</p>
-          </div>
+          </Link>
         </div>
       </div>
     </div>

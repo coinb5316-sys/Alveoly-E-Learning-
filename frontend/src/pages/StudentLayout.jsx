@@ -22,6 +22,7 @@ import {
   Star,
   ChevronRight,
   DollarSign,
+  Video,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import StudentNotificationPanel from "../components/StudentNotificationPanel";
@@ -83,6 +84,7 @@ const StudentLayout = () => {
     { to: "/student/payments", label: "Payments", icon: Wallet, color: "text-yellow-500" },
     { to: "/student/content-payment", label: "Content Payment", icon: DollarSign, color: "text-indigo-500" },
     { to: "/student/testimonials", label: "Testimonials", icon: Star, color: "text-amber-500" },
+    { to: "/student/live-classes", label: "Live Classes", icon: Video, color: "text-red-500" },
   ];
 
   return (

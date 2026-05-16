@@ -28,6 +28,17 @@ const contentSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Add to your Content schema
+lecturerId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  required: false,
+  index: true
+},
+lecturerName: {
+  type: String,
+  default: "Admin"
+},
     courseId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Course",

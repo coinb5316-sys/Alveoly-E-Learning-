@@ -1,3 +1,4 @@
+// App.js - WITH EDIT ROUTE ADDED
 import React, { useEffect } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
@@ -51,7 +52,6 @@ import LecturerLayout from "./pages/LecturerLayout";
 import LecturerDashboard from "./pages/LecturerDashboard";
 import LecturerContentList from "./pages/LecturerContentList";
 import LecturerContentForm from "./pages/LecturerContentForm";
-import LecturerAttempts from "./pages/LecturerAttempts";
 import LecturerGrading from "./pages/LecturerGrading";
 import LecturerResults from "./pages/LecturerResults";
 import LecturerStudents from "./pages/LecturerStudents";
@@ -61,6 +61,21 @@ import LecturerSettings from "./pages/LecturerSettings";
 import LecturerHelp from "./pages/LecturerHelp";
 import AdminLecturers from "./pages/AdminLecturers";
 import AdminLecturerDetail from "./pages/AdminLecturerDetail";
+import LecturerExams from "./pages/LecturerExams";
+import AdminQuestionApproval from "./pages/AdminQuestionApproval";
+import LecturerPerformance from "./pages/LecturerPerformance";
+import LecturerGradingList from "./pages/LecturerGradingList";
+import LecturerProgressSelect from "./pages/LecturerProgressSelect";
+import LecturerLiveClasses from "./pages/LecturerLiveClasses";
+import LiveClassRoom from "./components/LiveClassRoom";
+import StudentLiveClasses from "./pages/StudentLiveClasses";
+import AdminLiveClasses from "./pages/AdminLiveClasses";
+import AdminCreateLiveClass from "./pages/AdminCreateLiveClass";
+import JoinLiveClass from "./pages/JoinLiveClass";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import Disclaimer from "./pages/Disclaimer";
+import CookiePolicy from "./pages/CookiePolicy";
 
 function App() {
   useEffect(() => {
@@ -106,12 +121,17 @@ function App() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+<Route path="/terms" element={<TermsOfService />} />
+<Route path="/disclaimer" element={<Disclaimer />} />
+<Route path="/cookies" element={<CookiePolicy />} />
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/content-payment-success" element={<ContentPaymentSuccess />} />
           <Route path="/plan-payment-success" element={<PlanPaymentSuccess />} />
           <Route path="/subject-payment-success" element={<SubjectPaymentSuccess />} />
+          <Route path="/join/:classId" element={<JoinLiveClass />} />
 
           {/* ==================== STUDENT ROUTES ==================== */}
           <Route
@@ -144,6 +164,8 @@ function App() {
             <Route path="progress" element={<StudentProgress />} />
             <Route path="testimonials" element={<StudentTestimonials />} />
             <Route path="content-payment" element={<StudentContentPayments />} />
+            <Route path="live-classes" element={<StudentLiveClasses />} />
+            <Route path="live-class/:classId" element={<LiveClassRoom />} />
           </Route>
 
           {/* ==================== ADMIN ROUTES ==================== */}
@@ -156,6 +178,7 @@ function App() {
             }
           >
             <Route index element={<AdminDashboard />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="courses" element={<AdminCourses />} />
             <Route path="subjects" element={<AdminSubjects />} />
             <Route path="questions" element={<AdminQuestions />} />
@@ -169,7 +192,12 @@ function App() {
             <Route path="in-box" element={<AdminInbox />} />
             <Route path="content-payment" element={<AdminContentPayments />} />
             <Route path="lecturers" element={<AdminLecturers />} />
-<Route path="lecturers/:id" element={<AdminLecturerDetail />} />
+            <Route path="lecturers/:id" element={<AdminLecturerDetail />} />
+            <Route path="question-approval" element={<AdminQuestionApproval />} />
+            <Route path="live-classes" element={<AdminLiveClasses />} />
+            <Route path="live-classes/create" element={<AdminCreateLiveClass />} />
+            <Route path="live-classes/:id/edit" element={<AdminCreateLiveClass />} />
+            <Route path="live-class/:classId" element={<LiveClassRoom />} />
           </Route>
 
           {/* ==================== LECTURER ROUTES ==================== */}
@@ -181,30 +209,25 @@ function App() {
               </ProtectedRoute>
             }
           >
-            {/* Dashboard */}
             <Route index element={<LecturerDashboard />} />
             <Route path="dashboard" element={<LecturerDashboard />} />
-            
-            {/* Content Management */}
             <Route path="content" element={<LecturerContentList />} />
             <Route path="content/create" element={<LecturerContentForm />} />
-            <Route path="content/:id/edit" element={<LecturerContentForm />} />
-            
-            {/* Assessment & Grading */}
-            <Route path="attempts" element={<LecturerAttempts />} />
-            <Route path="attempts/:attemptId" element={<LecturerGrading />} />
-            <Route path="grading" element={<LecturerGrading />} />
+            <Route path="content/edit/:id" element={<LecturerContentForm />} />
+            <Route path="exams" element={<LecturerExams />} />
+            <Route path="attempts" element={<LecturerPerformance />} />
+            <Route path="grading" element={<LecturerGradingList />} />
+            <Route path="grading/:attemptId" element={<LecturerGrading />} />
             <Route path="results" element={<LecturerResults />} />
-            
-            {/* Student Management */}
             <Route path="students" element={<LecturerStudents />} />
+            <Route path="progress" element={<LecturerProgressSelect />} />
             <Route path="students/:studentId/progress" element={<LecturerStudentProgress />} />
-            <Route path="progress" element={<LecturerStudentProgress />} />
-            
-            {/* Profile & Settings */}
+            <Route path="progress/:studentId" element={<LecturerStudentProgress />} />
             <Route path="profile" element={<LecturerProfile />} />
             <Route path="settings" element={<LecturerSettings />} />
             <Route path="help" element={<LecturerHelp />} />
+            <Route path="live-classes" element={<LecturerLiveClasses />} />
+            <Route path="live-class/:classId" element={<LiveClassRoom />} />
           </Route>
 
           {/* ==================== 404 CATCH-ALL ROUTE ==================== */}

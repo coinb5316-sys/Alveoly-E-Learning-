@@ -1,3 +1,4 @@
+// pages/Programs.jsx - Fetches courses from API
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -18,156 +19,226 @@ import {
   FaHandsHelping,
   FaFilter,
   FaTimes,
+  FaSpinner,
 } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import programsBg from "../images/programs-bg.jpg";
+import axios from "../api/axios";
 
 const Programs = () => {
   const navigate = useNavigate();
+  const [programs, setPrograms] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [filteredPrograms, setFilteredPrograms] = useState([]);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const { scrollYProgress } = useScroll();
 
-  const programs = [
-    {
-      id: 1,
-      icon: <FaLaptopCode />,
-      title: "Computer Science",
-      category: "technology",
-      duration: "4 Years",
-      degree: "BSc",
-      description: "Explore AI, data science, and software engineering with modern labs and expert faculty.",
-      fullDescription: "Our Computer Science program provides a strong foundation in computing principles, programming, and software development.",
-      features: ["AI & Machine Learning", "Data Science", "Software Engineering", "Cloud Computing"],
-      careers: ["Software Developer", "Data Scientist", "AI Engineer", "Cloud Architect"],
-      color: "from-blue-500 to-cyan-500",
-      bgColor: "bg-blue-50",
-      iconColor: "text-blue-600",
-    },
-    {
-      id: 2,
-      icon: <FaMicroscope />,
-      title: "Biological Sciences",
-      category: "science",
-      duration: "4 Years",
-      degree: "BSc",
-      description: "Hands-on research experience with world-class equipment and professional mentorship.",
-      fullDescription: "The Biological Sciences program offers comprehensive training in molecular biology, genetics, and biotechnology.",
-      features: ["Molecular Biology", "Genetics", "Biotechnology", "Environmental Science"],
-      careers: ["Research Scientist", "Biotechnologist", "Lab Manager", "Clinical Researcher"],
-      color: "from-green-500 to-emerald-500",
-      bgColor: "bg-green-50",
-      iconColor: "text-green-600",
-    },
-    {
-      id: 3,
-      icon: <FaBriefcase />,
-      title: "Business Administration",
-      category: "business",
-      duration: "4 Years",
-      degree: "BBA",
-      description: "Learn leadership, entrepreneurship, and innovation through practical industry projects.",
-      fullDescription: "Our Business Administration program develops strategic thinkers and innovative leaders.",
-      features: ["Marketing", "Finance", "Entrepreneurship", "Strategic Management"],
-      careers: ["Business Analyst", "Marketing Manager", "Entrepreneur", "Consultant"],
-      color: "from-purple-500 to-pink-500",
-      bgColor: "bg-purple-50",
-      iconColor: "text-purple-600",
-    },
-    {
-      id: 4,
-      icon: <FaGlobeAmericas />,
-      title: "International Relations",
-      category: "humanities",
-      duration: "4 Years",
-      degree: "BA",
-      description: "Gain insights into global politics, diplomacy, and international development.",
-      fullDescription: "The International Relations program prepares students for careers in diplomacy and global affairs.",
-      features: ["Global Governance", "Diplomacy", "International Law", "Conflict Resolution"],
-      careers: ["Diplomat", "Policy Analyst", "NGO Director", "International Consultant"],
-      color: "from-orange-500 to-red-500",
-      bgColor: "bg-orange-50",
-      iconColor: "text-orange-600",
-    },
-    {
-      id: 5,
-      icon: <FaUserGraduate />,
-      title: "Education",
-      category: "education",
-      duration: "4 Years",
-      degree: "BEd",
-      description: "Train to become an inspiring educator with 21st-century teaching methodologies.",
-      fullDescription: "Our Education program prepares future educators with innovative teaching methods.",
-      features: ["Curriculum Design", "Educational Psychology", "EdTech", "Special Education"],
-      careers: ["Teacher", "Curriculum Developer", "Education Consultant", "School Administrator"],
-      color: "from-indigo-500 to-purple-500",
-      bgColor: "bg-indigo-50",
-      iconColor: "text-indigo-600",
-    },
-    {
-      id: 6,
-      icon: <FaHeartbeat />,
-      title: "Health Sciences",
-      category: "health",
-      duration: "4 Years",
-      degree: "BSc",
-      description: "Study healthcare innovation, nursing, and clinical science with professional guidance.",
-      fullDescription: "The Health Sciences program provides comprehensive education in healthcare systems.",
-      features: ["Public Health", "Nursing", "Clinical Research", "Healthcare Management"],
-      careers: ["Healthcare Administrator", "Public Health Officer", "Clinical Coordinator", "Health Educator"],
-      color: "from-red-500 to-pink-500",
-      bgColor: "bg-red-50",
-      iconColor: "text-red-600",
-    },
-    {
-      id: 7,
-      icon: <FaGraduationCap />,
-      title: "Nursing Science",
-      category: "health",
-      duration: "4 Years",
-      degree: "BNSc",
-      description: "Comprehensive nursing education with clinical rotations and hands-on training.",
-      fullDescription: "Our Nursing Science program offers rigorous training in patient care and clinical procedures.",
-      features: ["Patient Care", "Pharmacology", "Clinical Practice", "Health Assessment"],
-      careers: ["Registered Nurse", "Clinical Nurse Specialist", "Nurse Educator", "Healthcare Manager"],
-      color: "from-teal-500 to-cyan-500",
-      bgColor: "bg-teal-50",
-      iconColor: "text-teal-600",
-    },
-    {
-      id: 8,
-      icon: <FaCertificate />,
-      title: "Public Health",
-      category: "health",
-      duration: "4 Years",
-      degree: "BPH",
-      description: "Focus on community health, epidemiology, and health promotion strategies.",
-      fullDescription: "The Public Health program prepares students to address community health challenges.",
-      features: ["Epidemiology", "Biostatistics", "Health Policy", "Community Health"],
-      careers: ["Public Health Specialist", "Epidemiologist", "Health Policy Advisor", "Community Health Worker"],
-      color: "from-emerald-500 to-teal-500",
-      bgColor: "bg-emerald-50",
-      iconColor: "text-emerald-600",
-    },
-    {
-      id: 9,
-      icon: <FaMicroscope />,
-      title: "Medical Laboratory Science",
-      category: "science",
-      duration: "4 Years",
-      degree: "BMLS",
-      description: "Train in diagnostic techniques and laboratory management.",
-      fullDescription: "This program trains students in diagnostic laboratory procedures and quality control.",
-      features: ["Clinical Chemistry", "Hematology", "Microbiology", "Immunology"],
-      careers: ["Medical Lab Scientist", "Lab Manager", "Research Associate", "Quality Control Specialist"],
-      color: "from-cyan-500 to-blue-500",
-      bgColor: "bg-cyan-50",
-      iconColor: "text-cyan-600",
-    },
-  ];
+  // Fetch courses from API
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  const fetchCourses = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get("/courses");
+      
+      // Map API courses to program format
+      const mappedPrograms = res.data.map((course, index) => ({
+        id: course._id,
+        icon: getProgramIcon(index),
+        title: course.name,
+        category: getProgramCategory(course.name),
+        duration: "Flexible",
+        degree: getProgramDegree(course.name),
+        description: getProgramDescription(course.name),
+        fullDescription: getProgramFullDescription(course.name),
+        features: getProgramFeatures(course.name),
+        careers: getProgramCareers(course.name),
+        color: getProgramColor(index),
+        bgColor: getProgramBgColor(index),
+        iconColor: getProgramIconColor(index),
+      }));
+      
+      setPrograms(mappedPrograms);
+      setFilteredPrograms(mappedPrograms);
+    } catch (err) {
+      console.error("Error fetching courses:", err);
+      // Fallback to static data if API fails
+      setPrograms(getFallbackPrograms());
+      setFilteredPrograms(getFallbackPrograms());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Helper functions to map courses to program data
+  const getProgramIcon = (index) => {
+    const icons = [
+      <FaHeartbeat />, <FaMicroscope />, <FaLaptopCode />, 
+      <FaBriefcase />, <FaUserGraduate />, <FaGlobeAmericas />,
+      <FaCertificate />, <FaGraduationCap />
+    ];
+    return icons[index % icons.length];
+  };
+
+  const getProgramCategory = (courseName) => {
+    const name = courseName.toLowerCase();
+    if (name.includes("nursing") || name.includes("health") || name.includes("medical")) return "health";
+    if (name.includes("science") || name.includes("biology") || name.includes("lab")) return "science";
+    if (name.includes("computer") || name.includes("tech") || name.includes("it")) return "technology";
+    if (name.includes("business") || name.includes("admin") || name.includes("management")) return "business";
+    if (name.includes("education") || name.includes("teaching")) return "education";
+    if (name.includes("international") || name.includes("relations")) return "humanities";
+    return "health";
+  };
+
+  const getProgramDegree = (courseName) => {
+    const name = courseName.toLowerCase();
+    if (name.includes("nursing")) return "BNSc";
+    if (name.includes("public health")) return "BPH";
+    if (name.includes("medical lab")) return "BMLS";
+    if (name.includes("computer")) return "BSc";
+    if (name.includes("business")) return "BBA";
+    if (name.includes("education")) return "BEd";
+    return "BSc";
+  };
+
+  const getProgramDescription = (courseName) => {
+    const descriptions = {
+      "Nursing": "Comprehensive nursing education with clinical rotations and hands-on training.",
+      "Public Health": "Focus on community health, epidemiology, and health promotion strategies.",
+      "Medical Laboratory": "Train in diagnostic techniques and laboratory management.",
+      "Computer Science": "Explore AI, data science, and software engineering with modern labs.",
+      "Business": "Learn leadership, entrepreneurship, and innovation through practical projects.",
+    };
+    
+    for (const [key, desc] of Object.entries(descriptions)) {
+      if (courseName.toLowerCase().includes(key.toLowerCase())) {
+        return desc;
+      }
+    }
+    return `Professional ${courseName} program designed for career success in the healthcare industry.`;
+  };
+
+  const getProgramFullDescription = (courseName) => {
+    return `The ${courseName} program at Alveoly provides comprehensive education and practical training to prepare you for a successful career in healthcare. Our curriculum is designed by industry experts and updated regularly to meet current healthcare standards.`;
+  };
+
+  const getProgramFeatures = (courseName) => {
+    const features = {
+      "Nursing": ["Patient Care", "Pharmacology", "Clinical Practice", "Health Assessment"],
+      "Public Health": ["Epidemiology", "Biostatistics", "Health Policy", "Community Health"],
+      "Medical Laboratory": ["Clinical Chemistry", "Hematology", "Microbiology", "Immunology"],
+      "Computer Science": ["AI & Machine Learning", "Data Science", "Software Engineering", "Cloud Computing"],
+      "Business": ["Marketing", "Finance", "Entrepreneurship", "Strategic Management"],
+    };
+    
+    for (const [key, feat] of Object.entries(features)) {
+      if (courseName.toLowerCase().includes(key.toLowerCase())) {
+        return feat;
+      }
+    }
+    return ["Core Healthcare", "Clinical Skills", "Professional Development", "Research Methods"];
+  };
+
+  const getProgramCareers = (courseName) => {
+    const careers = {
+      "Nursing": ["Registered Nurse", "Clinical Nurse Specialist", "Nurse Educator", "Healthcare Manager"],
+      "Public Health": ["Public Health Specialist", "Epidemiologist", "Health Policy Advisor", "Community Health Worker"],
+      "Medical Laboratory": ["Medical Lab Scientist", "Lab Manager", "Research Associate", "Quality Control Specialist"],
+    };
+    
+    for (const [key, car] of Object.entries(careers)) {
+      if (courseName.toLowerCase().includes(key.toLowerCase())) {
+        return car;
+      }
+    }
+    return ["Healthcare Professional", "Clinical Specialist", "Healthcare Administrator", "Research Associate"];
+  };
+
+  const getProgramColor = (index) => {
+    const colors = [
+      "from-red-500 to-pink-500",
+      "from-green-500 to-emerald-500",
+      "from-blue-500 to-cyan-500",
+      "from-purple-500 to-pink-500",
+      "from-orange-500 to-red-500",
+      "from-indigo-500 to-purple-500",
+      "from-teal-500 to-cyan-500",
+      "from-emerald-500 to-teal-500",
+    ];
+    return colors[index % colors.length];
+  };
+
+  const getProgramBgColor = (index) => {
+    const bgColors = [
+      "bg-red-50", "bg-green-50", "bg-blue-50", "bg-purple-50",
+      "bg-orange-50", "bg-indigo-50", "bg-teal-50", "bg-emerald-50",
+    ];
+    return bgColors[index % bgColors.length];
+  };
+
+  const getProgramIconColor = (index) => {
+    const iconColors = [
+      "text-red-600", "text-green-600", "text-blue-600", "text-purple-600",
+      "text-orange-600", "text-indigo-600", "text-teal-600", "text-emerald-600",
+    ];
+    return iconColors[index % iconColors.length];
+  };
+
+  const getFallbackPrograms = () => {
+    return [
+      {
+        id: 1,
+        icon: <FaHeartbeat />,
+        title: "Nursing Science",
+        category: "health",
+        duration: "4 Years",
+        degree: "BNSc",
+        description: "Comprehensive nursing education with clinical rotations and hands-on training.",
+        fullDescription: "Our Nursing Science program offers rigorous training in patient care and clinical procedures.",
+        features: ["Patient Care", "Pharmacology", "Clinical Practice", "Health Assessment"],
+        careers: ["Registered Nurse", "Clinical Nurse Specialist", "Nurse Educator", "Healthcare Manager"],
+        color: "from-red-500 to-pink-500",
+        bgColor: "bg-red-50",
+        iconColor: "text-red-600",
+      },
+      {
+        id: 2,
+        icon: <FaMicroscope />,
+        title: "Medical Laboratory Science",
+        category: "science",
+        duration: "4 Years",
+        degree: "BMLS",
+        description: "Train in diagnostic techniques and laboratory management.",
+        fullDescription: "This program trains students in diagnostic laboratory procedures and quality control.",
+        features: ["Clinical Chemistry", "Hematology", "Microbiology", "Immunology"],
+        careers: ["Medical Lab Scientist", "Lab Manager", "Research Associate", "Quality Control Specialist"],
+        color: "from-green-500 to-emerald-500",
+        bgColor: "bg-green-50",
+        iconColor: "text-green-600",
+      },
+      {
+        id: 3,
+        icon: <FaCertificate />,
+        title: "Public Health",
+        category: "health",
+        duration: "4 Years",
+        degree: "BPH",
+        description: "Focus on community health, epidemiology, and health promotion strategies.",
+        fullDescription: "The Public Health program prepares students to address community health challenges.",
+        features: ["Epidemiology", "Biostatistics", "Health Policy", "Community Health"],
+        careers: ["Public Health Specialist", "Epidemiologist", "Health Policy Advisor", "Community Health Worker"],
+        color: "from-teal-500 to-cyan-500",
+        bgColor: "bg-teal-50",
+        iconColor: "text-teal-600",
+      },
+    ];
+  };
 
   useEffect(() => {
     let filtered = [...programs];
@@ -185,7 +256,7 @@ const Programs = () => {
     }
     
     setFilteredPrograms(filtered);
-  }, [searchTerm, selectedCategory]);
+  }, [searchTerm, selectedCategory, programs]);
 
   const fadeInUp = {
     hidden: { opacity: 0, y: 60 },
@@ -210,11 +281,28 @@ const Programs = () => {
     { value: "education", label: "Education", color: "from-indigo-500 to-purple-500" },
   ];
 
+  const handleGetStarted = () => {
+    navigate("/signup");
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white overflow-x-hidden">
+        <Navbar />
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <FaSpinner className="text-5xl text-blue-600 animate-spin mb-4" />
+          <p className="text-gray-500">Loading programs...</p>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
       <Navbar />
 
-      {/* Hero Section - Reduced height for mobile */}
+      {/* Hero Section */}
       <header className="relative min-h-[60vh] md:h-screen flex items-center justify-center bg-cover bg-center overflow-hidden">
         <div 
           className="absolute inset-0 bg-cover bg-center"
@@ -267,7 +355,7 @@ const Programs = () => {
             transition={{ delay: 0.5 }}
           >
             <button 
-              onClick={() => navigate("/signup")}
+              onClick={handleGetStarted}
               className="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 md:px-8 py-2.5 md:py-3 rounded-xl font-semibold text-sm md:text-base transition-all duration-300 hover:shadow-2xl hover:scale-105"
             >
               <span className="relative z-10 flex items-center gap-2">
@@ -285,7 +373,7 @@ const Programs = () => {
           </motion.div>
         </motion.div>
 
-        {/* Scroll Indicator - Hidden on mobile */}
+        {/* Scroll Indicator */}
         <motion.div 
           className="absolute bottom-4 md:bottom-8 left-1/2 transform -translate-x-1/2 cursor-pointer hidden sm:block"
           animate={{ y: [0, 10, 0] }}
@@ -298,12 +386,12 @@ const Programs = () => {
         </motion.div>
       </header>
 
-      {/* Stats Section - Responsive grid */}
+      {/* Stats Section */}
       <section className="py-12 md:py-16 px-4 md:px-6 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
             {[
-              { icon: FaGraduationCap, value: "9+", label: "Degree Programs" },
+              { icon: FaGraduationCap, value: programs.length + "+", label: "Degree Programs" },
               { icon: FaUserGraduate, value: "50+", label: "Expert Faculty" },
               { icon: FaChartLine, value: "98%", label: "Employment Rate" },
               { icon: FaHandsHelping, value: "1000+", label: "Active Students" },
@@ -324,7 +412,7 @@ const Programs = () => {
         </div>
       </section>
 
-      {/* Search and Filter Section - Mobile optimized */}
+      {/* Search and Filter Section */}
       <div className="sticky top-16 md:top-20 z-40 py-4 md:py-6 px-4 md:px-6 bg-white shadow-md">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col gap-4">
@@ -349,7 +437,7 @@ const Programs = () => {
               {showMobileFilters ? "Hide Filters" : "Show Filters"}
             </button>
 
-            {/* Category Filters - Desktop always visible, Mobile toggled */}
+            {/* Category Filters */}
             <div className={`${showMobileFilters ? "flex" : "hidden"} lg:flex flex-wrap gap-2 md:gap-3 justify-center`}>
               {categories.map((category) => (
                 <button
@@ -439,11 +527,12 @@ const Programs = () => {
                         </div>
                       </div>
 
+                      {/* Get Started Button - Changed from Learn More */}
                       <button
-                        onClick={() => navigate(`/programs/${program.id}`)}
+                        onClick={handleGetStarted}
                         className={`w-full py-2 md:py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2 ${program.bgColor} ${program.iconColor} hover:opacity-90 text-sm md:text-base`}
                       >
-                        Learn More
+                        Get Started
                         <FaArrowRight className="text-xs md:text-sm group-hover:translate-x-1 transition-transform" />
                       </button>
                     </div>
@@ -502,17 +591,17 @@ const Programs = () => {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center px-4">
             <button 
-              onClick={() => navigate("/signup")}
+              onClick={handleGetStarted}
               className="group bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 md:px-8 py-2.5 md:py-4 rounded-xl font-semibold text-sm md:text-base lg:text-lg transition-all duration-300 hover:shadow-2xl hover:scale-105 inline-flex items-center justify-center gap-2"
             >
-              Apply Now
+              Get Started Now
               <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
             </button>
             <button 
               onClick={() => navigate("/contact")}
               className="bg-transparent border-2 border-white text-white px-6 md:px-8 py-2.5 md:py-4 rounded-xl font-semibold text-sm md:text-base lg:text-lg hover:bg-white hover:text-gray-900 transition-all duration-300"
             >
-              Contact Admissions
+              Contact Us
             </button>
           </div>
         </div>

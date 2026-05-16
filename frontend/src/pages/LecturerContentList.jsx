@@ -1,31 +1,47 @@
-// LecturerContentList.jsx - Same card UI as AdminContent but fetches lecturer's own content
+// LecturerContentList.jsx
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "../api/axios";
-import { Link } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
 import {
-  Search,
   Plus,
   Edit,
   Trash2,
-  Eye,
-  FileText,
+  HelpCircle,
   Video,
   Image,
-  HelpCircle,
   File,
-  Calendar,
+  X,
+  Eye,
   BookOpen,
   DollarSign,
+  Clock,
+  Users,
+  TrendingUp,
+  CheckCircle,
+  AlertCircle,
   Loader2,
-  X
+  Search,
+  Filter
 } from "lucide-react";
 
 const LecturerContentList = () => {
   const [contents, setContents] = useState([]);
+  const [filteredContents, setFilteredContents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState({ type: "", search: "" });
-  const [showDeleteModal, setShowDeleteModal] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const navigate = useNavigate();
+  const [stats, setStats] = useState({
+    total: 0,
+    videos: 0,
+    pdfs: 0,
+    images: 0,
+    quizzes: 0,
+    paid: 0,
+    free: 0
+  });
+
   const [viewer, setViewer] = useState({
     open: false,
     type: "",
@@ -35,55 +51,78 @@ const LecturerContentList = () => {
 
   useEffect(() => {
     fetchContents();
-  }, [filter]);
+  }, []);
 
-  // LecturerContentList.jsx - Fix the API endpoints
+  useEffect(() => {
+    filterContents();
+  }, [searchTerm, typeFilter, contents]);
 
-// LecturerContentList.jsx - Fix API endpoints
-
-const fetchContents = async () => {
-  try {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (filter.type) params.append("type", filter.type);
-    if (filter.search) params.append("search", filter.search);
-    
-    // ✅ Add /content prefix
-    const res = await axios.get(`/content/lecturer/content?${params.toString()}`);
-    if (res.data.success) {
-      setContents(res.data.content);
+  const fetchContents = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get("/content/lecturer");
+      setContents(res.data);
+      
+      // Calculate stats
+      const newStats = {
+        total: res.data.length,
+        videos: res.data.filter(c => c.type === "video").length,
+        pdfs: res.data.filter(c => c.type === "pdf").length,
+        images: res.data.filter(c => c.type === "image").length,
+        quizzes: res.data.filter(c => c.type === "quiz").length,
+        paid: res.data.filter(c => c.isPaid).length,
+        free: res.data.filter(c => !c.isPaid).length,
+      };
+      setStats(newStats);
+    } catch (err) {
+      console.error("Error fetching contents:", err);
+      toast.error("Failed to fetch your contents");
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error("Fetch content error:", err);
-    toast.error("Failed to fetch content");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
-const handleDelete = async (id) => {
-  try {
-    // ✅ Add /content prefix
-    await axios.delete(`/content/lecturer/content/${id}`);
-    fetchContents();
-    setShowDeleteModal(null);
-    toast.success("Content deleted successfully");
-  } catch (err) {
-    console.error("Delete error:", err);
-    toast.error("Delete failed");
-  }
-};
+  const filterContents = () => {
+    let filtered = [...contents];
+    
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(c => 
+        c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.subjectId?.name && c.subjectId.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+    
+    // Apply type filter
+    if (typeFilter !== "all") {
+      filtered = filtered.filter(c => c.type === typeFilter);
+    }
+    
+    setFilteredContents(filtered);
+  };
 
-  const openViewer = (content) => {
-    if (content.type === "quiz") {
-      // Navigate to quiz viewer or open modal
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this content? This action cannot be undone.")) return;
+    try {
+      await axios.delete(`/content/${id}`);
+      setContents((prev) => prev.filter((c) => c._id !== id));
+      toast.success("Content deleted successfully");
+    } catch (err) {
+      console.error(err);
+      toast.error("Delete failed");
+    }
+  };
+
+  const openViewer = (c) => {
+    if (c.type === "quiz") {
+      toast.info("Quiz content - edit to add questions");
       return;
     }
     setViewer({
       open: true,
-      type: content.type,
-      url: content.fileUrl,
-      title: content.title,
+      type: c.type,
+      url: c.fileUrl,
+      title: c.title,
     });
   };
 
@@ -94,218 +133,286 @@ const handleDelete = async (id) => {
   const getTypeIcon = (type) => {
     switch(type) {
       case "video": return <Video className="h-4 w-4" />;
-      case "pdf": return <FileText className="h-4 w-4" />;
+      case "pdf": return <File className="h-4 w-4" />;
       case "image": return <Image className="h-4 w-4" />;
       case "quiz": return <HelpCircle className="h-4 w-4" />;
-      default: return <File className="h-4 w-4" />;
+      default: return <BookOpen className="h-4 w-4" />;
     }
   };
 
-  const getTypeBadge = (type) => {
-    const badges = {
-      video: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
-      pdf: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400",
-      image: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
-      quiz: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
-    };
-    return badges[type] || "bg-gray-100 dark:bg-gray-800 text-gray-700";
+  const getTypeColor = (type) => {
+    switch(type) {
+      case "video": return "from-blue-500 to-cyan-600";
+      case "pdf": return "from-red-500 to-rose-600";
+      case "image": return "from-green-500 to-emerald-600";
+      case "quiz": return "from-purple-500 to-indigo-600";
+      default: return "from-gray-500 to-gray-600";
+    }
   };
 
-  return (
-    <div className="space-y-6">
-      <Toaster position="top-right" />
-      
-      {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-            My Content
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Manage your uploaded learning materials
-          </p>
-        </div>
-        <Link
-          to="/lecturer/content/create"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-200"
-        >
-          <Plus className="h-4 w-4" />
-          Create Content
-        </Link>
-      </div>
+  const getTypeBadgeColor = (type) => {
+    switch(type) {
+      case "video": return "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400";
+      case "pdf": return "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400";
+      case "image": return "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400";
+      case "quiz": return "bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400";
+      default: return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400";
+    }
+  };
 
-      {/* Filters - Same as Admin */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded mb-8" />
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-24 bg-gray-200 dark:bg-gray-800 rounded-xl" />
+            ))}
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 mt-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+                <div className="h-44 bg-gray-200 dark:bg-gray-800" />
+                <div className="p-4 space-y-3">
+                  <div className="h-5 bg-gray-200 dark:bg-gray-800 rounded w-3/4" />
+                  <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Toaster position="top-right" />
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+              My Content Library
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Manage all the learning materials you've created
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-2 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+              <span className="text-sm text-blue-600 dark:text-blue-400">
+                {stats.total} Total Items
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Summary */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Videos</p>
+                <p className="text-2xl font-semibold text-blue-600 dark:text-blue-400 mt-1">
+                  {stats.videos}
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
+                <Video className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">PDFs</p>
+                <p className="text-2xl font-semibold text-red-600 dark:text-red-400 mt-1">
+                  {stats.pdfs}
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-lg bg-red-50 dark:bg-red-950/30 flex items-center justify-center">
+                <File className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Quizzes</p>
+                <p className="text-2xl font-semibold text-purple-600 dark:text-purple-400 mt-1">
+                  {stats.quizzes}
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
+                <HelpCircle className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Premium</p>
+                <p className="text-2xl font-semibold text-yellow-600 dark:text-yellow-400 mt-1">
+                  {stats.paid}
+                </p>
+              </div>
+              <div className="h-10 w-10 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center">
+                <DollarSign className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Search and Filter */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search content..."
-              value={filter.search}
-              onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Search by title or subject..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             />
           </div>
-          <select
-            value={filter.type}
-            onChange={(e) => setFilter({ ...filter, type: e.target.value })}
-            className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800"
-          >
-            <option value="">All Types</option>
-            <option value="video">Videos</option>
-            <option value="image">Images</option>
-            <option value="pdf">PDFs</option>
-            <option value="quiz">Quizzes</option>
-          </select>
-        </div>
-        <button
-          onClick={() => setFilter({ type: "", search: "" })}
-          className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-        >
-          Clear Filters
-        </button>
-      </div>
-
-      {/* Content List - Same card UI as Admin */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-        </div>
-      ) : contents.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
-          <div className="flex flex-col items-center">
-            <div className="h-20 w-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-              <File className="h-10 w-10 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              No Content Yet
-            </h3>
-            <p className="text-gray-500 dark:text-gray-400 max-w-md">
-              Create your first learning material to get started
-            </p>
-            <Link
-              to="/lecturer/content/create"
-              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
+          
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-gray-400" />
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-4 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             >
-              Create Content
-            </Link>
+              <option value="all">All Types</option>
+              <option value="video">Videos</option>
+              <option value="pdf">PDFs</option>
+              <option value="image">Images</option>
+              <option value="quiz">Quizzes</option>
+            </select>
           </div>
         </div>
-      ) : (
-        <div className="grid gap-4">
-          {contents.map((content) => (
-            <div
-              key={content._id}
-              className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 hover:shadow-md transition-all"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4 flex-1">
-                  {/* Thumbnail */}
-                  <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex-shrink-0 overflow-hidden">
-                    {content.thumbnailUrl ? (
+
+        {/* Content Grid */}
+        {filteredContents.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
+            <div className="flex flex-col items-center">
+              <div className="h-20 w-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                <BookOpen className="h-10 w-10 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                No Content Found
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                {searchTerm || typeFilter !== "all" 
+                  ? "Try adjusting your search or filter criteria" 
+                  : "You haven't created any content yet. Use the form to upload your first learning material."}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredContents.map((content) => (
+              <div
+                key={content._id}
+                onClick={() => openViewer(content)}
+                className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+              >
+                {/* Thumbnail */}
+                <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
+                  {content.type === "quiz" ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center">
+                      <HelpCircle className="text-white/80 text-5xl mb-2" />
+                      <span className="text-white font-medium text-sm">Quiz Content</span>
+                    </div>
+                  ) : (
+                    <>
                       <img
-                        src={content.thumbnailUrl}
-                        className="w-full h-full object-cover"
+                        src={content.thumbnailUrl || "/api/placeholder/400/200"}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                         alt={content.title}
                         onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
                       />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        {getTypeIcon(content.type)}
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Eye className="h-12 w-12 text-white" />
                       </div>
-                    )}
+                    </>
+                  )}
+
+                  {/* Type Badge */}
+                  <div className={`absolute top-3 left-3 px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1 ${getTypeBadgeColor(content.type)}`}>
+                    {getTypeIcon(content.type)}
+                    <span className="capitalize">{content.type}</span>
                   </div>
 
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                        {content.title}
-                      </h3>
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${getTypeBadge(content.type)} capitalize`}>
-                        {content.type}
-                      </span>
-                      {content.isPaid && (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700">
-                          ₵{content.price}
-                        </span>
-                      )}
+                  {/* Price Badge */}
+                  {content.isPaid && (
+                    <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" />
+                      ₵{content.price}
                     </div>
-                    
-                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(content.createdAt).toLocaleDateString()}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <BookOpen className="h-3 w-3" />
-                        {content.subjectId?.name || content.courseId?.name || "Unlinked"}
-                      </div>
+                  )}
+                </div>
+
+                {/* Content Info */}
+                <div className="p-4">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    {content.title}
+                  </h3>
+                  
+                  {/* Meta Info */}
+                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    <span className="capitalize">{content.type}</span>
+                    <span>•</span>
+                    <span>{content.subjectId?.name || content.courseId?.name || "Unlinked"}</span>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 mb-3">
+                    <div className="flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      <span>0 views</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      <span>{new Date(content.createdAt).toLocaleDateString()}</span>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => openViewer(content)}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    title="View"
-                  >
-                    <Eye className="h-4 w-4 text-gray-500" />
-                  </button>
-                  <Link
-                    to={`/lecturer/content/${content._id}/edit`}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    title="Edit"
-                  >
-                    <Edit className="h-4 w-4 text-gray-500" />
-                  </Link>
-                  <button
-                    onClick={() => setShowDeleteModal(content)}
-                    className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </button>
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Navigate to edit form
+                        navigate(`/lecturer/content/edit/${content._id}`);
+                      }}
+                      className="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(content._id);
+                      }}
+                      className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Delete Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6">
-            <div className="text-center">
-              <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
-                <Trash2 className="h-6 w-6 text-red-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Delete Content
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                Are you sure you want to delete "{showDeleteModal.title}"? This action cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDeleteModal(null)}
-                  className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDelete(showDeleteModal._id)}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Media Viewer */}
       {viewer.open && (
@@ -333,7 +440,7 @@ const handleDelete = async (id) => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

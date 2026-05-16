@@ -21,6 +21,7 @@ export const getFAQById = async (req, res) => {
   }
 };
 
+// controllers/faqController.js - FIXED createFAQ
 export const createFAQ = async (req, res) => {
   try {
     const { question, answer, category } = req.body;
@@ -32,27 +33,45 @@ export const createFAQ = async (req, res) => {
     }
     
     // Check if FAQ already exists
-    const existing = await FAQ.findOne({ question });
+    const existing = await FAQ.findOne({ question: { $regex: new RegExp(`^${question.trim()}$`, 'i') } });
     if (existing) {
       return res.status(400).json({ success: false, message: "FAQ with this question already exists" });
     }
     
-    // Create FAQ - simplified without createdBy to avoid issues
-    const faq = new FAQ({
+    // Generate keywords from question (client-side to avoid middleware issues)
+    const keywords = question
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length > 2);
+    
+    // Create FAQ - without createdBy if not provided
+    const faqData = {
       question: question.trim(),
       answer: answer.trim(),
       category: category || "general",
+      keywords: keywords,
       isActive: true,
       views: 0,
       helpful: { yes: 0, no: 0 }
-    });
+    };
     
+    // Add createdBy only if user is authenticated and has an ID
+    if (req.user && req.user._id) {
+      faqData.createdBy = req.user._id;
+    }
+    
+    const faq = new FAQ(faqData);
     const savedFaq = await faq.save();
     console.log("✅ FAQ saved successfully:", savedFaq._id);
     
     res.status(201).json({ success: true, data: savedFaq, message: "FAQ created successfully" });
   } catch (error) {
     console.error("❌ Create FAQ error:", error);
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: "A FAQ with this question already exists" });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

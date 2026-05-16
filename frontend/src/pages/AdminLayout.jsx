@@ -29,9 +29,11 @@ import {
   Shield,
   Zap,
   GraduationCap,
+  Video,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationPanel from "../components/NotificationPanel";
+import { FaCheckCircle } from "react-icons/fa";
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -108,6 +110,7 @@ const AdminLayout = () => {
       { to: "/admin", label: "Dashboard", icon: LayoutDashboard, color: "text-blue-500" },
       { to: "/admin/performance", label: "Analytics", icon: BarChart3, color: "text-purple-500" },
       { to: "/admin/questions", label: "Question Bank", icon: HelpCircle, color: "text-green-500" },
+      { to: "/admin/question-approval", label: "Question Approval", icon: FaCheckCircle, color: "text-yellow-500" },
       { to: "/admin/subjects", label: "Subjects", icon: BookOpen, color: "text-orange-500" },
       { to: "/admin/users", label: "Users", icon: Users, color: "text-cyan-500" },
       { to: "/admin/payments", label: "Revenue", icon: DollarSign, color: "text-yellow-500" },
@@ -128,6 +131,7 @@ const AdminLayout = () => {
       { to: "/admin/settings", label: "Settings", icon: Settings, color: "text-gray-500" },
       { to: "/admin/security", label: "Security", icon: Shield, color: "text-gray-500" },
       { to: "/admin/help", label: "Help & Support", icon: LifeBuoy, color: "text-gray-500" },
+      { to: "/admin/live-classes", label: "Live Classes", icon: Video, color: "text-red-500" },
     ]},
   ];
 

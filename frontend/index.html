@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 
     <title>Alveoly E-Learning Academy - Health & Sciences Education</title>
     <meta name="description" content="Alveoly E-Learning Academy offers world-class health and sciences education..." />
@@ -14,7 +14,50 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-    <!-- REMOVE THE FORCE FIX SCRIPT COMPLETELY -->
+    <!-- CRITICAL: Global polyfill for simple-peer and WebRTC -->
+    <script>
+      // This MUST run before any module scripts
+      (function() {
+        // Fix for "global is not defined" in simple-peer
+        if (typeof global === 'undefined') {
+          window.global = window;
+        }
+        
+        if (typeof globalThis === 'undefined') {
+          window.globalThis = window;
+        }
+        
+        // Process polyfill
+        if (typeof process === 'undefined') {
+          window.process = {
+            env: {},
+            nextTick: function(fn) {
+              setTimeout(fn, 0);
+            },
+            browser: true,
+            version: '',
+            versions: {},
+            platform: 'browser'
+          };
+        }
+        
+        // Buffer polyfill (simplified for initial load)
+        if (typeof Buffer === 'undefined') {
+          window.Buffer = {
+            from: function(data) {
+              if (typeof data === 'string') {
+                return new TextEncoder().encode(data);
+              }
+              return new Uint8Array(data);
+            },
+            isBuffer: function() { return false; },
+            alloc: function(size) { return new Uint8Array(size); }
+          };
+        }
+        
+        console.log('✅ Global polyfills loaded for WebRTC');
+      })();
+    </script>
   </head>
 
   <body>

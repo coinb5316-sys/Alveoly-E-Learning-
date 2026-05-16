@@ -769,27 +769,49 @@ const handleUpload = async () => {
             {form.type !== "quiz" && (
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Content File
-                  </label>
-                  <input
-                    type="file"
-                    accept="video/*,image/*,application/pdf"
-                    onChange={(e) => setFile(e.target.files[0])}
-                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
-                  />
-                </div>
+  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+    Content File
+  </label>
+  <input
+    type="file"
+    accept="video/*,image/*,application/pdf"
+    onChange={(e) => {
+      const selectedFile = e.target.files[0];
+      if (selectedFile) {
+        // File size validation
+        const maxSize = form.type === 'video' ? 100 * 1024 * 1024 : 
+                       form.type === 'pdf' ? 50 * 1024 * 1024 : 
+                       10 * 1024 * 1024;
+        if (selectedFile.size > maxSize) {
+          toast.error(`${form.type.toUpperCase()} file too large! Maximum ${maxSize / (1024 * 1024)}MB`);
+          e.target.value = null;
+          return;
+        }
+        setFile(selectedFile);
+      }
+    }}
+    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
+  />
+</div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Thumbnail (Optional)
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setForm({ ...form, thumbnail: e.target.files[0] })}
-                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
-                  />
-                </div>
+  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+    Thumbnail (Optional)
+  </label>
+  <input
+    type="file"
+    accept="image/*"
+    onChange={(e) => {
+      const selectedFile = e.target.files[0];
+      if (selectedFile && selectedFile.size > 5 * 1024 * 1024) {
+        toast.error("Thumbnail too large! Maximum size is 5MB");
+        e.target.value = null;
+        return;
+      }
+      setForm({ ...form, thumbnail: selectedFile });
+    }}
+    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
+  />
+</div>
               </div>
             )}
 

@@ -1,31 +1,71 @@
-// controllers/lessonQuestionController.js - Updated with notifications
+// controllers/lessonQuestionController.js - Updated with lecturer permissions
 import LessonQuestion from "../models/LessonQuestion.js";
 import LessonAttempt from "../models/LessonAttempt.js";
 import Content from "../models/Content.js";
 import User from "../models/User.js";
 import { createNotification } from "./notificationController.js";
 
+// Helper function to check if lecturer has access to a subject
+const checkLecturerSubjectAccess = async (userId, subjectId) => {
+  const user = await User.findById(userId);
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (user.role !== "lecturer") return false;
+  
+  const hasAccess = user.lecturerInfo?.assignedSubjects?.some(
+    s => s.toString() === subjectId.toString()
+  );
+  return hasAccess;
+};
+
+// Helper function to check if lecturer has access to an attempt
+const checkLecturerAttemptAccess = async (userId, attempt) => {
+  if (!attempt) return false;
+  const user = await User.findById(userId);
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (user.role !== "lecturer") return false;
+  
+  // Check if lecturer is assigned to the subject of this attempt
+  const hasAccess = user.lecturerInfo?.assignedSubjects?.some(
+    s => s.toString() === attempt.subjectId?.toString()
+  );
+  return hasAccess;
+};
+
 // ================= CREATE/UPDATE LESSON QUESTIONS =================
 export const saveLessonQuestions = async (req, res) => {
   try {
     const { lessonId, questions, timerMinutes } = req.body;
-    
+
     if (!lessonId) {
       return res.status(400).json({ message: "Lesson ID is required" });
     }
-    
+
     if (!questions || !Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ message: "At least one question is required" });
     }
-    
+
+    // Check if the lesson exists
     const lesson = await Content.findById(lessonId);
     if (!lesson) {
       return res.status(404).json({ message: "Lesson not found" });
     }
+
+    // Permission check: Allow if user is admin OR the creator of the content (lecturer)
+    const isAdmin = req.user.role === "admin";
+    const isCreator = lesson.lecturerId && lesson.lecturerId.toString() === req.user._id.toString();
     
+    if (!isAdmin && !isCreator) {
+      return res.status(403).json({ 
+        message: "Access denied. Only the content creator or admin can add quizzes to this lesson." 
+      });
+    }
+
     await LessonQuestion.deleteMany({ lessonId });
-    
-    const questionsToSave = questions.map((q, idx) => ({
+
+    // Save new questions
+    const quizQuestions = questions.map((q, index) => ({
       lessonId,
       subjectId: lesson.subjectId,
       courseId: lesson.courseId,
@@ -34,21 +74,20 @@ export const saveLessonQuestions = async (req, res) => {
       correctAnswer: q.correctAnswer,
       rationale: q.rationale || "",
       points: q.points || 1,
-      order: idx,
+      order: index,
       timerMinutes: timerMinutes || 0,
     }));
-    
-    const savedQuestions = await LessonQuestion.insertMany(questionsToSave);
-    
-    res.json({
-      success: true,
-      message: `${savedQuestions.length} questions saved for lesson`,
-      questions: savedQuestions,
-      timerMinutes: timerMinutes || 0,
+
+    const savedQuizzes = await LessonQuestion.insertMany(quizQuestions);
+
+    res.status(201).json({
+      message: `Successfully saved ${savedQuizzes.length} questions`,
+      count: savedQuizzes.length,
+      quizzes: savedQuizzes
     });
   } catch (err) {
-    console.error("Save lesson questions error:", err);
-    res.status(500).json({ message: err.message });
+    console.error("Save quiz error:", err);
+    res.status(500).json({ message: err.message || "Failed to save quiz" });
   }
 };
 
@@ -283,47 +322,94 @@ export const submitLessonQuiz = async (req, res) => {
   }
 };
 
-// ================= ADMIN ALLOW RETAKE =================
-export const allowRetake = async (req, res) => {
+// ================= GET STUDENT PROGRESS FOR A SUBJECT (Lecturer & Admin) =================
+export const getStudentProgressForSubject = async (req, res) => {
   try {
-    const { attemptId } = req.params;
+    const { studentId, subjectId } = req.params;
     
-    const attempt = await LessonAttempt.findById(attemptId).populate("userId", "name email");
-    if (!attempt) {
-      return res.status(404).json({ message: "Attempt not found" });
+    // Check if lecturer has access to this subject
+    const hasAccess = await checkLecturerSubjectAccess(req.user._id, subjectId);
+    if (!hasAccess && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You are not assigned to this subject." });
     }
     
-    if (attempt.status !== "completed") {
-      return res.status(400).json({ message: "Can only allow retake for completed quizzes" });
-    }
+    const attempts = await LessonAttempt.find({ 
+      userId: studentId,
+      subjectId: subjectId, 
+      status: "completed" 
+    })
+      .populate("lessonId", "title")
+      .sort({ completedAt: -1 });
     
-    attempt.adminAllowedRetake = true;
-    await attempt.save();
-    
-    // Notify student that they can retake the quiz
-    await createNotification(
-      attempt.userId,
-      "student",
-      "info",
-      "🔄 Retake Permission Granted",
-      `Your request to retake "${attempt.lessonId?.title || 'Quiz'}" has been approved. You can now attempt it again.`,
-      `/student/lessons/${attempt.lessonId}/quiz`,
-      { quizId: attempt.lessonId, action: "retake_allowed" }
-    );
-    
-    res.json({ 
-      success: true, 
-      message: "Student can now retake this quiz",
-      student: attempt.userName,
-      lesson: attempt.lessonId,
+    const processedAttempts = attempts.map(attempt => {
+      const attemptObj = attempt.toObject();
+      const percentage = attemptObj.percentage || 0;
+      const passMark = attemptObj.passMark || 70;
+      attemptObj.isPassed = percentage >= passMark;
+      return attemptObj;
     });
+    
+    res.json({ attempts: processedAttempts });
   } catch (err) {
-    console.error("Allow retake error:", err);
+    console.error("Get student progress for subject error:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-// ================= GET STUDENT PROGRESS =================
+// ================= GET SUBJECT PERFORMANCE (Lecturer & Admin) =================
+export const getSubjectPerformance = async (req, res) => {
+  try {
+    const { subjectId } = req.params;
+    
+    // Check if lecturer has access to this subject
+    const hasAccess = await checkLecturerSubjectAccess(req.user._id, subjectId);
+    if (!hasAccess && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You are not assigned to this subject." });
+    }
+    
+    const attempts = await LessonAttempt.find({ 
+      subjectId: subjectId,
+      status: "completed" 
+    })
+      .populate("userId", "name email")
+      .populate("lessonId", "title")
+      .sort({ completedAt: -1 });
+    
+    const processedAttempts = attempts.map(attempt => {
+      const attemptObj = attempt.toObject();
+      const percentage = attemptObj.percentage || 0;
+      const passMark = attemptObj.passMark || 70;
+      attemptObj.isPassed = percentage >= passMark;
+      return attemptObj;
+    });
+    
+    let totalScore = 0;
+    let passedCount = 0;
+    const completedLessonsSet = new Set();
+    
+    processedAttempts.forEach(attempt => {
+      totalScore += attempt.percentage || 0;
+      if (attempt.isPassed) passedCount++;
+      if (attempt.lessonCompleted) {
+        completedLessonsSet.add(attempt.lessonId?._id?.toString());
+      }
+    });
+    
+    const stats = {
+      totalAttempts: processedAttempts.length,
+      averageScore: processedAttempts.length > 0 ? Math.round(totalScore / processedAttempts.length) : 0,
+      passRate: processedAttempts.length > 0 ? Math.round((passedCount / processedAttempts.length) * 100) : 0,
+      completedLessons: completedLessonsSet.size,
+    };
+    
+    res.json({ attempts: processedAttempts, stats });
+  } catch (err) {
+    console.error("Get subject performance error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ================= GET STUDENT PROGRESS (Admin only) =================
 export const getStudentProgress = async (req, res) => {
   try {
     const { studentId } = req.params;
@@ -358,54 +444,7 @@ export const getStudentProgress = async (req, res) => {
   }
 };
 
-// ================= GET SUBJECT PERFORMANCE (ADMIN) =================
-export const getSubjectPerformance = async (req, res) => {
-  try {
-    const { subjectId } = req.params;
-    
-    const attempts = await LessonAttempt.find({ 
-      subjectId: subjectId,
-      status: "completed" 
-    })
-      .populate("userId", "name email")
-      .populate("lessonId", "title")
-      .sort({ completedAt: -1 });
-    
-    const processedAttempts = attempts.map(attempt => {
-      const attemptObj = attempt.toObject({ virtuals: true });
-      const percentage = attemptObj.percentage || 0;
-      const passMark = attemptObj.passMark || 70;
-      attemptObj.isPassed = percentage >= passMark;
-      return attemptObj;
-    });
-    
-    let totalScore = 0;
-    let passedCount = 0;
-    const completedLessonsSet = new Set();
-    
-    processedAttempts.forEach(attempt => {
-      totalScore += attempt.percentage || 0;
-      if (attempt.isPassed) passedCount++;
-      if (attempt.lessonCompleted) {
-        completedLessonsSet.add(attempt.lessonId?._id?.toString());
-      }
-    });
-    
-    const stats = {
-      totalAttempts: processedAttempts.length,
-      averageScore: processedAttempts.length > 0 ? Math.round(totalScore / processedAttempts.length) : 0,
-      passRate: processedAttempts.length > 0 ? Math.round((passedCount / processedAttempts.length) * 100) : 0,
-      completedLessons: completedLessonsSet.size,
-    };
-    
-    res.json({ attempts: processedAttempts, stats });
-  } catch (err) {
-    console.error("Get subject performance error:", err);
-    res.status(500).json({ message: err.message });
-  }
-};
-
-// ================= GET LESSON PERFORMANCE =================
+// ================= GET LESSON PERFORMANCE (Admin only) =================
 export const getLessonPerformance = async (req, res) => {
   try {
     const { lessonId } = req.params;
@@ -436,7 +475,53 @@ export const getLessonPerformance = async (req, res) => {
   }
 };
 
-// ================= DELETE ATTEMPT (ADMIN) =================
+// ================= ALLOW RETAKE (Lecturer & Admin) =================
+export const allowRetake = async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    
+    const attempt = await LessonAttempt.findById(attemptId).populate("userId", "name email");
+    if (!attempt) {
+      return res.status(404).json({ message: "Attempt not found" });
+    }
+    
+    if (attempt.status !== "completed") {
+      return res.status(400).json({ message: "Can only allow retake for completed quizzes" });
+    }
+    
+    // Check if user has permission (admin or lecturer assigned to subject)
+    const hasAccess = await checkLecturerAttemptAccess(req.user._id, attempt);
+    if (!hasAccess && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You are not assigned to this subject." });
+    }
+    
+    attempt.adminAllowedRetake = true;
+    await attempt.save();
+    
+    // Notify student that they can retake the quiz
+    await createNotification(
+      attempt.userId,
+      "student",
+      "info",
+      "🔄 Retake Permission Granted",
+      `Your request to retake "${attempt.lessonId?.title || 'Quiz'}" has been approved. You can now attempt it again.`,
+      `/student/lessons/${attempt.lessonId}/quiz`,
+      { quizId: attempt.lessonId, action: "retake_allowed" }
+    );
+    
+    res.json({ 
+      success: true, 
+      message: "Student can now retake this quiz",
+      student: attempt.userName,
+      lesson: attempt.lessonId,
+    });
+  } catch (err) {
+    console.error("Allow retake error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ================= DELETE ATTEMPT (Lecturer & Admin) =================
 export const deleteAttempt = async (req, res) => {
   try {
     const { attemptId } = req.params;
@@ -444,6 +529,12 @@ export const deleteAttempt = async (req, res) => {
     const attempt = await LessonAttempt.findById(attemptId);
     if (!attempt) {
       return res.status(404).json({ message: "Attempt not found" });
+    }
+    
+    // Check if user has permission (admin or lecturer assigned to subject)
+    const hasAccess = await checkLecturerAttemptAccess(req.user._id, attempt);
+    if (!hasAccess && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You are not assigned to this subject." });
     }
     
     const studentName = attempt.userName;

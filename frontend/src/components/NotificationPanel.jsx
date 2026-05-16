@@ -1,4 +1,4 @@
-// components/NotificationPanel.jsx - Updated with navigation support for admin
+// components/NotificationPanel.jsx - Updated with live class notifications for admin
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -14,16 +14,22 @@ import {
   Zap,
   MessageSquare,
   Award,
-  ExternalLink
+  ExternalLink,
+  Video,
+  Calendar,
+  Users,
+  RefreshCw
 } from "lucide-react";
 import axios from "../api/axios";
 import { formatDistanceToNow } from "date-fns";
+import toast from "react-hot-toast";
 
 const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
     if (isOpen) {
@@ -35,21 +41,14 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
     // Listen for real-time admin notifications
     if (window.socket) {
       window.socket.on("new_admin_notification", (notification) => {
-        const formattedNotif = {
-          id: notification.id,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          link: notification.link,
-          metadata: notification.metadata || {},
-          time: formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true }),
-          read: false,
-          icon: getIconForType(notification.type),
-          color: getColorForType(notification.type),
-          bgColor: getBgColorForType(notification.type)
-        };
+        const formattedNotif = formatNotification(notification);
         setNotifications(prev => [formattedNotif, ...prev]);
         setUnreadCount(prev => prev + 1);
+        
+        // Show toast for live class notifications
+        if (notification.type === "live_class") {
+          toast.success(`🔴 ${notification.title}`, { duration: 5000 });
+        }
       });
     }
     
@@ -60,33 +59,48 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
     };
   }, []);
 
+  const formatNotification = (notif) => {
+    return {
+      id: notif._id || notif.id,
+      type: notif.type || "info",
+      title: notif.title,
+      message: notif.message,
+      link: notif.link,
+      metadata: notif.metadata || {},
+      time: formatDistanceToNow(new Date(notif.createdAt || notif.timestamp || Date.now()), { addSuffix: true }),
+      read: notif.read || false,
+      icon: getIconForType(notif.type),
+      color: getColorForType(notif.type),
+      bgColor: getBgColorForType(notif.type)
+    };
+  };
+
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/notifications?limit=20");
+      const res = await axios.get("/notifications?limit=50");
       
-      if (res.data && res.data.notifications) {
-        const formattedNotifications = res.data.notifications.map(notif => ({
-          id: notif._id,
-          type: notif.type,
-          title: notif.title,
-          message: notif.message,
-          link: notif.link,
-          metadata: notif.metadata || {},
-          time: formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true }),
-          read: notif.read,
-          icon: getIconForType(notif.type),
-          color: getColorForType(notif.type),
-          bgColor: getBgColorForType(notif.type)
-        }));
-        setNotifications(formattedNotifications);
-        setUnreadCount(res.data.unreadCount || 0);
-      } else {
-        setNotifications([]);
+      let notificationsData = [];
+      let unread = 0;
+      
+      if (res.data && Array.isArray(res.data)) {
+        notificationsData = res.data;
+        unread = res.data.filter(n => !n.read).length;
+      } else if (res.data && res.data.notifications && Array.isArray(res.data.notifications)) {
+        notificationsData = res.data.notifications;
+        unread = res.data.unreadCount || res.data.notifications.filter(n => !n.read).length;
+      } else if (res.data && res.data.success && res.data.notifications) {
+        notificationsData = res.data.notifications;
+        unread = res.data.unreadCount || 0;
       }
+      
+      const formattedNotifications = notificationsData.map(notif => formatNotification(notif));
+      setNotifications(formattedNotifications);
+      setUnreadCount(unread);
     } catch (err) {
       console.error("Error fetching notifications:", err);
       setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }
@@ -97,6 +111,9 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
       case "success": return CheckCircle;
       case "warning": return AlertCircle;
       case "error": return XCircle;
+      case "live_class": return Video;
+      case "class_created": return Calendar;
+      case "class_updated": return MessageSquare;
       default: return Info;
     }
   };
@@ -106,6 +123,9 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
       case "success": return "text-green-500";
       case "warning": return "text-yellow-500";
       case "error": return "text-red-500";
+      case "live_class": return "text-red-500";
+      case "class_created": return "text-purple-500";
+      case "class_updated": return "text-blue-500";
       default: return "text-blue-500";
     }
   };
@@ -115,6 +135,9 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
       case "success": return "bg-green-50 dark:bg-green-950/30";
       case "warning": return "bg-yellow-50 dark:bg-yellow-950/30";
       case "error": return "bg-red-50 dark:bg-red-950/30";
+      case "live_class": return "bg-red-50 dark:bg-red-950/30";
+      case "class_created": return "bg-purple-50 dark:bg-purple-950/30";
+      case "class_updated": return "bg-blue-50 dark:bg-blue-950/30";
       default: return "bg-blue-50 dark:bg-blue-950/30";
     }
   };
@@ -140,53 +163,62 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
         prev.map(notif => ({ ...notif, read: true }))
       );
       setUnreadCount(0);
+      toast.success("All notifications marked as read");
     } catch (err) {
       console.error("Error marking all as read:", err);
+      toast.error("Failed to mark all as read");
     }
   };
 
   const handleNotificationClick = (notification) => {
-    // Mark as read
     markAsRead(notification.id);
     
-    // Handle navigation based on notification link or metadata
+    // Handle live class navigation for admin
+    if (notification.type === "live_class" && notification.metadata?.classId) {
+      navigate(`/admin/live-class/${notification.metadata.classId}`);
+      onClose();
+      return;
+    }
+    
     if (notification.link) {
-      // If there's a direct link, navigate to it
       navigate(notification.link);
       onClose();
     } else if (notification.metadata) {
-      // Handle different notification types with metadata
-      const { action, userId, paymentId, examId, quizId, testimonialId } = notification.metadata;
-      
+      const { action, classId, userId, paymentId } = notification.metadata;
       switch (action) {
+        case "live_class_created":
+        case "live_class_updated":
+          navigate(`/admin/live-classes/${classId}/edit`);
+          break;
+        case "live_class_started":
+          navigate(`/admin/live-class/${classId}`);
+          break;
         case "new_user":
           navigate(`/admin/users?userId=${userId}`);
           break;
         case "payment_received":
           navigate(`/admin/payments?paymentId=${paymentId}`);
           break;
-        case "exam_completed":
-          navigate(`/admin/results?examId=${examId}`);
-          break;
-        case "quiz_completed":
-          navigate(`/admin/performance?quizId=${quizId}`);
-          break;
-        case "testimonial_submitted":
-          navigate(`/admin/testimonials?testimonialId=${testimonialId}`);
-          break;
         default:
-          // If onNotificationClick is provided, call it
-          if (onNotificationClick) {
-            onNotificationClick(notification);
-          }
+          if (onNotificationClick) onNotificationClick(notification);
       }
-    } else {
-      // Default action - call onNotificationClick if provided
-      if (onNotificationClick) {
-        onNotificationClick(notification);
-      }
+      onClose();
+    } else if (onNotificationClick) {
+      onNotificationClick(notification);
     }
   };
+
+  const getFilteredCount = (type) => {
+    if (type === "all") return notifications.length;
+    if (type === "unread") return notifications.filter(n => !n.read).length;
+    return notifications.filter(n => n.type === type).length;
+  };
+
+  const filteredNotifications = notifications.filter(notif => {
+    if (filter === "all") return true;
+    if (filter === "unread") return !notif.read;
+    return notif.type === filter;
+  });
 
   return (
     <>
@@ -206,7 +238,7 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
           <div className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Admin Notifications
+              Notifications
             </h2>
             {unreadCount > 0 && (
               <span className="px-2 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full">
@@ -215,12 +247,19 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={fetchNotifications}
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw className="h-4 w-4 text-gray-500" />
+            </button>
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
                 className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 transition-colors"
               >
-                Mark all as read
+                Mark all read
               </button>
             )}
             <button
@@ -232,13 +271,46 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto h-[calc(100%-4rem)]">
+        {/* Filter Tabs */}
+        <div className="flex gap-1 p-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
+          {[
+            { id: "all", label: "All", icon: Bell },
+            { id: "unread", label: "Unread", icon: Info },
+            { id: "live_class", label: "Live Classes", icon: Video },
+            { id: "success", label: "Success", icon: CheckCircle },
+            { id: "warning", label: "Warnings", icon: AlertCircle }
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const count = getFilteredCount(tab.id);
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setFilter(tab.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                  filter === tab.id
+                    ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
+                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+              >
+                <Icon className="h-3 w-3" />
+                <span className="hidden sm:inline">{tab.label}</span>
+                {count > 0 && filter !== tab.id && (
+                  <span className="ml-1 text-[10px] bg-gray-200 dark:bg-gray-700 px-1 rounded-full">
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex-1 overflow-y-auto h-[calc(100%-130px)]">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4" />
               <p className="text-gray-500 dark:text-gray-400">Loading notifications...</p>
             </div>
-          ) : notifications.length === 0 ? (
+          ) : filteredNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <Bell className="h-12 w-12 text-gray-300 dark:text-gray-700 mb-4" />
               <p className="text-gray-500 dark:text-gray-400">No notifications yet</p>
@@ -248,7 +320,7 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
             </div>
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
-              {notifications.map((notification) => {
+              {filteredNotifications.map((notification) => {
                 const Icon = notification.icon;
                 return (
                   <div
@@ -278,12 +350,10 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
                           <span className="text-xs text-gray-400 dark:text-gray-500">
                             {notification.time}
                           </span>
-                          {notification.link && (
-                            <span className="text-xs text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                              View details
-                              <ExternalLink className="h-3 w-3" />
-                            </span>
-                          )}
+                          <span className="text-xs text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                            View details
+                            <ExternalLink className="h-3 w-3" />
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -309,6 +379,40 @@ const NotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
                 className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 transition-colors"
               >
                 View All
+              </button>
+            </div>
+            
+            {/* Quick Action Buttons */}
+            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+              <button
+                onClick={() => {
+                  onClose();
+                  navigate("/admin/live-classes");
+                }}
+                className="text-center text-xs text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+              >
+                <Video className="h-4 w-4 mx-auto mb-1" />
+                Live Classes
+              </button>
+              <button
+                onClick={() => {
+                  onClose();
+                  navigate("/admin/users");
+                }}
+                className="text-center text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                <Users className="h-4 w-4 mx-auto mb-1" />
+                Users
+              </button>
+              <button
+                onClick={() => {
+                  onClose();
+                  navigate("/admin/payments");
+                }}
+                className="text-center text-xs text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+              >
+                <CreditCard className="h-4 w-4 mx-auto mb-1" />
+                Payments
               </button>
             </div>
           </div>

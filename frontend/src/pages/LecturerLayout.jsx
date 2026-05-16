@@ -27,7 +27,9 @@ import {
   Zap,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  FileQuestion,
+  Video
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import LecturerNotificationPanel from "../components/LecturerNotificationPanel";
@@ -170,6 +172,7 @@ const LecturerLayout = () => {
         { to: "/lecturer/students", label: "My Students", icon: Users, badge: null },
         { to: "/lecturer/progress", label: "Student Progress", icon: TrendingUp, badge: null },
         { to: "/lecturer/achievements", label: "Achievements", icon: Award, badge: null },
+        { to: "/lecturer/exams", label: "Create Exams", icon: FileQuestion, badge: null },
       ]
     },
     { 
@@ -181,6 +184,14 @@ const LecturerLayout = () => {
         { to: "/lecturer/help", label: "Help & Support", icon: HelpCircle, badge: null },
       ]
     },
+    { 
+  section: "Teaching", 
+  icon: Video,
+  items: [
+    { to: "/lecturer/live-classes", label: "Live Classes", icon: Video, badge: null },
+  ]
+},
+
   ];
 
   const getUserInitials = () => {

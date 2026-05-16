@@ -7,6 +7,9 @@ import Subject from "../models/Subject.js";
 import { createNotification } from "./notificationController.js";
 import cloudinary from "../../config/cloudinary.js";
 import streamifier from "streamifier";
+import ExamAttempt from "../models/ExamAttempt.js";
+import Question from "../models/Question.js";
+import mongoose from "mongoose";
 
 // ================= CONTENT MANAGEMENT =================
 
@@ -615,6 +618,257 @@ export const getDashboardStats = async (req, res) => {
     });
   } catch (err) {
     console.error("Get dashboard stats error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ================= GET ASSIGNED COURSES =================
+export const getAssignedCourses = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate('lecturerInfo.assignedCourses', 'name code description thumbnail');
+    
+    const courses = user.lecturerInfo?.assignedCourses || [];
+    
+    res.json({
+      success: true,
+      courses,
+      total: courses.length
+    });
+  } catch (err) {
+    console.error("Get assigned courses error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ================= GET ASSIGNED SUBJECTS =================
+// ================= GET ASSIGNED SUBJECTS =================
+export const getAssignedSubjects = async (req, res) => {
+  try {
+    console.log("=== GET ASSIGNED SUBJECTS CALLED ===");
+    console.log("Lecturer ID:", req.user._id);
+    
+    // First, get the user without population to see what IDs are stored
+    const userRaw = await User.findById(req.user._id);
+    console.log("Raw assigned subjects IDs:", userRaw.lecturerInfo?.assignedSubjects);
+    
+    // Now get with population
+    const user = await User.findById(req.user._id)
+      .populate({
+        path: 'lecturerInfo.assignedSubjects',
+        populate: { 
+          path: 'courseId', 
+          select: 'name code description'
+        }
+      });
+    
+    const subjects = user.lecturerInfo?.assignedSubjects || [];
+    console.log("Populated subjects count:", subjects.length);
+    console.log("Populated subjects:", JSON.stringify(subjects, null, 2));
+    
+    res.json({
+      success: true,
+      subjects,
+      total: subjects.length
+    });
+  } catch (err) {
+    console.error("Get assigned subjects error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ================= GET ASSIGNED SUBJECTS BY COURSE =================
+export const getAssignedSubjectsByCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    
+    const user = await User.findById(req.user._id)
+      .populate({
+        path: 'lecturerInfo.assignedSubjects',
+        match: { courseId: courseId },
+        populate: { path: 'courseId', select: 'name code' }
+      });
+    
+    const subjects = user.lecturerInfo?.assignedSubjects || [];
+    
+    res.json({
+      success: true,
+      subjects,
+      total: subjects.length
+    });
+  } catch (err) {
+    console.error("Get assigned subjects by course error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// controllers/lecturerController.js - Add these functions
+
+// GET LECTURER EXAM RESULTS (only for assigned subjects)
+export const getLecturerExamResults = async (req, res) => {
+  try {
+    const { courseId, subjectId } = req.query;
+    
+    // Get lecturer's assigned subjects
+    const user = await User.findById(req.user._id);
+    const assignedSubjectIds = user.lecturerInfo?.assignedSubjects || [];
+    
+    const filter = { 
+      status: "submitted",
+      subjectId: { $in: assignedSubjectIds }
+    };
+    
+    if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+      filter.courseId = new mongoose.Types.ObjectId(courseId);
+    }
+    
+    if (subjectId && mongoose.Types.ObjectId.isValid(subjectId)) {
+      filter.subjectId = new mongoose.Types.ObjectId(subjectId);
+    }
+    
+    const results = await ExamAttempt.find(filter)
+      .populate('userId', 'name email')
+      .populate('courseId', 'name')
+      .populate('subjectId', 'name')
+      .sort({ submittedAt: -1 });
+    
+    const formattedResults = results.map(result => ({
+      _id: result._id,
+      userId: result.userId,
+      courseId: result.courseId,
+      subjectId: result.subjectId,
+      userName: result.userId?.name || result.userName,
+      userEmail: result.userId?.email || result.userEmail,
+      courseName: result.courseId?.name || result.courseName,
+      subjectName: result.subjectId?.name || result.subjectName,
+      score: result.score,
+      percentage: result.percentage,
+      result: result.result,
+      resitAllowed: result.resitAllowed,
+      submittedAt: result.submittedAt,
+      totalQuestions: result.totalQuestions
+    }));
+    
+    res.json(formattedResults);
+  } catch (err) {
+    console.error("Get lecturer exam results error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// DELETE EXAM ATTEMPT (Lecturer only for their subjects)
+export const deleteLecturerExamAttempt = async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    
+    const attempt = await ExamAttempt.findById(attemptId);
+    if (!attempt) {
+      return res.status(404).json({ message: "Exam attempt not found" });
+    }
+    
+    // Verify lecturer has access to this subject
+    const user = await User.findById(req.user._id);
+    const hasAccess = user.lecturerInfo?.assignedSubjects?.includes(attempt.subjectId?.toString());
+    
+    if (!hasAccess && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You are not assigned to this subject." });
+    }
+    
+    await ExamAttempt.findByIdAndDelete(attemptId);
+    
+    res.json({ success: true, message: "Exam attempt deleted successfully" });
+  } catch (err) {
+    console.error("Delete exam attempt error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ALLOW RESIT (Lecturer only for their subjects)
+export const allowLecturerResit = async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    
+    const attempt = await ExamAttempt.findById(attemptId);
+    if (!attempt) {
+      return res.status(404).json({ message: "Exam attempt not found" });
+    }
+    
+    // Verify lecturer has access to this subject
+    const user = await User.findById(req.user._id);
+    const hasAccess = user.lecturerInfo?.assignedSubjects?.includes(attempt.subjectId?.toString());
+    
+    if (!hasAccess && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You are not assigned to this subject." });
+    }
+    
+    attempt.resitAllowed = true;
+    await attempt.save();
+    
+    res.json({ success: true, message: "Resit allowed successfully" });
+  } catch (err) {
+    console.error("Allow resit error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// GET EXAM DETAILS (Lecturer only for their subjects)
+export const getLecturerExamDetails = async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    
+    const attempt = await ExamAttempt.findById(attemptId)
+      .populate('userId', 'name email')
+      .populate('courseId', 'name')
+      .populate('subjectId', 'name');
+    
+    if (!attempt) {
+      return res.status(404).json({ message: "Exam attempt not found" });
+    }
+    
+    // Verify lecturer has access to this subject
+    const user = await User.findById(req.user._id);
+    const hasAccess = user.lecturerInfo?.assignedSubjects?.includes(attempt.subjectId?._id?.toString() || attempt.subjectId?.toString());
+    
+    if (!hasAccess && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. You are not assigned to this subject." });
+    }
+    
+    // Get full question details
+    const questions = await Question.find({
+      _id: { $in: attempt.questions.map(q => q.questionId) }
+    });
+    
+    const detailedResults = attempt.questions.map(q => {
+      const fullQuestion = questions.find(qu => qu._id.toString() === q.questionId.toString());
+      return {
+        questionId: q.questionId,
+        questionText: fullQuestion?.question || "",
+        userAnswer: q.selected,
+        correctAnswer: q.correct,
+        isCorrect: q.isCorrect,
+        rationale: fullQuestion?.rationale || ""
+      };
+    });
+    
+    const result = {
+      _id: attempt._id,
+      userId: attempt.userId,
+      courseId: attempt.courseId,
+      subjectId: attempt.subjectId,
+      userName: attempt.userId?.name || attempt.userName,
+      courseName: attempt.courseId?.name || attempt.courseName,
+      subjectName: attempt.subjectId?.name || attempt.subjectName,
+      score: attempt.score,
+      percentage: attempt.percentage,
+      result: attempt.result,
+      totalQuestions: attempt.totalQuestions,
+      submittedAt: attempt.submittedAt,
+      questionResults: detailedResults
+    };
+    
+    res.json(result);
+  } catch (err) {
+    console.error("Get exam details error:", err);
     res.status(500).json({ message: err.message });
   }
 };

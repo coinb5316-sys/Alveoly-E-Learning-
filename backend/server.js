@@ -1,4 +1,4 @@
-// server.js - Cleaned version (FAQ routes removed - they are in faqRoutes.js)
+// server.js - COMPLETE WITH VIDEO CONFERENCE SUPPORT
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
@@ -23,6 +23,7 @@ const httpServer = createServer(app);
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
+  "http://localhost:5000",
   "https://alveolye-learning.academy",
   "https://www.alveolye-learning.academy",
   "https://alveoly-platform.onrender.com",
@@ -42,13 +43,13 @@ export const io = new Server(httpServer, {
         callback(null, true);
       } else {
         console.warn(`⚠️ Socket.IO blocked origin: ${origin}`);
-        callback(null, true);
+        callback(null, true); // Allow anyway for development
       }
     },
     methods: ["GET", "POST"],
     credentials: true,
   },
-  transports: ["polling", "websocket"],
+  transports: ["websocket", "polling"], // Prefer websocket first
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
@@ -58,6 +59,9 @@ export const io = new Server(httpServer, {
   httpCompression: false,
 });
 
+// Store active rooms and participants
+const rooms = new Map(); // classId -> Map of userId -> participant info
+
 // ================= SOCKET.IO CONNECTION HANDLER =================
 io.on("connection", (socket) => {
   console.log("🟢 Client connected:", socket.id);
@@ -65,6 +69,202 @@ io.on("connection", (socket) => {
 
   socket.on("upgrade", () => {
     console.log("⬆️ Transport upgraded to websocket");
+  });
+
+  // ================= VIDEO CONFERENCE EVENTS =================
+  
+  socket.on("join-call", (data) => {
+    const { classId, userId, userName, role, audioEnabled = true, videoEnabled = true } = data;
+    
+    if (!classId || !userId) {
+      console.error("Missing classId or userId in join-call");
+      return;
+    }
+    
+    console.log(`🎥 User ${userName} (${userId}) joining room ${classId}`);
+    
+    // Store user info on socket
+    socket.userId = userId;
+    socket.userName = userName;
+    socket.classId = classId;
+    socket.role = role;
+    
+    // Join the room
+    socket.join(classId);
+    
+    // Store participant info
+    if (!rooms.has(classId)) {
+      rooms.set(classId, new Map());
+    }
+    
+    const room = rooms.get(classId);
+    const participantInfo = {
+      socketId: socket.id,
+      userName,
+      role,
+      audioEnabled,
+      videoEnabled,
+      joinedAt: new Date()
+    };
+    
+    room.set(userId, participantInfo);
+    
+    console.log(`📊 Room ${classId} now has ${room.size} participants`);
+    
+    // Get existing participants (excluding current user)
+    const existingParticipants = [];
+    for (const [existingUserId, info] of room.entries()) {
+      if (existingUserId !== userId) {
+        existingParticipants.push({
+          userId: existingUserId,
+          userName: info.userName,
+          role: info.role,
+          audioEnabled: info.audioEnabled,
+          videoEnabled: info.videoEnabled
+        });
+      }
+    }
+    
+    // Send existing participants to the new user
+    socket.emit("existing-participants", existingParticipants);
+    console.log(`📨 Sent ${existingParticipants.length} existing participants to ${userName}`);
+    
+    // Notify others in the room that a new user joined
+    socket.to(classId).emit("user-joined", {
+      userId,
+      userName,
+      role,
+      audioEnabled,
+      videoEnabled
+    });
+    
+    // Confirm join to the user
+    socket.emit("join-confirmed", { classId, userId });
+  });
+
+  socket.on("signal", (data) => {
+    const { to, signal, classId } = data;
+    
+    if (!classId || !to) return;
+    
+    const room = rooms.get(classId);
+    const targetUser = room?.get(to);
+    
+    if (targetUser) {
+      io.to(targetUser.socketId).emit("signal", {
+        from: socket.userId,
+        signal
+      });
+    } else {
+      console.log(`⚠️ Target user ${to} not found in room ${classId}`);
+    }
+  });
+
+  socket.on("user-speaking", (data) => {
+    const { classId, userId, isSpeaking } = data;
+    
+    if (!classId || !userId) return;
+    
+    // Broadcast to everyone in the room including sender? No, exclude sender
+    socket.to(classId).emit("user-speaking", {
+      userId,
+      isSpeaking
+    });
+  });
+
+  socket.on("participant-updated", (data) => {
+    const { classId, userId, updates } = data;
+    
+    if (!classId || !userId) return;
+    
+    const room = rooms.get(classId);
+    const participant = room?.get(userId);
+    
+    if (participant) {
+      Object.assign(participant, updates);
+      socket.to(classId).emit("participant-updated", {
+        userId,
+        updates
+      });
+    }
+  });
+
+  socket.on("chat-message", (data) => {
+    const { classId, message, userId, userName } = data;
+    
+    if (!classId || !message) return;
+    
+    io.to(classId).emit("new-chat-message", {
+      userId,
+      userName,
+      message,
+      timestamp: new Date()
+    });
+  });
+
+  socket.on("user-leaving", (data) => {
+    const { classId, userId, userName, isLecturer } = data;
+    
+    console.log(`👋 User ${userName} (${userId}) leaving room ${classId}, isLecturer: ${isLecturer}`);
+    
+    const room = rooms.get(classId);
+    if (room) {
+      room.delete(userId);
+      socket.to(classId).emit("user-left", { 
+        userId, 
+        userName,
+        leftAt: new Date()
+      });
+      
+      if (room.size === 0) {
+        rooms.delete(classId);
+        console.log(`🗑️ Room ${classId} deleted (empty)`);
+      }
+    }
+    
+    socket.leave(classId);
+  });
+
+  socket.on("end-class", (data) => {
+    const { classId } = data;
+    
+    console.log(`🔚 Class ${classId} ended by lecturer`);
+    
+    // Notify all participants in the room
+    io.to(classId).emit("class-ended", {
+      message: "The class has been ended by the lecturer"
+    });
+    
+    // Clean up room
+    const room = rooms.get(classId);
+    if (room) {
+      room.clear();
+      rooms.delete(classId);
+    }
+  });
+
+  // ================= HELPER: Get room participants =================
+  socket.on("get-room-participants", (data) => {
+    const { classId } = data;
+    
+    const room = rooms.get(classId);
+    if (!room) {
+      socket.emit("room-participants", { participants: [] });
+      return;
+    }
+    
+    const participants = [];
+    for (const [userId, info] of room.entries()) {
+      participants.push({
+        userId,
+        userName: info.userName,
+        role: info.role,
+        audioEnabled: info.audioEnabled,
+        videoEnabled: info.videoEnabled
+      });
+    }
+    
+    socket.emit("room-participants", { participants });
   });
 
   // ================= USER ROOM JOINING =================
@@ -142,9 +342,9 @@ io.on("connection", (socket) => {
         } else if (lowerText.includes("admission") || lowerText.includes("apply")) {
           reply = "📝 Apply online through our website! Need step-by-step guidance?";
         } else if (lowerText.includes("fee") || lowerText.includes("cost")) {
-          reply = "💰 Certificates from $500, Diplomas from $1,500, Degrees from $3,000/year.";
+          reply = "💰 Certificates from  GH¢500, Diplomas from  GH¢1,500, Degrees from  GH¢3,000/year.";
         } else if (lowerText.includes("contact") || lowerText.includes("support")) {
-          reply = "📞 Email: support@alveoly.com | Phone: +233 (0) 54 489 1862";
+          reply = "📞 Email: alveolyelearning@gmail.com | Phone: +233 (0) 549 556 6116";
         } else if (lowerText.includes("thank")) {
           reply = "🌟 You're welcome! Anything else I can help with?";
         } else if (lowerText.includes("bye")) {
@@ -193,6 +393,31 @@ io.on("connection", (socket) => {
   // ================= DISCONNECT HANDLING =================
   socket.on("disconnect", (reason) => {
     console.log(`🔴 Client disconnected (${socket.id}):`, reason);
+    
+    // Clean up from video conference rooms
+    if (socket.classId && socket.userId) {
+      const room = rooms.get(socket.classId);
+      if (room) {
+        const participant = room.get(socket.userId);
+        if (participant) {
+          room.delete(socket.userId);
+          console.log(`👋 User ${participant.userName} (${socket.userId}) removed from room ${socket.classId} due to disconnect`);
+          
+          // Notify others
+          io.to(socket.classId).emit("user-left", {
+            userId: socket.userId,
+            userName: participant.userName,
+            leftAt: new Date(),
+            disconnected: true
+          });
+        }
+        
+        if (room.size === 0) {
+          rooms.delete(socket.classId);
+          console.log(`🗑️ Room ${socket.classId} deleted (empty after disconnect)`);
+        }
+      }
+    }
   });
 
   socket.on("error", (err) => {
@@ -204,7 +429,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// ================= HELPER FUNCTION TO EMIT NOTIFICATIONS =================
+// ================= HELPER FUNCTIONS =================
 export const emitNotification = (userId, notification) => {
   io.to(userId.toString()).emit("new_notification", notification);
   io.to(`user_${userId}`).emit("new_notification", notification);
@@ -228,26 +453,31 @@ app.get("/", (req, res) => {
   res.status(200).json({ 
     status: "OK", 
     message: "API is running 🚀",
-    socket: "Socket.IO server is ready"
+    socket: "Socket.IO server is ready",
+    activeRooms: rooms.size
   });
 });
 
 // ================= SOCKET STATUS ENDPOINT =================
 app.get("/socket-status", (req, res) => {
-  const rooms = {};
-  const roomMap = io.sockets.adapter.rooms;
-  
-  for (const [room, set] of roomMap.entries()) {
-    if (!rooms[room]) {
-      rooms[room] = set.size;
-    }
+  const roomStats = {};
+  for (const [roomId, participants] of rooms.entries()) {
+    roomStats[roomId] = {
+      participantCount: participants.size,
+      participants: Array.from(participants.entries()).map(([userId, info]) => ({
+        userId,
+        userName: info.userName,
+        role: info.role
+      }))
+    };
   }
   
   res.json({
     status: "healthy",
     connections: io.engine.clientsCount,
     transports: ["polling", "websocket"],
-    rooms: rooms,
+    activeRooms: rooms.size,
+    rooms: roomStats,
     allowedOrigins: allowedOrigins,
   });
 });
@@ -261,7 +491,10 @@ app.get("/socket-stats", (req, res) => {
     connectedSockets.push({
       id: id,
       rooms: Array.from(socket.rooms),
-      connected: socket.connected
+      connected: socket.connected,
+      userId: socket.userId,
+      userName: socket.userName,
+      classId: socket.classId
     });
   }
   
@@ -284,8 +517,13 @@ httpServer.listen(PORT, () => {
   console.log(`\n🚀 Server running on port ${PORT}`);
   console.log(`🔗 http://localhost:${PORT}`);
   console.log(`📡 Socket.IO server ready`);
-  console.log(`✅ Transports: polling, websocket`);
+  console.log(`✅ Transports: websocket, polling`);
   console.log(`✅ Allowed origins:`, allowedOrigins);
+  console.log(`\n🎥 Video Conference Ready:`);
+  console.log(`   - Peer-to-peer video calling`);
+  console.log(`   - Screen sharing support`);
+  console.log(`   - Real-time chat`);
+  console.log(`   - Speaking detection`);
   console.log(`\n📢 Notification rooms ready:`);
   console.log(`   - User rooms: user_{userId}`);
   console.log(`   - Admin rooms: admin, admin_notifications`);

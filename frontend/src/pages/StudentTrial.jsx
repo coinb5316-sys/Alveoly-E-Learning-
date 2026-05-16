@@ -1,7 +1,7 @@
-// StudentTrial.jsx - Fixed results view with proper data handling
+// StudentTrial.jsx - Fixed version with proper socket handling
 import { useState, useEffect } from "react";
 import axios from "../api/axios";
-import socket from "../config/socket";
+import { getSocket } from "../config/socket";
 import { useAuth } from "../context/AuthContext";
 import { useParams, useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
@@ -36,19 +36,22 @@ const StudentTrial = () => {
   const [submitting, setSubmitting] = useState(false);
   const [resultData, setResultData] = useState(null);
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const current = questions[currentIndex];
 
   // ================= FETCH =================
   const fetchQuestions = async () => {
     try {
+      setLoading(true);
       if (!subjectId || !courseId) return;
 
       const res = await axios.get(
         `/questions?subjectId=${subjectId}&courseId=${courseId}`
       );
 
-      const trials = res.data.filter((q) => q.type === "trial");
+      // Filter for trial questions that are approved
+      const trials = res.data.filter((q) => q.type === "trial" && q.status === "approved");
       setQuestions(trials);
       
       setAnswers({});
@@ -59,33 +62,42 @@ const StudentTrial = () => {
     } catch (err) {
       console.error(err);
       toast.error("Failed to load questions");
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchQuestions();
 
-    socket.on("question:created", fetchQuestions);
-    socket.on("question:updated", fetchQuestions);
-    socket.on("question:deleted", fetchQuestions);
+    // Socket event listeners - FIXED
+    const socket = getSocket();
+    if (socket) {
+      socket.on("question:created", fetchQuestions);
+      socket.on("question:updated", fetchQuestions);
+      socket.on("question:deleted", fetchQuestions);
+    }
 
     return () => {
-      socket.off("question:created", fetchQuestions);
-      socket.off("question:updated", fetchQuestions);
-      socket.off("question:deleted", fetchQuestions);
+      const socket = getSocket();
+      if (socket) {
+        socket.off("question:created", fetchQuestions);
+        socket.off("question:updated", fetchQuestions);
+        socket.off("question:deleted", fetchQuestions);
+      }
     };
   }, [subjectId, courseId]);
 
   // ================= TIMER =================
   useEffect(() => {
-    if (submitted) return;
+    if (submitted || loading) return;
 
     const interval = setInterval(() => {
       setTime((prev) => prev + 1);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [submitted]);
+  }, [submitted, loading]);
 
   // ================= SELECT =================
   const handleSelect = (qId, optionLetter, optionText) => {
@@ -173,7 +185,7 @@ const StudentTrial = () => {
   const performanceDetails = getPerformanceDetails();
 
   // Loading state
-  if (questions.length === 0 && !submitted) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
@@ -183,15 +195,15 @@ const StudentTrial = () => {
   }
 
   // No questions state
-  if (!current && questions.length === 0 && !submitted) {
+  if (!loading && questions.length === 0 && !submitted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <div className="h-24 w-24 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-6">
           <BookOpen className="h-12 w-12 text-gray-400" />
         </div>
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">No Questions Available</h3>
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">No Practice Questions Available</h3>
         <p className="text-gray-500 dark:text-gray-400 text-center max-w-md">
-          No trial questions found for this subject. Please check back later.
+          No practice questions found for this subject. Please check back later.
         </p>
         <button
           onClick={() => navigate(-1)}

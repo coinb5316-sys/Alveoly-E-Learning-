@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
-import socket from "../config/socket";
+import { getSocket } from "../config/socket";
 import { useAuth } from "../context/AuthContext";
 import toast, { Toaster } from "react-hot-toast";
 import {
@@ -83,9 +83,13 @@ const StudentExams = () => {
 
     startExam();
 
-    socket.on("question:created", startExam);
-    socket.on("question:updated", startExam);
-    socket.on("question:deleted", startExam);
+    // Socket event listeners
+    const socket = getSocket();
+    if (socket) {
+      socket.on("question:created", startExam);
+      socket.on("question:updated", startExam);
+      socket.on("question:deleted", startExam);
+    }
 
     const visibilityHandler = () => {
       if (document.hidden) {
@@ -107,9 +111,12 @@ const StudentExams = () => {
     document.addEventListener("contextmenu", contextMenuHandler);
 
     return () => {
-      socket.off("question:created", startExam);
-      socket.off("question:updated", startExam);
-      socket.off("question:deleted", startExam);
+      const socket = getSocket();
+      if (socket) {
+        socket.off("question:created", startExam);
+        socket.off("question:updated", startExam);
+        socket.off("question:deleted", startExam);
+      }
       document.removeEventListener("visibilitychange", visibilityHandler);
       document.removeEventListener("contextmenu", contextMenuHandler);
       document.body.style.filter = "";
@@ -211,6 +218,26 @@ const StudentExams = () => {
       <div className="flex flex-col items-center justify-center h-64">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
         <p className="text-gray-500 dark:text-gray-400 mt-4">Loading exam...</p>
+      </div>
+    );
+  }
+
+  if (questions.length === 0 && !loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <div className="h-20 w-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+          <BookOpen className="h-10 w-10 text-gray-400" />
+        </div>
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">No Exam Questions Available</h3>
+        <p className="text-gray-500 dark:text-gray-400 text-center max-w-md">
+          There are no approved exam questions for this subject yet.
+        </p>
+        <button
+          onClick={() => navigate("/student/dashboard")}
+          className="mt-6 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium"
+        >
+          Back to Dashboard
+        </button>
       </div>
     );
   }

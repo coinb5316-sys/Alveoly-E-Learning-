@@ -1,4 +1,4 @@
-// components/LecturerNotificationPanel.jsx - Updated for lecturer role
+// components/LecturerNotificationPanel.jsx - FIXED for lecturer role
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -18,16 +18,19 @@ import {
   BookOpen,
   Users,
   FileText,
-  GraduationCap
+  GraduationCap,
+  RefreshCw
 } from "lucide-react";
 import axios from "../api/axios";
 import { formatDistanceToNow } from "date-fns";
+import toast from "react-hot-toast";
 
 const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
     if (isOpen) {
@@ -36,29 +39,19 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
   }, [isOpen]);
 
   useEffect(() => {
-    // Listen for real-time lecturer notifications
+    // Listen for real-time lecturer notifications via socket
     if (window.socket) {
       window.socket.on("new_lecturer_notification", (notification) => {
-        const formattedNotif = {
-          id: notification.id,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          link: notification.link,
-          metadata: notification.metadata || {},
-          time: formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true }),
-          read: false,
-          icon: getIconForType(notification.type),
-          color: getColorForType(notification.type),
-          bgColor: getBgColorForType(notification.type)
-        };
+        const formattedNotif = formatNotification(notification);
         setNotifications(prev => [formattedNotif, ...prev]);
         setUnreadCount(prev => prev + 1);
         
-        // Play sound for important notifications
+        // Show toast for important notifications
         if (notification.type === "warning" || notification.type === "success") {
-          const audio = new Audio("/notification.mp3");
-          audio.play().catch(() => {});
+          toast[notification.type === "success" ? "success" : "error"](
+            notification.title,
+            { duration: 4000 }
+          );
         }
       });
     }
@@ -70,33 +63,61 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
     };
   }, []);
 
+  const formatNotification = (notif) => {
+    return {
+      id: notif._id || notif.id,
+      type: notif.type || "info",
+      title: notif.title,
+      message: notif.message,
+      link: notif.link,
+      metadata: notif.metadata || {},
+      time: formatDistanceToNow(new Date(notif.createdAt || notif.timestamp || Date.now()), { addSuffix: true }),
+      read: notif.read || false,
+      icon: getIconForType(notif.type),
+      color: getColorForType(notif.type),
+      bgColor: getBgColorForType(notif.type)
+    };
+  };
+
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/lecturer/notifications?limit=20");
-      
-      if (res.data && res.data.notifications) {
-        const formattedNotifications = res.data.notifications.map(notif => ({
-          id: notif._id,
-          type: notif.type,
-          title: notif.title,
-          message: notif.message,
-          link: notif.link,
-          metadata: notif.metadata || {},
-          time: formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true }),
-          read: notif.read,
-          icon: getIconForType(notif.type),
-          color: getColorForType(notif.type),
-          bgColor: getBgColorForType(notif.type)
-        }));
-        setNotifications(formattedNotifications);
-        setUnreadCount(res.data.unreadCount || 0);
-      } else {
-        setNotifications([]);
+      // Try to get from /lecturer/notifications first
+      let res;
+      try {
+        res = await axios.get("/lecturer/notifications?limit=50");
+      } catch (err) {
+        // Fallback to general /notifications endpoint
+        res = await axios.get("/notifications?limit=50");
       }
+      
+      // Handle different response formats
+      let notificationsData = [];
+      let unread = 0;
+      
+      if (res.data && Array.isArray(res.data)) {
+        // Direct array response
+        notificationsData = res.data;
+        unread = res.data.filter(n => !n.read).length;
+      } else if (res.data && res.data.notifications && Array.isArray(res.data.notifications)) {
+        // Nested notifications object
+        notificationsData = res.data.notifications;
+        unread = res.data.unreadCount || res.data.notifications.filter(n => !n.read).length;
+      } else if (res.data && res.data.success && res.data.notifications) {
+        // Success wrapper
+        notificationsData = res.data.notifications;
+        unread = res.data.unreadCount || 0;
+      }
+      
+      const formattedNotifications = notificationsData.map(notif => formatNotification(notif));
+      setNotifications(formattedNotifications);
+      setUnreadCount(unread);
+      
     } catch (err) {
       console.error("Error fetching notifications:", err);
+      // Don't show error toast for this, just set empty state
       setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }
@@ -110,7 +131,8 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
       case "submission": return FileText;
       case "student": return Users;
       case "grade": return Award;
-      default: return Info;
+      case "info": return Info;
+      default: return Bell;
     }
   };
 
@@ -140,7 +162,7 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
 
   const markAsRead = async (id) => {
     try {
-      await axios.patch(`/lecturer/notifications/${id}/read`);
+      await axios.patch(`/notifications/${id}/read`);
       setNotifications(prev =>
         prev.map(notif =>
           notif.id === id ? { ...notif, read: true } : notif
@@ -154,92 +176,72 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
 
   const markAllAsRead = async () => {
     try {
-      await axios.post("/lecturer/notifications/mark-all-read");
+      await axios.post("/notifications/mark-all-read");
       setNotifications(prev =>
         prev.map(notif => ({ ...notif, read: true }))
       );
       setUnreadCount(0);
+      toast.success("All notifications marked as read");
     } catch (err) {
       console.error("Error marking all as read:", err);
+      toast.error("Failed to mark all as read");
     }
   };
 
   const handleNotificationClick = (notification) => {
     // Mark as read
-    markAsRead(notification.id);
+    if (!notification.read) {
+      markAsRead(notification.id);
+    }
     
     // Handle navigation based on notification link or metadata
     if (notification.link) {
       navigate(notification.link);
       onClose();
     } else if (notification.metadata) {
-      // Handle different notification types with metadata for lecturers
-      const { 
-        action, 
-        studentId, 
-        attemptId, 
-        contentId,
-        submissionId,
-        studentName,
-        contentTitle,
-        courseId,
-        subjectId
-      } = notification.metadata;
+      const { action, studentId, attemptId, contentId, submissionId, courseId, subjectId } = notification.metadata;
       
       switch (action) {
         case "new_submission":
-          // Navigate to grade submission page
-          navigate(`/lecturer/attempts/${attemptId || submissionId}`);
+          navigate(`/lecturer/grading/${attemptId || submissionId}`);
           break;
         case "student_enrolled":
-          // Navigate to student progress
           navigate(`/lecturer/students/${studentId}/progress`);
           break;
         case "quiz_completed":
-          // Navigate to results
           navigate(`/lecturer/results?student=${studentId}&content=${contentId}`);
           break;
         case "grade_request":
-          // Navigate to grading page
-          navigate(`/lecturer/grading?attempt=${attemptId}`);
+          navigate(`/lecturer/grading/${attemptId}`);
           break;
         case "content_created":
-          // Navigate to content edit
-          navigate(`/lecturer/content/${contentId}/edit`);
-          break;
-        case "low_performance":
-          // Navigate to student progress for intervention
-          navigate(`/lecturer/students/${studentId}/progress?alert=low`);
+          navigate(`/lecturer/content/edit/${contentId}`);
           break;
         default:
-          // Default action - call onNotificationClick if provided
           if (onNotificationClick) {
             onNotificationClick(notification);
           } else {
-            // Fallback to dashboard
             navigate("/lecturer");
           }
       }
     } else {
-      // Default action - navigate to dashboard
-      navigate("/lecturer");
+      if (onNotificationClick) {
+        onNotificationClick(notification);
+      }
     }
   };
-
-  // Get notification categories for filtering
-  const [filter, setFilter] = useState("all");
-  
-  const filteredNotifications = notifications.filter(notif => {
-    if (filter === "all") return true;
-    if (filter === "unread") return !notif.read;
-    return notif.type === filter;
-  });
 
   const getFilteredCount = (type) => {
     if (type === "all") return notifications.length;
     if (type === "unread") return notifications.filter(n => !n.read).length;
     return notifications.filter(n => n.type === type).length;
   };
+
+  const filteredNotifications = notifications.filter(notif => {
+    if (filter === "all") return true;
+    if (filter === "unread") return !notif.read;
+    return notif.type === filter;
+  });
 
   return (
     <>
@@ -260,7 +262,7 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
           <div className="flex items-center gap-2">
             <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Lecturer Notifications
+              Notifications
             </h2>
             {unreadCount > 0 && (
               <span className="px-2 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full">
@@ -269,19 +271,26 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={fetchNotifications}
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw className="h-4 w-4 text-gray-500" />
+            </button>
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
                 className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 transition-colors"
               >
-                Mark all as read
+                Mark all read
               </button>
             )}
             <button
               onClick={onClose}
-              className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
-              <X className="h-5 w-5 text-gray-500" />
+              <X className="h-4 w-4 text-gray-500" />
             </button>
           </div>
         </div>
@@ -292,8 +301,8 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
             { id: "all", label: "All", icon: Bell },
             { id: "unread", label: "Unread", icon: Info },
             { id: "submission", label: "Submissions", icon: FileText },
-            { id: "student", label: "Students", icon: Users },
-            { id: "grade", label: "Grades", icon: Award }
+            { id: "grade", label: "Grades", icon: Award },
+            { id: "student", label: "Students", icon: Users }
           ].map((tab) => {
             const Icon = tab.icon;
             const count = getFilteredCount(tab.id);
@@ -301,14 +310,14 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
               <button
                 key={tab.id}
                 onClick={() => setFilter(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs font-medium rounded-lg transition-all ${
                   filter === tab.id
                     ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
                 }`}
               >
                 <Icon className="h-3 w-3" />
-                <span>{tab.label}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
                 {count > 0 && filter !== tab.id && (
                   <span className="ml-1 text-[10px] bg-gray-200 dark:bg-gray-700 px-1 rounded-full">
                     {count}
@@ -320,7 +329,7 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
         </div>
 
         {/* Notifications List */}
-        <div className="flex-1 overflow-y-auto h-[calc(100%-8.5rem)]">
+        <div className="flex-1 overflow-y-auto h-[calc(100%-130px)]">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4" />
@@ -342,7 +351,7 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
                   <div
                     key={notification.id}
                     className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all cursor-pointer group ${
-                      !notification.read ? "bg-blue-50/50 dark:bg-blue-950/20" : ""
+                      !notification.read ? "bg-blue-50/30 dark:bg-blue-950/20" : ""
                     }`}
                     onClick={() => handleNotificationClick(notification)}
                   >
@@ -380,7 +389,7 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
           )}
         </div>
 
-        {/* Footer with Quick Stats & Actions */}
+        {/* Footer with Quick Actions */}
         {notifications.length > 0 && (
           <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 p-4">
             <div className="flex justify-between items-center mb-3">
@@ -398,14 +407,14 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
               </button>
             </div>
             
-            {/* Quick Actions */}
+            {/* Quick Action Buttons */}
             <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
               <button
                 onClick={() => {
                   onClose();
                   navigate("/lecturer/attempts");
                 }}
-                className="text-center text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 transition-colors"
+                className="text-center text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
               >
                 <FileText className="h-4 w-4 mx-auto mb-1" />
                 Submissions
@@ -415,7 +424,7 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
                   onClose();
                   navigate("/lecturer/students");
                 }}
-                className="text-center text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 transition-colors"
+                className="text-center text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
               >
                 <Users className="h-4 w-4 mx-auto mb-1" />
                 Students
@@ -425,7 +434,7 @@ const LecturerNotificationPanel = ({ isOpen, onClose, onNotificationClick }) => 
                   onClose();
                   navigate("/lecturer/results");
                 }}
-                className="text-center text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 transition-colors"
+                className="text-center text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
               >
                 <Award className="h-4 w-4 mx-auto mb-1" />
                 Results

@@ -1,5 +1,5 @@
-// src/pages/Login.jsx - UPDATED with lecturer redirect
-import React, { useState } from "react";
+// src/pages/Login.jsx - COMPLETE FIXED VERSION
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash, FaGraduationCap } from "react-icons/fa";
@@ -16,6 +16,15 @@ const LoginPage = () => {
   const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
 
+  // Check for redirect after login
+  useEffect(() => {
+    const redirectUrl = localStorage.getItem("redirectAfterLogin");
+    if (redirectUrl) {
+      localStorage.removeItem("redirectAfterLogin");
+      // Don't auto-redirect here, wait for login
+    }
+  }, []);
+
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -25,7 +34,15 @@ const LoginPage = () => {
     try {
       const user = await login(form);
       
-      // ✅ Redirect based on role
+      // Check for saved redirect URL
+      const redirectUrl = localStorage.getItem("redirectAfterLogin");
+      if (redirectUrl) {
+        localStorage.removeItem("redirectAfterLogin");
+        navigate(redirectUrl);
+        return;
+      }
+      
+      // Default redirect based on role
       if (user?.role === "admin") {
         navigate("/admin");
       } else if (user?.role === "lecturer") {
@@ -51,7 +68,15 @@ const LoginPage = () => {
       
       console.log("Google login user:", res.user);
       
-      // ✅ Check all roles
+      // Check for saved redirect URL
+      const redirectUrl = localStorage.getItem("redirectAfterLogin");
+      if (redirectUrl) {
+        localStorage.removeItem("redirectAfterLogin");
+        navigate(redirectUrl);
+        return;
+      }
+      
+      // Default redirect based on role
       if (userRole === "admin") {
         navigate("/admin");
       } else if (userRole === "lecturer") {

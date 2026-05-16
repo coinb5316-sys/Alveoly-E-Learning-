@@ -11,7 +11,7 @@ const notificationSchema = new mongoose.Schema(
     },
     userRole: {
       type: String,
-      enum: ["student", "admin"],
+      enum: ["student", "admin","lecturer"],
       required: true
     },
     type: {

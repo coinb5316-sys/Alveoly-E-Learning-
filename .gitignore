@@ -1,38 +1,50 @@
 # Dependencies
 node_modules/
-package-lock.json
-yarn.lock
+frontend/node_modules/
+backend/node_modules/
+
+# Build outputs
+dist/
+frontend/dist/
+backend/dist/
+build/
 
 # Environment files
 .env
 .env.local
 .env.production
-.env.development
-
-# Build outputs
-dist/
-build/
-*.log
+.env.staging
+frontend/.env
+backend/.env
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Render
-.render/
-# Large media files
-*.mp4
-*.mov
-*.avi
-*.mkv
-frontend/public/images/*.mp4
-frontend/public/images/*.jpg
-frontend/src/assets/*.jpg
-frontend/src/assets/*.png
-frontend/public/*.jpg
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Uploads
+uploads/
+temp-uploads/
+files/
+
+# Vercel/Netlify
+.vercel
+.netlify
+*.toml
+
+# Vite
+.vite/
+vite.config.js.timestamp-*

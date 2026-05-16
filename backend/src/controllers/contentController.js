@@ -1,4 +1,4 @@
-// controllers/contentController.js - Fixed version
+// controllers/contentController.js - COMPLETE FIXED VERSION with file size validation & Lecturer fields
 import Content from "../models/Content.js";
 import cloudinary from "../../config/cloudinary.js";
 import streamifier from "streamifier";
@@ -53,6 +53,9 @@ export const uploadContent = async (req, res) => {
         price: Number(price) || 0,
         quizTimerMinutes: Number(quizTimerMinutes) || 0,
         quizPassMark: Number(quizPassMark) || 70,
+        // ================= LECTURER FIELDS =================
+        lecturerId: req.user?._id || null,
+        lecturerName: req.user?.name || "Admin",
       };
 
       console.log("💾 Saving quiz to database:", contentData);
@@ -79,7 +82,26 @@ export const uploadContent = async (req, res) => {
       return res.status(400).json({ message: "Main file required for video, image, or pdf content" });
     }
 
-    console.log(`📁 Uploading ${type} file: ${mainFile.originalname}`);
+    // ================= FILE SIZE VALIDATION =================
+    const maxFileSize = 100 * 1024 * 1024; // 100MB max
+    if (mainFile.size > maxFileSize) {
+      const fileSizeMB = (mainFile.size / (1024 * 1024)).toFixed(2);
+      return res.status(400).json({ 
+        message: `File too large! Maximum size is 100MB. Your file is ${fileSizeMB}MB.`,
+        details: `Please compress your ${type} file or use a smaller file.`
+      });
+    }
+
+    // Type-specific recommendations
+    if (type === "video" && mainFile.size > 50 * 1024 * 1024) {
+      console.warn(`⚠️ Large video file: ${(mainFile.size / (1024 * 1024)).toFixed(2)}MB - Consider optimizing for faster upload`);
+    }
+    
+    if (type === "pdf" && mainFile.size > 20 * 1024 * 1024) {
+      console.warn(`⚠️ Large PDF file: ${(mainFile.size / (1024 * 1024)).toFixed(2)}MB - Consider splitting or compressing`);
+    }
+
+    console.log(`📁 Uploading ${type} file: ${mainFile.originalname} (${(mainFile.size / (1024 * 1024)).toFixed(2)}MB)`);
 
     const uploadToCloudinary = (file, fileType, folder = "alveoly-content") =>
       new Promise((resolve, reject) => {
@@ -87,6 +109,7 @@ export const uploadContent = async (req, res) => {
           {
             resource_type: fileType === "pdf" ? "raw" : "auto",
             folder,
+            timeout: 120000, // 2 minute timeout for large files
           },
           (err, result) => {
             if (err) {
@@ -118,6 +141,10 @@ export const uploadContent = async (req, res) => {
     // Generate or upload thumbnail
     try {
       if (thumbFile) {
+        // Validate thumbnail size (max 5MB)
+        if (thumbFile.size > 5 * 1024 * 1024) {
+          console.warn(`⚠️ Thumbnail large: ${(thumbFile.size / (1024 * 1024)).toFixed(2)}MB`);
+        }
         thumbUpload = await uploadToCloudinary(thumbFile, "image", "alveoly-thumbnails");
         console.log("✅ Thumbnail uploaded:", thumbUpload.secure_url);
       } else {
@@ -168,7 +195,7 @@ export const uploadContent = async (req, res) => {
       }
     }
 
-    // Save to DB
+    // Save to DB with Lecturer fields
     const contentData = {
       title,
       type,
@@ -180,6 +207,9 @@ export const uploadContent = async (req, res) => {
       publicId: mainUpload?.public_id,
       thumbnailUrl: thumbUpload?.secure_url || "",
       thumbnailPublicId: thumbUpload?.public_id || "",
+      // ================= LECTURER FIELDS =================
+      lecturerId: req.user?._id || null,
+      lecturerName: req.user?.name || "Admin",
     };
 
     console.log("💾 Saving content to database:", contentData);
@@ -197,23 +227,46 @@ export const uploadContent = async (req, res) => {
   }
 };
 
-// ================= GET CONTENTS =================
+// ================= GET CONTENTS (with optional lecturer filter) =================
 export const getContents = async (req, res) => {
   try {
-    const { subjectId, courseId } = req.query;
+    const { subjectId, courseId, lecturerId } = req.query;
 
     const filter = {};
     if (subjectId) filter.subjectId = subjectId;
     if (courseId) filter.courseId = courseId;
+    if (lecturerId) filter.lecturerId = lecturerId;
 
     const contents = await Content.find(filter)
       .populate("subjectId", "name")
       .populate("courseId", "name")
+      .populate("lecturerId", "name email")
       .sort({ createdAt: -1 });
 
     res.json(contents);
   } catch (err) {
     console.error("Fetch contents failed:", err);
+    res.status(500).json({ message: "Failed to fetch contents" });
+  }
+};
+
+// ================= GET LECTURER'S OWN CONTENTS =================
+export const getLecturerContents = async (req, res) => {
+  try {
+    // Only lecturers can access this
+    if (req.user.role !== "lecturer" && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Lecturer only." });
+    }
+    
+    // Get contents where the lecturerId matches the logged-in user
+    const contents = await Content.find({ lecturerId: req.user._id })
+      .populate("subjectId", "name")
+      .populate("courseId", "name")
+      .sort({ createdAt: -1 });
+    
+    res.json(contents);
+  } catch (err) {
+    console.error("Error fetching lecturer contents:", err);
     res.status(500).json({ message: "Failed to fetch contents" });
   }
 };
@@ -225,6 +278,11 @@ export const deleteContent = async (req, res) => {
 
     if (!content) {
       return res.status(404).json({ message: "Content not found" });
+    }
+
+    // Check if user is admin or the content owner (lecturer)
+    if (req.user.role !== "admin" && content.lecturerId?.toString() !== req.user._id?.toString()) {
+      return res.status(403).json({ message: "You can only delete your own content" });
     }
 
     // DELETE MAIN FILE (only if not a quiz and has publicId)
@@ -264,6 +322,7 @@ export const deleteContent = async (req, res) => {
 };
 
 // ================= UPDATE CONTENT =================
+// ================= UPDATE CONTENT =================
 export const updateContent = async (req, res) => {
   try {
     const { title, isPaid, price, quizTimerMinutes, quizPassMark } = req.body;
@@ -271,6 +330,11 @@ export const updateContent = async (req, res) => {
     const content = await Content.findById(req.params.id);
     if (!content) {
       return res.status(404).json({ message: "Content not found" });
+    }
+
+    // Check if user is admin or the content owner (lecturer)
+    if (req.user.role !== "admin" && content.lecturerId?.toString() !== req.user._id?.toString()) {
+      return res.status(403).json({ message: "You can only edit your own content" });
     }
 
     // For quiz type, just update text fields
@@ -286,31 +350,58 @@ export const updateContent = async (req, res) => {
       return res.json(updated);
     }
 
-    // For non-quiz types, handle file uploads
-    const uploadToCloudinary = (file, type, folder = "alveoly-content") =>
-      new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          {
-            resource_type: type === "pdf" ? "raw" : "auto",
-            folder,
-          },
-          (err, result) => {
-            if (result) resolve(result);
-            else reject(err);
-          }
-        );
-        streamifier.createReadStream(file.buffer).pipe(stream);
-      });
+    // Helper function to get correct Cloudinary resource type
+    const getCloudinaryResourceType = (fileType) => {
+      if (fileType === "video") return "video";
+      if (fileType === "pdf") return "raw";
+      if (fileType === "image") return "image";
+      return "raw";
+    };
 
+    // Upload to Cloudinary with correct resource type
+    const uploadToCloudinary = (file, fileType, folder = "alveoly-content") =>
+  new Promise((resolve, reject) => {
+    const resourceType = getCloudinaryResourceType(fileType);
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: resourceType,
+        folder,
+        timeout: 120000,
+      },
+      (err, result) => {
+        if (err) {
+          console.error("Cloudinary upload error:", err);
+          reject(err);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+    streamifier.createReadStream(file.buffer).pipe(stream);
+  });
     const newFile = req.files?.file?.[0] || null;
     const newThumb = req.files?.thumbnail?.[0] || null;
 
-    // UPDATE MAIN FILE
+    // UPDATE MAIN FILE with size validation
     if (newFile) {
-      if (content.publicId) {
-        await cloudinary.uploader.destroy(content.publicId, {
-          resource_type: content.type === "video" ? "video" : "auto",
+      // Validate file size (max 100MB)
+      if (newFile.size > 100 * 1024 * 1024) {
+        return res.status(400).json({ 
+          message: `File too large! Maximum size is 100MB. Your file is ${(newFile.size / (1024 * 1024)).toFixed(2)}MB` 
         });
+      }
+      
+      // Delete old file if exists
+      if (content.publicId) {
+        try {
+          const oldResourceType = getCloudinaryResourceType(content.type);
+          await cloudinary.uploader.destroy(content.publicId, {
+            resource_type: oldResourceType,
+          });
+          console.log(`✅ Deleted old file: ${content.publicId}`);
+        } catch (err) {
+          console.error("Failed to delete old file:", err);
+        }
       }
 
       const uploaded = await uploadToCloudinary(newFile, content.type);
@@ -318,20 +409,26 @@ export const updateContent = async (req, res) => {
       content.publicId = uploaded.public_id;
     }
 
-    // UPDATE THUMBNAIL
+    // UPDATE THUMBNAIL with size validation
     if (newThumb) {
-      if (content.thumbnailPublicId) {
-        await cloudinary.uploader.destroy(content.thumbnailPublicId, {
-          resource_type: "image",
+      if (newThumb.size > 5 * 1024 * 1024) {
+        return res.status(400).json({ 
+          message: `Thumbnail too large! Maximum size is 5MB. Your file is ${(newThumb.size / (1024 * 1024)).toFixed(2)}MB` 
         });
       }
+      
+      if (content.thumbnailPublicId) {
+        try {
+          await cloudinary.uploader.destroy(content.thumbnailPublicId, {
+            resource_type: "image",
+          });
+          console.log(`✅ Deleted old thumbnail: ${content.thumbnailPublicId}`);
+        } catch (err) {
+          console.error("Failed to delete old thumbnail:", err);
+        }
+      }
 
-      const uploadedThumb = await uploadToCloudinary(
-        newThumb,
-        "image",
-        "alveoly-thumbnails"
-      );
-
+      const uploadedThumb = await uploadToCloudinary(newThumb, "image", "alveoly-thumbnails");
       content.thumbnailUrl = uploadedThumb.secure_url;
       content.thumbnailPublicId = uploadedThumb.public_id;
     }
@@ -349,6 +446,30 @@ export const updateContent = async (req, res) => {
   } catch (err) {
     console.error("UPDATE ERROR:", err.message);
     console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Add this to controllers/contentController.js
+export const getContentById = async (req, res) => {
+  try {
+    const content = await Content.findById(req.params.id)
+      .populate("subjectId", "name")
+      .populate("courseId", "name")
+      .populate("lecturerId", "name email");
+    
+    if (!content) {
+      return res.status(404).json({ message: "Content not found" });
+    }
+    
+    // Check if user is admin or content owner
+    if (req.user.role !== "admin" && content.lecturerId?._id?.toString() !== req.user._id?.toString()) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
+    res.json(content);
+  } catch (err) {
+    console.error("Error fetching content:", err);
     res.status(500).json({ message: err.message });
   }
 };

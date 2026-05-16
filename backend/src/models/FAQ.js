@@ -1,3 +1,4 @@
+// models/FAQ.js - SIMPLE FIXED VERSION (No automatic keyword generation)
 import mongoose from "mongoose";
 
 const faqSchema = new mongoose.Schema({
@@ -18,25 +19,27 @@ const faqSchema = new mongoose.Schema({
     enum: ["general", "admissions", "courses", "fees", "technical", "other"],
     default: "general"
   },
-  keywords: [String],
+  keywords: [{
+    type: String,
+    default: []
+  }],
   isActive: {
     type: Boolean,
     default: true
   },
   views: { type: Number, default: 0 },
-  helpful: { yes: { type: Number, default: 0 }, no: { type: Number, default: 0 } },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+  helpful: { 
+    yes: { type: Number, default: 0 }, 
+    no: { type: Number, default: 0 } 
+  },
+  createdBy: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "User",
+    required: false
+  }
 }, { timestamps: true });
 
-faqSchema.pre('save', function(next) {
-  if (this.question) {
-    this.keywords = this.question
-      .toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .split(/\s+/)
-      .filter(word => word.length > 2);
-  }
-  next();
-});
+// NO pre-save middleware - keep it simple
+// If you want keywords, you can set them manually or generate them client-side
 
 export default mongoose.model("FAQ", faqSchema);
