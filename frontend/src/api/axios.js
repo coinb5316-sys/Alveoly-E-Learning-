@@ -1,7 +1,7 @@
 // api/axios.js
 import axios from "axios";
 
-const API_BASE_URL = "https://alveoly-platform-sunu.onrender.com";
+const API_BASE_URL = "https://alveoly-e-learning-755w.onrender.com";
 
 
 console.log("🚀 API Base URL:", API_BASE_URL);

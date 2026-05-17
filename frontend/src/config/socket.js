@@ -1,7 +1,7 @@
 // src/config/socket.js
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "https://alveoly-platform-sunu.onrender.com";
+const SOCKET_URL = "https://alveoly-e-learning-755w.onrender.com";
 
 
 let socket = null;

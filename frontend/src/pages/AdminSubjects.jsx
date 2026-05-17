@@ -1,4 +1,4 @@
-// AdminSubjects.jsx - Fully updated with socket configuration
+// AdminSubjects.jsx - HIGHLY RESPONSIVE with socket configuration
 import { useState, useEffect } from "react";
 import { 
   FaPlus, 
@@ -235,21 +235,21 @@ const AdminSubjects = () => {
   const activeAccess = manualAccessList.filter(m => m.isActive).length;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full px-3 sm:px-4 md:px-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+      <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 break-words">
             Subject Management
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 break-words">
             Create, manage and control subject access for students
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-            <FaBook className="h-4 w-4 text-gray-400" />
-            <span className="text-sm text-gray-600 dark:text-gray-400">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+            <FaBook className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+            <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
               Total: {subjects.length} subjects
             </span>
           </div>
@@ -257,69 +257,69 @@ const AdminSubjects = () => {
       </div>
 
       {/* Stats Summary */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total Subjects</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Total Subjects</p>
+              <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1 break-words">
                 {subjects.length}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
-              <FaBook className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center flex-shrink-0 ml-2">
+              <FaBook className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Free Subjects</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Free Subjects</p>
+              <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1 break-words">
                 {freeSubjects}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center">
-              <FaCheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center flex-shrink-0 ml-2">
+              <FaCheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 dark:text-green-400" />
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Paid Subjects</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Paid Subjects</p>
+              <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1 break-words">
                 {paidSubjects}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center">
-              <FaDollarSign className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center flex-shrink-0 ml-2">
+              <FaDollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-600 dark:text-yellow-400" />
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Active Access</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Active Access</p>
+              <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1 break-words">
                 {activeAccess}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
-              <FaUserGraduate className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center flex-shrink-0 ml-2">
+              <FaUserGraduate className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 dark:text-purple-400" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex gap-2 border-b border-gray-200 dark:border-gray-800 overflow-x-auto">
         <button
           onClick={() => setActiveTab("subjects")}
-          className={`px-4 py-2 text-sm font-medium transition-all relative ${
+          className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all relative whitespace-nowrap ${
             activeTab === "subjects"
               ? "text-blue-600 dark:text-blue-400"
               : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
@@ -332,7 +332,7 @@ const AdminSubjects = () => {
         </button>
         <button
           onClick={() => setActiveTab("access")}
-          className={`px-4 py-2 text-sm font-medium transition-all relative ${
+          className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all relative whitespace-nowrap ${
             activeTab === "access"
               ? "text-blue-600 dark:text-blue-400"
               : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
@@ -349,27 +349,27 @@ const AdminSubjects = () => {
       {activeTab === "subjects" && (
         <>
           {/* Add Subject Form */}
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-            <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6">
+            <h3 className="font-semibold text-base sm:text-lg text-gray-900 dark:text-gray-100 mb-3 sm:mb-4 flex items-center gap-2">
               <FaPlus className="h-4 w-4 text-blue-500" />
               {editing ? "Edit Subject" : "Add New Subject"}
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <input
                 type="text"
                 name="name"
                 value={form.name}
                 onChange={handleChange}
                 placeholder="Subject Name"
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
 
               <select
                 name="courseId"
                 value={form.courseId}
                 onChange={handleChange}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               >
                 <option value="">Select Course</option>
                 {courses.map((c) => (
@@ -379,7 +379,7 @@ const AdminSubjects = () => {
                 ))}
               </select>
 
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
                 <input
                   type="checkbox"
                   name="isPaid"
@@ -397,21 +397,21 @@ const AdminSubjects = () => {
                   value={form.price}
                   onChange={handleChange}
                   placeholder="Price (₵)"
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
               )}
             </div>
 
-            <div className="flex gap-3 mt-4">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-4">
               <button
                 onClick={editing ? handleUpdate : handleAdd}
                 disabled={loading}
-                className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50"
+                className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50 text-sm sm:text-base"
               >
                 {loading ? (
-                  <div className="flex items-center gap-2">
-                    <FaSpinner className="h-4 w-4 animate-spin" />
-                    Processing...
+                  <div className="flex items-center justify-center gap-2">
+                    <FaSpinner className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                    <span>Processing...</span>
                   </div>
                 ) : (
                   editing ? "Update Subject" : "Add Subject"
@@ -423,7 +423,7 @@ const AdminSubjects = () => {
                     setEditing(null);
                     setForm({ name: "", courseId: "", isPaid: false, price: "" });
                   }}
-                  className="px-6 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all"
+                  className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all text-sm sm:text-base"
                 >
                   Cancel
                 </button>
@@ -433,52 +433,52 @@ const AdminSubjects = () => {
 
           {/* Search and Subjects List */}
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+            <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800">
               <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 <input
                   type="text"
                   placeholder="Search subjects..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
               </div>
             </div>
 
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
               {filteredSubjects.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <FaBook className="h-12 w-12 text-gray-300 dark:text-gray-700 mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400">
+                <div className="flex flex-col items-center justify-center py-12 px-4">
+                  <FaBook className="h-10 w-10 sm:h-12 sm:w-12 text-gray-300 dark:text-gray-700 mb-3" />
+                  <p className="text-gray-500 dark:text-gray-400 text-center text-sm break-words">
                     {searchTerm ? "No subjects match your search" : "No subjects found. Add your first subject!"}
                   </p>
                 </div>
               ) : (
                 filteredSubjects.map((subject) => (
-                  <div key={subject._id} className="group flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                  <div key={subject._id} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                      <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         subject.isPaid 
                           ? 'bg-yellow-50 dark:bg-yellow-950/30' 
                           : 'bg-green-50 dark:bg-green-950/30'
                       }`}>
-                        <FaChalkboardTeacher className={`h-4 w-4 ${
+                        <FaChalkboardTeacher className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
                           subject.isPaid 
                             ? 'text-yellow-600 dark:text-yellow-400' 
                             : 'text-green-600 dark:text-green-400'
                         }`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                        <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 break-words">
                           {subject.name}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 break-words">
                           {getCourseName(subject.courseId)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`text-xs px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full font-medium whitespace-nowrap ${
                           subject.isPaid
                             ? "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400"
                             : "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400"
@@ -487,20 +487,20 @@ const AdminSubjects = () => {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
                       <button
                         onClick={() => handleEdit(subject)}
-                        className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                        className="p-1.5 sm:p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
                         title="Edit Subject"
                       >
-                        <FaEdit size={16} />
+                        <FaEdit size={14} className="sm:w-4 sm:h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(subject._id)}
-                        className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                        className="p-1.5 sm:p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
                         title="Delete Subject"
                       >
-                        <FaTrash size={16} />
+                        <FaTrash size={14} className="sm:w-4 sm:h-4" />
                       </button>
                     </div>
                   </div>
@@ -515,16 +515,16 @@ const AdminSubjects = () => {
       {activeTab === "access" && (
         <>
           {/* Manual Unlock Form */}
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-            <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6">
+            <h3 className="font-semibold text-base sm:text-lg text-gray-900 dark:text-gray-100 mb-2 sm:mb-4 flex items-center gap-2">
               <FaUnlockAlt className="h-4 w-4 text-green-500" />
               Manual Unlock Access
             </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3 sm:mb-4 break-words">
               Grant subject access to students after offline payment
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                   Student
@@ -532,7 +532,7 @@ const AdminSubjects = () => {
                 <select
                   value={selectedUser}
                   onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="">Select student</option>
                   {users.map((u) => (
@@ -550,7 +550,7 @@ const AdminSubjects = () => {
                 <select
                   value={selectedSubject}
                   onChange={(e) => setSelectedSubject(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="">Select subject</option>
                   {subjects.map((s) => (
@@ -566,13 +566,13 @@ const AdminSubjects = () => {
                   Duration (Days)
                 </label>
                 <div className="relative">
-                  <FaClock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <FaClock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <input
                     type="number"
                     placeholder="e.g. 30"
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   />
                 </div>
               </div>
@@ -581,12 +581,12 @@ const AdminSubjects = () => {
                 <button
                   onClick={handleManualUnlock}
                   disabled={manualLoading}
-                  className="w-full px-4 py-2.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-green-500/25 disabled:opacity-50"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-green-500/25 disabled:opacity-50 text-sm sm:text-base"
                 >
                   {manualLoading ? (
                     <div className="flex items-center justify-center gap-2">
-                      <FaSpinner className="h-4 w-4 animate-spin" />
-                      Processing...
+                      <FaSpinner className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                      <span>Processing...</span>
                     </div>
                   ) : (
                     "Unlock Access"
@@ -598,76 +598,76 @@ const AdminSubjects = () => {
 
           {/* Manual Access List */}
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <h3 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-gray-100">
                 Manual Access Records
               </h3>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+              <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                 {manualAccessList.length} records
               </span>
             </div>
 
             {manualAccessList.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <FaUserGraduate className="h-12 w-12 text-gray-300 dark:text-gray-700 mb-3" />
-                <p className="text-gray-500 dark:text-gray-400">No manual unlocks yet</p>
+              <div className="flex flex-col items-center justify-center py-12 px-4">
+                <FaUserGraduate className="h-10 w-10 sm:h-12 sm:w-12 text-gray-300 dark:text-gray-700 mb-3" />
+                <p className="text-gray-500 dark:text-gray-400 text-center text-sm">No manual unlocks yet</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs sm:text-sm">
                   <thead className="bg-gray-50 dark:bg-gray-800/50">
                     <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
-                      <th className="px-4 py-3 text-left">Student</th>
-                      <th className="px-4 py-3 text-left">Subject</th>
-                      <th className="px-4 py-3 text-left">Expiry Date</th>
-                      <th className="px-4 py-3 text-left">Status</th>
-                      <th className="px-4 py-3 text-left">Actions</th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Student</th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Subject</th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left hidden sm:table-cell">Expiry Date</th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Status</th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                     {manualAccessList.map((m) => (
                       <tr key={m._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-gray-900 dark:text-gray-100">
+                        <td className="px-3 sm:px-4 py-2 sm:py-3">
+                          <div className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm break-words max-w-[150px] sm:max-w-none">
                             {m.userId?.name}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block break-all">
                             {m.userId?.email}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <span className="text-blue-600 dark:text-blue-400 font-medium">
+                        <td className="px-3 sm:px-4 py-2 sm:py-3">
+                          <span className="text-blue-600 dark:text-blue-400 font-medium text-xs sm:text-sm break-words max-w-[120px] sm:max-w-none block">
                             {m.subjectId?.name}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                        <td className="px-3 sm:px-4 py-2 sm:py-3 text-gray-600 dark:text-gray-300 text-xs sm:text-sm hidden sm:table-cell whitespace-nowrap">
                           {new Date(m.expiresAt).toLocaleDateString()}
                         </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium ${
+                        <td className="px-3 sm:px-4 py-2 sm:py-3">
+                          <span className={`inline-flex items-center gap-1 text-xs px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full font-medium whitespace-nowrap ${
                             m.isActive
                               ? "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400"
                               : "bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400"
                           }`}>
                             {m.isActive ? (
-                              <FaCheckCircle className="h-3 w-3" />
+                              <FaCheckCircle className="h-2 w-2 sm:h-3 sm:w-3" />
                             ) : (
-                              <FaExclamationCircle className="h-3 w-3" />
+                              <FaExclamationCircle className="h-2 w-2 sm:h-3 sm:w-3" />
                             )}
                             {m.isActive ? "Active" : "Expired"}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
+                        <td className="px-3 sm:px-4 py-2 sm:py-3">
+                          <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
                             <button
                               onClick={() => handleUpdateAccess(m._id)}
-                              className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-xs font-medium transition-colors"
+                              className="px-2 sm:px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-xs font-medium transition-colors whitespace-nowrap"
                             >
                               Update
                             </button>
                             <button
                               onClick={() => handleToggleAccess(m._id)}
-                              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                              className={`px-2 sm:px-3 py-1 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                                 m.isActive
                                   ? "bg-gray-500 hover:bg-gray-600 text-white"
                                   : "bg-green-600 hover:bg-green-700 text-white"
@@ -677,7 +677,7 @@ const AdminSubjects = () => {
                             </button>
                             <button
                               onClick={() => handleDeleteAccess(m._id)}
-                              className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors"
+                              className="px-2 sm:px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors whitespace-nowrap"
                             >
                               Delete
                             </button>
@@ -695,26 +695,26 @@ const AdminSubjects = () => {
 
       {/* Edit Modal */}
       {editing && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md relative shadow-2xl animate-scaleIn">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <FaEdit className="h-4 w-4 text-white" />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-[calc(100%-1.5rem)] sm:max-w-md relative shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                  <FaEdit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 truncate">
                   Edit Subject
                 </h3>
               </div>
               <button
                 onClick={() => setEditing(null)}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0 ml-2"
               >
-                <FaTimes size={20} />
+                <FaTimes size={18} className="sm:w-5 sm:h-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Subject Name
@@ -723,7 +723,7 @@ const AdminSubjects = () => {
                   name="name"
                   value={form.name}
                   onChange={handleChange}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
               </div>
 
@@ -735,7 +735,7 @@ const AdminSubjects = () => {
                   name="courseId"
                   value={form.courseId}
                   onChange={handleChange}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="">Select Course</option>
                   {courses.map((c) => (
@@ -767,22 +767,22 @@ const AdminSubjects = () => {
                     name="price"
                     value={form.price}
                     onChange={handleChange}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   />
                 </div>
               )}
             </div>
 
-            <div className="flex gap-3 p-6 pt-0">
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 p-4 sm:p-6 pt-0 sm:pt-0">
               <button
                 onClick={handleUpdate}
                 disabled={loading}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                className="w-full sm:flex-1 px-4 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all disabled:opacity-50 text-sm sm:text-base"
               >
                 {loading ? (
                   <div className="flex items-center justify-center gap-2">
-                    <FaSpinner className="h-4 w-4 animate-spin" />
-                    Saving...
+                    <FaSpinner className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                    <span>Saving...</span>
                   </div>
                 ) : (
                   'Save Changes'
@@ -790,7 +790,7 @@ const AdminSubjects = () => {
               </button>
               <button
                 onClick={() => setEditing(null)}
-                className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all"
+                className="w-full sm:flex-1 px-4 py-2 sm:py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all text-sm sm:text-base"
               >
                 Cancel
               </button>
