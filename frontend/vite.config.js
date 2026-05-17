@@ -1,29 +1,23 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { viteSingleFile } from 'vite-plugin-singlefile'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 export default defineConfig({
   plugins: [
     react(),
-    viteSingleFile(),
     nodePolyfills({
-      // Whether to polyfill `node:` protocol imports
       protocolImports: true,
-      // Polyfill specific globals
       globals: {
         Buffer: true,
         global: true,
         process: true,
       },
-      // Include specific modules
       include: ['buffer', 'process', 'global'],
     }),
   ],
   define: {
     'global': 'globalThis',
     'process.env': {},
-    'globalThis': 'globalThis',
   },
   optimizeDeps: {
     esbuildOptions: {
@@ -35,23 +29,39 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsInlineLimit: 100000000,
-    cssCodeSplit: false,
+    // Remove the inline limit - this causes huge files
+    assetsInlineLimit: 4096, // Only inline files under 4kb
+    cssCodeSplit: true, // Split CSS for better loading
     rollupOptions: {
       output: {
-        inlineDynamicImports: true,
-        manualChunks: undefined,
+        // Split code into manageable chunks
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['lucide-react', 'react-icons', 'framer-motion'],
+          'socket-vendor': ['socket.io-client', 'simple-peer'],
+          'chart-vendor': ['recharts'],
+          'email-vendor': ['@emailjs/browser'],
+          'payment-vendor': ['react-paystack'],
+        },
+        // Optimize chunk size
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
       },
     },
-    commonjsOptions: {
-      include: [/node_modules/],
-      transformMixedEsModules: true,
+    // Reduce source maps in production
+    sourcemap: false,
+    // Target modern browsers
+    target: 'es2020',
+    // Minify aggressively
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
     },
   },
-  resolve: {
-    alias: {
-      buffer: 'buffer',
-      process: 'process/browser',
-    },
+  server: {
+    port: 3000,
   },
 })

@@ -4,30 +4,45 @@ import { motion } from "framer-motion";
 import emailjs from "@emailjs/browser";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import forgotIllustration from "../assets/forgot-password.png";
 import API from "../api/axios";
-import { FaEnvelope, FaArrowRight, FaCheckCircle } from "react-icons/fa";
+import { FaEnvelope, FaArrowRight, FaCheckCircle, FaSpinner } from "react-icons/fa";
 
 const ForgotPasswordPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   // Initialize EmailJS once
   useEffect(() => {
-    if (import.meta.env.VITE_EMAILJS_PUBLIC_KEY2) {
-      emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY2);
+    const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY2;
+    if (publicKey) {
+      emailjs.init(publicKey);
     } else {
       console.error("EmailJS PUBLIC KEY is missing in .env");
+      setError("Email service configuration error");
     }
   }, []);
 
+  const validateEmail = (email) => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
 
+    // Client-side validation
     if (!email) {
-      return alert("Please enter your email");
+      setError("Please enter your email address");
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setError("Please enter a valid email address");
+      return;
     }
 
     try {
@@ -36,13 +51,10 @@ const ForgotPasswordPage = () => {
       // Call backend
       const res = await API.post("/auth/forgot-password", { email });
 
-      console.log("BACKEND RESPONSE:", res.data);
-
       const { email: userEmail, name, resetLink } = res.data;
 
       // Validate response
       if (!userEmail || !resetLink) {
-        console.error("Invalid backend response:", res.data);
         throw new Error("Failed to generate reset email data");
       }
 
@@ -52,155 +64,186 @@ const ForgotPasswordPage = () => {
       const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY2;
 
       if (!serviceID || !templateID || !publicKey) {
-        console.error("Missing EmailJS ENV variables");
         throw new Error("Email service not configured properly");
       }
 
       // Send email
-      const result = await emailjs.send(
+      await emailjs.send(
         serviceID,
         templateID,
         {
           to_email: userEmail,
           name: name || "User",
           reset_link: resetLink,
+          current_year: new Date().getFullYear(),
         },
         publicKey
       );
 
-      console.log("EMAILJS SUCCESS:", result);
-
       setSent(true);
     } catch (err) {
-      console.error("EMAIL ERROR FULL:", err);
-
-      alert(
+      console.error("Password reset error:", err);
+      setError(
         err.response?.data?.message ||
           err.message ||
-          "Failed to send reset email"
+          "Failed to send reset email. Please try again."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const fadeInUp = {
-    hidden: { opacity: 0, y: 60 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
       <Navbar />
 
-      <section className="pt-32 pb-20 px-4">
+      <section className="pt-24 sm:pt-28 md:pt-32 pb-16 sm:pb-20 px-3 sm:px-4">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl shadow-2xl overflow-hidden"
+            transition={{ duration: 0.5 }}
+            className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden"
           >
             <div className="grid md:grid-cols-2">
               {/* Left Side - Branding */}
-              <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 p-8 md:p-12 text-white flex flex-col justify-center">
-                <div className="mb-6">
-                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-4">
-                    <FaEnvelope className="text-3xl text-white" />
+              <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 p-6 sm:p-8 md:p-10 lg:p-12 text-white flex flex-col justify-center">
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2, duration: 0.5 }}
+                  className="mb-6"
+                >
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-4">
+                    <FaEnvelope className="text-2xl sm:text-3xl text-white" />
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-bold mb-4">Forgot Password?</h2>
-                  <p className="text-blue-100 mb-6 text-sm md:text-base">
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-2 sm:mb-3 md:mb-4">
+                    Forgot Password?
+                  </h2>
+                  <p className="text-blue-100 text-xs sm:text-sm md:text-base leading-relaxed">
                     Don't worry! We'll help you reset your password and get back to learning.
                   </p>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-blue-300 rounded-full"></div>
-                    <span className="text-sm text-blue-100">Enter your registered email</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-blue-300 rounded-full"></div>
-                    <span className="text-sm text-blue-100">Receive reset link via email</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-blue-300 rounded-full"></div>
-                    <span className="text-sm text-blue-100">Create a new secure password</span>
-                  </div>
-                </div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3, duration: 0.5 }}
+                  className="space-y-3 sm:space-y-4"
+                >
+                  {[
+                    "Enter your registered email",
+                    "Receive reset link via email",
+                    "Create a new secure password",
+                  ].map((text, index) => (
+                    <div key={index} className="flex items-center gap-2 sm:gap-3">
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-300 rounded-full flex-shrink-0"></div>
+                      <span className="text-xs sm:text-sm text-blue-100">
+                        {text}
+                      </span>
+                    </div>
+                  ))}
+                </motion.div>
               </div>
 
               {/* Right Side - Form */}
-              <div className="p-8 md:p-12">
+              <div className="p-6 sm:p-8 md:p-10 lg:p-12">
                 {!sent ? (
-                  <>
-                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Reset Password</h2>
-                    <p className="text-gray-500 mb-6 text-sm md:text-base">
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2, duration: 0.5 }}
+                  >
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                      Reset Password
+                    </h2>
+                    <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm sm:text-base">
                       Enter your email address and we'll send you a link to reset your password.
                     </p>
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    {error && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+                      >
+                        <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+                      </motion.div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
                       <div className="relative">
-                        <FaEnvelope className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <FaEnvelope className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5" />
                         <input
                           type="email"
                           value={email}
-                          onChange={(e) => setEmail(e.target.value)}
+                          onChange={(e) => {
+                            setEmail(e.target.value);
+                            setError("");
+                          }}
                           placeholder="Email Address"
                           required
-                          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
+                          disabled={loading}
+                          className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                         />
                       </div>
 
                       <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 text-sm md:text-base"
+                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-2.5 sm:py-3 rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base shadow-lg shadow-blue-500/25"
                       >
                         {loading ? (
                           <>
-                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Sending...
+                            <FaSpinner className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                            <span>Sending...</span>
                           </>
                         ) : (
                           <>
-                            Send Reset Link
-                            <FaArrowRight />
+                            <span>Send Reset Link</span>
+                            <FaArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
                           </>
                         )}
                       </button>
                     </form>
 
-                    <p className="mt-6 text-center text-sm text-gray-600">
+                    <p className="mt-6 text-center text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                       Remember your password?{" "}
                       <button
                         onClick={() => navigate("/login")}
-                        className="text-blue-600 font-semibold hover:text-blue-700"
+                        className="text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                       >
                         Back to Login
                       </button>
                     </p>
-                  </>
+                  </motion.div>
                 ) : (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="text-center py-8"
+                    className="text-center py-6 sm:py-8"
                   >
-                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <FaCheckCircle className="text-4xl text-green-500" />
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6">
+                      <FaCheckCircle className="text-3xl sm:text-4xl text-green-500" />
                     </div>
-                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">Email Sent! 🎉</h2>
-                    <p className="text-gray-600 mb-2">We've sent a password reset link to:</p>
-                    <p className="font-semibold text-blue-600 mb-4 break-all">{email}</p>
-                    <p className="text-sm text-gray-500 mb-6">Please check your inbox (and spam folder).</p>
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-3">
+                      Email Sent! 🎉
+                    </h2>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base mb-2">
+                      We've sent a password reset link to:
+                    </p>
+                    <p className="font-semibold text-blue-600 dark:text-blue-400 mb-3 sm:mb-4 break-all text-sm sm:text-base">
+                      {email}
+                    </p>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-500 mb-4 sm:mb-6">
+                      Please check your inbox (and spam folder).
+                    </p>
                     <button
                       onClick={() => navigate("/login")}
-                      className="inline-flex items-center gap-2 text-blue-600 font-semibold hover:text-blue-700"
+                      className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold hover:text-blue-700 dark:hover:text-blue-300 transition-colors text-sm sm:text-base"
                     >
                       Return to Login
-                      <FaArrowRight />
+                      <FaArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
                     </button>
                   </motion.div>
                 )}
