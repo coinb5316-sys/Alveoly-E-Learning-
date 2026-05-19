@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "../api/axios";
-import socket from "../api/socket";
+import initializeSocket, { getSocket } from "../config/socket";
 import {
   FaRobot,
   FaArrowLeft,
@@ -29,7 +29,20 @@ const StudentTrial = () => {
 
   const current = questions[currentIndex];
 
-  // ================= FETCH (UNCHANGED) =================
+  // ================= INITIALIZE SOCKET =================
+  useEffect(() => {
+    // Initialize socket connection
+    const socket = initializeSocket();
+    
+    // Cleanup on unmount
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, []);
+
+  // ================= FETCH =================
   const fetchQuestions = async () => {
     try {
       if (!subjectId || !courseId) return;
@@ -51,21 +64,28 @@ const StudentTrial = () => {
     }
   };
 
+  // ================= SOCKET & FETCH =================
   useEffect(() => {
     fetchQuestions();
 
-    socket.on("question:created", fetchQuestions);
-    socket.on("question:updated", fetchQuestions);
-    socket.on("question:deleted", fetchQuestions);
+    const socket = getSocket();
+    
+    if (socket) {
+      socket.on("question:created", fetchQuestions);
+      socket.on("question:updated", fetchQuestions);
+      socket.on("question:deleted", fetchQuestions);
+    }
 
     return () => {
-      socket.off("question:created", fetchQuestions);
-      socket.off("question:updated", fetchQuestions);
-      socket.off("question:deleted", fetchQuestions);
+      if (socket) {
+        socket.off("question:created", fetchQuestions);
+        socket.off("question:updated", fetchQuestions);
+        socket.off("question:deleted", fetchQuestions);
+      }
     };
   }, [subjectId, courseId]);
 
-  // ================= TIMER (UNCHANGED) =================
+  // ================= TIMER =================
   useEffect(() => {
     if (submitted) return;
 
@@ -76,7 +96,7 @@ const StudentTrial = () => {
     return () => clearInterval(interval);
   }, [submitted]);
 
-  // ================= SELECT (UNCHANGED) =================
+  // ================= SELECT =================
   const handleSelect = (qId, option) => {
     if (submitted) return;
 
@@ -86,7 +106,7 @@ const StudentTrial = () => {
     }));
   };
 
-  // ================= AI (COMPLETELY UNCHANGED) =================
+  // ================= AI =================
   const askAI = async () => {
     if (!current) return;
 
@@ -114,7 +134,7 @@ Explain the correct answer like a nursing tutor.
     setAiLoading(false);
   };
 
-  // ================= NAV (UNCHANGED) =================
+  // ================= NAV =================
   const next = () => {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex((prev) => prev + 1);
@@ -129,7 +149,7 @@ Explain the correct answer like a nursing tutor.
     }
   };
 
-  // ================= SUBMIT (UNCHANGED) =================
+  // ================= SUBMIT =================
   const submitTrial = async () => {
     if (Object.keys(answers).length === 0) {
       toast.error("Please answer at least one question.");
@@ -158,7 +178,7 @@ Explain the correct answer like a nursing tutor.
     }
   };
 
-  // ================= CALCULATE SCORE (UNCHANGED) =================
+  // ================= CALCULATE SCORE =================
   const calculateScore = () => {
     let correct = 0;
     questions.forEach((q) => {
@@ -424,7 +444,7 @@ Explain the correct answer like a nursing tutor.
           </div>
         )}
 
-        {/* Results Modal - Styled but logic UNCHANGED */}
+        {/* Results Modal */}
         {showResult && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex justify-center items-center z-50 p-4 animate-in fade-in duration-300">
             <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-3xl shadow-2xl overflow-y-auto max-h-[90vh] border border-slate-200 dark:border-slate-800">
