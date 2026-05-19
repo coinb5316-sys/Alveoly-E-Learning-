@@ -30,6 +30,8 @@ const allowedOrigins = [
   "https://alveoly-platform-1.onrender.com",
   "https://alveoly-platform-zp2p.onrender.com",
   "https://alveoly-platform-sunu.onrender.com",
+  "https://alveoly-e-learning-755w.onrender.com",
+  "https://alveoly-e-learning.pages.dev",
   CLIENT_URL,
 ].filter(Boolean);
 
