@@ -1,4 +1,4 @@
-// server.js - COMPLETE WITH VIDEO CONFERENCE SUPPORT
+// server.js - COMPLETE WITH VIDEO CONFERENCE SUPPORT (FIXED ORDER)
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
@@ -45,13 +45,13 @@ export const io = new Server(httpServer, {
         callback(null, true);
       } else {
         console.warn(`⚠️ Socket.IO blocked origin: ${origin}`);
-        callback(null, true); // Allow anyway for development
+        callback(null, true);
       }
     },
     methods: ["GET", "POST"],
     credentials: true,
   },
-  transports: ["websocket", "polling"], // Prefer websocket first
+  transports: ["websocket", "polling"],
   allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000,
@@ -62,7 +62,7 @@ export const io = new Server(httpServer, {
 });
 
 // Store active rooms and participants
-const rooms = new Map(); // classId -> Map of userId -> participant info
+const rooms = new Map();
 
 // ================= SOCKET.IO CONNECTION HANDLER =================
 io.on("connection", (socket) => {
@@ -113,7 +113,7 @@ io.on("connection", (socket) => {
     
     console.log(`📊 Room ${classId} now has ${room.size} participants`);
     
-    // Get existing participants (excluding current user)
+    // CRITICAL: Get existing participants BEFORE sending any notifications
     const existingParticipants = [];
     for (const [existingUserId, info] of room.entries()) {
       if (existingUserId !== userId) {
@@ -127,21 +127,24 @@ io.on("connection", (socket) => {
       }
     }
     
-    // Send existing participants to the new user
+    console.log(`📨 Sending ${existingParticipants.length} existing participants to ${userName}`);
+    
+    // CRITICAL: First send existing participants to the new user
     socket.emit("existing-participants", existingParticipants);
-    console.log(`📨 Sent ${existingParticipants.length} existing participants to ${userName}`);
     
-    // Notify others in the room that a new user joined
-    socket.to(classId).emit("user-joined", {
-      userId,
-      userName,
-      role,
-      audioEnabled,
-      videoEnabled
-    });
-    
-    // Confirm join to the user
+    // CRITICAL: Then confirm join to the user
     socket.emit("join-confirmed", { classId, userId });
+    
+    // CRITICAL: Finally notify others (with small delay to ensure new user is ready)
+    setTimeout(() => {
+      socket.to(classId).emit("user-joined", {
+        userId,
+        userName,
+        role,
+        audioEnabled,
+        videoEnabled
+      });
+    }, 200);
   });
 
   socket.on("signal", (data) => {
@@ -167,7 +170,6 @@ io.on("connection", (socket) => {
     
     if (!classId || !userId) return;
     
-    // Broadcast to everyone in the room including sender? No, exclude sender
     socket.to(classId).emit("user-speaking", {
       userId,
       isSpeaking
@@ -232,12 +234,10 @@ io.on("connection", (socket) => {
     
     console.log(`🔚 Class ${classId} ended by lecturer`);
     
-    // Notify all participants in the room
     io.to(classId).emit("class-ended", {
       message: "The class has been ended by the lecturer"
     });
     
-    // Clean up room
     const room = rooms.get(classId);
     if (room) {
       room.clear();
@@ -396,7 +396,6 @@ io.on("connection", (socket) => {
   socket.on("disconnect", (reason) => {
     console.log(`🔴 Client disconnected (${socket.id}):`, reason);
     
-    // Clean up from video conference rooms
     if (socket.classId && socket.userId) {
       const room = rooms.get(socket.classId);
       if (room) {
@@ -405,7 +404,6 @@ io.on("connection", (socket) => {
           room.delete(socket.userId);
           console.log(`👋 User ${participant.userName} (${socket.userId}) removed from room ${socket.classId} due to disconnect`);
           
-          // Notify others
           io.to(socket.classId).emit("user-left", {
             userId: socket.userId,
             userName: participant.userName,
