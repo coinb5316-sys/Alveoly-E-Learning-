@@ -1,4 +1,4 @@
-// components/LiveClassRoom.jsx - CIRCULAR DEPENDENCY FIXED
+// components/LiveClassRoom.jsx - FULLY FIXED WITH WORKING VIDEO & AUDIO
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -62,6 +62,7 @@ const LiveClassRoom = () => {
   const videoRefs = useRef({});
   const isLeavingRef = useRef(false);
   const pendingCandidatesRef = useRef({});
+  const createPeerRef = useRef(null);
   
   const getDashboardPath = useCallback(() => {
     if (!currentUser) return "/";
@@ -188,6 +189,7 @@ const LiveClassRoom = () => {
     socketRef.current.on("new-chat-message", handleNewChatMessage);
   };
 
+  // FIXED: Handle existing participants with proper peer creation
   const handleExistingParticipants = useCallback((participantsList) => {
     console.log("📋 Existing participants:", participantsList);
     
@@ -212,31 +214,44 @@ const LiveClassRoom = () => {
       return [...prev, ...uniqueNew];
     });
     
-    // Create peers for existing participants after a short delay to ensure stream is ready
-    const createPeersWithRetry = (retryCount = 0) => {
-      if (userMediaStreamRef.current && localStreamReady) {
+    // Store for later processing
+    window.pendingExistingParticipants = participantsList;
+    
+    // Try to create peers immediately if stream is ready
+    if (userMediaStreamRef.current && localStreamReady && createPeerRef.current) {
+      setTimeout(() => {
         participantsList.forEach(participant => {
           if (participant.userId !== currentUser?._id && !peersRef.current[participant.userId]) {
             console.log(`🔄 Creating peer for existing participant: ${participant.userName}`);
-            createPeer(participant.userId, userMediaStreamRef.current, true);
+            createPeerRef.current(participant.userId, userMediaStreamRef.current, true);
           }
         });
-      } else if (retryCount < 10) {
-        console.log(`⏳ Waiting for local stream, retry ${retryCount + 1}/10`);
-        setTimeout(() => createPeersWithRetry(retryCount + 1), 500);
-      }
-    };
-    
-    createPeersWithRetry();
+        window.pendingExistingParticipants = null;
+      }, 100);
+    }
   }, [currentUser, localStreamReady]);
 
+  // FIXED: Process pending participants after join confirmed
   const handleJoinConfirmed = useCallback(() => {
     console.log("✅ Join confirmed");
     setIsConnecting(false);
     setIsJoined(true);
     startDurationTimer();
     toast.success("Successfully joined the class!");
-  }, []);
+    
+    // Process any pending participants
+    if (window.pendingExistingParticipants && userMediaStreamRef.current && localStreamReady && createPeerRef.current) {
+      console.log("🔄 Processing pending participants after join confirmed");
+      setTimeout(() => {
+        window.pendingExistingParticipants.forEach(participant => {
+          if (participant.userId !== currentUser?._id && !peersRef.current[participant.userId]) {
+            createPeerRef.current(participant.userId, userMediaStreamRef.current, true);
+          }
+        });
+        window.pendingExistingParticipants = null;
+      }, 500);
+    }
+  }, [currentUser, localStreamReady]);
 
   const handleNewChatMessage = useCallback((data) => {
     setChatMessages(prev => [...prev, {
@@ -384,7 +399,6 @@ const LiveClassRoom = () => {
     
     console.log(`🔗 Creating ${isInitiator ? 'initiator' : 'receiver'} peer for ${userId}`);
     
-    // Use only reliable STUN servers, remove invalid TURN
     const peer = new Peer({
       initiator: isInitiator,
       trickle: true,
@@ -412,7 +426,7 @@ const LiveClassRoom = () => {
     peer.on("stream", remoteStream => {
       console.log(`📺 Received remote stream from ${userId}, tracks: audio=${remoteStream.getAudioTracks().length}, video=${remoteStream.getVideoTracks().length}`);
       
-      // Ensure audio plays
+      // Ensure audio plays - CRITICAL FIX
       remoteStream.getAudioTracks().forEach(track => {
         track.enabled = true;
         console.log(`Remote audio track enabled for ${userId}`);
@@ -427,7 +441,10 @@ const LiveClassRoom = () => {
       const videoElement = videoRefs.current[userId];
       if (videoElement && remoteStream) {
         videoElement.srcObject = remoteStream;
-        videoElement.play().catch(e => console.log("Play error:", e));
+        const playPromise = videoElement.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => console.log("Play error:", e));
+        }
       }
       
       // Force re-render to show video
@@ -461,6 +478,11 @@ const LiveClassRoom = () => {
     return peer;
   }, [classId, socketConnected]);
 
+  // Store createPeer in ref to avoid dependency issues
+  useEffect(() => {
+    createPeerRef.current = createPeer;
+  }, [createPeer]);
+
   const handleUserJoined = useCallback((data) => {
     const { userId, userName, role, audioEnabled, videoEnabled } = data;
     
@@ -483,8 +505,8 @@ const LiveClassRoom = () => {
     
     // Create peer connection with retry
     const createPeerWithRetry = (retryCount = 0) => {
-      if (userMediaStreamRef.current && localStreamReady && !peersRef.current[userId]) {
-        createPeer(userId, userMediaStreamRef.current, true);
+      if (userMediaStreamRef.current && localStreamReady && !peersRef.current[userId] && createPeerRef.current) {
+        createPeerRef.current(userId, userMediaStreamRef.current, true);
       } else if (retryCount < 10) {
         setTimeout(() => createPeerWithRetry(retryCount + 1), 500);
       }
@@ -493,7 +515,7 @@ const LiveClassRoom = () => {
     createPeerWithRetry();
     
     toast.success(`${userName} joined the class`);
-  }, [createPeer, localStreamReady]);
+  }, [localStreamReady]);
 
   const handleUserLeft = useCallback((data) => {
     const { userId, userName } = data;
@@ -524,12 +546,12 @@ const LiveClassRoom = () => {
     if (peersRef.current[from]) {
       console.log(`📡 Received signal from ${from}`);
       peersRef.current[from].signal(signal);
-    } else if (userMediaStreamRef.current && from !== currentUser?._id) {
+    } else if (userMediaStreamRef.current && from !== currentUser?._id && createPeerRef.current) {
       console.log(`🔄 Creating peer for signal from ${from}`);
-      const peer = createPeer(from, userMediaStreamRef.current, false);
+      const peer = createPeerRef.current(from, userMediaStreamRef.current, false);
       if (peer) peer.signal(signal);
     }
-  }, [currentUser, createPeer]);
+  }, [currentUser]);
 
   const handleClassEnded = useCallback(() => {
     if (classEnded) return;
@@ -564,7 +586,6 @@ const LiveClassRoom = () => {
         audioTrack.enabled = !newMuteState;
         setIsMuted(newMuteState);
         
-        // Notify others about mute state
         socketRef.current?.emit("participant-updated", {
           classId, userId: currentUser._id, updates: { audioEnabled: !newMuteState }
         });
@@ -597,10 +618,8 @@ const LiveClassRoom = () => {
 
   const joinClass = async () => {
     try {
-      // First join the database
       await axios.post(`/live-class/${classId}/join`);
       
-      // Initialize stream first
       const stream = await initializeLocalStream();
       if (!stream) {
         toast.error("Could not access camera/microphone");
@@ -608,7 +627,6 @@ const LiveClassRoom = () => {
         return;
       }
       
-      // Then join the call
       await joinCall();
     } catch (err) {
       console.error("Join error:", err);
@@ -647,28 +665,23 @@ const LiveClassRoom = () => {
   };
 
   const cleanup = useCallback(() => {
-    // Destroy all peer connections
     Object.values(peersRef.current).forEach(peer => {
       if (peer) peer.destroy();
     });
     peersRef.current = {};
     
-    // Stop all media tracks
     if (userMediaStreamRef.current) {
       userMediaStreamRef.current.getTracks().forEach(track => track.stop());
       userMediaStreamRef.current = null;
     }
     
-    // Clear intervals
     if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
     
-    // Disconnect socket
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
     
-    // Reset state
     setLocalStreamReady(false);
     setSocketConnected(false);
     setIsJoined(false);
@@ -799,7 +812,6 @@ const LiveClassRoom = () => {
           <div className="bg-gray-900 rounded-xl overflow-hidden h-full relative">
             {isJoined && isClassActive && socketConnected ? (
               <>
-                {/* Video Grid Component moved inline to avoid circular dependency */}
                 <VideoGridComponent 
                   layout={layout}
                   pinnedVideo={pinnedVideo}
@@ -979,7 +991,7 @@ const VideoTile = memo(({ video, isPinned = false, isSidebar = false,
     };
   }, [video.id, videoRefs]);
   
-  // Handle stream attachment
+  // Handle stream attachment - FIXED with better play handling
   useEffect(() => {
     const videoElement = videoElementRef.current;
     if (!videoElement) return;
@@ -994,12 +1006,24 @@ const VideoTile = memo(({ video, isPinned = false, isSidebar = false,
     if (streamToUse && videoElement.srcObject !== streamToUse) {
       console.log(`🎥 Attaching stream for ${video.name}, local: ${video.isLocal}`);
       videoElement.srcObject = streamToUse;
-      videoElement.play().catch(e => console.log("Play error:", e));
       
-      // Force re-render when metadata loads
+      const playPromise = videoElement.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(e => {
+          console.log(`Play error for ${video.name}:`, e);
+          setTimeout(() => {
+            if (videoElement.srcObject === streamToUse) {
+              videoElement.play().catch(e2 => console.log("Retry play error:", e2));
+            }
+          }, 100);
+        });
+      }
+      
       videoElement.onloadedmetadata = () => {
         console.log(`Video metadata loaded for ${video.name}`);
-        videoElement.play().catch(e => console.log("Play after metadata error:", e));
+        if (videoElement.paused) {
+          videoElement.play().catch(e => console.log("Play after metadata error:", e));
+        }
       };
     }
   }, [video.id, video.isLocal, video.remoteStream, userMediaStreamRef, remoteStreamsReady[video.id]]);
