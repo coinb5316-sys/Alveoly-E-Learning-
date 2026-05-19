@@ -1,4 +1,4 @@
-// components/LiveClassRoom.jsx - COMPLETE WITH FIXED NAVIGATION
+// components/LiveClassRoom.jsx - FULLY FIXED for video/audio calls
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -74,6 +74,7 @@ const LiveClassRoom = () => {
   const [showMobileControls, setShowMobileControls] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [classEnded, setClassEnded] = useState(false);
+  const [connectionQuality, setConnectionQuality] = useState({});
   
   // WebRTC Refs
   const socketRef = useRef(null);
@@ -86,6 +87,7 @@ const LiveClassRoom = () => {
   const speakingIntervalRef = useRef(null);
   const videoRefs = useRef(new Map());
   const isLeavingRef = useRef(false);
+  const peerConnectionAttempts = useRef({});
   
   // Helper function to get dashboard path based on user role
   const getDashboardPath = useCallback(() => {
@@ -272,9 +274,11 @@ const LiveClassRoom = () => {
       return [...prev, ...uniqueNew];
     });
     
+    // Create peers for existing participants AFTER stream is ready
     if (userMediaStreamRef.current && localStreamReady) {
       participantsList.forEach(participant => {
         if (participant.userId !== currentUser?._id && !peersRef.current[participant.userId]) {
+          console.log(`🔄 Creating peer for existing participant: ${participant.userName}`);
           createPeer(participant.userId, userMediaStreamRef.current, true);
         }
       });
@@ -303,7 +307,6 @@ const LiveClassRoom = () => {
     try {
       const res = await axios.get(`/live-class/${classId}`);
       
-      // Check if class is already completed
       if (res.data.status === "completed") {
         toast.error("This class has already ended");
         navigate(getDashboardPath());
@@ -338,9 +341,8 @@ const LiveClassRoom = () => {
     }
   };
 
-  // Initialize local media stream - SINGLE INITIALIZATION
+  // Initialize local media stream
   const initializeLocalStream = useCallback(async () => {
-    // Don't re-initialize if we already have a stream
     if (userMediaStreamRef.current && localStreamReady) {
       return userMediaStreamRef.current;
     }
@@ -359,9 +361,9 @@ const LiveClassRoom = () => {
         constraints.audio = { deviceId: { exact: selectedMicrophone } };
       }
       
+      console.log("🎥 Requesting media with constraints:", constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      // Only update if stream changed
       if (userMediaStreamRef.current !== stream) {
         if (userMediaStreamRef.current) {
           userMediaStreamRef.current.getTracks().forEach(track => track.stop());
@@ -375,6 +377,7 @@ const LiveClassRoom = () => {
         localVideoRef.current.srcObject = stream;
       }
       
+      console.log("✅ Local stream ready, audio tracks:", stream.getAudioTracks().length, "video tracks:", stream.getVideoTracks().length);
       return stream;
     } catch (err) {
       console.error("Error accessing media devices:", err);
@@ -399,6 +402,7 @@ const LiveClassRoom = () => {
     }
     
     setIsConnecting(true);
+    console.log("🎥 Joining call with stream ready");
     
     socketRef.current.emit("join-call", {
       classId,
@@ -410,12 +414,15 @@ const LiveClassRoom = () => {
     });
   };
 
-  const createPeer = useCallback((userId, stream, isInitiator = true) => {
+  // FIXED: Enhanced peer creation with better ICE servers
+  const createPeer = useCallback((userId, stream, isInitiator = true, retryCount = 0) => {
     if (!userId || peersRef.current[userId]) return null;
+    
+    console.log(`🔗 Creating peer for ${userId}, initiator: ${isInitiator}, retry: ${retryCount}`);
     
     const peer = new Peer({
       initiator: isInitiator,
-      trickle: false,
+      trickle: true,
       stream: stream,
       config: {
         iceServers: [
@@ -423,41 +430,87 @@ const LiveClassRoom = () => {
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' }
-        ]
+          { urls: 'stun:stun4.l.google.com:19302' },
+          // Public TURN servers for better connectivity
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
+        ],
+        iceCandidatePoolSize: 10
       }
     });
     
     peer.on("signal", signal => {
       if (socketRef.current && userId && socketConnected) {
+        console.log(`📡 Sending signal to ${userId}`);
         socketRef.current.emit("signal", { to: userId, signal, classId });
       }
     });
     
     peer.on("stream", remoteStream => {
+      console.log(`📺 Received remote stream from ${userId}, tracks: audio=${remoteStream.getAudioTracks().length}, video=${remoteStream.getVideoTracks().length}`);
+      
+      // Update participants with the remote stream
       setParticipants(prev => {
         const existingIndex = prev.findIndex(p => p.userId?._id === userId);
         if (existingIndex !== -1) {
           const updated = [...prev];
-          updated[existingIndex] = { ...updated[existingIndex], remoteStream, active: true };
+          updated[existingIndex] = { 
+            ...updated[existingIndex], 
+            remoteStream: remoteStream,
+            remoteStreamReady: true
+          };
           return updated;
         }
         return prev;
       });
       
+      // Force video element update
       const videoElement = videoRefs.current.get(userId);
       if (videoElement && remoteStream && videoElement.srcObject !== remoteStream) {
+        console.log(`🎥 Attaching remote stream to video element for ${userId}`);
         videoElement.srcObject = remoteStream;
         videoElement.play().catch(e => console.log("Play error:", e));
       }
     });
     
-    peer.on("close", () => {
-      setParticipants(prev => prev.filter(p => p.userId?._id !== userId));
-      videoRefs.current.delete(userId);
+    peer.on("connect", () => {
+      console.log(`✅ Peer connected to ${userId}`);
+      setConnectionQuality(prev => ({ ...prev, [userId]: "connected" }));
     });
     
-    peer.on("error", err => console.error(`Peer error for ${userId}:`, err));
+    peer.on("close", () => {
+      console.log(`❌ Peer closed for ${userId}`);
+      setParticipants(prev => prev.filter(p => p.userId?._id !== userId));
+      videoRefs.current.delete(userId);
+      delete peersRef.current[userId];
+    });
+    
+    peer.on("error", (err) => {
+      console.error(`Peer error for ${userId}:`, err);
+      
+      // Retry connection on error (up to 3 times)
+      if (retryCount < 3 && isInitiator) {
+        console.log(`🔄 Retrying peer connection for ${userId} (attempt ${retryCount + 1})`);
+        setTimeout(() => {
+          if (!peersRef.current[userId] && userMediaStreamRef.current) {
+            createPeer(userId, userMediaStreamRef.current, true, retryCount + 1);
+          }
+        }, 1000 * (retryCount + 1));
+      }
+    });
     
     peersRef.current[userId] = peer;
     return peer;
@@ -465,6 +518,8 @@ const LiveClassRoom = () => {
 
   const handleUserJoined = useCallback((data) => {
     const { userId, userName, role } = data;
+    
+    console.log(`👤 User joined: ${userName} (${userId})`);
     
     if (userId !== currentUser?._id && userMediaStreamRef.current && !peersRef.current[userId]) {
       createPeer(userId, userMediaStreamRef.current, true);
@@ -492,6 +547,8 @@ const LiveClassRoom = () => {
   const handleUserLeft = useCallback((data) => {
     const { userId, userName } = data;
     
+    console.log(`👋 User left: ${userName} (${userId})`);
+    
     if (peersRef.current[userId]) {
       peersRef.current[userId].destroy();
       delete peersRef.current[userId];
@@ -508,8 +565,10 @@ const LiveClassRoom = () => {
     const { from, signal } = data;
     
     if (peersRef.current[from]) {
+      console.log(`📡 Received signal from ${from}`);
       peersRef.current[from].signal(signal);
     } else if (userMediaStreamRef.current && from !== currentUser?._id) {
+      console.log(`🔄 Creating peer for signal from ${from}`);
       const peer = createPeer(from, userMediaStreamRef.current, false);
       if (peer) peer.signal(signal);
     }
@@ -524,7 +583,6 @@ const LiveClassRoom = () => {
       icon: "🔴"
     });
     
-    // Clean up and redirect to appropriate dashboard
     setTimeout(() => {
       if (!isLeavingRef.current) {
         isLeavingRef.current = true;
@@ -650,11 +708,9 @@ const LiveClassRoom = () => {
         await axios.post(`/live-class/lecturer/${classId}/end`);
         socketRef.current?.emit("end-class", { classId });
         toast.success("Class ended successfully");
-        // Redirect to live classes list for lecturers
         navigate(getLiveClassesPath());
       } else {
         toast.success("Left the class");
-        // Redirect to appropriate dashboard for non-lecturers
         navigate(getDashboardPath());
       }
       
@@ -744,23 +800,40 @@ const LiveClassRoom = () => {
     toast.success("Invite link copied!");
   };
 
-  // Stable VideoTile component - NO BLINKING
+  // FIXED: VideoTile component with proper stream handling
   const VideoTile = memo(({ video, isPinned = false, isSidebar = false }) => {
     const videoElementRef = useRef(null);
     
     useEffect(() => {
+      if (!videoElementRef.current) return;
+      
       if (video.id) {
         videoRefs.current.set(video.id, videoElementRef.current);
       }
       
-      const streamToAttach = video.isLocal ? userMediaStreamRef.current : video.stream;
-      if (streamToAttach && videoElementRef.current && videoElementRef.current.srcObject !== streamToAttach) {
-        videoElementRef.current.srcObject = streamToAttach;
+      // Determine which stream to use
+      let streamToUse = null;
+      if (video.isLocal) {
+        streamToUse = userMediaStreamRef.current;
+      } else {
+        streamToUse = video.remoteStream || video.stream;
+      }
+      
+      if (streamToUse && videoElementRef.current.srcObject !== streamToUse) {
+        console.log(`🎥 ${video.isLocal ? "Local" : "Remote"} video stream attached for ${video.name}`);
+        videoElementRef.current.srcObject = streamToUse;
         videoElementRef.current.play().catch(e => console.log("Play error:", e));
       }
-    }, [video.id, video.isLocal, video.stream]);
+      
+      return () => {
+        if (videoElementRef.current && !video.isLocal) {
+          // Don't clean up local stream
+          videoElementRef.current.srcObject = null;
+        }
+      };
+    }, [video.id, video.isLocal, video.stream, video.remoteStream, userMediaStreamRef.current]);
     
-    const hasValidStream = video.isLocal ? localStreamReady : !!video.stream;
+    const hasValidStream = video.isLocal ? localStreamReady : !!(video.remoteStream || video.stream);
     const shouldShowVideo = hasValidStream && !video.isVideoOff;
     
     return (
@@ -775,7 +848,6 @@ const LiveClassRoom = () => {
           playsInline
           muted={video.isLocal}
           className="w-full h-full object-cover"
-          style={{ display: shouldShowVideo ? 'block' : 'none' }}
         />
         
         {!shouldShowVideo && (
@@ -790,6 +862,7 @@ const LiveClassRoom = () => {
                 {video.name}{video.isLocal && " (You)"}
               </p>
               {video.isVideoOff && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 hidden md:block">Camera off</p>}
+              {!hasValidStream && !video.isLocal && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 hidden md:block">Connecting...</p>}
             </div>
           </div>
         )}
@@ -834,15 +907,17 @@ const LiveClassRoom = () => {
     );
   });
 
-  // Video Grid Component - Responsive
+  // FIXED: Video Grid Component with proper remote stream handling
   const VideoGrid = memo(() => {
     const getVideoParticipants = useCallback(() => {
       const allVideos = [];
       
+      // Add local user
       allVideos.push({
         id: currentUser?._id,
         name: currentUser?.name,
         stream: userMediaStreamRef.current,
+        remoteStream: userMediaStreamRef.current,
         isLocal: true,
         role: currentUser?.role,
         isMuted: isMuted,
@@ -851,13 +926,15 @@ const LiveClassRoom = () => {
         hasStream: localStreamReady
       });
       
+      // Add remote participants
       participants
         .filter(p => p.userId?._id !== currentUser?._id && p.active && !p.leftAt)
         .forEach(p => {
           allVideos.push({
             id: p.userId._id,
             name: p.userId.name,
-            stream: p.remoteStream || null,
+            stream: p.remoteStream,
+            remoteStream: p.remoteStream,
             isLocal: false,
             role: p.role,
             isMuted: !p.audioEnabled,
