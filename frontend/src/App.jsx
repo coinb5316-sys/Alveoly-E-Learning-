@@ -76,6 +76,9 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import Disclaimer from "./pages/Disclaimer";
 import CookiePolicy from "./pages/CookiePolicy";
+import AIAdmin from "./pages/AIAdmin";
+import AIPlansAdmin from "./pages/AIPlansAdmin";
+import AIGenerator from "./pages/AdminAIGeneratorU";
 
 function App() {
   useEffect(() => {
@@ -198,6 +201,9 @@ function App() {
             <Route path="live-classes/create" element={<AdminCreateLiveClass />} />
             <Route path="live-classes/:id/edit" element={<AdminCreateLiveClass />} />
             <Route path="live-class/:classId" element={<LiveClassRoom />} />
+            <Route path="ai" element={<AIAdmin />} />
+            <Route path="ai-plans" element={<AIPlansAdmin />} />
+            <Route path="ai-generator" element={<AIGenerator />} />
           </Route>
 
           {/* ==================== LECTURER ROUTES ==================== */}

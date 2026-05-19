@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import StudentNotificationPanel from "../components/StudentNotificationPanel";
+import { FaRobot } from "react-icons/fa";
 
 const StudentLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -85,6 +86,7 @@ const StudentLayout = () => {
     { to: "/student/content-payment", label: "Content Payment", icon: DollarSign, color: "text-indigo-500" },
     { to: "/student/testimonials", label: "Testimonials", icon: Star, color: "text-amber-500" },
     { to: "/student/live-classes", label: "Live Classes", icon: Video, color: "text-red-500" },
+    { to: "/student/ai", label: "AI Assistant", icon: FaRobot, color: "text-pink-500" },
   ];
 
   return (
