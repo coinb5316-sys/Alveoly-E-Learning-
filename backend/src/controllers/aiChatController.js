@@ -1,4 +1,4 @@
-import QA from "../models/QA.js";
+import QA from "../models/QuestionAnswer.js";
 import { askAI } from "../services/aiService.js";
 import UserAISubscription from "../models/UserAISubscription.js";
 // get history
