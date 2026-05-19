@@ -79,6 +79,7 @@ import CookiePolicy from "./pages/CookiePolicy";
 import AIAdmin from "./pages/AIAdmin";
 import AIPlansAdmin from "./pages/AIPlansAdmin";
 import AIGenerator from "./pages/AdminAIGeneratorU";
+import AIChat from "./pages/AIChat";
 
 function App() {
   useEffect(() => {
@@ -169,6 +170,7 @@ function App() {
             <Route path="content-payment" element={<StudentContentPayments />} />
             <Route path="live-classes" element={<StudentLiveClasses />} />
             <Route path="live-class/:classId" element={<LiveClassRoom />} />
+            <Route path="ai" element={<AIChat />} />
           </Route>
 
           {/* ==================== ADMIN ROUTES ==================== */}
