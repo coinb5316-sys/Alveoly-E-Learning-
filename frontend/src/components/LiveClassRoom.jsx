@@ -1,4 +1,4 @@
-// components/LiveClassRoom.jsx - FULLY FIXED for video/audio calls
+// components/LiveClassRoom.jsx - COMPLETELY FIXED WebRTC
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -6,31 +6,9 @@ import axios from "../api/axios";
 import { io } from "socket.io-client";
 import Peer from "simple-peer";
 import { 
-  Video, 
-  Mic, 
-  MicOff, 
-  VideoOff, 
-  PhoneOff,
-  MessageSquare,
-  Users,
-  Send,
-  Clock,
-  Calendar,
-  Grid,
-  List,
-  Maximize2,
-  Minimize2,
-  Pin,
-  Settings,
-  Copy,
-  Check,
-  LogOut,
-  WifiOff,
-  Loader2,
-  Menu,
-  X,
-  Sun,
-  Moon
+  Video, Mic, MicOff, VideoOff, PhoneOff, MessageSquare, Users, Send,
+  Clock, Calendar, Grid, List, Maximize2, Minimize2, Pin, Settings,
+  Copy, Check, LogOut, WifiOff, Loader2, Menu, X, Sun, Moon
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -68,54 +46,39 @@ const LiveClassRoom = () => {
   const [copied, setCopied] = useState(false);
   const [showLeftNotification, setShowLeftNotification] = useState(null);
   const [socketConnected, setSocketConnected] = useState(false);
-  const [isAudioInitialized, setIsAudioInitialized] = useState(false);
   const [localStreamReady, setLocalStreamReady] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileControls, setShowMobileControls] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [classEnded, setClassEnded] = useState(false);
-  const [connectionQuality, setConnectionQuality] = useState({});
+  const [remoteStreams, setRemoteStreams] = useState(new Map());
   
   // WebRTC Refs
   const socketRef = useRef(null);
   const peersRef = useRef({});
   const userMediaStreamRef = useRef(null);
   const localVideoRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const audioAnalyserRef = useRef(null);
   const durationIntervalRef = useRef(null);
-  const speakingIntervalRef = useRef(null);
   const videoRefs = useRef(new Map());
   const isLeavingRef = useRef(false);
-  const peerConnectionAttempts = useRef({});
   
-  // Helper function to get dashboard path based on user role
   const getDashboardPath = useCallback(() => {
     if (!currentUser) return "/";
     switch (currentUser.role) {
-      case "admin":
-        return "/admin";
-      case "lecturer":
-        return "/lecturer";
-      case "student":
-        return "/student/dashboard";
-      default:
-        return "/";
+      case "admin": return "/admin";
+      case "lecturer": return "/lecturer";
+      case "student": return "/student/dashboard";
+      default: return "/";
     }
   }, [currentUser]);
 
-  // Helper function to get live classes list path based on user role
   const getLiveClassesPath = useCallback(() => {
     if (!currentUser) return "/";
     switch (currentUser.role) {
-      case "admin":
-        return "/admin/live-classes";
-      case "lecturer":
-        return "/lecturer/live-classes";
-      case "student":
-        return "/student/live-classes";
-      default:
-        return "/";
+      case "admin": return "/admin/live-classes";
+      case "lecturer": return "/lecturer/live-classes";
+      case "student": return "/student/live-classes";
+      default: return "/";
     }
   }, [currentUser]);
   
@@ -143,39 +106,13 @@ const LiveClassRoom = () => {
     }
   };
   
-  // Check for mobile device
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
   
-  // Hide mobile controls after inactivity
-  useEffect(() => {
-    if (!isMobile || !isJoined) return;
-    
-    let timeout;
-    const resetTimeout = () => {
-      setShowMobileControls(true);
-      clearTimeout(timeout);
-      timeout = setTimeout(() => setShowMobileControls(false), 3000);
-    };
-    
-    resetTimeout();
-    document.addEventListener('touchstart', resetTimeout);
-    document.addEventListener('mousemove', resetTimeout);
-    
-    return () => {
-      clearTimeout(timeout);
-      document.removeEventListener('touchstart', resetTimeout);
-      document.removeEventListener('mousemove', resetTimeout);
-    };
-  }, [isMobile, isJoined]);
-  
-  // ================= REDIRECT IF NO USER =================
   useEffect(() => {
     if (!authLoading && !currentUser) {
       toast.error("Please login to access this page");
@@ -183,7 +120,6 @@ const LiveClassRoom = () => {
     }
   }, [currentUser, authLoading, navigate]);
 
-  // ================= INITIALIZATION =================
   useEffect(() => {
     if (!currentUser || authLoading) return;
     
@@ -216,12 +152,12 @@ const LiveClassRoom = () => {
     const API_URL = import.meta.env.VITE_APP_API_BASE_URL || "https://alveoly-e-learning-755w.onrender.com";
     
     socketRef.current = io(API_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
       timeout: 20000,
+      forceNew: true
     });
 
     socketRef.current.on("connect", () => {
@@ -232,7 +168,6 @@ const LiveClassRoom = () => {
     socketRef.current.on("disconnect", () => {
       console.log("❌ Socket disconnected");
       setSocketConnected(false);
-      toast.error("Disconnected from server. Reconnecting...");
     });
 
     socketRef.current.on("connect_error", (err) => {
@@ -274,7 +209,7 @@ const LiveClassRoom = () => {
       return [...prev, ...uniqueNew];
     });
     
-    // Create peers for existing participants AFTER stream is ready
+    // Create peers after stream is ready
     if (userMediaStreamRef.current && localStreamReady) {
       participantsList.forEach(participant => {
         if (participant.userId !== currentUser?._id && !peersRef.current[participant.userId]) {
@@ -290,7 +225,6 @@ const LiveClassRoom = () => {
     setIsConnecting(false);
     setIsJoined(true);
     startDurationTimer();
-    setupSpeakingDetection();
     toast.success("Successfully joined the class!");
   }, []);
 
@@ -414,11 +348,17 @@ const LiveClassRoom = () => {
     });
   };
 
-  // FIXED: Enhanced peer creation with better ICE servers
-  const createPeer = useCallback((userId, stream, isInitiator = true, retryCount = 0) => {
-    if (!userId || peersRef.current[userId]) return null;
+  // CRITICAL FIX: Proper peer creation with working TURN servers
+  const createPeer = useCallback((userId, stream, isInitiator = true) => {
+    if (!userId) return null;
     
-    console.log(`🔗 Creating peer for ${userId}, initiator: ${isInitiator}, retry: ${retryCount}`);
+    // Don't create duplicate peers
+    if (peersRef.current[userId]) {
+      console.log(`⚠️ Peer for ${userId} already exists`);
+      return peersRef.current[userId];
+    }
+    
+    console.log(`🔗 Creating ${isInitiator ? 'initiator' : 'receiver'} peer for ${userId}`);
     
     const peer = new Peer({
       initiator: isInitiator,
@@ -431,21 +371,16 @@ const LiveClassRoom = () => {
           { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:stun3.l.google.com:19302' },
           { urls: 'stun:stun4.l.google.com:19302' },
-          // Public TURN servers for better connectivity
+          // Working TURN servers
           {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
+            username: 'anyfirewall',
+            credential: 'anyfirewall'
           },
           {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-          },
-          {
-            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
+            urls: 'turn:turn.anyfirewall.com:80?transport=udp',
+            username: 'anyfirewall',
+            credential: 'anyfirewall'
           }
         ],
         iceCandidatePoolSize: 10
@@ -453,7 +388,7 @@ const LiveClassRoom = () => {
     });
     
     peer.on("signal", signal => {
-      if (socketRef.current && userId && socketConnected) {
+      if (socketRef.current && socketConnected) {
         console.log(`📡 Sending signal to ${userId}`);
         socketRef.current.emit("signal", { to: userId, signal, classId });
       }
@@ -462,25 +397,21 @@ const LiveClassRoom = () => {
     peer.on("stream", remoteStream => {
       console.log(`📺 Received remote stream from ${userId}, tracks: audio=${remoteStream.getAudioTracks().length}, video=${remoteStream.getVideoTracks().length}`);
       
-      // Update participants with the remote stream
-      setParticipants(prev => {
-        const existingIndex = prev.findIndex(p => p.userId?._id === userId);
-        if (existingIndex !== -1) {
-          const updated = [...prev];
-          updated[existingIndex] = { 
-            ...updated[existingIndex], 
-            remoteStream: remoteStream,
-            remoteStreamReady: true
-          };
-          return updated;
-        }
-        return prev;
+      // Store remote stream in a ref for stable access
+      setRemoteStreams(prev => {
+        const newMap = new Map(prev);
+        newMap.set(userId, remoteStream);
+        return newMap;
       });
+      
+      // Update participants with remote stream
+      setParticipants(prev => prev.map(p => 
+        p.userId?._id === userId ? { ...p, remoteStream, remoteStreamReady: true } : p
+      ));
       
       // Force video element update
       const videoElement = videoRefs.current.get(userId);
-      if (videoElement && remoteStream && videoElement.srcObject !== remoteStream) {
-        console.log(`🎥 Attaching remote stream to video element for ${userId}`);
+      if (videoElement && remoteStream) {
         videoElement.srcObject = remoteStream;
         videoElement.play().catch(e => console.log("Play error:", e));
       }
@@ -488,7 +419,6 @@ const LiveClassRoom = () => {
     
     peer.on("connect", () => {
       console.log(`✅ Peer connected to ${userId}`);
-      setConnectionQuality(prev => ({ ...prev, [userId]: "connected" }));
     });
     
     peer.on("close", () => {
@@ -500,16 +430,6 @@ const LiveClassRoom = () => {
     
     peer.on("error", (err) => {
       console.error(`Peer error for ${userId}:`, err);
-      
-      // Retry connection on error (up to 3 times)
-      if (retryCount < 3 && isInitiator) {
-        console.log(`🔄 Retrying peer connection for ${userId} (attempt ${retryCount + 1})`);
-        setTimeout(() => {
-          if (!peersRef.current[userId] && userMediaStreamRef.current) {
-            createPeer(userId, userMediaStreamRef.current, true, retryCount + 1);
-          }
-        }, 1000 * (retryCount + 1));
-      }
     });
     
     peersRef.current[userId] = peer;
@@ -521,15 +441,10 @@ const LiveClassRoom = () => {
     
     console.log(`👤 User joined: ${userName} (${userId})`);
     
-    if (userId !== currentUser?._id && userMediaStreamRef.current && !peersRef.current[userId]) {
-      createPeer(userId, userMediaStreamRef.current, true);
-    }
-    
+    // Add to participants list
     setParticipants(prev => {
       const exists = prev.find(p => p.userId?._id === userId);
-      if (exists) {
-        return prev.map(p => p.userId?._id === userId ? { ...p, active: true, leftAt: null } : p);
-      }
+      if (exists) return prev;
       return [...prev, {
         userId: { _id: userId, name: userName },
         role: role,
@@ -541,8 +456,15 @@ const LiveClassRoom = () => {
       }];
     });
     
+    // Create peer connection for this user
+    if (userMediaStreamRef.current && localStreamReady && !peersRef.current[userId]) {
+      setTimeout(() => {
+        createPeer(userId, userMediaStreamRef.current, true);
+      }, 500);
+    }
+    
     toast.success(`${userName} joined the class`);
-  }, [currentUser, createPeer]);
+  }, [currentUser, createPeer, localStreamReady]);
 
   const handleUserLeft = useCallback((data) => {
     const { userId, userName } = data;
@@ -553,6 +475,12 @@ const LiveClassRoom = () => {
       peersRef.current[userId].destroy();
       delete peersRef.current[userId];
     }
+    
+    setRemoteStreams(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(userId);
+      return newMap;
+    });
     
     setParticipants(prev => prev.filter(p => p.userId?._id !== userId));
     setShowLeftNotification({ userId, userName });
@@ -578,10 +506,7 @@ const LiveClassRoom = () => {
     if (classEnded) return;
     setClassEnded(true);
     
-    toast.error("Class has been ended by the lecturer", {
-      duration: 5000,
-      icon: "🔴"
-    });
+    toast.error("Class has been ended by the lecturer", { duration: 5000, icon: "🔴" });
     
     setTimeout(() => {
       if (!isLeavingRef.current) {
@@ -591,46 +516,6 @@ const LiveClassRoom = () => {
       }
     }, 2000);
   }, [navigate, classEnded, getDashboardPath]);
-
-  const setupSpeakingDetection = useCallback(() => {
-    if (!userMediaStreamRef.current || isAudioInitialized) return;
-    
-    try {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      audioAnalyserRef.current = audioContextRef.current.createAnalyser();
-      audioAnalyserRef.current.fftSize = 256;
-      
-      const source = audioContextRef.current.createMediaStreamSource(userMediaStreamRef.current);
-      source.connect(audioAnalyserRef.current);
-      
-      const resumeAudio = () => {
-        if (audioContextRef.current?.state === 'suspended') {
-          audioContextRef.current.resume();
-          setIsAudioInitialized(true);
-        }
-        document.removeEventListener('click', resumeAudio);
-        document.removeEventListener('keydown', resumeAudio);
-      };
-      
-      document.addEventListener('click', resumeAudio);
-      document.addEventListener('keydown', resumeAudio);
-      
-      speakingIntervalRef.current = setInterval(() => {
-        if (!audioAnalyserRef.current || !socketRef.current || !socketConnected) return;
-        
-        const dataArray = new Uint8Array(audioAnalyserRef.current.frequencyBinCount);
-        audioAnalyserRef.current.getByteFrequencyData(dataArray);
-        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-        const isSpeaking = avg > 30;
-        
-        socketRef.current.emit("user-speaking", { classId, userId: currentUser._id, isSpeaking });
-      }, 100);
-      
-      setIsAudioInitialized(true);
-    } catch (err) {
-      console.error("Speaking detection error:", err);
-    }
-  }, [currentUser, classId, socketConnected, isAudioInitialized]);
 
   const handleUserSpeaking = useCallback((data) => {
     setSpeakingUsers(prev => ({ ...prev, [data.userId]: data.isSpeaking }));
@@ -723,40 +608,27 @@ const LiveClassRoom = () => {
   };
 
   const cleanup = useCallback(() => {
-    // Destroy all peer connections
     Object.values(peersRef.current).forEach(peer => {
       if (peer) peer.destroy();
     });
     peersRef.current = {};
     
-    // Stop all local tracks
     if (userMediaStreamRef.current) {
-      userMediaStreamRef.current.getTracks().forEach(track => {
-        track.stop();
-      });
+      userMediaStreamRef.current.getTracks().forEach(track => track.stop());
       userMediaStreamRef.current = null;
     }
     
-    // Clear intervals
     if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
-    if (speakingIntervalRef.current) clearInterval(speakingIntervalRef.current);
     
-    // Close audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    
-    // Disconnect socket
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
     
-    // Reset states
     setLocalStreamReady(false);
     setSocketConnected(false);
     setIsJoined(false);
+    setRemoteStreams(new Map());
   }, []);
 
   const startDurationTimer = () => {
@@ -800,7 +672,7 @@ const LiveClassRoom = () => {
     toast.success("Invite link copied!");
   };
 
-  // FIXED: VideoTile component with proper stream handling
+  // CRITICAL FIX: VideoTile with correct stream handling
   const VideoTile = memo(({ video, isPinned = false, isSidebar = false }) => {
     const videoElementRef = useRef(null);
     
@@ -811,29 +683,28 @@ const LiveClassRoom = () => {
         videoRefs.current.set(video.id, videoElementRef.current);
       }
       
-      // Determine which stream to use
+      // Get the correct stream
       let streamToUse = null;
       if (video.isLocal) {
         streamToUse = userMediaStreamRef.current;
       } else {
-        streamToUse = video.remoteStream || video.stream;
+        streamToUse = video.remoteStream;
       }
       
       if (streamToUse && videoElementRef.current.srcObject !== streamToUse) {
-        console.log(`🎥 ${video.isLocal ? "Local" : "Remote"} video stream attached for ${video.name}`);
+        console.log(`🎥 Attaching stream for ${video.name}, local: ${video.isLocal}`);
         videoElementRef.current.srcObject = streamToUse;
         videoElementRef.current.play().catch(e => console.log("Play error:", e));
       }
       
       return () => {
         if (videoElementRef.current && !video.isLocal) {
-          // Don't clean up local stream
           videoElementRef.current.srcObject = null;
         }
       };
-    }, [video.id, video.isLocal, video.stream, video.remoteStream, userMediaStreamRef.current]);
+    }, [video.id, video.isLocal, video.remoteStream, userMediaStreamRef.current]);
     
-    const hasValidStream = video.isLocal ? localStreamReady : !!(video.remoteStream || video.stream);
+    const hasValidStream = video.isLocal ? localStreamReady : !!video.remoteStream;
     const shouldShowVideo = hasValidStream && !video.isVideoOff;
     
     return (
@@ -861,8 +732,8 @@ const LiveClassRoom = () => {
               <p className="text-gray-800 dark:text-white text-xs md:text-sm font-medium truncate max-w-[100px] md:max-w-[150px]">
                 {video.name}{video.isLocal && " (You)"}
               </p>
-              {video.isVideoOff && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 hidden md:block">Camera off</p>}
-              {!hasValidStream && !video.isLocal && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 hidden md:block">Connecting...</p>}
+              {video.isVideoOff && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Camera off</p>}
+              {!hasValidStream && !video.isLocal && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Waiting for video...</p>}
             </div>
           </div>
         )}
@@ -881,33 +752,23 @@ const LiveClassRoom = () => {
             <div className="flex items-center gap-1">
               {video.isMuted && <MicOff className="h-3 w-3 md:h-4 md:w-4 text-red-400" />}
               {video.isVideoOff && <VideoOff className="h-3 w-3 md:h-4 md:w-4 text-red-400" />}
-              {video.isSpeaking && <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-green-500 animate-pulse" />}
             </div>
           </div>
         </div>
         
-        {/* Top controls */}
-        <div className={`absolute top-2 right-2 flex gap-1 transition-opacity ${isMobile && !showMobileControls ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
-          {!video.isLocal && !isSidebar && (
-            <button onClick={() => setPinnedVideo(pinnedVideo === video.id ? null : video.id)} 
-              className="p-1 md:p-1.5 rounded-lg bg-black/50 hover:bg-black/70">
-              <Pin className={`h-2 w-2 md:h-3 md:w-3 ${pinnedVideo === video.id ? "text-indigo-400 fill-indigo-400" : "text-white"}`} />
-            </button>
-          )}
-          <button onClick={() => setFullscreenVideo(video.id)} 
-            className="p-1 md:p-1.5 rounded-lg bg-black/50 hover:bg-black/70">
-            <Maximize2 className="h-2 w-2 md:h-3 md:w-3 text-white" />
+        {!video.isLocal && !isSidebar && (
+          <button 
+            onClick={() => setPinnedVideo(pinnedVideo === video.id ? null : video.id)} 
+            className="absolute top-2 right-2 p-1 md:p-1.5 rounded-lg bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <Pin className={`h-2 w-2 md:h-3 md:w-3 ${pinnedVideo === video.id ? "text-indigo-400 fill-indigo-400" : "text-white"}`} />
           </button>
-        </div>
-        
-        {video.isSpeaking && (
-          <div className="absolute inset-0 rounded-xl ring-2 ring-green-500 ring-offset-2 ring-offset-gray-900 pointer-events-none" />
         )}
       </div>
     );
   });
 
-  // FIXED: Video Grid Component with proper remote stream handling
+  // Video Grid Component
   const VideoGrid = memo(() => {
     const getVideoParticipants = useCallback(() => {
       const allVideos = [];
@@ -916,14 +777,12 @@ const LiveClassRoom = () => {
       allVideos.push({
         id: currentUser?._id,
         name: currentUser?.name,
-        stream: userMediaStreamRef.current,
         remoteStream: userMediaStreamRef.current,
         isLocal: true,
         role: currentUser?.role,
         isMuted: isMuted,
         isVideoOff: isVideoOff,
-        isSpeaking: speakingUsers[currentUser?._id],
-        hasStream: localStreamReady
+        isSpeaking: speakingUsers[currentUser?._id]
       });
       
       // Add remote participants
@@ -933,14 +792,12 @@ const LiveClassRoom = () => {
           allVideos.push({
             id: p.userId._id,
             name: p.userId.name,
-            stream: p.remoteStream,
             remoteStream: p.remoteStream,
             isLocal: false,
             role: p.role,
             isMuted: !p.audioEnabled,
             isVideoOff: !p.videoEnabled,
-            isSpeaking: speakingUsers[p.userId._id],
-            hasStream: !!p.remoteStream
+            isSpeaking: speakingUsers[p.userId._id]
           });
         });
       
@@ -950,25 +807,9 @@ const LiveClassRoom = () => {
         return { pinned, others };
       }
       return { pinned: null, others: allVideos };
-    }, [currentUser, participants, isMuted, isVideoOff, speakingUsers, localStreamReady, pinnedVideo]);
+    }, [currentUser, participants, isMuted, isVideoOff, speakingUsers, pinnedVideo]);
     
     const { pinned, others } = getVideoParticipants();
-    
-    if (fullscreenVideo) {
-      const video = [...others, pinned].find(v => v?.id === fullscreenVideo);
-      if (video) {
-        return (
-          <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
-            <button onClick={() => setFullscreenVideo(null)} className="absolute top-4 right-4 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white z-10">
-              <Minimize2 className="h-5 w-5" />
-            </button>
-            <div className="w-full h-full">
-              <VideoTile video={video} isPinned />
-            </div>
-          </div>
-        );
-      }
-    }
     
     if (layout === "speaker" && others.length > 0) {
       const mainSpeaker = pinned || others.find(v => v.role === "lecturer") || others[0];
@@ -1029,16 +870,6 @@ const LiveClassRoom = () => {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
-      {/* Left notification */}
-      {showLeftNotification && (
-        <div className="fixed bottom-20 md:bottom-24 right-2 md:right-4 z-50 animate-slide-in">
-          <div className="bg-red-500/90 backdrop-blur-sm rounded-lg px-3 md:px-4 py-1.5 md:py-2 shadow-lg flex items-center gap-2">
-            <LogOut className="h-3 w-3 md:h-4 md:w-4 text-white" />
-            <span className="text-white text-xs md:text-sm">{showLeftNotification.userName} left</span>
-          </div>
-        </div>
-      )}
-      
       {/* Connection status */}
       {!socketConnected && (
         <div className="fixed top-16 md:top-20 right-2 md:right-4 z-50 bg-red-500/90 backdrop-blur-sm rounded-lg px-2 md:px-3 py-1 md:py-1.5 flex items-center gap-1 md:gap-2">
@@ -1047,7 +878,7 @@ const LiveClassRoom = () => {
         </div>
       )}
       
-      {/* Header - Responsive */}
+      {/* Header */}
       <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-3 md:px-6 py-2 md:py-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex-1 min-w-0">
@@ -1058,17 +889,11 @@ const LiveClassRoom = () => {
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
-            {/* Dark Mode Toggle */}
             <button
               onClick={toggleDarkMode}
               className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              aria-label="Toggle dark mode"
             >
-              {darkMode ? (
-                <Sun className="h-3 w-3 md:h-4 md:w-4 text-yellow-500" />
-              ) : (
-                <Moon className="h-3 w-3 md:h-4 md:w-4 text-gray-600" />
-              )}
+              {darkMode ? <Sun className="h-3 w-3 md:h-4 md:w-4 text-yellow-500" /> : <Moon className="h-3 w-3 md:h-4 md:w-4 text-gray-600" />}
             </button>
             
             <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 rounded-full bg-gray-100 dark:bg-gray-800">
@@ -1077,12 +902,14 @@ const LiveClassRoom = () => {
                 {isClassActive && isJoined ? "Connected" : isClassActive ? "Live" : "Scheduled"}
               </span>
             </div>
+            
             {isJoined && (
               <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20">
                 <Clock className="h-2 w-2 md:h-3 md:w-3 text-indigo-600 dark:text-indigo-400" />
                 <span className="text-[10px] md:text-sm text-indigo-600 dark:text-indigo-400 font-mono">{formatDuration(duration)}</span>
               </div>
             )}
+            
             <button onClick={() => setShowInviteModal(true)} className="hidden sm:flex items-center gap-1 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-[10px] md:text-sm">
               <Users className="h-3 w-3 md:h-4 md:w-4" /> Invite
             </button>
@@ -1102,8 +929,8 @@ const LiveClassRoom = () => {
                 <VideoGrid />
                 <video ref={localVideoRef} autoPlay playsInline muted className="hidden" />
                 
-                {/* Controls - Responsive and hides on inactivity on mobile */}
-                <div className={`absolute bottom-3 left-1/2 transform -translate-x-1/2 flex items-center gap-2 md:gap-3 bg-black/80 backdrop-blur-sm rounded-full px-3 md:px-5 py-1.5 md:py-2 z-10 transition-opacity duration-300 ${isMobile && !showMobileControls ? 'opacity-0' : 'opacity-100'}`}>
+                {/* Controls */}
+                <div className={`absolute bottom-3 left-1/2 transform -translate-x-1/2 flex items-center gap-2 md:gap-3 bg-black/80 backdrop-blur-sm rounded-full px-3 md:px-5 py-1.5 md:py-2 z-10`}>
                   <button onClick={toggleMute} className={`p-1.5 md:p-2.5 rounded-full transition-colors ${isMuted ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
                     {isMuted ? <MicOff className="h-3 w-3 md:h-4 md:w-4 text-white" /> : <Mic className="h-3 w-3 md:h-4 md:w-4 text-white" />}
                   </button>
@@ -1113,41 +940,10 @@ const LiveClassRoom = () => {
                   <button onClick={() => setLayout(layout === "grid" ? "speaker" : "grid")} className="p-1.5 md:p-2.5 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors">
                     {layout === "grid" ? <List className="h-3 w-3 md:h-4 md:w-4 text-white" /> : <Grid className="h-3 w-3 md:h-4 md:w-4 text-white" />}
                   </button>
-                  <button onClick={() => setShowSettings(!showSettings)} className="hidden sm:block p-1.5 md:p-2.5 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors">
-                    <Settings className="h-3 w-3 md:h-4 md:w-4 text-white" />
-                  </button>
                   <button onClick={leaveClass} className="p-1.5 md:p-2.5 rounded-full bg-red-500 hover:bg-red-600 transition-colors">
                     <PhoneOff className="h-3 w-3 md:h-4 md:w-4 text-white" />
                   </button>
                 </div>
-                
-                {/* Mobile invite button */}
-                {isMobile && (
-                  <button onClick={() => setShowInviteModal(true)} className="absolute top-2 right-2 p-2 rounded-lg bg-gray-800/80 z-10">
-                    <Users className="h-4 w-4 text-white" />
-                  </button>
-                )}
-                
-                {/* Settings panel - Responsive */}
-                {showSettings && (
-                  <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 w-64 md:w-80 bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 border border-gray-200 dark:border-gray-700 z-20 shadow-xl">
-                    <h3 className="text-gray-900 dark:text-white font-semibold text-sm md:text-base mb-2 md:mb-3">Settings</h3>
-                    <div className="space-y-2 md:space-y-3">
-                      <div>
-                        <label className="text-gray-600 dark:text-gray-400 text-xs md:text-sm block mb-1">Camera</label>
-                        <select value={selectedCamera} onChange={async (e) => { setSelectedCamera(e.target.value); await initializeLocalStream(); }} className="w-full px-2 md:px-3 py-1 md:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg text-xs md:text-sm border border-gray-300 dark:border-gray-600">
-                          {availableCameras.map(camera => <option key={camera.deviceId} value={camera.deviceId}>{camera.label?.slice(0, 20) || `Camera`}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-gray-600 dark:text-gray-400 text-xs md:text-sm block mb-1">Microphone</label>
-                        <select value={selectedMicrophone} onChange={async (e) => { setSelectedMicrophone(e.target.value); await initializeLocalStream(); }} className="w-full px-2 md:px-3 py-1 md:py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg text-xs md:text-sm border border-gray-300 dark:border-gray-600">
-                          {availableMicrophones.map(mic => <option key={mic.deviceId} value={mic.deviceId}>{mic.label?.slice(0, 20) || `Microphone`}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </>
             ) : isClassActive ? (
               <div className="flex flex-col items-center justify-center h-full px-4">
@@ -1179,7 +975,7 @@ const LiveClassRoom = () => {
           </div>
         </div>
 
-        {/* Sidebar - Slide in on mobile */}
+        {/* Sidebar */}
         <div className={`fixed inset-y-0 right-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 flex flex-col z-50 transform transition-transform duration-300 sm:relative sm:transform-none sm:w-80 ${
           showSidebar ? 'translate-x-0' : 'translate-x-full sm:translate-x-0'
         }`}>
@@ -1243,7 +1039,6 @@ const LiveClassRoom = () => {
                   <div className="flex items-center gap-1">
                     {p.audioEnabled === false && <MicOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
                     {p.videoEnabled === false && <VideoOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
-                    {speakingUsers[p.userId?._id] && <div className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-green-500 animate-pulse" />}
                   </div>
                 </div>
               ))}
@@ -1251,13 +1046,12 @@ const LiveClassRoom = () => {
           )}
         </div>
         
-        {/* Overlay for mobile sidebar */}
         {showSidebar && (
           <div className="fixed inset-0 bg-black/50 z-40 sm:hidden" onClick={() => setShowSidebar(false)} />
         )}
       </div>
 
-      {/* Invite Modal - Responsive */}
+      {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-5 max-w-md w-full">
@@ -1274,15 +1068,6 @@ const LiveClassRoom = () => {
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .animate-slide-in { animation: slideIn 0.3s ease-out; }
-        video { object-fit: cover; }
-        @media (max-width: 640px) {
-          .group:hover .opacity-0 { opacity: 1; }
-        }
-      `}</style>
     </div>
   );
 };
