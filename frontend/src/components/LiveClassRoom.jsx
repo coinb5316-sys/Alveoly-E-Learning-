@@ -51,6 +51,7 @@ const LiveClassRoom = () => {
   const [showMobileControls, setShowMobileControls] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [classEnded, setClassEnded] = useState(false);
+  const [remoteStreamsReady, setRemoteStreamsReady] = useState({});
   
   // WebRTC Refs
   const socketRef = useRef(null);
@@ -152,10 +153,11 @@ const LiveClassRoom = () => {
     const API_URL = import.meta.env.VITE_APP_API_BASE_URL || "https://alveoly-e-learning-755w.onrender.com";
     
     socketRef.current = io(API_URL, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
       timeout: 20000,
       forceNew: true
     });
@@ -186,7 +188,6 @@ const LiveClassRoom = () => {
     socketRef.current.on("new-chat-message", handleNewChatMessage);
   };
 
-  // ========== CRITICAL FIX: Handle existing participants AFTER stream is ready ==========
   const handleExistingParticipants = useCallback((participantsList) => {
     console.log("📋 Existing participants:", participantsList);
     
@@ -211,20 +212,23 @@ const LiveClassRoom = () => {
       return [...prev, ...uniqueNew];
     });
     
-    // CRITICAL: Only create peers if stream is ready
-    if (userMediaStreamRef.current && localStreamReady) {
-      participantsList.forEach(participant => {
-        if (participant.userId !== currentUser?._id && !peersRef.current[participant.userId]) {
-          console.log(`🔄 Creating peer for existing participant: ${participant.userName}`);
-          createPeer(participant.userId, userMediaStreamRef.current, true);
-        }
-      });
-    } else {
-      console.log("⏳ Waiting for local stream before creating peers for existing participants");
-      // Store for later
-      window.pendingExistingParticipants = participantsList;
-    }
-  }, [currentUser, localStreamReady]);
+    // Create peers for existing participants after a short delay to ensure stream is ready
+    const createPeersWithRetry = (retryCount = 0) => {
+      if (userMediaStreamRef.current && localStreamReady) {
+        participantsList.forEach(participant => {
+          if (participant.userId !== currentUser?._id && !peersRef.current[participant.userId]) {
+            console.log(`🔄 Creating peer for existing participant: ${participant.userName}`);
+            createPeer(participant.userId, userMediaStreamRef.current, true);
+          }
+        });
+      } else if (retryCount < 10) {
+        console.log(`⏳ Waiting for local stream, retry ${retryCount + 1}/10`);
+        setTimeout(() => createPeersWithRetry(retryCount + 1), 500);
+      }
+    };
+    
+    createPeersWithRetry();
+  }, [currentUser, localStreamReady, createPeer]);
 
   const handleJoinConfirmed = useCallback(() => {
     console.log("✅ Join confirmed");
@@ -232,18 +236,7 @@ const LiveClassRoom = () => {
     setIsJoined(true);
     startDurationTimer();
     toast.success("Successfully joined the class!");
-    
-    // Check if there were pending participants
-    if (window.pendingExistingParticipants && userMediaStreamRef.current && localStreamReady) {
-      console.log("🔄 Processing pending participants after stream ready");
-      window.pendingExistingParticipants.forEach(participant => {
-        if (participant.userId !== currentUser?._id && !peersRef.current[participant.userId]) {
-          createPeer(participant.userId, userMediaStreamRef.current, true);
-        }
-      });
-      window.pendingExistingParticipants = null;
-    }
-  }, [currentUser, localStreamReady]);
+  }, []);
 
   const handleNewChatMessage = useCallback((data) => {
     setChatMessages(prev => [...prev, {
@@ -325,11 +318,13 @@ const LiveClassRoom = () => {
       // Ensure audio tracks are enabled
       stream.getAudioTracks().forEach(track => {
         track.enabled = !isMuted;
+        console.log(`Audio track enabled: ${track.enabled}`);
       });
       
       // Ensure video tracks are enabled
       stream.getVideoTracks().forEach(track => {
         track.enabled = !isVideoOff;
+        console.log(`Video track enabled: ${track.enabled}`);
       });
       
       setLocalStreamReady(true);
@@ -344,7 +339,7 @@ const LiveClassRoom = () => {
       return stream;
     } catch (err) {
       console.error("Error accessing media devices:", err);
-      toast.error("Unable to access camera or microphone");
+      toast.error("Unable to access camera or microphone. Please check permissions.");
       return null;
     }
   }, [isVideoOff, isMuted, selectedCamera, selectedMicrophone, localStreamReady]);
@@ -377,7 +372,7 @@ const LiveClassRoom = () => {
     });
   };
 
-  // ========== CRITICAL FIX: Proper peer creation with audio handling ==========
+  // FIXED: Proper peer creation with valid ICE servers and audio handling
   const createPeer = useCallback((userId, stream, isInitiator = true) => {
     if (!userId) return null;
     
@@ -389,6 +384,7 @@ const LiveClassRoom = () => {
     
     console.log(`🔗 Creating ${isInitiator ? 'initiator' : 'receiver'} peer for ${userId}`);
     
+    // Use only reliable STUN servers, remove invalid TURN
     const peer = new Peer({
       initiator: isInitiator,
       trickle: true,
@@ -400,18 +396,9 @@ const LiveClassRoom = () => {
           { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:stun3.l.google.com:19302' },
           { urls: 'stun:stun4.l.google.com:19302' },
-          {
-            urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
-            username: 'anyfirewall',
-            credential: 'anyfirewall'
-          },
-          {
-            urls: 'turn:turn.anyfirewall.com:80?transport=udp',
-            username: 'anyfirewall',
-            credential: 'anyfirewall'
-          }
+          { urls: 'stun:stun.stunprotocol.org:3478' }
         ],
-        iceCandidatePoolSize: 10
+        iceCandidatePoolSize: 5
       }
     });
     
@@ -425,9 +412,15 @@ const LiveClassRoom = () => {
     peer.on("stream", remoteStream => {
       console.log(`📺 Received remote stream from ${userId}, tracks: audio=${remoteStream.getAudioTracks().length}, video=${remoteStream.getVideoTracks().length}`);
       
+      // Ensure audio plays
+      remoteStream.getAudioTracks().forEach(track => {
+        track.enabled = true;
+        console.log(`Remote audio track enabled for ${userId}`);
+      });
+      
       // Update participants with remote stream
       setParticipants(prev => prev.map(p => 
-        p.userId?._id === userId ? { ...p, remoteStream, remoteStreamReady: true } : p
+        p.userId?._id === userId ? { ...p, remoteStream } : p
       ));
       
       // Update video element if it exists
@@ -455,11 +448,18 @@ const LiveClassRoom = () => {
       console.error(`Peer error for ${userId}:`, err);
     });
     
+    // Monitor ICE connection state
+    peer.on("iceConnectionStateChange", () => {
+      console.log(`ICE connection state for ${userId}: ${peer.iceConnectionState}`);
+      if (peer.iceConnectionState === 'failed') {
+        console.error(`ICE connection failed for ${userId}, attempting restart`);
+        peer.restartIce();
+      }
+    });
+    
     peersRef.current[userId] = peer;
     return peer;
   }, [classId, socketConnected]);
-  
-  const [remoteStreamsReady, setRemoteStreamsReady] = useState({});
 
   const handleUserJoined = useCallback((data) => {
     const { userId, userName, role, audioEnabled, videoEnabled } = data;
@@ -481,12 +481,16 @@ const LiveClassRoom = () => {
       }];
     });
     
-    // CRITICAL: Create peer connection with a small delay to ensure we have stream
-    if (userMediaStreamRef.current && localStreamReady && !peersRef.current[userId]) {
-      setTimeout(() => {
+    // Create peer connection with retry
+    const createPeerWithRetry = (retryCount = 0) => {
+      if (userMediaStreamRef.current && localStreamReady && !peersRef.current[userId]) {
         createPeer(userId, userMediaStreamRef.current, true);
-      }, 500);
-    }
+      } else if (retryCount < 10) {
+        setTimeout(() => createPeerWithRetry(retryCount + 1), 500);
+      }
+    };
+    
+    createPeerWithRetry();
     
     toast.success(`${userName} joined the class`);
   }, [createPeer, localStreamReady]);
@@ -596,14 +600,16 @@ const LiveClassRoom = () => {
       // First join the database
       await axios.post(`/live-class/${classId}/join`);
       
-      // Then initialize stream
+      // Initialize stream first
       const stream = await initializeLocalStream();
-      if (stream) {
-        // Then join the call
-        await joinCall();
-      } else {
+      if (!stream) {
+        toast.error("Could not access camera/microphone");
         setIsConnecting(false);
+        return;
       }
+      
+      // Then join the call
+      await joinCall();
     } catch (err) {
       console.error("Join error:", err);
       toast.error(err.response?.data?.message || "Failed to join class");
@@ -710,7 +716,7 @@ const LiveClassRoom = () => {
     toast.success("Invite link copied!");
   };
 
-  // ========== CRITICAL FIX: VideoTile with proper stream handling ==========
+  // VideoTile Component
   const VideoTile = memo(({ video, isPinned = false, isSidebar = false }) => {
     const videoElementRef = useRef(null);
     
@@ -743,8 +749,14 @@ const LiveClassRoom = () => {
         console.log(`🎥 Attaching stream for ${video.name}, local: ${video.isLocal}`);
         videoElement.srcObject = streamToUse;
         videoElement.play().catch(e => console.log("Play error:", e));
+        
+        // Force re-render when metadata loads
+        videoElement.onloadedmetadata = () => {
+          console.log(`Video metadata loaded for ${video.name}`);
+          videoElement.play().catch(e => console.log("Play after metadata error:", e));
+        };
       }
-    }, [video.id, video.isLocal, video.remoteStream, userMediaStreamRef.current, remoteStreamsReady]);
+    }, [video.id, video.isLocal, video.remoteStream, userMediaStreamRef.current, remoteStreamsReady[video.id]]);
     
     const hasValidStream = video.isLocal ? localStreamReady : !!video.remoteStream;
     const shouldShowVideo = hasValidStream && !video.isVideoOff;
