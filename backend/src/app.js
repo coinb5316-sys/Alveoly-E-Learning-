@@ -29,6 +29,9 @@ import faqRoutes from "./routes/faqRoutes.js";
 import lecturerContentRoutes from "./routes/lecturerContentRoutes.js";
 import gradingRoutes from "./routes/gradingRoutes.js";
 import liveClassRoutes from "./routes/liveClassRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
+import aiPlanRoutes from "./routes/aiPlanRoutes.js";
+import aiSubscriptionRoutes from "./routes/aiSubscriptionRoutes.js";
 
 const app = express();
 
@@ -117,6 +120,9 @@ app.use("/api/faqs", faqRoutes);
 app.use("/api/content/lecturer", lecturerContentRoutes);
 app.use("/api/grading", gradingRoutes);
 app.use("/api/live-class", liveClassRoutes);
+app.use("/api/ai", aiRoutes);
+app.use("/api/ai-subscriptions", aiSubscriptionRoutes);
+app.use("/api/ai-plans", aiPlanRoutes);
 
 // ================= HEALTH CHECK =================
 app.get("/", (req, res) => {
