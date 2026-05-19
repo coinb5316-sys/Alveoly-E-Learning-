@@ -1,4 +1,4 @@
-// components/LiveClassRoom.jsx - COMPLETELY FIXED WebRTC with working audio/video
+// components/LiveClassRoom.jsx - CIRCULAR DEPENDENCY FIXED
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -228,7 +228,7 @@ const LiveClassRoom = () => {
     };
     
     createPeersWithRetry();
-  }, [currentUser, localStreamReady, createPeer]);
+  }, [currentUser, localStreamReady]);
 
   const handleJoinConfirmed = useCallback(() => {
     console.log("✅ Join confirmed");
@@ -716,187 +716,6 @@ const LiveClassRoom = () => {
     toast.success("Invite link copied!");
   };
 
-  // VideoTile Component
-  const VideoTile = memo(({ video, isPinned = false, isSidebar = false }) => {
-    const videoElementRef = useRef(null);
-    
-    // Store video element reference
-    useEffect(() => {
-      if (video.id && videoElementRef.current) {
-        videoRefs.current[video.id] = videoElementRef.current;
-      }
-      
-      return () => {
-        if (video.id) {
-          delete videoRefs.current[video.id];
-        }
-      };
-    }, [video.id]);
-    
-    // Handle stream attachment
-    useEffect(() => {
-      const videoElement = videoElementRef.current;
-      if (!videoElement) return;
-      
-      let streamToUse = null;
-      if (video.isLocal) {
-        streamToUse = userMediaStreamRef.current;
-      } else {
-        streamToUse = video.remoteStream;
-      }
-      
-      if (streamToUse && videoElement.srcObject !== streamToUse) {
-        console.log(`🎥 Attaching stream for ${video.name}, local: ${video.isLocal}`);
-        videoElement.srcObject = streamToUse;
-        videoElement.play().catch(e => console.log("Play error:", e));
-        
-        // Force re-render when metadata loads
-        videoElement.onloadedmetadata = () => {
-          console.log(`Video metadata loaded for ${video.name}`);
-          videoElement.play().catch(e => console.log("Play after metadata error:", e));
-        };
-      }
-    }, [video.id, video.isLocal, video.remoteStream, userMediaStreamRef.current, remoteStreamsReady[video.id]]);
-    
-    const hasValidStream = video.isLocal ? localStreamReady : !!video.remoteStream;
-    const shouldShowVideo = hasValidStream && !video.isVideoOff;
-    
-    return (
-      <div 
-        className={`relative bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden group ${
-          isPinned ? "h-full" : isSidebar ? "h-24 md:h-32" : "aspect-video"
-        } ${video.isSpeaking ? "ring-2 ring-green-500" : ""}`}
-      >
-        <video
-          ref={videoElementRef}
-          autoPlay
-          playsInline
-          muted={video.isLocal}
-          className="w-full h-full object-cover"
-        />
-        
-        {!shouldShowVideo && (
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-100 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
-            <div className="text-center px-2">
-              <div className="w-12 h-12 md:w-16 md:h-16 mx-auto rounded-full bg-indigo-500/20 dark:bg-indigo-500/30 flex items-center justify-center mb-1 md:mb-2">
-                <span className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                  {video.name?.charAt(0) || "U"}
-                </span>
-              </div>
-              <p className="text-gray-800 dark:text-white text-xs md:text-sm font-medium truncate max-w-[100px] md:max-w-[150px]">
-                {video.name}{video.isLocal && " (You)"}
-              </p>
-              {video.isVideoOff && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Camera off</p>}
-              {!hasValidStream && !video.isLocal && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Waiting for video...</p>}
-            </div>
-          </div>
-        )}
-        
-        {/* Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 md:p-3 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 md:gap-2">
-              <span className="text-white text-xs md:text-sm font-medium truncate max-w-[80px] md:max-w-[150px]">
-                {video.name}{video.isLocal && " (You)"}
-              </span>
-              {video.role === "lecturer" && (
-                <span className="px-1 md:px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] md:text-xs">Host</span>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              {video.isMuted && <MicOff className="h-3 w-3 md:h-4 md:w-4 text-red-400" />}
-              {video.isVideoOff && <VideoOff className="h-3 w-3 md:h-4 md:w-4 text-red-400" />}
-            </div>
-          </div>
-        </div>
-        
-        {!video.isLocal && !isSidebar && (
-          <button 
-            onClick={() => setPinnedVideo(pinnedVideo === video.id ? null : video.id)} 
-            className="absolute top-2 right-2 p-1 md:p-1.5 rounded-lg bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <Pin className={`h-2 w-2 md:h-3 md:w-3 ${pinnedVideo === video.id ? "text-indigo-400 fill-indigo-400" : "text-white"}`} />
-          </button>
-        )}
-      </div>
-    );
-  });
-
-  // Video Grid Component
-  const VideoGrid = memo(() => {
-    const getVideoParticipants = useCallback(() => {
-      const allVideos = [];
-      
-      // Add local user
-      allVideos.push({
-        id: currentUser?._id,
-        name: currentUser?.name,
-        remoteStream: userMediaStreamRef.current,
-        isLocal: true,
-        role: currentUser?.role,
-        isMuted: isMuted,
-        isVideoOff: isVideoOff,
-        isSpeaking: speakingUsers[currentUser?._id]
-      });
-      
-      // Add remote participants
-      participants
-        .filter(p => p.userId?._id !== currentUser?._id && p.active && !p.leftAt)
-        .forEach(p => {
-          allVideos.push({
-            id: p.userId._id,
-            name: p.userId.name,
-            remoteStream: p.remoteStream,
-            isLocal: false,
-            role: p.role,
-            isMuted: !p.audioEnabled,
-            isVideoOff: !p.videoEnabled,
-            isSpeaking: speakingUsers[p.userId._id]
-          });
-        });
-      
-      if (pinnedVideo) {
-        const pinned = allVideos.find(v => v.id === pinnedVideo);
-        const others = allVideos.filter(v => v.id !== pinnedVideo);
-        return { pinned, others };
-      }
-      return { pinned: null, others: allVideos };
-    }, [currentUser, participants, isMuted, isVideoOff, speakingUsers, pinnedVideo]);
-    
-    const { pinned, others } = getVideoParticipants();
-    
-    if (layout === "speaker" && others.length > 0) {
-      const mainSpeaker = pinned || others.find(v => v.role === "lecturer") || others[0];
-      const sidebarVideos = others.filter(v => v.id !== mainSpeaker?.id);
-      
-      return (
-        <div className="flex flex-col md:flex-row h-full gap-2 md:gap-4">
-          <div className="flex-1 min-h-0">{mainSpeaker && <VideoTile video={mainSpeaker} isPinned />}</div>
-          {sidebarVideos.length > 0 && (
-            <div className="flex md:flex-col gap-2 md:gap-3 overflow-x-auto md:overflow-y-auto md:w-32 lg:w-48 p-2">
-              {sidebarVideos.map(video => <VideoTile key={video.id} video={video} isSidebar />)}
-            </div>
-          )}
-        </div>
-      );
-    }
-    
-    const count = others.length;
-    const getGridCols = () => {
-      if (count <= 1) return "grid-cols-1";
-      if (count === 2) return "grid-cols-2";
-      if (count <= 4) return "grid-cols-2";
-      if (count <= 6) return "grid-cols-2 md:grid-cols-3";
-      return "grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
-    };
-    
-    return (
-      <div className={`grid ${getGridCols()} gap-2 md:gap-4 h-full auto-rows-fr overflow-y-auto p-1 md:p-2`}>
-        {others.map(video => <VideoTile key={video.id} video={video} />)}
-      </div>
-    );
-  });
-
   // Loading states
   if (authLoading || loading) {
     return (
@@ -980,7 +799,22 @@ const LiveClassRoom = () => {
           <div className="bg-gray-900 rounded-xl overflow-hidden h-full relative">
             {isJoined && isClassActive && socketConnected ? (
               <>
-                <VideoGrid />
+                {/* Video Grid Component moved inline to avoid circular dependency */}
+                <VideoGridComponent 
+                  layout={layout}
+                  pinnedVideo={pinnedVideo}
+                  setPinnedVideo={setPinnedVideo}
+                  currentUser={currentUser}
+                  participants={participants}
+                  isMuted={isMuted}
+                  isVideoOff={isVideoOff}
+                  speakingUsers={speakingUsers}
+                  userMediaStreamRef={userMediaStreamRef}
+                  localStreamReady={localStreamReady}
+                  videoRefs={videoRefs}
+                  remoteStreamsReady={remoteStreamsReady}
+                  setRemoteStreamsReady={setRemoteStreamsReady}
+                />
                 <video ref={localVideoRef} autoPlay playsInline muted className="hidden" />
                 
                 {/* Controls */}
@@ -1125,5 +959,230 @@ const LiveClassRoom = () => {
     </div>
   );
 };
+
+// VideoTile Component - Moved outside to avoid circular dependency
+const VideoTile = memo(({ video, isPinned = false, isSidebar = false, 
+  userMediaStreamRef, localStreamReady, videoRefs, remoteStreamsReady, setRemoteStreamsReady,
+  pinnedVideo, setPinnedVideo }) => {
+  const videoElementRef = useRef(null);
+  
+  // Store video element reference
+  useEffect(() => {
+    if (video.id && videoElementRef.current) {
+      videoRefs.current[video.id] = videoElementRef.current;
+    }
+    
+    return () => {
+      if (video.id) {
+        delete videoRefs.current[video.id];
+      }
+    };
+  }, [video.id, videoRefs]);
+  
+  // Handle stream attachment
+  useEffect(() => {
+    const videoElement = videoElementRef.current;
+    if (!videoElement) return;
+    
+    let streamToUse = null;
+    if (video.isLocal) {
+      streamToUse = userMediaStreamRef.current;
+    } else {
+      streamToUse = video.remoteStream;
+    }
+    
+    if (streamToUse && videoElement.srcObject !== streamToUse) {
+      console.log(`🎥 Attaching stream for ${video.name}, local: ${video.isLocal}`);
+      videoElement.srcObject = streamToUse;
+      videoElement.play().catch(e => console.log("Play error:", e));
+      
+      // Force re-render when metadata loads
+      videoElement.onloadedmetadata = () => {
+        console.log(`Video metadata loaded for ${video.name}`);
+        videoElement.play().catch(e => console.log("Play after metadata error:", e));
+      };
+    }
+  }, [video.id, video.isLocal, video.remoteStream, userMediaStreamRef, remoteStreamsReady[video.id]]);
+  
+  const hasValidStream = video.isLocal ? localStreamReady : !!video.remoteStream;
+  const shouldShowVideo = hasValidStream && !video.isVideoOff;
+  
+  return (
+    <div 
+      className={`relative bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden group ${
+        isPinned ? "h-full" : isSidebar ? "h-24 md:h-32" : "aspect-video"
+      } ${video.isSpeaking ? "ring-2 ring-green-500" : ""}`}
+    >
+      <video
+        ref={videoElementRef}
+        autoPlay
+        playsInline
+        muted={video.isLocal}
+        className="w-full h-full object-cover"
+      />
+      
+      {!shouldShowVideo && (
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-100 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
+          <div className="text-center px-2">
+            <div className="w-12 h-12 md:w-16 md:h-16 mx-auto rounded-full bg-indigo-500/20 dark:bg-indigo-500/30 flex items-center justify-center mb-1 md:mb-2">
+              <span className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                {video.name?.charAt(0) || "U"}
+              </span>
+            </div>
+            <p className="text-gray-800 dark:text-white text-xs md:text-sm font-medium truncate max-w-[100px] md:max-w-[150px]">
+              {video.name}{video.isLocal && " (You)"}
+            </p>
+            {video.isVideoOff && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Camera off</p>}
+            {!hasValidStream && !video.isLocal && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Waiting for video...</p>}
+          </div>
+        </div>
+      )}
+      
+      {/* Overlay */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 md:p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1 md:gap-2">
+            <span className="text-white text-xs md:text-sm font-medium truncate max-w-[80px] md:max-w-[150px]">
+              {video.name}{video.isLocal && " (You)"}
+            </span>
+            {video.role === "lecturer" && (
+              <span className="px-1 md:px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] md:text-xs">Host</span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {video.isMuted && <MicOff className="h-3 w-3 md:h-4 md:w-4 text-red-400" />}
+            {video.isVideoOff && <VideoOff className="h-3 w-3 md:h-4 md:w-4 text-red-400" />}
+          </div>
+        </div>
+      </div>
+      
+      {!video.isLocal && !isSidebar && (
+        <button 
+          onClick={() => setPinnedVideo(pinnedVideo === video.id ? null : video.id)} 
+          className="absolute top-2 right-2 p-1 md:p-1.5 rounded-lg bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <Pin className={`h-2 w-2 md:h-3 md:w-3 ${pinnedVideo === video.id ? "text-indigo-400 fill-indigo-400" : "text-white"}`} />
+        </button>
+      )}
+    </div>
+  );
+});
+
+// VideoGrid Component - Moved outside to avoid circular dependency
+const VideoGridComponent = memo(({ layout, pinnedVideo, setPinnedVideo, currentUser, participants, 
+  isMuted, isVideoOff, speakingUsers, userMediaStreamRef, localStreamReady, videoRefs, 
+  remoteStreamsReady, setRemoteStreamsReady }) => {
+  
+  const getVideoParticipants = useCallback(() => {
+    const allVideos = [];
+    
+    // Add local user
+    allVideos.push({
+      id: currentUser?._id,
+      name: currentUser?.name,
+      remoteStream: userMediaStreamRef.current,
+      isLocal: true,
+      role: currentUser?.role,
+      isMuted: isMuted,
+      isVideoOff: isVideoOff,
+      isSpeaking: speakingUsers[currentUser?._id]
+    });
+    
+    // Add remote participants
+    participants
+      .filter(p => p.userId?._id !== currentUser?._id && p.active && !p.leftAt)
+      .forEach(p => {
+        allVideos.push({
+          id: p.userId._id,
+          name: p.userId.name,
+          remoteStream: p.remoteStream,
+          isLocal: false,
+          role: p.role,
+          isMuted: !p.audioEnabled,
+          isVideoOff: !p.videoEnabled,
+          isSpeaking: speakingUsers[p.userId._id]
+        });
+      });
+    
+    if (pinnedVideo) {
+      const pinned = allVideos.find(v => v.id === pinnedVideo);
+      const others = allVideos.filter(v => v.id !== pinnedVideo);
+      return { pinned, others };
+    }
+    return { pinned: null, others: allVideos };
+  }, [currentUser, participants, isMuted, isVideoOff, speakingUsers, pinnedVideo, userMediaStreamRef]);
+  
+  const { pinned, others } = getVideoParticipants();
+  
+  if (layout === "speaker" && others.length > 0) {
+    const mainSpeaker = pinned || others.find(v => v.role === "lecturer") || others[0];
+    const sidebarVideos = others.filter(v => v.id !== mainSpeaker?.id);
+    
+    return (
+      <div className="flex flex-col md:flex-row h-full gap-2 md:gap-4">
+        <div className="flex-1 min-h-0">
+          {mainSpeaker && (
+            <VideoTile 
+              video={mainSpeaker} 
+              isPinned 
+              userMediaStreamRef={userMediaStreamRef}
+              localStreamReady={localStreamReady}
+              videoRefs={videoRefs}
+              remoteStreamsReady={remoteStreamsReady}
+              setRemoteStreamsReady={setRemoteStreamsReady}
+              pinnedVideo={pinnedVideo}
+              setPinnedVideo={setPinnedVideo}
+            />
+          )}
+        </div>
+        {sidebarVideos.length > 0 && (
+          <div className="flex md:flex-col gap-2 md:gap-3 overflow-x-auto md:overflow-y-auto md:w-32 lg:w-48 p-2">
+            {sidebarVideos.map(video => (
+              <VideoTile 
+                key={video.id} 
+                video={video} 
+                isSidebar 
+                userMediaStreamRef={userMediaStreamRef}
+                localStreamReady={localStreamReady}
+                videoRefs={videoRefs}
+                remoteStreamsReady={remoteStreamsReady}
+                setRemoteStreamsReady={setRemoteStreamsReady}
+                pinnedVideo={pinnedVideo}
+                setPinnedVideo={setPinnedVideo}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+  const count = others.length;
+  const getGridCols = () => {
+    if (count <= 1) return "grid-cols-1";
+    if (count === 2) return "grid-cols-2";
+    if (count <= 4) return "grid-cols-2";
+    if (count <= 6) return "grid-cols-2 md:grid-cols-3";
+    return "grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
+  };
+  
+  return (
+    <div className={`grid ${getGridCols()} gap-2 md:gap-4 h-full auto-rows-fr overflow-y-auto p-1 md:p-2`}>
+      {others.map(video => (
+        <VideoTile 
+          key={video.id} 
+          video={video} 
+          userMediaStreamRef={userMediaStreamRef}
+          localStreamReady={localStreamReady}
+          videoRefs={videoRefs}
+          remoteStreamsReady={remoteStreamsReady}
+          setRemoteStreamsReady={setRemoteStreamsReady}
+          pinnedVideo={pinnedVideo}
+          setPinnedVideo={setPinnedVideo}
+        />
+      ))}
+    </div>
+  );
+});
 
 export default LiveClassRoom;
