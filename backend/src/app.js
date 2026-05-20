@@ -32,6 +32,7 @@ import liveClassRoutes from "./routes/liveClassRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import aiPlanRoutes from "./routes/aiPlanRoutes.js";
 import aiSubscriptionRoutes from "./routes/aiSubscriptionRoutes.js";
+import programRoutes from "./routes/programRoutes.js";
 
 const app = express();
 
@@ -123,6 +124,7 @@ app.use("/api/live-class", liveClassRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/ai-subscriptions", aiSubscriptionRoutes);
 app.use("/api/ai-plans", aiPlanRoutes);
+app.use("/api/programs", programRoutes);
 
 // ================= HEALTH CHECK =================
 app.get("/", (req, res) => {

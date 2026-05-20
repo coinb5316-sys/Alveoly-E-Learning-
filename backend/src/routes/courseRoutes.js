@@ -1,7 +1,7 @@
-// routes/courseRoutes.js
 import express from "express";
 import {
   getCourses,
+  getCoursesByProgram,
   createCourse,
   updateCourse,
   deleteCourse,
@@ -10,9 +10,8 @@ import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.get("/", getCourses);
-// ✅ Allow authenticated users (including lecturers) to view courses
 router.get("/", protect, getCourses);
+router.get("/program/:programId", protect, getCoursesByProgram);
 router.post("/", protect, adminOnly, createCourse);
 router.put("/:id", protect, adminOnly, updateCourse);
 router.delete("/:id", protect, adminOnly, deleteCourse);

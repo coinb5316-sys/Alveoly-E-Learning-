@@ -80,6 +80,7 @@ import AIAdmin from "./pages/AIAdmin";
 import AIPlansAdmin from "./pages/AIPlansAdmin";
 import AIGenerator from "./pages/AdminAIGeneratorU";
 import AIChat from "./pages/AIChat";
+import AdminPrograms from "./pages/AdminPrograms";
 
 function App() {
   useEffect(() => {
@@ -184,6 +185,7 @@ function App() {
           >
             <Route index element={<AdminDashboard />} />
             <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="programs" element={<AdminPrograms />} />
             <Route path="courses" element={<AdminCourses />} />
             <Route path="subjects" element={<AdminSubjects />} />
             <Route path="questions" element={<AdminQuestions />} />

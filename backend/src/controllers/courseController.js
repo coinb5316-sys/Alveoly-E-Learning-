@@ -1,11 +1,13 @@
-// controllers/courseController.js
 import Course from "../models/Course.js";
+import Program from "../models/Program.js";
 import { io } from "../../server.js";
 
-// GET ALL COURSES (for signup + admin)
+// GET ALL COURSES (with program populated)
 export const getCourses = async (req, res) => {
   try {
-    const courses = await Course.find().sort({ createdAt: -1 });
+    const courses = await Course.find()
+      .populate("programId", "name code")
+      .sort({ createdAt: -1 });
     res.json(courses);
   } catch (error) {
     console.error("Get Courses Error:", error);
@@ -13,22 +15,50 @@ export const getCourses = async (req, res) => {
   }
 };
 
+// GET COURSES BY PROGRAM
+export const getCoursesByProgram = async (req, res) => {
+  try {
+    const { programId } = req.params;
+    const courses = await Course.find({ programId })
+      .populate("programId", "name code")
+      .sort({ createdAt: -1 });
+    res.json(courses);
+  } catch (error) {
+    console.error("Get Courses By Program Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 // CREATE COURSE
 export const createCourse = async (req, res) => {
   try {
-    if (!req.body.name) {
+    const { name, programId } = req.body;
+
+    if (!name) {
       return res.status(400).json({ message: "Course name is required" });
     }
 
+    if (!programId) {
+      return res.status(400).json({ message: "Program is required" });
+    }
+
+    // Verify program exists
+    const program = await Program.findById(programId);
+    if (!program) {
+      return res.status(400).json({ message: "Invalid program selected" });
+    }
+
     const course = await Course.create({
-      name: req.body.name,
+      name,
+      programId,
       createdBy: req.user.id,
     });
 
-    // Emit event to all connected clients
-    io.emit("course:created", course);
+    const populatedCourse = await Course.findById(course._id).populate("programId", "name code");
 
-    res.status(201).json(course);
+    io.emit("course:created", populatedCourse);
+
+    res.status(201).json(populatedCourse);
   } catch (error) {
     console.error("Create Course Error:", error);
     res.status(500).json({ message: "Server Error" });
@@ -43,12 +73,22 @@ export const updateCourse = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    if (req.body.programId) {
+      const program = await Program.findById(req.body.programId);
+      if (!program) {
+        return res.status(400).json({ message: "Invalid program selected" });
+      }
+      course.programId = req.body.programId;
+    }
+
     course.name = req.body.name || course.name;
     const updated = await course.save();
 
-    io.emit("course:updated", updated);
+    const populatedUpdated = await Course.findById(updated._id).populate("programId", "name code");
 
-    res.json(updated);
+    io.emit("course:updated", populatedUpdated);
+
+    res.json(populatedUpdated);
   } catch (error) {
     console.error("Update Course Error:", error);
     res.status(500).json({ message: "Server Error" });
