@@ -1,29 +1,39 @@
+// routes/authRoutes.js - Updated with Program support
 import express from "express";
 import {
   register,
   login,
   assignCourse,
+  assignProgram,
   getMyInfo,
   resetPassword,
   forgotPassword,
   googleLogin,
   registerLecturer,
+  updateActivity,
 } from "../controllers/authController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// EMAIL AUTH
+// ================= EMAIL AUTH =================
 router.post("/register", register);
-// In authRoutes.js
-router.post("/register-lecturer", protect, adminOnly, registerLecturer);
 router.post("/login", login);
-router.put("/me/course", protect, assignCourse);
+
+// ================= GOOGLE LOGIN (frontend sends idToken) =================
+router.post("/google-login", googleLogin);
+
+// ================= USER MANAGEMENT =================
 router.get("/me", protect, getMyInfo);
+router.put("/me/course", protect, assignCourse);
+router.put("/me/program", protect, assignProgram);  // NEW: Assign program to user
+router.put("/me/activity", protect, updateActivity);
+
+// ================= PASSWORD RESET =================
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
 
-// GOOGLE LOGIN (frontend sends idToken)
-router.post("/google-login", googleLogin);
+// ================= LECTURER MANAGEMENT (Admin only) =================
+router.post("/register-lecturer", protect, adminOnly, registerLecturer);
 
 export default router;

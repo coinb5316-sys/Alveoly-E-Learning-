@@ -13,7 +13,7 @@ import Admissions from "./pages/Admissions";
 import Contact from "./pages/Contact";
 import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
-import SelectCoursePage from "./pages/SelectCoursePage";
+import SelectProgramPage from "./pages/SelectProgramPage";
 import ProtectedRoute from "./components/ProtectedRoutes";
 import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -143,7 +143,7 @@ function App() {
             path="/select-course"
             element={
               <ProtectedRoute role="student">
-                <SelectCoursePage />
+                <SelectProgramPage />
               </ProtectedRoute>
             }
           />

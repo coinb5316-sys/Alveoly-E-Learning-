@@ -1,4 +1,4 @@
-// models/User.js - Updated with lecturer role
+// models/User.js - Updated with programId and lecturer role
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -19,12 +19,20 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
     },
+    avatar: {
+      type: String,
+      default: ""
+    },
 
-    // ================= ROLE & COURSE =================
+    // ================= ROLE, PROGRAM & COURSE =================
     role: {
       type: String,
-      enum: ["student", "admin", "lecturer"], // Added "lecturer"
+      enum: ["student", "admin", "lecturer"],
       default: "student",
+    },
+    programId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Program",
     },
     courseId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -34,7 +42,7 @@ const userSchema = new mongoose.Schema(
     // ================= LECTURER SPECIFIC FIELDS =================
     lecturerInfo: {
       department: { type: String, default: "" },
-      title: { type: String, default: "" }, // Dr., Prof., Mr., Mrs.
+      title: { type: String, default: "" },
       specialization: { type: String, default: "" },
       bio: { type: String, default: "" },
       assignedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Subject" }],
@@ -108,6 +116,7 @@ const userSchema = new mongoose.Schema(
 // ================= INDEXES =================
 userSchema.index({ email: 1 });
 userSchema.index({ role: 1 });
+userSchema.index({ programId: 1 });
 userSchema.index({ lastLoginAt: -1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ isActive: 1 });

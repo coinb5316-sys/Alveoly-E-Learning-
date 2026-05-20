@@ -1,14 +1,13 @@
-// controllers/authController.js - SIMPLIFIED VERSION
+// controllers/authController.js - Updated with Program support
 import User from "../models/User.js";
+import Program from "../models/Program.js";
 import bcrypt from "bcryptjs";
 import generateToken from "../utils/generateToken.js";
 import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { createNotification } from "./notificationController.js";
 
-// Use the same client ID for all environments (simpler)
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // ================= GOOGLE LOGIN =================
@@ -19,9 +18,6 @@ export const googleLogin = async (req, res) => {
     if (!idToken) {
       return res.status(400).json({ message: "Google token required" });
     }
-
-    console.log("Google login attempt - Client ID used:", GOOGLE_CLIENT_ID);
-    console.log("Request origin:", req.headers.origin);
 
     const ticket = await client.verifyIdToken({
       idToken,
@@ -81,9 +77,9 @@ export const googleLogin = async (req, res) => {
     await user.save();
 
     const token = generateToken(user, user.activeSession);
-    const requiresCourse = !user.courseId;
+    const requiresProgram = !user.programId && !user.courseId;
 
-    res.json({ token, user, requiresCourse });
+    res.json({ token, user, requiresProgram });
   } catch (err) {
     console.error("GOOGLE LOGIN ERROR:", err);
     res.status(401).json({ 
@@ -93,25 +89,33 @@ export const googleLogin = async (req, res) => {
   }
 };
 
-// Rest of your functions remain the same...
-
-
 // ================= EMAIL/PASSWORD REGISTER =================
 export const register = async (req, res) => {
   try {
-    const { name, email, password, courseId } = req.body;
-    if (!name || !email || !password || !courseId)
+    const { name, email, password, programId, courseId } = req.body;
+    
+    if (!name || !email || !password) {
       return res.status(400).json({ message: "All fields required" });
+    }
 
     const userExists = await User.findOne({ email });
     if (userExists) return res.status(400).json({ message: "User already exists" });
+
+    // If programId is provided, verify it exists and is active
+    if (programId) {
+      const program = await Program.findById(programId);
+      if (!program || program.isActive === false) {
+        return res.status(400).json({ message: "Invalid or inactive program selected" });
+      }
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({ 
       name, 
       email, 
-      password: hashedPassword, 
-      courseId,
+      password: hashedPassword,
+      programId: programId || null,
+      courseId: courseId || null,
       lastLoginAt: new Date(),
       lastActivityAt: new Date()
     });
@@ -141,7 +145,7 @@ export const register = async (req, res) => {
       );
     }
 
-    // Record login with IP and device info
+    // Record login info
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
     const deviceInfo = req.headers['user-agent'];
     
@@ -154,113 +158,57 @@ export const register = async (req, res) => {
     
     await user.save();
 
-    res.status(201).json({ token: generateToken(user, user.activeSession), user });
+    res.status(201).json({ 
+      token: generateToken(user, user.activeSession), 
+      user,
+      requiresProgram: !user.programId && !user.courseId
+    });
   } catch (err) {
     console.error("REGISTER ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-
-// Add to authController.js
-export const registerLecturer = async (req, res) => {
+// ================= ASSIGN PROGRAM (NEW) =================
+export const assignProgram = async (req, res) => {
   try {
-    const { name, email, password, department, title, specialization } = req.body;
+    const { programId } = req.body;
     
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Name, email, and password are required" });
+    if (!programId) {
+      return res.status(400).json({ message: "Program is required" });
     }
-    
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(400).json({ message: "User already exists with this email" });
+
+    // Verify program exists and is active
+    const program = await Program.findById(programId);
+    if (!program || program.isActive === false) {
+      return res.status(400).json({ message: "Invalid or inactive program selected" });
     }
-    
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    const user = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      role: "lecturer",
-      lecturerInfo: {
-        department: department || "",
-        title: title || "",
-        specialization: specialization || "",
-        isActive: true,
-        hireDate: new Date()
-      }
-    });
-    
-    // Send welcome notification
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { programId },
+      { new: true }
+    ).populate("programId", "name code");
+
+    // Notify user about program assignment
     await createNotification(
       user._id,
-      "lecturer",
+      "student",
       "success",
-      "Welcome to Alveoly! 🎉",
-      `Welcome ${name}! You have been added as a lecturer.`,
-      "/lecturer/dashboard",
-      { action: "welcome" }
+      "Program Assigned! 📚",
+      `You have been enrolled in ${user.programId?.name || "a new program"}.`,
+      "/student/courses",
+      { programId, action: "program_assigned" }
     );
-    
-    res.status(201).json({
-      success: true,
-      message: "Lecturer created successfully",
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    });
+
+    res.json(user);
   } catch (err) {
-    console.error("Register lecturer error:", err);
-    res.status(500).json({ message: err.message });
-  }
-};
-
-// ================= EMAIL/PASSWORD LOGIN =================
-export const login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password)
-      return res.status(400).json({ message: "Email & password required" });
-
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(400).json({ message: "Invalid credentials" });
-
-    if (!user.password)
-      return res.status(400).json({ message: "Please login with Google" });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(400).json({ message: "Invalid credentials" });
-
-    // Record login with IP and device info
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
-    const deviceInfo = req.headers['user-agent'];
-    
-    user.lastLoginAt = new Date();
-    user.lastActivityAt = new Date();
-    user.loginCount += 1;
-    user.lastLoginIP = ip;
-    user.deviceInfo = deviceInfo;
-    user.activeSession = crypto.randomBytes(16).toString("hex");
-
-    await user.save();
-
-    const token = generateToken(user, user.activeSession);
-
-    res.json({ token, user });
-  } catch (err) {
-    console.error("LOGIN ERROR:", err);
+    console.error("ASSIGN PROGRAM ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ================= ASSIGN COURSE =================
+// ================= ASSIGN COURSE (Updated with program check) =================
 export const assignCourse = async (req, res) => {
   try {
     const { courseId } = req.body;
@@ -290,13 +238,56 @@ export const assignCourse = async (req, res) => {
   }
 };
 
+// ================= EMAIL/PASSWORD LOGIN =================
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password)
+      return res.status(400).json({ message: "Email & password required" });
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(400).json({ message: "Invalid credentials" });
+
+    if (!user.password)
+      return res.status(400).json({ message: "Please login with Google" });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(400).json({ message: "Invalid credentials" });
+
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+    const deviceInfo = req.headers['user-agent'];
+    
+    user.lastLoginAt = new Date();
+    user.lastActivityAt = new Date();
+    user.loginCount += 1;
+    user.lastLoginIP = ip;
+    user.deviceInfo = deviceInfo;
+    user.activeSession = crypto.randomBytes(16).toString("hex");
+
+    await user.save();
+
+    const token = generateToken(user, user.activeSession);
+    const requiresProgram = !user.programId && !user.courseId;
+
+    res.json({ token, user, requiresProgram });
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ================= GET CURRENT USER =================
 export const getMyInfo = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).populate("courseId", "_id name");
+    const user = await User.findById(req.user._id)
+      .populate("programId", "name code isActive")
+      .populate("courseId", "_id name");
+    
     if (!user) return res.status(404).json({ message: "User not found" });
     
-    // Update last activity
     user.lastActivityAt = new Date();
     await user.save();
     
@@ -350,7 +341,6 @@ export const resetPassword = async (req, res) => {
     user.resetTokenExpire = undefined;
     await user.save();
 
-    // Notify user about password reset
     await createNotification(
       user._id,
       user.role === "admin" ? "admin" : "student",
@@ -365,6 +355,62 @@ export const resetPassword = async (req, res) => {
   } catch (err) {
     console.error("RESET PASSWORD ERROR:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= REGISTER LECTURER =================
+export const registerLecturer = async (req, res) => {
+  try {
+    const { name, email, password, department, title, specialization } = req.body;
+    
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email, and password are required" });
+    }
+    
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ message: "User already exists with this email" });
+    }
+    
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: "lecturer",
+      lecturerInfo: {
+        department: department || "",
+        title: title || "",
+        specialization: specialization || "",
+        isActive: true,
+        hireDate: new Date()
+      }
+    });
+    
+    await createNotification(
+      user._id,
+      "lecturer",
+      "success",
+      "Welcome to Alveoly! 🎉",
+      `Welcome ${name}! You have been added as a lecturer.`,
+      "/lecturer/dashboard",
+      { action: "welcome" }
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: "Lecturer created successfully",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    console.error("Register lecturer error:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 

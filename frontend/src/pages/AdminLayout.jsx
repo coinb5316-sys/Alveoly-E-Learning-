@@ -122,7 +122,7 @@ const AdminLayout = () => {
       { to: "/admin/lecturers", label: "Lecturers", icon: GraduationCap, color: "text-pink-500" },
       { to: "/admin/content-payment", label: "Content Payment", icon: DollarSign, color: "text-indigo-500" },
       { to: "/admin/plans", label: "Plans", icon: Zap, color: "text-red-500" },
-      { to: "/admin/programs", label: "Programs", icon: Layers, color: "text-teal-500" },
+      { to: "/admin/programs", label: "Programs", icon: BookOpen, color: "text-teal-500" },
       { to: "/admin/courses", label: "Courses", icon: Layers, color: "text-light-blue-500" },
       { to: "/admin/content", label: "Content Library", icon: FileText, color: "text-emerald-500" },
     ]},
