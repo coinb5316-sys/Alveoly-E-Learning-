@@ -1,5 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "../api/axios";
+import { 
+  FaMagic, 
+  FaCopy, 
+  FaFilePdf, 
+  FaTrash, 
+  FaPlus, 
+  FaHistory,
+  FaSpinner,
+  FaCheckCircle,
+  FaRobot,
+  FaBrain,
+  FaLightbulb,
+  FaChevronRight,
+  FaChevronLeft,
+  FaDownload,
+  FaClipboardCheck
+} from "react-icons/fa";
+import toast, { Toaster } from "react-hot-toast";
 
 const AIGenerator = () => {
   const [subject, setSubject] = useState("");
@@ -7,31 +25,47 @@ const AIGenerator = () => {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const [activeId, setActiveId] = useState(null);
-
-  // ✅ NEW (hamburger control)
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const contentRef = useRef(null);
 
-  // ✅ Fetch history from backend
+  // ================= DARK MODE =================
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme");
+    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const isDark = savedTheme === "dark" || (!savedTheme && systemPrefersDark);
+    setDarkMode(isDark);
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, []);
+
+  // ================= FETCH HISTORY =================
   useEffect(() => {
     const fetchHistory = async () => {
       try {
         const res = await axios.get("/ai/history");
         setHistory(res.data);
-
         if (res.data.length > 0) {
           setActiveId(res.data[0]._id);
         }
       } catch (err) {
         console.error(err);
+        toast.error("Failed to load history");
       }
     };
-
     fetchHistory();
   }, []);
 
-  // ✅ Generate questions (saved in backend)
+  // ================= GENERATE QUESTIONS =================
   const handleGenerate = async () => {
-    if (!subject.trim()) return;
+    if (!subject.trim()) {
+      toast.error("Please enter a subject");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -43,21 +77,30 @@ const AIGenerator = () => {
       setHistory((prev) => [res.data, ...prev]);
       setActiveId(res.data._id);
       setSubject("");
+      toast.success(`Generated ${count} questions successfully!`);
     } catch (err) {
       console.error(err);
+      toast.error(err.response?.data?.message || "Generation failed");
     }
     setLoading(false);
   };
 
   const activeItem = history.find((item) => item._id === activeId);
 
-  // ✅ Copy
-  const handleCopy = () => {
+  // ================= COPY TO CLIPBOARD =================
+  const handleCopy = async () => {
     if (!activeItem) return;
-    navigator.clipboard.writeText(activeItem.result);
+    try {
+      await navigator.clipboard.writeText(activeItem.result);
+      setCopied(true);
+      toast.success("Copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast.error("Failed to copy");
+    }
   };
 
-  // ✅ PDF Export
+  // ================= PDF EXPORT =================
   const handleDownloadPDF = () => {
     if (!activeItem) return;
 
@@ -65,217 +108,410 @@ const AIGenerator = () => {
     win.document.write(`
       <html>
         <head>
-          <title>${activeItem.subject}</title>
+          <title>${activeItem.subject} - AI Generated Questions</title>
           <style>
-            body { font-family: Arial; padding: 30px; }
-            h2 { margin-bottom: 20px; }
-            pre { white-space: pre-wrap; font-size: 14px; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Segoe UI', Arial, sans-serif; 
+              padding: 40px; 
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              min-height: 100vh;
+            }
+            .container {
+              max-width: 900px;
+              margin: 0 auto;
+              background: white;
+              border-radius: 20px;
+              padding: 40px;
+              box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            }
+            h1 { 
+              color: #4f46e5; 
+              margin-bottom: 10px;
+              font-size: 28px;
+            }
+            .subject-badge {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              padding: 8px 16px;
+              border-radius: 50px;
+              display: inline-block;
+              margin-bottom: 30px;
+              font-size: 14px;
+            }
+            pre { 
+              white-space: pre-wrap; 
+              font-size: 14px; 
+              line-height: 1.6;
+              font-family: 'Segoe UI', Arial, sans-serif;
+              background: #f8fafc;
+              padding: 20px;
+              border-radius: 12px;
+              border-left: 4px solid #4f46e5;
+            }
+            .footer {
+              margin-top: 30px;
+              text-align: center;
+              color: #94a3b8;
+              font-size: 12px;
+            }
           </style>
         </head>
         <body>
-          <h2>${activeItem.subject}</h2>
-          <pre>${activeItem.result}</pre>
+          <div class="container">
+            <h1>🤖 AI Generated Questions</h1>
+            <div class="subject-badge">📚 ${activeItem.subject}</div>
+            <pre>${activeItem.result}</pre>
+            <div class="footer">Generated by Alveoly AI • ${new Date().toLocaleDateString()}</div>
+          </div>
         </body>
       </html>
     `);
+    win.document.close();
     win.print();
   };
 
-  // ✅ Delete from backend
+  // ================= DELETE HISTORY ITEM =================
   const handleDelete = async (id) => {
     try {
       await axios.delete(`/ai/history/${id}`);
       setHistory((prev) => prev.filter((item) => item._id !== id));
-
       if (activeId === id) {
-        setActiveId(null);
+        setActiveId(history.length > 1 ? history[0]._id : null);
       }
+      toast.success("Deleted successfully");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to delete");
     }
   };
 
+  // ================= NEW GENERATION =================
+  const handleNewGeneration = () => {
+    setSubject("");
+    setCount(5);
+    document.getElementById("subject-input")?.focus();
+  };
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now - date;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days === 0) return "Today";
+    if (days === 1) return "Yesterday";
+    if (days < 7) return `${days} days ago`;
+    return date.toLocaleDateString();
+  };
+
   return (
-  <div className="flex h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 overflow-hidden">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 overflow-hidden">
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "#fff",
+            borderRadius: "16px",
+          },
+        }}
+      />
 
-    {/* MOBILE SIDEBAR */}
-    {sidebarOpen && (
-      <div className="fixed inset-0 z-40 flex">
-        <div className="w-72 max-w-[85%] bg-white/90 backdrop-blur-xl h-full shadow-2xl p-4">
-          <div className="flex justify-between mb-4">
-            <h3 className="font-bold text-gray-700">History</h3>
-            <button onClick={() => setSidebarOpen(false)}>✕</button>
+      {/* MOBILE SIDEBAR */}
+      {sidebarOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="fixed left-0 top-0 z-50 w-80 h-full bg-white dark:bg-slate-900 shadow-2xl animate-in slide-in-from-left duration-300">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                    <FaHistory className="text-white text-sm" />
+                  </div>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Generation History</span>
+                </div>
+                <button 
+                  onClick={() => setSidebarOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {history.length === 0 ? (
+                <div className="text-center py-12">
+                  <FaMagic className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
+                  <p className="text-sm text-slate-500 dark:text-slate-400">No history yet</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Generate your first set</p>
+                </div>
+              ) : (
+                history.map((item) => (
+                  <div
+                    key={item._id}
+                    onClick={() => {
+                      setActiveId(item._id);
+                      setSidebarOpen(false);
+                    }}
+                    className={`group p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                      activeId === item._id
+                        ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200 dark:border-indigo-800"
+                        : "hover:bg-slate-100 dark:hover:bg-slate-800/50"
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                      {item.subject}
+                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        {formatDate(item.createdAt)}
+                      </p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(item._id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
+                      >
+                        <FaTrash className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
+        </>
+      )}
 
-          <div className="space-y-2 overflow-y-auto">
-            {history.map((item) => (
+      {/* DESKTOP SIDEBAR */}
+      <div className="hidden md:flex w-80 flex-col border-r border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+              <FaMagic className="text-white text-lg" />
+            </div>
+            <div>
+              <h2 className="font-bold text-slate-900 dark:text-white text-lg">AI Generator</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Smart Question Generator</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {history.length === 0 ? (
+            <div className="text-center py-12">
+              <FaBrain className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">No history yet</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Generate your first set</p>
+            </div>
+          ) : (
+            history.map((item) => (
               <div
                 key={item._id}
-                onClick={() => {
-                  setActiveId(item._id);
-                  setSidebarOpen(false);
-                }}
-                className="p-3 rounded-xl hover:bg-gray-100 cursor-pointer text-sm transition"
+                onClick={() => setActiveId(item._id)}
+                className={`group p-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                  activeId === item._id
+                    ? "bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border border-indigo-200 dark:border-indigo-800 shadow-md"
+                    : "hover:bg-slate-100 dark:hover:bg-slate-800/50"
+                }`}
               >
-                {item.subject}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                      {item.subject}
+                    </p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                      {formatDate(item.createdAt)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(item._id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1"
+                  >
+                    <FaTrash className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </div>
 
-        <div
-          className="flex-1 bg-black/40"
-          onClick={() => setSidebarOpen(false)}
-        />
+        {/* New Generation Button */}
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+          <button
+            onClick={handleNewGeneration}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium transition-all shadow-lg hover:shadow-xl"
+          >
+            <FaPlus className="w-4 h-4" />
+            New Generation
+          </button>
+        </div>
       </div>
-    )}
 
-    {/* DESKTOP SIDEBAR */}
-    <div className="hidden md:flex md:w-72 flex-col border-r bg-white/80 backdrop-blur-xl">
-      <div className="p-5 border-b font-bold text-gray-700 text-lg">
-        AI Generator ✨
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {history.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center mt-6">
-            No history yet
-          </p>
-        ) : (
-          history.map((item) => (
-            <div
-              key={item._id}
-              onClick={() => setActiveId(item._id)}
-              className={`group p-3 rounded-xl cursor-pointer transition ${
-                activeId === item._id
-                  ? "bg-gradient-to-r from-indigo-100 to-purple-100"
-                  : "hover:bg-gray-100"
-              }`}
+      {/* MAIN CONTENT */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* HEADER */}
+        <div className="sticky top-0 z-30 backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex justify-between items-center shadow-sm">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
-              <p className="truncate text-sm font-medium">
-                {item.subject}
-              </p>
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
 
+            <div className="flex items-center gap-2 md:hidden">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <FaMagic className="text-white text-sm" />
+              </div>
+              <h2 className="font-bold text-slate-900 dark:text-white">AI Generator</h2>
+            </div>
+          </div>
+
+          {activeItem && (
+            <div className="flex gap-2">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(item._id);
-                }}
-                className="text-red-500 text-xs mt-1 opacity-0 group-hover:opacity-100 transition"
+                onClick={handleCopy}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-medium transition-all shadow-md hover:shadow-lg"
               >
-                Delete
+                {copied ? <FaClipboardCheck className="w-3 h-3" /> : <FaCopy className="w-3 h-3" />}
+                {copied ? "Copied!" : "Copy"}
+              </button>
+              <button
+                onClick={handleDownloadPDF}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-xs font-medium transition-all shadow-md hover:shadow-lg"
+              >
+                <FaFilePdf className="w-3 h-3" />
+                PDF
               </button>
             </div>
-          ))
-        )}
-      </div>
-    </div>
-
-    {/* MAIN */}
-    <div className="flex-1 flex flex-col">
-
-      {/* HEADER */}
-      <div className="sticky top-0 z-30 backdrop-blur bg-white/70 border-b px-3 sm:px-4 py-3 flex justify-between items-center shadow-sm">
-        
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="md:hidden text-gray-600 text-xl"
-          >
-            ☰
-          </button>
-
-          <h2 className="font-bold text-gray-800 text-sm sm:text-lg">
-            AI Generator 🤖
-          </h2>
+          )}
         </div>
 
-        {activeItem && (
-          <div className="flex gap-1 sm:gap-2">
-            <button
-              onClick={handleCopy}
-              className="px-2 sm:px-3 py-1 text-[10px] sm:text-xs bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-full shadow"
-            >
-              Copy
-            </button>
-
-            <button
-              onClick={handleDownloadPDF}
-              className="px-2 sm:px-3 py-1 text-[10px] sm:text-xs bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-full shadow"
-            >
-              PDF
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* CONTENT */}
-      <div className="flex-1 overflow-y-auto px-2 sm:px-4 py-4 sm:py-6">
-
-        {loading ? (
-          <div className="flex justify-center mt-20">
-            <div className="flex gap-1">
-              <span className="w-2 h-2 sm:w-3 sm:h-3 bg-gray-400 rounded-full animate-bounce"></span>
-              <span className="w-2 h-2 sm:w-3 sm:h-3 bg-gray-400 rounded-full animate-bounce delay-150"></span>
-              <span className="w-2 h-2 sm:w-3 sm:h-3 bg-gray-400 rounded-full animate-bounce delay-300"></span>
+        {/* CONTENT AREA */}
+        <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center h-full">
+              <div className="relative">
+                <div className="w-16 h-16 border-4 border-slate-200 dark:border-slate-700 border-t-indigo-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <FaBrain className="w-6 h-6 text-indigo-500 animate-pulse" />
+                </div>
+              </div>
+              <p className="mt-4 text-slate-500 dark:text-slate-400 font-medium">Generating questions...</p>
+              <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">AI is working its magic</p>
             </div>
-          </div>
-        ) : activeItem ? (
+          ) : activeItem ? (
+            <div className="max-w-4xl mx-auto">
+              {/* Subject Header */}
+              <div className="mb-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-indigo-100 to-purple-100 dark:from-indigo-950/50 dark:to-purple-950/50 text-indigo-700 dark:text-indigo-400 text-sm font-medium mb-3">
+                  <FaLightbulb className="w-3 h-3" />
+                  Generated Questions
+                </div>
+                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
+                  {activeItem.subject}
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Generated on {new Date(activeItem.createdAt).toLocaleDateString()}
+                </p>
+              </div>
 
-          <div className="w-full max-w-full sm:max-w-2xl md:max-w-3xl mx-auto flex items-center gap-2 overflow-hidden">
+              {/* Content Card */}
+              <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="p-6 md:p-8">
+                  <pre className="whitespace-pre-wrap break-words text-sm md:text-base text-slate-700 dark:text-slate-300 leading-relaxed font-sans">
+                    {activeItem.result}
+                  </pre>
+                </div>
+              </div>
 
-            <h3 className="text-sm sm:text-lg font-bold mb-3 sm:mb-4 text-gray-800">
-              {activeItem.subject}
-            </h3>
-
-            {/* 🔥 FIXED MOBILE OVERFLOW */}
-            <div className="overflow-x-auto">
-              <pre className="whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed text-gray-700">
-                {activeItem.result}
-              </pre>
+              {/* Action Buttons Bottom */}
+              <div className="flex gap-3 mt-6 justify-end">
+                <button
+                  onClick={handleCopy}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                >
+                  <FaCopy className="w-4 h-4" />
+                  Copy Text
+                </button>
+                <button
+                  onClick={handleDownloadPDF}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all shadow-md"
+                >
+                  <FaDownload className="w-4 h-4" />
+                  Download PDF
+                </button>
+              </div>
             </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-950/50 dark:to-purple-950/50 flex items-center justify-center mb-6">
+                <FaRobot className="w-12 h-12 text-indigo-500" />
+              </div>
+              <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Welcome to AI Question Generator
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400 max-w-md mb-6">
+                Enter a subject and number of questions below to generate custom practice questions powered by AI.
+              </p>
+              <div className="flex gap-2">
+                <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">📚 Nursing</span>
+                <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">💊 Pharmacology</span>
+                <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">🫀 Anatomy</span>
+              </div>
+            </div>
+          )}
+        </div>
 
+        {/* INPUT AREA */}
+        <div className="border-t border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-4 py-4 sticky bottom-0 z-20">
+          <div className="max-w-4xl mx-auto flex items-center gap-3">
+            <input
+              id="subject-input"
+              type="text"
+              placeholder="Enter subject..."
+              className="flex-1 h-12 px-5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-base focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+            />
+            <input
+              type="number"
+              min="1"
+              max="20"
+              className="w-20 h-12 px-3 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-center text-base focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all shadow-sm"
+              value={count}
+              onChange={(e) => setCount(Math.min(20, Math.max(1, parseInt(e.target.value) || 5)))}
+            />
+            <button
+              onClick={handleGenerate}
+              disabled={loading || !subject.trim()}
+              className="h-12 px-6 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:hover:shadow-lg flex items-center gap-2"
+            >
+              {loading ? <FaSpinner className="animate-spin w-4 h-4" /> : <FaMagic className="w-4 h-4" />}
+              Generate
+            </button>
           </div>
-
-        ) : (
-          <div className="text-center text-gray-400 mt-20 text-sm">
-            Start by generating a question set 👇
-          </div>
-        )}
-      </div>
-
-      {/* INPUT */}
-      <div className="border-t bg-white/80 backdrop-blur px-2 sm:px-4 py-3 sticky bottom-0 z-20">
-        <div className="w-full max-w-full sm:max-w-2xl md:max-w-3xl mx-auto flex items-center gap-2">
-
-          <input
-  type="text"
-  placeholder="Enter subject..."
-  className="flex-1 h-10 sm:h-11 border border-gray-300 rounded-full px-3 sm:px-4 text-[16px] sm:text-sm focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all duration-200"
-  value={subject}
-  onChange={(e) => setSubject(e.target.value)}
-  onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-/>
-
-<input
-  type="number"
-  className="w-14 sm:w-20 h-10 sm:h-11 border border-gray-300 rounded-full px-2 sm:px-3 text-[16px] sm:text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all duration-200"
-  value={count}
-  onChange={(e) => setCount(e.target.value)}
-/>
-
-          <button
-            onClick={handleGenerate}
-            className="h-10 sm:h-11 px-3 sm:px-5 text-xs sm:text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-md"
-          >
-            {loading ? "..." : "Go"}
-          </button>
+          <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-3">
+            AI generates up to {count} practice questions based on your subject
+          </p>
         </div>
       </div>
-
     </div>
-  </div>
-);
+  );
 };
 
 export default AIGenerator;

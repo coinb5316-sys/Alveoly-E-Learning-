@@ -6,6 +6,10 @@ import {
   FaArrowLeft,
   FaArrowRight,
   FaCheck,
+  FaClock,
+  FaChartLine,
+  FaTrophy,
+  FaLightbulb,
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { useParams, useNavigate } from "react-router-dom";
@@ -31,10 +35,7 @@ const StudentTrial = () => {
 
   // ================= INITIALIZE SOCKET =================
   useEffect(() => {
-    // Initialize socket connection
     const socket = initializeSocket();
-    
-    // Cleanup on unmount
     return () => {
       if (socket) {
         socket.disconnect();
@@ -178,14 +179,27 @@ Explain the correct answer like a nursing tutor.
     }
   };
 
-  // ================= CALCULATE SCORE =================
+  // ================= CALCULATE SCORE (FIXED - compares text content) =================
   const calculateScore = () => {
     let correct = 0;
     questions.forEach((q) => {
-      const userAnswer = answers[q._id];
-      const correctAnswer = q.correctAnswer;
+      const userAnswerLetter = answers[q._id];
+      if (!userAnswerLetter) return;
       
-      if (userAnswer && correctAnswer && userAnswer === correctAnswer) {
+      // Get the text of the user's answer from options
+      const userAnswerText = q.options[userAnswerLetter.charCodeAt(0) - 65];
+      
+      // Get correct answer and clean it
+      let correctAnswerText = q.correctAnswer || '';
+      
+      // Remove any letter prefix (A., B-, C) etc.)
+      correctAnswerText = correctAnswerText.replace(/^[A-D]\s*[-.:)]?\s*/i, '');
+      
+      // Clean both for comparison
+      const cleanedUser = userAnswerText?.toLowerCase().trim() || '';
+      const cleanedCorrect = correctAnswerText?.toLowerCase().trim() || '';
+      
+      if (cleanedUser && cleanedCorrect && cleanedUser === cleanedCorrect) {
         correct++;
       }
     });
@@ -196,59 +210,86 @@ Explain the correct answer like a nursing tutor.
   const percentage = questions.length ? Math.round((score / questions.length) * 100) : 0;
 
   const getColor = () => {
-    if (percentage >= 80) return "text-green-600 dark:text-green-400";
-    if (percentage >= 50) return "text-yellow-500 dark:text-yellow-400";
-    return "text-red-500 dark:text-red-400";
+    if (percentage >= 80) return "text-emerald-600 dark:text-emerald-400";
+    if (percentage >= 50) return "text-amber-500 dark:text-amber-400";
+    return "text-rose-500 dark:text-rose-400";
+  };
+
+  const getPerformanceText = () => {
+    if (percentage >= 90) return "Outstanding! You're a star! 🌟";
+    if (percentage >= 80) return "Excellent! Great job! 🎯";
+    if (percentage >= 70) return "Very Good! Keep pushing! 💪";
+    if (percentage >= 60) return "Good! You're on the right track! 📈";
+    if (percentage >= 50) return "Satisfactory! Review and improve! 📚";
+    if (percentage >= 30) return "Needs Improvement! Keep practicing! 🔄";
+    return "More Practice Needed! You'll get there! 🎯";
   };
 
   const formatTime = (seconds) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${hrs > 0 ? hrs + "h " : ""}${mins > 0 ? mins + "m " : ""}${secs}s`;
+    if (hrs > 0) {
+      return `${hrs}h ${mins}m ${secs}s`;
+    }
+    return `${mins}m ${secs}s`;
+  };
+
+  // Helper function to clean answer text for display
+  const cleanAnswerText = (text) => {
+    if (!text) return '';
+    return text.replace(/^[A-D]\s*[-.:)]?\s*/i, '').trim();
   };
 
   // ================= BILLION-DOLLAR PROFESSIONAL UI =================
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <Toaster position="top-right" />
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "#fff",
+            borderRadius: "16px",
+          },
+        }}
+      />
       
       <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {/* Hero Header */}
-        <div className="mb-10 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full mb-4">
+        <div className="mb-12 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full mb-4 backdrop-blur-sm">
             <span className="text-2xl">🧠</span>
             <span className="text-sm font-medium text-blue-600 dark:text-blue-400">AI-Powered Assessment</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 dark:from-white dark:via-slate-200 dark:to-white bg-clip-text text-transparent">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 dark:from-white dark:via-slate-200 dark:to-white bg-clip-text text-transparent">
             Trial Practice
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-3 max-w-2xl mx-auto">
+          <p className="text-slate-500 dark:text-slate-400 mt-4 max-w-2xl mx-auto text-lg">
             Test your knowledge with our intelligent practice system. Get real-time AI assistance and detailed feedback.
           </p>
         </div>
 
         {/* Timer & Progress Section */}
-        <div className="grid gap-6 md:grid-cols-2 mb-8">
+        <div className="grid gap-6 md:grid-cols-2 mb-10">
           {/* Timer Card */}
-          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800 p-6">
+          <div className="group relative overflow-hidden rounded-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-xl border border-slate-200 dark:border-slate-800 p-6 hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700" />
             <div className="relative flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <FaClock className="w-7 h-7 text-white" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Time Spent</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{formatTime(time)}</p>
+                  <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatTime(time)}</p>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-400 dark:text-slate-500">Focus & Accuracy</p>
                 <div className="flex items-center gap-1 mt-1">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                   <span className="text-xs text-slate-500 dark:text-slate-400">Active Session</span>
                 </div>
               </div>
@@ -256,7 +297,7 @@ Explain the correct answer like a nursing tutor.
           </div>
 
           {/* Progress Card */}
-          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800 p-6">
+          <div className="group relative overflow-hidden rounded-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-xl border border-slate-200 dark:border-slate-800 p-6 hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
             <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700" />
             <div className="relative">
               <div className="flex justify-between items-center mb-3">
@@ -284,11 +325,9 @@ Explain the correct answer like a nursing tutor.
         </div>
 
         {/* Question Navigator */}
-        <div className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl p-4 mb-8 border border-slate-200 dark:border-slate-800">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-            </svg>
+        <div className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl p-5 mb-8 border border-slate-200 dark:border-slate-800">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2 uppercase tracking-wider">
+            <FaChartLine className="w-3 h-3" />
             Question Navigator
           </p>
           <div className="flex flex-wrap gap-2">
@@ -298,13 +337,13 @@ Explain the correct answer like a nursing tutor.
                 onClick={() => setCurrentIndex(i)}
                 className={`relative w-10 h-10 rounded-xl text-sm font-bold transition-all duration-300 ${
                   answers[q._id]
-                    ? "bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md"
+                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md"
                     : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-                } ${currentIndex === i ? "ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900" : ""}`}
+                } ${currentIndex === i ? "ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900 scale-105" : ""}`}
               >
                 {i + 1}
                 {answers[q._id] && (
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full border-2 border-green-500"></span>
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full border-2 border-emerald-500"></span>
                 )}
               </button>
             ))}
@@ -312,14 +351,14 @@ Explain the correct answer like a nursing tutor.
         </div>
 
         {!current && (
-          <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl shadow-xl">
-            <div className="text-6xl mb-4">📚</div>
+          <div className="text-center py-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-2xl shadow-xl">
+            <div className="text-7xl mb-4">📚</div>
             <p className="text-slate-500 dark:text-slate-400 text-lg">No questions available for this subject.</p>
           </div>
         )}
 
         {current && !submitted && (
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden transition-all duration-300">
             {/* Question Header */}
             <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-slate-900 dark:to-slate-950 px-8 py-6">
               <div className="flex items-center justify-between flex-wrap gap-4">
@@ -328,12 +367,12 @@ Explain the correct answer like a nursing tutor.
                     <span className="text-white font-bold text-lg">{currentIndex + 1}</span>
                   </div>
                   <div>
-                    <p className="text-white/60 text-xs font-medium tracking-wide">CURRENT QUESTION</p>
+                    <p className="text-white/60 text-xs font-medium tracking-wide uppercase">Current Question</p>
                     <p className="text-white text-sm font-semibold">Question {currentIndex + 1} of {questions.length}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl">
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl backdrop-blur-sm">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
                   <span className="text-white/80 text-sm">AI Ready to Assist</span>
                 </div>
               </div>
@@ -387,12 +426,12 @@ Explain the correct answer like a nursing tutor.
                 })}
               </div>
 
-              {/* AI Section - EXACTLY as original */}
+              {/* AI Section */}
               <div className="mb-8">
                 <button
                   onClick={askAI}
                   disabled={aiLoading}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-purple-500/25"
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-purple-500/25 hover:shadow-xl hover:scale-[1.02]"
                 >
                   <FaRobot className="text-lg" /> 
                   {aiLoading ? "Thinking..." : "Ask AI"}
@@ -406,10 +445,13 @@ Explain the correct answer like a nursing tutor.
                 )}
 
                 {aiResponse && (
-                  <div className="mt-4 p-5 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 border border-purple-200 dark:border-purple-800">
-                    <p className="text-purple-800 dark:text-purple-300 leading-relaxed">
-                      {aiResponse}
-                    </p>
+                  <div className="mt-4 p-5 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 border border-purple-200 dark:border-purple-800 animate-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-start gap-2">
+                      <FaLightbulb className="text-purple-600 dark:text-purple-400 mt-0.5" />
+                      <p className="text-purple-800 dark:text-purple-300 leading-relaxed">
+                        {aiResponse}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -418,25 +460,25 @@ Explain the correct answer like a nursing tutor.
               <div className="flex justify-between items-center pt-6 border-t border-slate-200 dark:border-slate-800">
                 <button
                   onClick={prev}
-                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-all hover:scale-[1.02]"
                 >
-                  <FaArrowLeft /> Previous
+                  <FaArrowLeft className="text-sm" /> Previous
                 </button>
 
                 {currentIndex === questions.length - 1 ? (
                   <button
                     onClick={submitTrial}
                     disabled={submitting}
-                    className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-medium transition-all shadow-lg shadow-green-500/25"
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium transition-all shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:scale-[1.02] disabled:opacity-50"
                   >
                     {submitting ? "Submitting..." : "Submit Trial"} <FaCheck />
                   </button>
                 ) : (
                   <button
                     onClick={next}
-                    className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium transition-all shadow-lg shadow-blue-500/25"
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium transition-all shadow-lg shadow-blue-500/25 hover:shadow-xl hover:scale-[1.02]"
                   >
-                    Next <FaArrowRight />
+                    Next <FaArrowRight className="text-sm" />
                   </button>
                 )}
               </div>
@@ -444,77 +486,108 @@ Explain the correct answer like a nursing tutor.
           </div>
         )}
 
-        {/* Results Modal */}
+        {/* Results Modal - Premium */}
         {showResult && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex justify-center items-center z-50 p-4 animate-in fade-in duration-300">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-3xl shadow-2xl overflow-y-auto max-h-[90vh] border border-slate-200 dark:border-slate-800">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex justify-center items-center z-50 p-4 animate-in fade-in zoom-in duration-300">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-4xl shadow-2xl overflow-y-auto max-h-[90vh] border border-slate-200 dark:border-slate-800">
               <div className="p-8">
+                {/* Results Header */}
                 <div className="text-center mb-8">
-                  <div className="text-6xl mb-4">🎉</div>
+                  <div className="text-7xl mb-4 animate-bounce">🎉</div>
                   <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Trial Complete!</h2>
                   <p className="text-slate-500 dark:text-slate-400 mt-2">Here's your performance breakdown</p>
                 </div>
 
-                <div className="text-center mb-8 p-6 rounded-2xl bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30">
-                  <div className="text-5xl font-bold mb-2">
+                {/* Score Display */}
+                <div className="text-center mb-8 p-8 rounded-2xl bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 dark:from-blue-950/30 dark:via-purple-950/30 dark:to-pink-950/30">
+                  <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 mb-4 shadow-lg">
+                    <FaTrophy className="text-white text-4xl" />
+                  </div>
+                  <div className="text-6xl font-bold mb-3">
                     <span className={getColor()}>
                       {backendResult?.score ?? score}/{questions.length}
                     </span>
                   </div>
-                  <p className={`text-2xl font-semibold ${getColor()}`}>
+                  <p className={`text-3xl font-semibold ${getColor()}`}>
                     {backendResult?.percentage ?? percentage}%
                   </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-3">
-                    Performance:{" "}
-                    <span className="font-semibold text-blue-600 dark:text-blue-400">
-                      {backendResult?.performance || 
-                        (percentage >= 80 ? "Excellent" : percentage >= 60 ? "Good" : percentage >= 40 ? "Average" : "Poor")}
-                    </span>
+                  <p className="text-md text-slate-600 dark:text-slate-400 mt-4">
+                    {getPerformanceText()}
                   </p>
                 </div>
 
-                <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                {/* Question Review Section */}
+                <div className="mb-6">
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <FaChartLine className="text-blue-500" />
+                    Detailed Question Review
+                  </h3>
+                </div>
+
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                   {questions.map((q, index) => {
                     const userAnswerLetter = answers[q._id];
                     const userAnswerText = userAnswerLetter && q.options 
                       ? q.options[userAnswerLetter.charCodeAt(0) - 65] 
                       : null;
                     
-                    const correctAnswerLetter = q.correctAnswer;
-                    const correctAnswerText = correctAnswerLetter && q.options 
-                      ? q.options[correctAnswerLetter.charCodeAt(0) - 65] 
-                      : null;
+                    const correctAnswerRaw = q.correctAnswer || '';
+                    const cleanedCorrectAnswer = cleanAnswerText(correctAnswerRaw);
                     
-                    const isCorrect = userAnswerLetter === correctAnswerLetter;
+                    const isCorrect = userAnswerText?.toLowerCase().trim() === cleanedCorrectAnswer?.toLowerCase().trim();
 
                     return (
-                      <div key={q._id} className="p-5 rounded-xl border border-slate-200 dark:border-slate-800 hover:shadow-md transition-all">
-                        <p className="font-semibold mb-3 text-slate-900 dark:text-slate-100">
-                          {index + 1}. {q.question}
-                        </p>
-                        <div className="space-y-2 text-sm">
-                          <p>
-                            <span className="font-medium text-slate-500 dark:text-slate-400">Your Answer:</span>{" "}
-                            <span className={isCorrect ? "text-green-600 dark:text-green-400 font-medium" : "text-red-600 dark:text-red-400 font-medium"}>
-                              {userAnswerLetter || "None"}
-                              {userAnswerText && ` - ${userAnswerText}`}
-                            </span>
-                          </p>
-                          {!isCorrect && (
-                            <p>
-                              <span className="font-medium text-slate-500 dark:text-slate-400">Correct Answer:</span>{" "}
-                              <span className="text-green-600 dark:text-green-400 font-medium">
-                                {correctAnswerLetter}
-                                {correctAnswerText && ` - ${correctAnswerText}`}
-                              </span>
+                      <div 
+                        key={q._id} 
+                        className={`p-5 rounded-xl border-2 transition-all duration-300 ${
+                          isCorrect 
+                            ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/20" 
+                            : "border-rose-200 dark:border-rose-800 bg-rose-50/30 dark:bg-rose-950/20"
+                        } hover:shadow-lg`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0">
+                            {isCorrect ? (
+                              <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shadow-md">
+                                <FaCheck className="text-white text-sm" />
+                              </div>
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-rose-500 flex items-center justify-center shadow-md">
+                                <span className="text-white text-sm font-bold">✕</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold mb-2 text-slate-900 dark:text-slate-100">
+                              {index + 1}. {q.question}
                             </p>
-                          )}
+                            <div className="space-y-2 text-sm">
+                              <p>
+                                <span className="font-medium text-slate-500 dark:text-slate-400">Your Answer:</span>{" "}
+                                <span className={isCorrect ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-rose-600 dark:text-rose-400 font-medium"}>
+                                  {userAnswerLetter || "None"}
+                                  {userAnswerText && ` - ${userAnswerText}`}
+                                </span>
+                              </p>
+                              {!isCorrect && (
+                                <p>
+                                  <span className="font-medium text-slate-500 dark:text-slate-400">Correct Answer:</span>{" "}
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                                    {cleanedCorrectAnswer}
+                                  </span>
+                                </p>
+                              )}
+                            </div>
+                            {q.rationale && (
+                              <div className="mt-3 p-3 rounded-lg bg-white/50 dark:bg-slate-800/50">
+                                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">📘 Explanation</p>
+                                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                  {q.rationale}
+                                </p>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        {q.rationale && (
-                          <p className="mt-3 text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 p-3 rounded-lg">
-                            📘 {q.rationale}
-                          </p>
-                        )}
                       </div>
                     );
                   })}
@@ -522,7 +595,7 @@ Explain the correct answer like a nursing tutor.
 
                 <button
                   onClick={() => navigate("/student/progress")}
-                  className="mt-8 w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 rounded-xl font-medium transition-all shadow-lg"
+                  className="mt-8 w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] text-lg"
                 >
                   View Progress Dashboard
                 </button>
@@ -531,6 +604,24 @@ Explain the correct answer like a nursing tutor.
           </div>
         )}
       </div>
+
+      {/* Custom Scrollbar Styles */}
+      <style jsx>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.05);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(135deg, #5a67d8 0%, #6b46a2 100%);
+        }
+      `}</style>
     </div>
   );
 };
