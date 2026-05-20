@@ -1,4 +1,4 @@
-// AdminUsers.jsx - COMPLETE WITH DARK/LIGHT MODE SUPPORT
+// AdminUsers.jsx - COMPLETE WITH PROGRAM SUPPORT & DARK/LIGHT MODE
 import { useEffect, useState } from "react";
 import { 
   FaTrash, 
@@ -15,14 +15,18 @@ import {
   FaEdit,
   FaSave,
   FaBook,
+  FaBuilding,
+  FaUserPlus,
   FaChalkboard,
-  FaUserPlus
+  FaCheckCircle
 } from "react-icons/fa";
 import axios from "../api/axios";
+import toast, { Toaster } from "react-hot-toast";
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [programs, setPrograms] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -35,6 +39,7 @@ const AdminUsers = () => {
     name: "",
     email: "",
     password: "",
+    programId: "",
     courseId: "",
     title: "Dr.",
     subjectIds: []
@@ -43,11 +48,14 @@ const AdminUsers = () => {
     name: "",
     email: "",
     role: "",
+    programId: "",
     courseId: "",
     title: "",
     subjectIds: []
   });
   const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [coursesByProgram, setCoursesByProgram] = useState([]);
+  const [filteredCourses, setFilteredCourses] = useState([]);
 
   // ================= FETCH USERS =================
   const fetchUsers = async () => {
@@ -57,19 +65,33 @@ const AdminUsers = () => {
       setUsers(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error(err);
-      alert("Failed to fetch users");
+      toast.error("Failed to fetch users");
     } finally {
       setLoading(false);
     }
   };
 
-  // ================= FETCH COURSES =================
-  const fetchCourses = async () => {
+  // ================= FETCH PROGRAMS =================
+  const fetchPrograms = async () => {
     try {
-      const res = await axios.get("/courses");
-      setCourses(Array.isArray(res.data) ? res.data : []);
+      const res = await axios.get("/programs");
+      setPrograms(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Failed to fetch programs:", err);
+    }
+  };
+
+  // ================= FETCH COURSES =================
+  const fetchCourses = async (programId = null) => {
+    try {
+      const url = programId ? `/courses?program=${programId}` : "/courses";
+      const res = await axios.get(url);
+      const coursesData = Array.isArray(res.data) ? res.data : [];
+      setCourses(coursesData);
+      return coursesData;
     } catch (err) {
       console.error("Failed to fetch courses:", err);
+      return [];
     }
   };
 
@@ -84,8 +106,45 @@ const AdminUsers = () => {
     }
   };
 
+  // ================= FETCH FILTERED COURSES BY PROGRAM =================
+  const fetchFilteredCourses = async (programId) => {
+    if (!programId) {
+      setFilteredCourses([]);
+      return [];
+    }
+    try {
+      const res = await axios.get(`/courses/program/${programId}`);
+      const coursesData = Array.isArray(res.data) ? res.data : [];
+      setFilteredCourses(coursesData);
+      return coursesData;
+    } catch (err) {
+      console.error("Failed to fetch filtered courses:", err);
+      setFilteredCourses([]);
+      return [];
+    }
+  };
+
+  // ================= FETCH FILTERED SUBJECTS =================
+  const fetchFilteredSubjects = async (courseId) => {
+    if (!courseId) {
+      setAvailableSubjects([]);
+      return [];
+    }
+    try {
+      const res = await axios.get(`/subjects?course=${courseId}`);
+      const subjectsArray = Array.isArray(res.data) ? res.data : [];
+      setAvailableSubjects(subjectsArray);
+      return subjectsArray;
+    } catch (err) {
+      console.error("Failed to fetch subjects:", err);
+      setAvailableSubjects([]);
+      return [];
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchPrograms();
     fetchCourses();
     fetchSubjects();
   }, []);
@@ -99,6 +158,7 @@ const AdminUsers = () => {
         name: editUserData.name,
         email: editUserData.email,
         role: editUserData.role,
+        programId: editUserData.programId || null,
         courseId: editUserData.courseId || null,
       };
       
@@ -118,16 +178,16 @@ const AdminUsers = () => {
       const response = await axios.put(`/users/${selectedUser._id}`, updateData);
       
       if (response.data.success) {
-        alert("✅ User updated successfully!");
+        toast.success("User updated successfully!");
         setShowEditUserModal(false);
         setSelectedUser(null);
         fetchUsers();
       } else {
-        alert(response.data.message || "Failed to update user");
+        toast.error(response.data.message || "Failed to update user");
       }
     } catch (err) {
       console.error("Update error:", err);
-      alert(err.response?.data?.message || "Failed to update user");
+      toast.error(err.response?.data?.message || "Failed to update user");
     } finally {
       setLoading(false);
     }
@@ -144,38 +204,29 @@ const AdminUsers = () => {
       }).filter(id => id);
     }
     
+    const userProgramId = user.programId?._id || user.programId || "";
+    const userCourseId = user.courseId?._id || user.courseId || "";
+    
     setSelectedUser(user);
     setEditUserData({
       name: user.name || "",
       email: user.email || "",
       role: user.role || "student",
-      courseId: user.courseId?._id || user.courseId || "",
-      title: user.lecturerInfo?.title || "",
+      programId: userProgramId,
+      courseId: userCourseId,
+      title: user.lecturerInfo?.title || "Dr.",
       subjectIds: subjectIds
     });
     
-    const courseId = user.courseId?._id || user.courseId;
-    if (courseId) {
-      fetchFilteredSubjects(courseId);
+    if (userProgramId) {
+      fetchFilteredCourses(userProgramId).then(coursesData => {
+        if (userCourseId) {
+          fetchFilteredSubjects(userCourseId);
+        }
+      });
     }
     
     setShowEditUserModal(true);
-  };
-
-  // ================= FETCH FILTERED SUBJECTS =================
-  const fetchFilteredSubjects = async (courseId) => {
-    if (!courseId) {
-      setAvailableSubjects([]);
-      return;
-    }
-    try {
-      const res = await axios.get(`/subjects?course=${courseId}`);
-      const subjectsArray = Array.isArray(res.data) ? res.data : [];
-      setAvailableSubjects(subjectsArray);
-    } catch (err) {
-      console.error("Failed to fetch subjects:", err);
-      setAvailableSubjects([]);
-    }
   };
 
   // ================= UPDATE USER ROLE =================
@@ -186,10 +237,10 @@ const AdminUsers = () => {
       setUsers((prev) =>
         prev.map((u) => (u._id === id ? { ...u, role } : u))
       );
-      alert(`User role updated to ${role}`);
+      toast.success(`User role updated to ${role}`);
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || "Failed to update role");
+      toast.error(err.response?.data?.message || "Failed to update role");
     } finally {
       setLoading(false);
     }
@@ -203,10 +254,10 @@ const AdminUsers = () => {
       setLoading(true);
       await axios.delete(`/users/${id}`);
       setUsers((prev) => prev.filter((u) => u._id !== id));
-      alert("User deleted successfully");
+      toast.success("User deleted successfully");
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || "Failed to delete user");
+      toast.error(err.response?.data?.message || "Failed to delete user");
     } finally {
       setLoading(false);
     }
@@ -227,17 +278,19 @@ const AdminUsers = () => {
         name: newLecturer.name,
         email: newLecturer.email,
         password: newLecturer.password,
+        programId: newLecturer.programId,
         courseId: newLecturer.courseId,
         title: newLecturer.title,
         assignedSubjects: subjectIds
       });
       
-      alert("✅ Lecturer added successfully!");
+      toast.success("Lecturer added successfully!");
       setShowAddLecturerModal(false);
       setNewLecturer({
         name: "",
         email: "",
         password: "",
+        programId: "",
         courseId: "",
         title: "Dr.",
         subjectIds: []
@@ -245,9 +298,51 @@ const AdminUsers = () => {
       fetchUsers();
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.message || "Failed to add lecturer");
+      toast.error(err.response?.data?.message || "Failed to add lecturer");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleProgramChange = async (programId) => {
+    setEditUserData({...editUserData, programId, courseId: "", subjectIds: []});
+    if (programId) {
+      const coursesData = await fetchFilteredCourses(programId);
+      setFilteredCourses(coursesData);
+      setAvailableSubjects([]);
+    } else {
+      setFilteredCourses([]);
+      setAvailableSubjects([]);
+    }
+  };
+
+  const handleCourseChange = async (courseId) => {
+    setEditUserData({...editUserData, courseId, subjectIds: []});
+    if (courseId) {
+      await fetchFilteredSubjects(courseId);
+    } else {
+      setAvailableSubjects([]);
+    }
+  };
+
+  const handleNewProgramChange = async (programId) => {
+    setNewLecturer({...newLecturer, programId, courseId: "", subjectIds: []});
+    if (programId) {
+      const coursesData = await fetchFilteredCourses(programId);
+      setFilteredCourses(coursesData);
+      setAvailableSubjects([]);
+    } else {
+      setFilteredCourses([]);
+      setAvailableSubjects([]);
+    }
+  };
+
+  const handleNewCourseChange = async (courseId) => {
+    setNewLecturer({...newLecturer, courseId, subjectIds: []});
+    if (courseId) {
+      await fetchFilteredSubjects(courseId);
+    } else {
+      setAvailableSubjects([]);
     }
   };
 
@@ -306,6 +401,8 @@ const AdminUsers = () => {
 
   return (
     <div className="space-y-6">
+      <Toaster position="top-right" />
+      
       {/* Page Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -321,7 +418,7 @@ const AdminUsers = () => {
             onClick={() => setShowAddLecturerModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
           >
-            <FaChalkboardTeacher className="h-4 w-4" />
+            <FaUserPlus className="h-4 w-4" />
             <span className="text-sm font-medium">Add Lecturer</span>
           </button>
           <button
@@ -433,6 +530,7 @@ const AdminUsers = () => {
                 <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
                   <th className="px-6 py-4 text-left font-medium">User</th>
                   <th className="px-6 py-4 text-left font-medium">Email</th>
+                  <th className="px-6 py-4 text-left font-medium">Program</th>
                   <th className="px-6 py-4 text-left font-medium">Course</th>
                   <th className="px-6 py-4 text-left font-medium">Role</th>
                   <th className="px-6 py-4 text-left font-medium">Actions</th>
@@ -456,7 +554,16 @@ const AdminUsers = () => {
                       <div className="flex items-center gap-2"><FaEnvelope className="h-3.5 w-3.5 text-gray-400" />{user.email}</div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2"><FaGraduationCap className="h-3.5 w-3.5 text-gray-400" /><span>{user.courseId?.name || "None"}</span></div>
+                      <div className="flex items-center gap-2">
+                        <FaBuilding className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="text-gray-600 dark:text-gray-400">{user.programId?.name || "None"}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <FaGraduationCap className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="text-gray-600 dark:text-gray-400">{user.courseId?.name || "None"}</span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -490,302 +597,122 @@ const AdminUsers = () => {
         </div>
       )}
 
-      {/* ================= ADD LECTURER MODAL - FULL DARK MODE SUPPORT ================= */}
+      {/* No Results */}
+      {!loading && filteredUsers.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+          <FaUsers className="h-12 w-12 text-gray-300 dark:text-gray-700 mb-3" />
+          <p className="text-gray-500 dark:text-gray-400">No users found</p>
+        </div>
+      )}
+
+      {/* ================= ADD LECTURER MODAL ================= */}
       {showAddLecturerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
             <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                   <FaChalkboardTeacher className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    Add New Lecturer
-                  </h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Create a new lecturer account
-                  </p>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Add New Lecturer</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Create a new lecturer account</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setShowAddLecturerModal(false)} 
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              >
+              <button onClick={() => setShowAddLecturerModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                 <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
 
             <form onSubmit={handleAddLecturer} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Full Name <span className="text-red-500">*</span>
-                </label>
-                <input 
-                  type="text" 
-                  required 
-                  value={newLecturer.name} 
-                  onChange={(e) => setNewLecturer({...newLecturer, name: e.target.value})} 
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
-                  placeholder="e.g., Dr. John Smith"
-                />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name <span className="text-red-500">*</span></label>
+                <input type="text" required value={newLecturer.name} onChange={(e) => setNewLecturer({...newLecturer, name: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="e.g., Dr. John Smith" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <input 
-                  type="email" 
-                  required 
-                  value={newLecturer.email} 
-                  onChange={(e) => setNewLecturer({...newLecturer, email: e.target.value})} 
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
-                  placeholder="lecturer@example.com"
-                />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email <span className="text-red-500">*</span></label>
+                <input type="email" required value={newLecturer.email} onChange={(e) => setNewLecturer({...newLecturer, email: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="lecturer@example.com" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Password <span className="text-red-500">*</span>
-                </label>
-                <input 
-                  type="password" 
-                  required 
-                  value={newLecturer.password} 
-                  onChange={(e) => setNewLecturer({...newLecturer, password: e.target.value})} 
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
-                  placeholder="Minimum 6 characters"
-                />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Password <span className="text-red-500">*</span></label>
+                <input type="password" required value={newLecturer.password} onChange={(e) => setNewLecturer({...newLecturer, password: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="Minimum 6 characters" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Course <span className="text-red-500">*</span>
-                </label>
-                <select 
-                  required 
-                  value={newLecturer.courseId} 
-                  onChange={(e) => {
-                    setNewLecturer({...newLecturer, courseId: e.target.value, subjectIds: []});
-                    fetchFilteredSubjects(e.target.value);
-                  }} 
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                >
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Program <span className="text-red-500">*</span></label>
+                <select required value={newLecturer.programId} onChange={(e) => handleNewProgramChange(e.target.value)} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                  <option value="">Select Program</option>
+                  {programs.map(program => <option key={program._id} value={program._id}>{program.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Course <span className="text-red-500">*</span></label>
+                <select required value={newLecturer.courseId} onChange={(e) => handleNewCourseChange(e.target.value)} disabled={!newLecturer.programId} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                   <option value="">Select Course</option>
-                  {courses.map(course => <option key={course._id} value={course._id}>{course.name}</option>)}
+                  {filteredCourses.map(course => <option key={course._id} value={course._id}>{course.name}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Subjects
-                </label>
-                <select 
-                  multiple 
-                  onChange={handleNewSubjectSelection}
-                  value={newLecturer.subjectIds}
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                >
-                  {subjects.filter(s => s.courseId === newLecturer.courseId).map(subject => (
-                    <option key={subject._id} value={subject._id} className="py-1">
-                      {subject.name}
-                    </option>
-                  ))}
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subjects</label>
+                <select multiple onChange={handleNewSubjectSelection} value={newLecturer.subjectIds} disabled={!newLecturer.courseId} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  {availableSubjects.map(subject => <option key={subject._id} value={subject._id}>{subject.name}</option>)}
                 </select>
-                <div className="flex justify-between mt-2">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Hold <kbd className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 rounded">Ctrl</kbd> (Windows) or <kbd className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 rounded">Cmd</kbd> (Mac) to select multiple
-                  </p>
-                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                    Selected: {newLecturer.subjectIds.length} subject(s)
-                  </p>
-                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Title
-                </label>
-                <select 
-                  value={newLecturer.title} 
-                  onChange={(e) => setNewLecturer({...newLecturer, title: e.target.value})} 
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                >
-                  <option>Dr.</option>
-                  <option>Prof.</option>
-                  <option>Mr.</option>
-                  <option>Mrs.</option>
-                  <option>Ms.</option>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title</label>
+                <select value={newLecturer.title} onChange={(e) => setNewLecturer({...newLecturer, title: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                  <option>Dr.</option><option>Prof.</option><option>Mr.</option><option>Mrs.</option><option>Ms.</option>
                 </select>
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700 mt-2">
-                <button 
-                  type="button" 
-                  onClick={() => setShowAddLecturerModal(false)} 
-                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-200"
-                >
-                  Add Lecturer
-                </button>
+              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button type="button" onClick={() => setShowAddLecturerModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all">Add Lecturer</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* ================= EDIT USER MODAL - FULL DARK MODE SUPPORT ================= */}
+      {/* ================= EDIT USER MODAL ================= */}
       {showEditUserModal && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
             <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <FaEdit className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    Edit User
-                  </h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Update user information and permissions
-                  </p>
-                </div>
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center"><FaEdit className="h-5 w-5 text-white" /></div>
+                <div><h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Edit User</h2><p className="text-xs text-gray-500 dark:text-gray-400">Update user information</p></div>
               </div>
-              <button 
-                onClick={() => setShowEditUserModal(false)} 
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              >
-                <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-              </button>
+              <button onClick={() => setShowEditUserModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" /></button>
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Full Name
-                </label>
-                <input 
-                  type="text" 
-                  value={editUserData.name} 
-                  onChange={(e) => setEditUserData({...editUserData, name: e.target.value})} 
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
-                />
-              </div>
+              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name</label><input type="text" value={editUserData.name} onChange={(e) => setEditUserData({...editUserData, name: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label><input type="email" value={editUserData.email} onChange={(e) => setEditUserData({...editUserData, email: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Role</label><select value={editUserData.role} onChange={(e) => setEditUserData({...editUserData, role: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"><option value="student">Student</option><option value="lecturer">Lecturer</option><option value="admin">Administrator</option></select></div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Email
-                </label>
-                <input 
-                  type="email" 
-                  value={editUserData.email} 
-                  onChange={(e) => setEditUserData({...editUserData, email: e.target.value})} 
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
-                />
-              </div>
+              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Program</label><select value={editUserData.programId} onChange={(e) => handleProgramChange(e.target.value)} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"><option value="">No Program</option>{programs.map(program => <option key={program._id} value={program._id}>{program.name}</option>)}</select></div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Role
-                </label>
-                <select 
-                  value={editUserData.role} 
-                  onChange={(e) => setEditUserData({...editUserData, role: e.target.value})} 
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                >
-                  <option value="student">Student</option>
-                  <option value="lecturer">Lecturer</option>
-                  <option value="admin">Administrator</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Course
-                </label>
-                <select 
-                  value={editUserData.courseId} 
-                  onChange={(e) => {
-                    setEditUserData({...editUserData, courseId: e.target.value, subjectIds: []});
-                    fetchFilteredSubjects(e.target.value);
-                  }} 
-                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                >
-                  <option value="">No Course</option>
-                  {courses.map(course => <option key={course._id} value={course._id}>{course.name}</option>)}
-                </select>
-              </div>
+              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Course</label><select value={editUserData.courseId} onChange={(e) => handleCourseChange(e.target.value)} disabled={!editUserData.programId} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"><option value="">No Course</option>{filteredCourses.map(course => <option key={course._id} value={course._id}>{course.name}</option>)}</select></div>
 
               {editUserData.role === "lecturer" && (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Title
-                    </label>
-                    <select 
-                      value={editUserData.title} 
-                      onChange={(e) => setEditUserData({...editUserData, title: e.target.value})} 
-                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    >
-                      <option value="Dr.">Dr.</option>
-                      <option value="Prof.">Prof.</option>
-                      <option value="Mr.">Mr.</option>
-                      <option value="Mrs.">Mrs.</option>
-                      <option value="Ms.">Ms.</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Assigned Subjects
-                    </label>
-                    <select 
-                      multiple 
-                      onChange={handleSubjectSelection}
-                      value={editUserData.subjectIds}
-                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    >
-                      {availableSubjects.map(subject => (
-                        <option key={subject._id} value={subject._id} className="py-1">
-                          {subject.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="flex justify-between mt-2">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Hold <kbd className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 rounded">Ctrl</kbd> (Windows) or <kbd className="px-1.5 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 rounded">Cmd</kbd> (Mac) to select multiple
-                      </p>
-                      <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                        Selected: {editUserData.subjectIds.length} subject(s)
-                      </p>
-                    </div>
-                  </div>
+                  <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title</label><select value={editUserData.title} onChange={(e) => setEditUserData({...editUserData, title: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"><option>Dr.</option><option>Prof.</option><option>Mr.</option><option>Mrs.</option><option>Ms.</option></select></div>
+                  <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Assigned Subjects</label><select multiple onChange={handleSubjectSelection} value={editUserData.subjectIds} disabled={!editUserData.courseId} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50">
+                    {availableSubjects.map(subject => <option key={subject._id} value={subject._id}>{subject.name}</option>)}
+                  </select><p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p></div>
                 </>
               )}
 
-              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700 mt-2">
-                <button 
-                  onClick={() => setShowEditUserModal(false)} 
-                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleUpdateUser} 
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
-                >
-                  <FaSave className="h-4 w-4" />
-                  Save Changes
-                </button>
+              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button onClick={() => setShowEditUserModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
+                <button onClick={handleUpdateUser} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"><FaSave className="h-4 w-4" /> Save Changes</button>
               </div>
             </div>
           </div>

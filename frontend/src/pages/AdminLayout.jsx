@@ -111,6 +111,8 @@ const AdminLayout = () => {
       { to: "/admin/performance", label: "Analytics", icon: BarChart3, color: "text-purple-500" },
       { to: "/admin/questions", label: "Question Bank", icon: HelpCircle, color: "text-green-500" },
       { to: "/admin/question-approval", label: "Question Approval", icon: FaCheckCircle, color: "text-yellow-500" },
+      { to: "/admin/programs", label: "Programs", icon: BookOpen, color: "text-teal-500" },
+      { to: "/admin/courses", label: "Courses", icon: Layers, color: "text-light-blue-500" },
       { to: "/admin/subjects", label: "Subjects", icon: BookOpen, color: "text-orange-500" },
       { to: "/admin/users", label: "Users", icon: Users, color: "text-cyan-500" },
       { to: "/admin/payments", label: "Revenue", icon: DollarSign, color: "text-yellow-500" },
@@ -122,8 +124,6 @@ const AdminLayout = () => {
       { to: "/admin/lecturers", label: "Lecturers", icon: GraduationCap, color: "text-pink-500" },
       { to: "/admin/content-payment", label: "Content Payment", icon: DollarSign, color: "text-indigo-500" },
       { to: "/admin/plans", label: "Plans", icon: Zap, color: "text-red-500" },
-      { to: "/admin/programs", label: "Programs", icon: BookOpen, color: "text-teal-500" },
-      { to: "/admin/courses", label: "Courses", icon: Layers, color: "text-light-blue-500" },
       { to: "/admin/content", label: "Content Library", icon: FileText, color: "text-emerald-500" },
     ]},
     { section: "Engagement", items: [

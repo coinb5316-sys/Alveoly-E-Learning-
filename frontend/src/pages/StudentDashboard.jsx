@@ -1,4 +1,4 @@
-// StudentDashboard.jsx - Fixed with proper scroll and missing X icon import
+// StudentDashboard.jsx - Updated with Program support
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -22,6 +22,8 @@ import {
   Loader2,
   CreditCard,
   X,
+  Building,
+  GraduationCap,
 } from "lucide-react";
 import API from "../api/axios";
 import { useAuth } from "../context/AuthContext";
@@ -52,11 +54,12 @@ const StudentDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch student data
+  // Fetch student data (includes program and course)
   useEffect(() => {
     const fetchStudent = async () => {
       try {
         const res = await API.get("/auth/me");
+        console.log("Student data:", res.data); // Debug log
         setStudent(res.data);
       } catch (err) {
         console.error(err);
@@ -125,7 +128,11 @@ const StudentDashboard = () => {
     );
   }
 
+  // Get program and course info
+  const programId = student?.programId?._id || student?.programId || null;
+  const programName = student?.programId?.name || null;
   const courseId = student?.courseId?._id || student?.courseId || null;
+  const courseName = student?.courseId?.name || null;
 
   const getPlanStatus = (planId) => {
     const expiry = myPlans[planId];
@@ -149,11 +156,18 @@ const StudentDashboard = () => {
 
   const statCards = [
     {
-      title: "Course Progress",
-      value: courseId ? "Enrolled" : "No Course",
-      icon: BookOpen,
+      title: "Program",
+      value: programName || "Not Assigned",
+      icon: Building,
+      color: "indigo",
+      subtitle: programName ? "Your academic program" : "Contact admin",
+    },
+    {
+      title: "Course",
+      value: courseName || "Not Assigned",
+      icon: GraduationCap,
       color: "blue",
-      subtitle: courseId ? "Active enrollment" : "Contact admin",
+      subtitle: courseName ? "Your current course" : "Contact admin",
     },
     {
       title: "Questions Solved",
@@ -186,7 +200,7 @@ const StudentDashboard = () => {
       color: "blue",
       onClick: () => {
         if (!courseId) {
-          alert("No course assigned yet");
+          alert("No course assigned yet. Please contact admin.");
           return;
         }
         navigate(`/student/subjects?course=${courseId}`);
@@ -199,7 +213,7 @@ const StudentDashboard = () => {
       color: "green",
       onClick: () => {
         if (!courseId) {
-          alert("No course assigned yet");
+          alert("No course assigned yet. Please contact admin.");
           return;
         }
         navigate(`/student/subjects?course=${courseId}`);
@@ -223,8 +237,8 @@ const StudentDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 p-8 text-white">
+      {/* Welcome Header - Premium */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-8 text-white">
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
             <Zap className="h-5 w-5 text-yellow-300" />
@@ -233,21 +247,27 @@ const StudentDashboard = () => {
           <h1 className="text-2xl md:text-3xl font-bold mb-2">
             Welcome back, {student?.name?.split(" ")[0]}! 👋
           </h1>
-          <p className="text-blue-100 max-w-md">
-            {student?.courseId?.name
-              ? `You are enrolled in: ${student.courseId.name}`
+          <p className="text-indigo-100 max-w-md">
+            {programName 
+              ? `Program: ${programName}`
               : "Ready to start your learning journey?"}
           </p>
+          {courseName && (
+            <p className="text-indigo-100 text-sm mt-1 opacity-80">
+              Course: {courseName}
+            </p>
+          )}
         </div>
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24" />
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stats Grid - Includes Program and Course */}
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
         {statCards.map((card, idx) => {
           const Icon = card.icon;
           const colorMap = {
+            indigo: "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400",
             blue: "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400",
             green: "bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400",
             purple: "bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400",
@@ -256,14 +276,15 @@ const StudentDashboard = () => {
           return (
             <div
               key={idx}
-              className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 transition-all hover:shadow-lg"
+              className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 transition-all hover:shadow-lg hover:-translate-y-1 duration-300"
             >
-              <div className="flex items-start justify-between">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-800/50 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-500" />
+              <div className="relative flex items-start justify-between">
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {card.title}
                   </p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                  <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
                     {card.value}
                   </p>
                   <p className="mt-1 text-xs text-gray-400">
@@ -319,34 +340,77 @@ const StudentDashboard = () => {
         </div>
       </div>
 
-      {/* My Course Section */}
-      {courseId && (
+      {/* My Program & Course Section */}
+      {(programName || courseName) && (
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-green-500" />
-            My Course
+            <GraduationCap className="h-5 w-5 text-green-500" />
+            My Enrollment
           </h2>
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    {student?.courseId?.name || "My Course"}
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Access subjects and start practicing questions
-                  </p>
-                </div>
-                <button
-                  onClick={() => navigate(`/student/subjects?course=${courseId}`)}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2"
-                >
-                  View Subjects
-                  <ArrowRight className="h-4 w-4" />
-                </button>
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* Program Card */}
+                {programName && (
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                        <Building className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Program</p>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {programName}
+                        </h3>
+                      </div>
+                    </div>
+                    {student?.programId?.code && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Code: {student.programId.code}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Course Card */}
+                {courseName && (
+                  <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/30 dark:to-cyan-950/30">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                        <GraduationCap className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Course</p>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {courseName}
+                        </h3>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => navigate(`/student/subjects?course=${courseId}`)}
+                      className="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 font-medium flex items-center gap-1"
+                    >
+                      View Subjects
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* No Enrollment Message */}
+      {!programName && !courseName && (
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-6 text-center">
+          <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-amber-800 dark:text-amber-400 mb-2">
+            No Program Assigned Yet
+          </h3>
+          <p className="text-amber-700 dark:text-amber-500 text-sm">
+            Please contact an administrator to assign you to a program and course.
+          </p>
         </div>
       )}
 
