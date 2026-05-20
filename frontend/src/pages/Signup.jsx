@@ -35,24 +35,27 @@ const SignupPage = () => {
   });
 
   // ================= FETCH PROGRAMS =================
-  useEffect(() => {
-    const fetchPrograms = async () => {
-      try {
-        setLoadingPrograms(true);
-        const res = await API.get("/programs");
-        // Only show active programs
-        const activePrograms = (res.data || []).filter(p => p.isActive !== false);
-        setPrograms(activePrograms);
-      } catch (err) {
-        console.error("Error fetching programs:", err);
-        toast.error("Failed to load programs");
-        setPrograms([]);
-      } finally {
-        setLoadingPrograms(false);
-      }
-    };
-    fetchPrograms();
-  }, []);
+  // src/pages/SignupPage.jsx - UPDATE the fetchPrograms function
+useEffect(() => {
+  const fetchPrograms = async () => {
+    try {
+      setLoadingPrograms(true);
+      // CHANGE: Use the public endpoint instead
+      const res = await API.get("/programs/public");
+      console.log("Fetched programs:", res.data); // Debug log
+      // Only show active programs (already filtered by backend)
+      const activePrograms = (res.data || []).filter(p => p.isActive !== false);
+      setPrograms(activePrograms);
+    } catch (err) {
+      console.error("Error fetching programs:", err);
+      toast.error("Failed to load programs");
+      setPrograms([]);
+    } finally {
+      setLoadingPrograms(false);
+    }
+  };
+  fetchPrograms();
+}, []);
 
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });

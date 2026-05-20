@@ -2,7 +2,21 @@ import Program from "../models/Program.js";
 import Course from "../models/Course.js";
 import { io } from "../../server.js";
 
-// ================= GET ALL PROGRAMS =================
+// ================= GET ALL PROGRAMS (PUBLIC - NO AUTH REQUIRED) =================
+export const getPublicPrograms = async (req, res) => {
+  try {
+    // Only return active programs for public view
+    const programs = await Program.find({ isActive: { $ne: false } })
+      .select("name code description isActive createdAt")
+      .sort({ createdAt: -1 });
+    res.json(programs);
+  } catch (error) {
+    console.error("Get Public Programs Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= GET ALL PROGRAMS (ADMIN - REQUIRES AUTH) =================
 export const getPrograms = async (req, res) => {
   try {
     const programs = await Program.find().sort({ createdAt: -1 });

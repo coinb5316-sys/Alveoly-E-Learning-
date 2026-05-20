@@ -28,32 +28,33 @@ const SelectProgramPage = () => {
   const { assignProgram, user, loading: authLoading } = useAuth();
 
   // ================= FETCH PROGRAMS =================
-  useEffect(() => {
-    const fetchPrograms = async () => {
-      try {
-        setLoadingPrograms(true);
-        setError(null);
-        const res = await API.get("/programs");
-        console.log("Fetched programs:", res.data);
-        
-        // Only show active programs
-        const activePrograms = (res.data || []).filter(p => p.isActive !== false);
-        setPrograms(activePrograms);
-        
-        if (activePrograms.length === 0) {
-          setError("No active programs available. Please contact support.");
-        }
-      } catch (err) {
-        console.error("Error fetching programs:", err);
-        setError(err.response?.data?.message || "Failed to load programs");
-        toast.error("Failed to load programs");
-      } finally {
-        setLoadingPrograms(false);
+ // src/pages/SelectProgramPage.jsx - UPDATE the fetchPrograms function
+useEffect(() => {
+  const fetchPrograms = async () => {
+    try {
+      setLoadingPrograms(true);
+      setError(null);
+      // CHANGE: Use the public endpoint
+      const res = await API.get("/programs/public");
+      console.log("Fetched programs:", res.data);
+      
+      const activePrograms = (res.data || []).filter(p => p.isActive !== false);
+      setPrograms(activePrograms);
+      
+      if (activePrograms.length === 0) {
+        setError("No active programs available. Please contact support.");
       }
-    };
+    } catch (err) {
+      console.error("Error fetching programs:", err);
+      setError(err.response?.data?.message || "Failed to load programs");
+      toast.error("Failed to load programs");
+    } finally {
+      setLoadingPrograms(false);
+    }
+  };
 
-    fetchPrograms();
-  }, []);
+  fetchPrograms();
+}, []);
 
   // ================= HANDLE SELECT PROGRAM =================
   const handleSelectProgram = async () => {
