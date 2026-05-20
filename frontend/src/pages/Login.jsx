@@ -82,7 +82,7 @@ const LoginPage = () => {
       } else if (userRole === "lecturer") {
         navigate("/lecturer");
       } else if (res.requiresCourse) {
-        navigate("/select-course");
+        navigate("/select-program");
       } else {
         navigate("/student/dashboard");
       }

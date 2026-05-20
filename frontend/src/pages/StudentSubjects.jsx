@@ -1,4 +1,4 @@
-// StudentSubjects.jsx - Fully updated with proper socket initialization
+// StudentSubjects.jsx - Fixed to work with sidebar navigation
 import { useEffect, useState } from "react"; 
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -20,7 +20,8 @@ import {
   AlertCircle,
   Loader2,
   CreditCard,
-  Shield
+  Shield,
+  Building
 } from "lucide-react";
 
 const StudentSubjects = () => {
@@ -33,8 +34,12 @@ const StudentSubjects = () => {
   const [fetching, setFetching] = useState(true);
   const [courseId, setCourseId] = useState(null);
   const [courseName, setCourseName] = useState("");
+  const [programId, setProgramId] = useState(null);
+  const [programName, setProgramName] = useState("");
   const [hoveredSubject, setHoveredSubject] = useState(null);
   const [socket, setSocket] = useState(null);
+  const [userCourses, setUserCourses] = useState([]);
+  const [showCourseSelector, setShowCourseSelector] = useState(false);
 
   const [payments, setPayments] = useState([]);
   const [now, setNow] = useState(new Date());
@@ -61,13 +66,48 @@ const StudentSubjects = () => {
     fetchManualAccess();
   }, []);
 
-  // ================= GET COURSE =================
-  useEffect(() => {
-    const courseFromUrl = new URLSearchParams(search).get("course");
+  // ================= FETCH USER'S COURSES (for sidebar navigation) =================
+  const fetchUserCourses = async () => {
+    try {
+      // First get user's program
+      const userRes = await axios.get("/auth/me");
+      const userData = userRes.data;
+      
+      if (userData.programId) {
+        setProgramId(userData.programId?._id || userData.programId);
+        setProgramName(userData.programId?.name || "");
+        
+        // Fetch courses under this program
+        const programIdValue = userData.programId?._id || userData.programId;
+        if (programIdValue) {
+          const coursesRes = await axios.get(`/courses/program/${programIdValue}`);
+          setUserCourses(coursesRes.data || []);
+          
+          // If user has a course assigned, use it
+          if (userData.courseId) {
+            const userCourseId = userData.courseId?._id || userData.courseId;
+            const userCourseName = userData.courseId?.name || "";
+            setCourseId(userCourseId);
+            setCourseName(userCourseName);
+            return true;
+          }
+        }
+      }
+      return false;
+    } catch (err) {
+      console.error("Error fetching user courses:", err);
+      return false;
+    }
+  };
 
-    if (courseFromUrl) {
-      setCourseId(courseFromUrl);
-      const fetchCourseName = async () => {
+  // ================= GET COURSE FROM URL OR USER =================
+  useEffect(() => {
+    const loadCourse = async () => {
+      const courseFromUrl = new URLSearchParams(search).get("course");
+
+      if (courseFromUrl) {
+        // Course provided in URL
+        setCourseId(courseFromUrl);
         try {
           const res = await axios.get(`/courses/${courseFromUrl}`);
           setCourseName(res.data.name);
@@ -75,17 +115,19 @@ const StudentSubjects = () => {
           console.error("Error fetching course name:", err);
           setCourseName("Course");
         }
-      };
-      fetchCourseName();
-    } else if (user?.courseId) {
-      if (typeof user.courseId === "string") {
-        setCourseId(user.courseId);
-        setCourseName(user.courseIdName || "My Course");
-      } else if (user.courseId?._id) {
-        setCourseId(user.courseId._id);
-        setCourseName(user.courseId.name);
+        setShowCourseSelector(false);
+      } else {
+        // No course in URL - try to get from user
+        const hasCourse = await fetchUserCourses();
+        if (!hasCourse) {
+          // No course assigned - show selector or message
+          setShowCourseSelector(true);
+          setFetching(false);
+        }
       }
-    }
+    };
+    
+    loadCourse();
   }, [user, search]);
 
   // ================= FETCH PAYMENTS =================
@@ -164,34 +206,33 @@ const StudentSubjects = () => {
     fetchSubjects();
 
     // Socket event listeners
-    newSocket.on("subject:created", (subj) => {
-      if (subj.courseId?.toString() === courseId) {
-        setSubjects((prev) => [subj, ...prev]);
-      }
-    });
-
-    newSocket.on("subject:updated", (subj) => {
-      setSubjects((prev) =>
-        prev.map((s) => (s._id === subj._id ? subj : s))
-      );
-    });
-
-    newSocket.on("subject:deleted", (_id) => {
-      setSubjects((prev) => prev.filter((s) => s._id !== _id));
-    });
-
-    newSocket.on("manualAccess:updated", () => {
-      // Refresh manual access
-      axios.get("/manual-access/mine").then((res) => {
-        setManualAccess(res.data || []);
+    if (newSocket) {
+      newSocket.on("subject:created", (subj) => {
+        if (subj.courseId?.toString() === courseId) {
+          setSubjects((prev) => [subj, ...prev]);
+        }
       });
-      // Refresh subjects to update unlock status
-      axios.get(`/subjects?course=${courseId}`).then((res) => {
-        setSubjects(res.data || []);
-      });
-    });
 
-    // Cleanup
+      newSocket.on("subject:updated", (subj) => {
+        setSubjects((prev) =>
+          prev.map((s) => (s._id === subj._id ? subj : s))
+        );
+      });
+
+      newSocket.on("subject:deleted", (_id) => {
+        setSubjects((prev) => prev.filter((s) => s._id !== _id));
+      });
+
+      newSocket.on("manualAccess:updated", () => {
+        axios.get("/manual-access/mine").then((res) => {
+          setManualAccess(res.data || []);
+        });
+        axios.get(`/subjects?course=${courseId}`).then((res) => {
+          setSubjects(res.data || []);
+        });
+      });
+    }
+
     return () => {
       if (newSocket) {
         newSocket.off("subject:created");
@@ -220,6 +261,15 @@ const StudentSubjects = () => {
     }
   };
 
+  // ================= SELECT COURSE =================
+  const handleSelectCourse = (course) => {
+    setCourseId(course._id);
+    setCourseName(course.name);
+    setShowCourseSelector(false);
+    // Update URL without reload
+    navigate(`/student/subjects?course=${course._id}`, { replace: true });
+  };
+
   // Calculate stats
   const unlockedCount = subjects.filter(s => isSubjectUnlocked(s)).length;
   const lockedCount = subjects.filter(s => !isSubjectUnlocked(s) && s.isPaid).length;
@@ -232,12 +282,94 @@ const StudentSubjects = () => {
     return text.substring(0, maxLength) + '...';
   };
 
+  // Show course selector when no course is selected
+  if (showCourseSelector) {
+    return (
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+              Select Your Course
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Choose a course to start learning
+            </p>
+          </div>
+        </div>
+
+        {/* No Course Message */}
+        {userCourses.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
+            <div className="flex flex-col items-center">
+              <div className="h-20 w-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                <Building className="h-10 w-10 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                No Course Assigned
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                You haven't been assigned to any course yet. Please contact your administrator.
+              </p>
+              <button
+                onClick={() => navigate("/student/dashboard")}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {userCourses.map((course) => (
+              <div
+                key={course._id}
+                onClick={() => handleSelectCourse(course)}
+                className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <GraduationCap className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
+                      {course.name}
+                    </h3>
+                    {course.programId?.name && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {course.programId.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Click to view subjects and start learning
+                </p>
+                <div className="mt-4 flex items-center gap-1 text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                  Select Course
+                  <ChevronRight className="h-4 w-4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1 flex-wrap">
+            {programName && (
+              <>
+                <Building className="h-4 w-4" />
+                <span>{programName}</span>
+                <ChevronRight className="h-3 w-3" />
+              </>
+            )}
             <GraduationCap className="h-4 w-4" />
             <span>Course</span>
             <ChevronRight className="h-3 w-3" />
@@ -259,6 +391,17 @@ const StudentSubjects = () => {
               {subjects.length} Subjects
             </span>
           </div>
+          {userCourses.length > 1 && (
+            <button
+              onClick={() => {
+                setShowCourseSelector(true);
+                setCourseId(null);
+              }}
+              className="px-3 py-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Change Course
+            </button>
+          )}
         </div>
       </div>
 
@@ -332,7 +475,7 @@ const StudentSubjects = () => {
       )}
 
       {/* Empty State */}
-      {!fetching && subjects.length === 0 && (
+      {!fetching && subjects.length === 0 && courseId && (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
           <div className="flex flex-col items-center">
             <div className="h-20 w-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
@@ -371,7 +514,7 @@ const StudentSubjects = () => {
                     : "border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30"
                 }`}
               >
-                {/* Badges - Positioned properly to avoid text overlap */}
+                {/* Badges */}
                 <div className="absolute top-3 right-3 z-10 flex flex-col gap-1 items-end">
                   {subject.isPaid && !unlocked && (
                     <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full shadow-lg whitespace-nowrap">
@@ -396,9 +539,8 @@ const StudentSubjects = () => {
                 </div>
 
                 <div className="p-5 relative z-10 flex-1 flex flex-col">
-                  {/* Icon and Title - Improved layout */}
+                  {/* Icon and Title */}
                   <div className="flex items-start gap-3 mb-3 pr-16">
-                    {/* Icon - smaller on mobile */}
                     <div className={`flex-shrink-0 ${!unlocked && 'opacity-50'}`}>
                       <div className={`h-12 w-12 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-300 ${
                         unlocked 
@@ -409,7 +551,6 @@ const StudentSubjects = () => {
                       </div>
                     </div>
                     
-                    {/* Title area with proper text wrapping */}
                     <div className="flex-1 min-w-0">
                       <h3 className={`font-semibold text-base leading-tight break-words ${unlocked ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
                         {subject.name}
@@ -423,7 +564,7 @@ const StudentSubjects = () => {
                     </div>
                   </div>
 
-                  {/* Description - with truncation for long text */}
+                  {/* Description */}
                   <p className={`text-sm mb-4 line-clamp-2 ${unlocked ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}`}>
                     Master {truncateText(subject.name, 30)} with comprehensive study materials, practice questions, and mock exams.
                   </p>
