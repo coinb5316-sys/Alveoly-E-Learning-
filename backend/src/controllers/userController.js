@@ -1,4 +1,4 @@
-// controllers/userController.js - UPDATE THIS FILE
+// controllers/userController.js - FULLY UPDATED with programId population
 import User from "../models/User.js";
 import { createNotification } from "./notificationController.js";
 
@@ -7,7 +7,8 @@ export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find()
       .select("-password")
-      .populate("courseId", "name")
+      .populate("programId", "name code isActive")  // ✅ ADD THIS LINE
+      .populate("courseId", "name")                 // ✅ KEEP THIS
       .populate({
         path: 'lecturerInfo.assignedSubjects',
         populate: { path: 'courseId', select: 'name code' }
@@ -15,6 +16,30 @@ export const getAllUsers = async (req, res) => {
       .populate('lecturerInfo.assignedCourses', 'name code');
 
     res.json(users);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= GET USER BY ID =================
+export const getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select("-password")
+      .populate("programId", "name code isActive")  // ✅ ADD THIS
+      .populate("courseId", "name")
+      .populate({
+        path: 'lecturerInfo.assignedSubjects',
+        populate: { path: 'courseId', select: 'name code' }
+      })
+      .populate('lecturerInfo.assignedCourses', 'name code');
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -70,15 +95,16 @@ export const updateUserRole = async (req, res) => {
       { action: "role_change", oldRole: user.role, newRole: role }
     );
 
+    // Fetch updated user with populated fields
+    const updatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name");
+
     res.json({ 
       success: true,
       message: `User role updated to ${role} successfully`,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
+      user: updatedUser
     });
 
   } catch (err) {
@@ -91,7 +117,7 @@ export const updateUserRole = async (req, res) => {
 // ================= FULL UPDATE USER =================
 export const updateUser = async (req, res) => {
   try {
-    const { name, email, role, courseId, lecturerInfo } = req.body;
+    const { name, email, role, programId, courseId, lecturerInfo } = req.body;
     const userId = req.params.id;
     
     if (req.user._id.toString() === userId) {
@@ -109,6 +135,12 @@ export const updateUser = async (req, res) => {
     if (role && ["student", "admin", "lecturer"].includes(role)) {
       user.role = role;
     }
+    
+    // ADD PROGRAM ID UPDATE
+    if (programId !== undefined) {
+      user.programId = programId || null;
+    }
+    
     if (courseId !== undefined) {
       user.courseId = courseId || null;
     }
@@ -119,14 +151,12 @@ export const updateUser = async (req, res) => {
         user.lecturerInfo = {};
       }
       
-      // Preserve existing values and update new ones
       user.lecturerInfo.title = lecturerInfo.title || user.lecturerInfo.title || "";
       user.lecturerInfo.bio = lecturerInfo.bio || user.lecturerInfo.bio || "";
       user.lecturerInfo.phoneNumber = lecturerInfo.phoneNumber || user.lecturerInfo.phoneNumber || "";
       user.lecturerInfo.department = lecturerInfo.department || user.lecturerInfo.department || "";
       user.lecturerInfo.specialization = lecturerInfo.specialization || user.lecturerInfo.specialization || "";
       
-      // IMPORTANT: Handle assignedCourses and assignedSubjects
       if (lecturerInfo.assignedCourses !== undefined) {
         user.lecturerInfo.assignedCourses = Array.isArray(lecturerInfo.assignedCourses) 
           ? lecturerInfo.assignedCourses 
@@ -147,9 +177,8 @@ export const updateUser = async (req, res) => {
     }
     
     await user.save();
-    console.log("✅ User saved successfully with subjects:", user.lecturerInfo?.assignedSubjects);
+    console.log("✅ User saved successfully with program:", user.programId);
     
-    // Send notification about profile update
     await createNotification(
       user._id,
       user.role,
@@ -162,6 +191,7 @@ export const updateUser = async (req, res) => {
     
     const updatedUser = await User.findById(userId)
       .select("-password")
+      .populate("programId", "name code isActive")  // ✅ ADD THIS
       .populate("courseId", "name")
       .populate({
         path: 'lecturerInfo.assignedSubjects',
@@ -199,6 +229,40 @@ export const deleteUser = async (req, res) => {
 
     res.json({ message: "User deleted successfully" });
 
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= GET USER STATS =================
+export const getUserStats = async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    const totalStudents = await User.countDocuments({ role: "student" });
+    const totalAdmins = await User.countDocuments({ role: "admin" });
+    const totalLecturers = await User.countDocuments({ role: "lecturer" });
+    const activeToday = await User.countDocuments({
+      lastActivityAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    });
+    
+    // Get users by program
+    const usersByProgram = await User.aggregate([
+      { $match: { programId: { $ne: null } } },
+      { $group: { _id: "$programId", count: { $sum: 1 } } },
+      { $lookup: { from: "programs", localField: "_id", foreignField: "_id", as: "program" } },
+      { $unwind: { path: "$program", preserveNullAndEmptyArrays: true } },
+      { $project: { programName: "$program.name", count: 1 } }
+    ]);
+    
+    res.json({
+      totalUsers,
+      totalStudents,
+      totalAdmins,
+      totalLecturers,
+      activeToday,
+      usersByProgram
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

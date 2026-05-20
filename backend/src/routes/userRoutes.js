@@ -3,16 +3,19 @@ import express from "express";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import {
   getAllUsers,
+  getUserById,
   updateUserRole,
   deleteUser,
   updateUser,
+  getUserStats,
 } from "../controllers/userController.js";
-import User from "../models/User.js";
 
 const router = express.Router();
 
 // ADMIN ONLY
 router.get("/", protect, adminOnly, getAllUsers);
+router.get("/stats", protect, adminOnly, getUserStats);  // ADD THIS
+router.get("/:id", protect, adminOnly, getUserById);     // ADD THIS
 router.put("/:id/role", protect, adminOnly, updateUserRole);
 router.delete("/:id", protect, adminOnly, deleteUser);
 router.put("/:id", protect, adminOnly, updateUser);
@@ -23,12 +26,10 @@ router.get("/students", protect, async (req, res) => {
     const { courseId } = req.query;
     const filter = { role: "student" };
     
-    // Filter by course if provided
     if (courseId && courseId !== "undefined" && courseId !== "null") {
       filter.courseId = courseId;
     }
     
-    // Include createdAt and lastLoginAt in the selection
     const students = await User.find(filter)
       .select("name email courseId _id createdAt lastLoginAt isActive")
       .populate("courseId", "name");
