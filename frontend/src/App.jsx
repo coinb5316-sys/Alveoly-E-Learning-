@@ -13,7 +13,6 @@ import Admissions from "./pages/Admissions";
 import Contact from "./pages/Contact";
 import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
-import SelectProgramPage from "./pages/SelectProgramPage";
 import ProtectedRoute from "./components/ProtectedRoutes";
 import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -81,6 +80,7 @@ import AIPlansAdmin from "./pages/AIPlansAdmin";
 import AIGenerator from "./pages/AdminAIGeneratorU";
 import AIChat from "./pages/AIChat";
 import AdminPrograms from "./pages/AdminPrograms";
+import SelectProgramPage from "./pages/SelectProgramPage";
 
 function App() {
   useEffect(() => {
@@ -139,8 +139,17 @@ function App() {
           <Route path="/join/:classId" element={<JoinLiveClass />} />
 
           {/* ==================== STUDENT ROUTES ==================== */}
-          <Route
+          {/* <Route
             path="/select-course"
+            element={
+              <ProtectedRoute role="student">
+                <SelectCoursePage />
+              </ProtectedRoute>
+            }
+          /> */}
+
+          <Route
+            path="/select-program"
             element={
               <ProtectedRoute role="student">
                 <SelectProgramPage />

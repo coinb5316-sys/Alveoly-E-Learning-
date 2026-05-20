@@ -9,6 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [socket, setSocket] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem("token"));
 
   // ================= SOCKET =================
   const connectSocket = (userData) => {
@@ -23,7 +24,6 @@ export const AuthProvider = ({ children }) => {
 
     socketInstance.emit("join:user", userData._id);
     
-    // Emit role-specific join events
     if (userData.role === "lecturer") {
       socketInstance.emit("join:lecturer", userData._id);
     } else if (userData.role === "admin") {
@@ -38,36 +38,44 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ================= SET AUTH =================
-  const setAuth = (token, userData) => {
-    localStorage.setItem("token", token);
+  const setAuth = (newToken, userData) => {
+    if (newToken) {
+      localStorage.setItem("token", newToken);
+      setToken(newToken);
+    }
     setUser(userData);
-    connectSocket(userData);
+    if (userData) {
+      connectSocket(userData);
+    }
   };
 
   // ================= CLEAR AUTH =================
   const clearAuth = () => {
     localStorage.removeItem("token");
+    setToken(null);
     disconnectSocket();
     setUser(null);
   };
 
   // ================= FETCH CURRENT USER =================
   const fetchUser = async () => {
+    const storedToken = localStorage.getItem("token");
+    
+    if (!storedToken) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-
       const res = await API.get("/auth/me");
       setUser(res.data);
       connectSocket(res.data);
     } catch (err) {
       console.error("Fetch user error:", err);
-      clearAuth();
+      if (err.response?.status === 401) {
+        clearAuth();
+      }
     } finally {
       setLoading(false);
     }
@@ -85,9 +93,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (form) => {
     try {
       const res = await API.post("/auth/login", form);
-      const { token, user: userData, requiresProgram } = res.data;
-
-      setAuth(token, userData);
+      const { token: newToken, user: userData, requiresProgram } = res.data;
+      
+      setAuth(newToken, userData);
       return { user: userData, requiresProgram };
     } catch (err) {
       console.error("Login error:", err);
@@ -99,9 +107,9 @@ export const AuthProvider = ({ children }) => {
   const register = async (form) => {
     try {
       const res = await API.post("/auth/register", form);
-      const { token, user: userData, requiresProgram } = res.data;
-
-      setAuth(token, userData);
+      const { token: newToken, user: userData, requiresProgram } = res.data;
+      
+      setAuth(newToken, userData);
       return { user: userData, requiresProgram };
     } catch (err) {
       console.error("Register error:", err);
@@ -109,14 +117,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= GOOGLE LOGIN (FIXED - returns requiresProgram) =================
+  // ================= GOOGLE LOGIN =================
   const googleLogin = async (idToken) => {
     try {
       const res = await API.post("/auth/google-login", { idToken });
-      const { token, user: userData, requiresProgram } = res.data;
-
-      setAuth(token, userData);
-
+      const { token: newToken, user: userData, requiresProgram } = res.data;
+      
+      console.log("Google login response:", { userData, requiresProgram });
+      
+      setAuth(newToken, userData);
       return { user: userData, requiresProgram };
     } catch (err) {
       console.error("Google login error:", err);
@@ -127,6 +136,18 @@ export const AuthProvider = ({ children }) => {
   // ================= LOGOUT =================
   const logout = () => {
     clearAuth();
+  };
+
+  // ================= ASSIGN PROGRAM =================
+  const assignProgram = async (programId) => {
+    try {
+      const res = await API.put("/auth/me/program", { programId });
+      setUser(res.data);
+      return res.data;
+    } catch (err) {
+      console.error("Assign program error:", err);
+      throw err;
+    }
   };
 
   // ================= HELPER METHODS =================
@@ -146,17 +167,17 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         loading,
+        token,
         login,
         register,
         googleLogin,
         logout,
         setUser,
-        // Helper methods
+        assignProgram,
         isAdmin,
         isLecturer,
         isStudent,
         getDashboardPath,
-        // Role checks
         isAuthenticated: !!user,
         userRole: user?.role,
       }}

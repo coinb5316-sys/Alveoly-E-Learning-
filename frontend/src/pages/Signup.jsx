@@ -1,4 +1,4 @@
-// SignupPage.jsx - FULLY UPDATED with Program support
+// src/pages/SignupPage.jsx - FULLY UPDATED with Programs
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -10,8 +10,7 @@ import {
   FaEyeSlash, 
   FaGraduationCap, 
   FaBuilding,
-  FaSpinner,
-  FaGoogle
+  FaSpinner
 } from "react-icons/fa";
 import { GoogleLogin } from "@react-oauth/google";
 import Navbar from "../components/Navbar";
@@ -87,7 +86,6 @@ const SignupPage = () => {
       if (!idToken) throw new Error("No Google credential received");
       const result = await googleLogin(idToken);
       
-      // Check if user needs to select a program
       if (result.requiresProgram) {
         navigate("/select-program");
       } else {
