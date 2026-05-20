@@ -8,15 +8,11 @@ import {
   FaPaperPlane, 
   FaClock, 
   FaLock, 
-  FaUnlockAlt,
   FaPlus,
   FaComments,
-  FaChevronLeft,
-  FaChevronRight,
   FaSpinner,
   FaStar,
-  FaCrown,
-  FaGift
+  FaCrown
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
@@ -34,26 +30,12 @@ const AIChat = () => {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
 
-  // ================= DARK MODE =================
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const isDark = savedTheme === "dark" || (!savedTheme && systemPrefersDark);
-    setDarkMode(isDark);
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, []);
-
   // ================= SOCKET =================
   useEffect(() => {
-    const newSocket = io("https://alveoly-e-learning-755w.onrender.com", {
+    const newSocket = io(process.env.REACT_APP_SOCKET_URL || "https://alveoly-e-learning-755w.onrender.com", {
       transports: ["websocket"],
       withCredentials: true,
     });
@@ -62,7 +44,9 @@ const AIChat = () => {
     setSocket(newSocket);
 
     return () => {
-      newSocket.disconnect();
+      if (newSocket) {
+        newSocket.disconnect();
+      }
     };
   }, []);
 
@@ -71,9 +55,10 @@ const AIChat = () => {
     const fetchQA = async () => {
       try {
         const res = await axios.get("/ai/all-admin");
-        setQaList(res.data);
+        setQaList(res.data || []);
       } catch (err) {
         console.error(err);
+        toast.error("Failed to load knowledge base");
       }
     };
     fetchQA();
@@ -106,18 +91,29 @@ const AIChat = () => {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on("newQA", (qa) => setQaList((prev) => [qa, ...prev]));
-    socket.on("updateQA", (qa) =>
-      setQaList((prev) => prev.map((item) => (item.id === qa.id ? qa : item)))
-    );
-    socket.on("deleteQA", (id) =>
-      setQaList((prev) => prev.filter((item) => item.id !== id))
-    );
+    const handleNewQA = (qa) => {
+      setQaList((prev) => [qa, ...prev]);
+      toast.success("New QA added to knowledge base");
+    };
+    
+    const handleUpdateQA = (qa) => {
+      setQaList((prev) => prev.map((item) => (item.id === qa.id ? qa : item)));
+      toast.success("QA updated");
+    };
+    
+    const handleDeleteQA = (id) => {
+      setQaList((prev) => prev.filter((item) => item.id !== id));
+      toast.success("QA deleted");
+    };
+
+    socket.on("newQA", handleNewQA);
+    socket.on("updateQA", handleUpdateQA);
+    socket.on("deleteQA", handleDeleteQA);
 
     return () => {
-      socket.off("newQA");
-      socket.off("updateQA");
-      socket.off("deleteQA");
+      socket.off("newQA", handleNewQA);
+      socket.off("updateQA", handleUpdateQA);
+      socket.off("deleteQA", handleDeleteQA);
     };
   }, [socket]);
 
@@ -125,18 +121,21 @@ const AIChat = () => {
   useEffect(() => {
     const fetchPlansAndSub = async () => {
       try {
-        const plansRes = await axios.get("/ai-plans");
-        setPlans(plansRes.data);
-
-        const subRes = await axios.get("/ai-subscriptions");
-        if (subRes.data.active) {
+        const [plansRes, subRes] = await Promise.all([
+          axios.get("/ai-plans"),
+          axios.get("/ai-subscriptions").catch(() => ({ data: { active: false } }))
+        ]);
+        
+        setPlans(plansRes.data || []);
+        
+        if (subRes.data.active && subRes.data.subscription) {
           setSubscription(subRes.data.subscription);
-          const remaining =
-            new Date(subRes.data.subscription.expiryDate) - new Date();
+          const remaining = new Date(subRes.data.subscription.expiryDate) - new Date();
           setTimeLeft(Math.max(remaining, 0));
         }
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching plans:", err);
+        toast.error("Failed to load subscription plans");
       }
     };
     fetchPlansAndSub();
@@ -144,17 +143,20 @@ const AIChat = () => {
 
   // ================= TIMER =================
   useEffect(() => {
-    if (!timeLeft) return;
+    if (!timeLeft || timeLeft <= 0) return;
+    
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1000) {
           setSubscription(null);
           clearInterval(timer);
+          toast.info("Your subscription has expired");
           return 0;
         }
         return prev - 1000;
       });
     }, 1000);
+    
     return () => clearInterval(timer);
   }, [timeLeft]);
 
@@ -163,24 +165,36 @@ const AIChat = () => {
     const fetchChats = async () => {
       try {
         const res = await axios.get("/ai/student-history");
-        setChats(res.data);
-        if (res.data.length > 0) setActiveChatId(res.data[0]._id);
+        const chatData = res.data || [];
+        setChats(chatData);
+        if (chatData.length > 0) {
+          setActiveChatId(chatData[0]._id);
+        }
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching chats:", err);
+        toast.error("Failed to load chat history");
       }
     };
     fetchChats();
   }, []);
 
   // ================= SCROLL TO BOTTOM =================
-  useEffect(() => {
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeChat, loading]);
+  };
 
-  const activeChat = chats.find((c) => c._id === activeChatId);
+  useEffect(() => {
+    scrollToBottom();
+  }, [activeChatId, loading]);
+
+  const activeChat = chats?.find((c) => c._id === activeChatId);
 
   const handleAsk = async () => {
-    if (!question.trim()) return;
+    if (!question?.trim()) {
+      toast.error("Please enter a question");
+      return;
+    }
+    
     if (!subscription) {
       toast.error("You must have an active AI subscription!");
       return;
@@ -188,13 +202,15 @@ const AIChat = () => {
 
     setLoading(true);
     try {
-      const res = await axios.post("/ai/student-ask", {
-        question,
+      const response = await axios.post("/ai/student-ask", {
+        question: question.trim(),
         chatId: activeChatId,
       });
 
-      setAnswer(res.data.answer);
-      setFromDB(res.data.fromDB || false);
+      const { answer: aiAnswer, fromDB: isFromDB, chatId } = response.data;
+      
+      setAnswer(aiAnswer);
+      setFromDB(isFromDB || false);
 
       let updatedChats;
       if (activeChatId) {
@@ -203,22 +219,24 @@ const AIChat = () => {
             ? {
                 ...chat,
                 messages: [
-                  ...chat.messages,
-                  { role: "user", content: question },
-                  { role: "ai", content: res.data.answer },
+                  ...(chat.messages || []),
+                  { role: "user", content: question.trim() },
+                  { role: "ai", content: aiAnswer },
                 ],
               }
             : chat
         );
       } else {
         const newChat = {
-          _id: res.data.chatId,
+          _id: chatId,
           messages: [
-            { role: "user", content: question },
-            { role: "ai", content: res.data.answer },
+            { role: "user", content: question.trim() },
+            { role: "ai", content: aiAnswer },
           ],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         };
-        updatedChats = [newChat, ...chats];
+        updatedChats = [newChat, ...(chats || [])];
         setActiveChatId(newChat._id);
       }
 
@@ -226,20 +244,30 @@ const AIChat = () => {
       setQuestion("");
       toast.success("Response received!");
     } catch (err) {
-      setAnswer(err.response?.data?.message || "Error getting AI response");
-      toast.error(err.response?.data?.message || "Failed to get response");
+      console.error("Ask error:", err);
+      const errorMessage = err.response?.data?.message || "Failed to get AI response";
+      setAnswer(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const handleDeleteChat = async (id) => {
+  const handleDeleteChat = async (chatId) => {
+    if (!chatId) return;
+    
     try {
-      await axios.delete(`/ai/student-history/${id}`);
-      setChats((prev) => prev.filter((c) => c._id !== id));
-      if (activeChatId === id) setActiveChatId(null);
+      await axios.delete(`/ai/student-history/${chatId}`);
+      const updatedChats = chats.filter((c) => c._id !== chatId);
+      setChats(updatedChats);
+      
+      if (activeChatId === chatId) {
+        setActiveChatId(updatedChats.length > 0 ? updatedChats[0]._id : null);
+      }
+      
       toast.success("Chat deleted successfully");
     } catch (err) {
-      console.error(err);
+      console.error("Delete error:", err);
       toast.error("Failed to delete chat");
     }
   };
@@ -247,25 +275,38 @@ const AIChat = () => {
   const handleNewChat = () => {
     setActiveChatId(null);
     setQuestion("");
-    if (window.innerWidth < 768) setSidebarOpen(false);
+    setAnswer("");
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+    toast.success("New conversation started");
   };
 
   const formatTime = (ms) => {
-    const s = Math.floor(ms / 1000);
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    if (h > 0) return `${h}h ${m}m ${sec}s`;
-    if (m > 0) return `${m}m ${sec}s`;
-    return `${sec}s`;
+    if (!ms || ms <= 0) return "Expired";
+    const seconds = Math.floor(ms / 1000);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+    if (minutes > 0) return `${minutes}m ${secs}s`;
+    return `${secs}s`;
   };
 
   const handleSubscribe = async (planId) => {
+    if (!planId) return;
+    
     try {
-      const res = await axios.post("/ai-subscriptions", { planId });
-      window.location.href = res.data.authorization_url;
+      const response = await axios.post("/ai-subscriptions", { planId });
+      if (response.data?.authorization_url) {
+        window.location.href = response.data.authorization_url;
+      } else {
+        toast.error("Invalid subscription response");
+      }
     } catch (err) {
-      toast.error("Subscription failed. Try again.");
+      console.error("Subscription error:", err);
+      toast.error(err.response?.data?.message || "Subscription failed. Try again.");
     }
   };
 
@@ -283,12 +324,13 @@ const AIChat = () => {
         }}
       />
 
-      {/* HEADER - Premium */}
+      {/* HEADER */}
       <div className="sticky top-0 z-30 backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
             className="md:hidden text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+            aria-label="Open menu"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -309,13 +351,12 @@ const AIChat = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {subscription && (
+          {subscription ? (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
               <FaClock className="w-3 h-3" />
               <span className="text-xs font-medium">{formatTime(timeLeft)}</span>
             </div>
-          )}
-          {!subscription && (
+          ) : (
             <div className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400">
               <FaLock className="w-3 h-3" />
               <span className="text-xs font-medium">Inactive</span>
@@ -326,9 +367,8 @@ const AIChat = () => {
 
       {/* MAIN CONTENT */}
       <div className="flex flex-1 overflow-hidden max-w-7xl w-full mx-auto">
-        {/* DESKTOP SIDEBAR - Premium */}
+        {/* DESKTOP SIDEBAR */}
         <div className="hidden md:flex w-80 flex-col border-r border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
-          {/* Sidebar Header */}
           <div className="p-5 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -345,7 +385,6 @@ const AIChat = () => {
             </div>
           </div>
 
-          {/* Chat List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {chats.length === 0 && (
               <div className="text-center py-12">
@@ -366,7 +405,7 @@ const AIChat = () => {
               >
                 <div className="flex justify-between items-start gap-2">
                   <p className="text-sm text-slate-700 dark:text-slate-300 flex-1 line-clamp-2">
-                    {chat.messages[0]?.content?.slice(0, 50) || "New Chat"}
+                    {chat.messages?.[0]?.content?.slice(0, 50) || "New Chat"}
                   </p>
                   <button
                     onClick={(e) => {
@@ -374,12 +413,13 @@ const AIChat = () => {
                       handleDeleteChat(chat._id);
                     }}
                     className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
+                    aria-label="Delete chat"
                   >
                     <FaTrash className="w-3.5 h-3.5" />
                   </button>
                 </div>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  {new Date(chat.updatedAt).toLocaleDateString()}
+                  {chat.updatedAt ? new Date(chat.updatedAt).toLocaleDateString() : "New"}
                 </p>
               </div>
             ))}
@@ -400,10 +440,11 @@ const AIChat = () => {
                   <button
                     onClick={handleNewChat}
                     className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                    aria-label="New chat"
                   >
                     <FaPlus className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setSidebarOpen(false)} className="p-2 text-slate-500">
+                  <button onClick={() => setSidebarOpen(false)} className="p-2 text-slate-500" aria-label="Close menu">
                     ✕
                   </button>
                 </div>
@@ -419,7 +460,7 @@ const AIChat = () => {
                     className="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                   >
                     <p className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                      {chat.messages[0]?.content?.slice(0, 40) || "New Chat"}
+                      {chat.messages?.[0]?.content?.slice(0, 40) || "New Chat"}
                     </p>
                   </div>
                 ))}
@@ -428,7 +469,7 @@ const AIChat = () => {
           </>
         )}
 
-        {/* CHAT AREA - Premium */}
+        {/* CHAT AREA */}
         <div className="flex-1 flex flex-col relative min-w-0">
           {/* MESSAGES */}
           <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-4">
@@ -445,14 +486,14 @@ const AIChat = () => {
                     Get personalized AI tutoring and instant answers to your nursing questions
                   </p>
                   <div className="space-y-3">
-                    {plans.map((p) => (
+                    {plans.map((plan) => (
                       <button
-                        key={p._id}
-                        onClick={() => handleSubscribe(p._id)}
+                        key={plan._id}
+                        onClick={() => handleSubscribe(plan._id)}
                         className="w-full flex items-center justify-between px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
                       >
-                        <span className="font-semibold">{p.name}</span>
-                        <span className="text-lg font-bold">${p.price}</span>
+                        <span className="font-semibold">{plan.name}</span>
+                        <span className="text-lg font-bold">${plan.price}</span>
                       </button>
                     ))}
                   </div>
@@ -471,7 +512,7 @@ const AIChat = () => {
                 <p className="text-slate-500 dark:text-slate-400 max-w-md">
                   Ask me anything about nursing, healthcare, or medical topics. I'm here to help you learn!
                 </p>
-                <div className="mt-6 flex gap-2">
+                <div className="mt-6 flex gap-2 flex-wrap justify-center">
                   <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">💊 Pharmacology</span>
                   <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">🫀 Anatomy</span>
                   <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">📋 NCLEX Prep</span>
@@ -479,9 +520,9 @@ const AIChat = () => {
               </div>
             )}
 
-            {activeChat?.messages.map((msg, i) => (
+            {activeChat?.messages?.map((msg, index) => (
               <div
-                key={i}
+                key={index}
                 className={`flex items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300 ${
                   msg.role === "user" ? "justify-end" : "justify-start"
                 }`}
@@ -535,21 +576,21 @@ const AIChat = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* INPUT AREA - Premium */}
+          {/* INPUT AREA */}
           <div className="border-t border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-4 md:px-6 py-4">
             <div className="flex items-center gap-3 max-w-5xl mx-auto">
               <input
                 className="flex-1 h-12 px-5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-base focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all shadow-sm"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAsk()}
+                onKeyDown={(e) => e.key === "Enter" && !loading && handleAsk()}
                 placeholder="Ask a nursing question..."
-                disabled={!subscription}
+                disabled={!subscription || loading}
               />
               <button
                 onClick={handleAsk}
                 disabled={!subscription || loading || !question.trim()}
-                className="flex-shrink-0 h-12 px-6 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
+                className="flex-shrink-0 h-12 px-6 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-lg flex items-center gap-2"
               >
                 {loading ? <FaSpinner className="animate-spin" /> : <FaPaperPlane />}
                 <span className="hidden sm:inline">Send</span>

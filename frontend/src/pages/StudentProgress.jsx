@@ -308,10 +308,10 @@ const StudentProgress = () => {
           </div>
         </div>
 
-        {/* Performance Prediction & AI Feedback Row - Premium */}
+        {/* Performance Prediction & AI Feedback Row - Premium with Fixed Height */}
         <div className="grid gap-6 lg:grid-cols-2 mb-10">
           {/* Performance Prediction - Enhanced */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 p-8 text-white shadow-xl group">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 p-8 text-white shadow-xl group h-full">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 animate-pulse" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24 group-hover:scale-150 transition-transform duration-700" />
             <div className="relative z-10">
@@ -346,11 +346,12 @@ const StudentProgress = () => {
             </div>
           </div>
 
-          {/* AI Feedback - Premium Card */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 p-8 text-white shadow-xl group">
+          {/* AI Feedback - Premium Card with Scrollable Content */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 p-8 text-white shadow-xl group h-full">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24 group-hover:scale-150 transition-transform duration-700" />
-            <div className="relative z-10">
+            <div className="relative z-10 flex flex-col h-full">
+              {/* Header */}
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
                   <FaBrain className="w-5 h-5" />
@@ -360,20 +361,27 @@ const StudentProgress = () => {
                   <p className="text-white/60 text-xs">Personalized learning insights</p>
                 </div>
               </div>
-              {aiLoading && (
-                <div className="flex items-center gap-2 text-white/80 bg-white/10 rounded-xl p-4 backdrop-blur-sm">
-                  <FaSpinner className="w-4 h-4 animate-spin" />
-                  <span>Analyzing your performance...</span>
-                </div>
-              )}
-              {!aiLoading && (
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 text-sm leading-relaxed">
-                  <div className="flex items-start gap-2">
-                    <FaStar className="text-amber-300 mt-0.5 flex-shrink-0" />
-                    <p>{aiInsight || "Complete more trials to receive personalized AI coaching insights tailored to your learning pattern."}</p>
+              
+              {/* Scrollable Content Area */}
+              <div className="flex-1 min-h-0">
+                {aiLoading && (
+                  <div className="flex items-center gap-2 text-white/80 bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                    <FaSpinner className="w-4 h-4 animate-spin" />
+                    <span>Analyzing your performance...</span>
                   </div>
-                </div>
-              )}
+                )}
+                
+                {!aiLoading && (
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 text-sm leading-relaxed max-h-[220px] overflow-y-auto custom-scrollbar-white">
+                    <div className="flex items-start gap-2">
+                      <FaStar className="text-amber-300 mt-0.5 flex-shrink-0" />
+                      <p className="whitespace-normal break-words">
+                        {aiInsight || "Complete more trials to receive personalized AI coaching insights tailored to your learning pattern."}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -548,6 +556,24 @@ const StudentProgress = () => {
           </div>
         </div>
       </div>
+
+      {/* Custom Scrollbar Styles */}
+      <style jsx>{`
+        .custom-scrollbar-white::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar-white::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+        }
+        .custom-scrollbar-white::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 10px;
+        }
+        .custom-scrollbar-white::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.5);
+        }
+      `}</style>
     </div>
   );
 };

@@ -151,33 +151,49 @@ Explain the correct answer like a nursing tutor.
   };
 
   // ================= SUBMIT =================
-  const submitTrial = async () => {
-    if (Object.keys(answers).length === 0) {
-      toast.error("Please answer at least one question.");
-      return;
-    }
+ // ================= SUBMIT =================
+const submitTrial = async () => {
+  if (Object.keys(answers).length === 0) {
+    toast.error("Please answer at least one question.");
+    return;
+  }
 
-    try {
-      setSubmitting(true);
+  try {
+    setSubmitting(true);
 
-      const res = await axios.post("/trial/submit", {
-        subjectId,
-        courseId,
-        answers,
-        duration: time,
-      });
+    // Convert answer letters to actual answer text
+    const answersWithText = {};
+    Object.keys(answers).forEach(qId => {
+      const answerLetter = answers[qId];
+      const question = questions.find(q => q._id === qId);
+      if (question && answerLetter) {
+        const answerIndex = answerLetter.charCodeAt(0) - 65;
+        if (question.options[answerIndex]) {
+          answersWithText[qId] = question.options[answerIndex];
+        }
+      }
+    });
 
-      setBackendResult(res.data.attempt);
-      setSubmitted(true);
-      setShowResult(true);
-      toast.success("Trial submitted successfully!");
-    } catch (err) {
-      console.error("❌ Submit Error:", err);
-      toast.error(err.response?.data?.message || "Failed to submit trial.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    console.log("Submitting answers:", answersWithText); // Debug log
+
+    const res = await axios.post("/trial/submit", {
+      subjectId,
+      courseId,
+      answers: answersWithText,
+      duration: time,
+    });
+
+    setBackendResult(res.data.attempt);
+    setSubmitted(true);
+    setShowResult(true);
+    toast.success("Trial submitted successfully!");
+  } catch (err) {
+    console.error("❌ Submit Error:", err);
+    toast.error(err.response?.data?.message || "Failed to submit trial.");
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   // ================= CALCULATE SCORE (FIXED - compares text content) =================
   const calculateScore = () => {
