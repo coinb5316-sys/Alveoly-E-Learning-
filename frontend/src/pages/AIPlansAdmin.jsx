@@ -147,10 +147,10 @@ const AIPlansAdmin = () => {
     }
   };
 
+  // ✅ FIXED: Return the component, not JSX
   const getPlanIcon = (index) => {
     const icons = [FaCrown, FaGem, FaRocket, FaStar];
-    const Icon = icons[index % icons.length];
-    return <Icon className="w-8 h-8" />;
+    return icons[index % icons.length];
   };
 
   const getPlanGradient = (index) => {
@@ -353,7 +353,7 @@ const AIPlansAdmin = () => {
 
             <div className="space-y-4">
               {plans.map((plan, index) => {
-                const PlanIcon = getPlanIcon(index);
+                const PlanIcon = getPlanIcon(index); // ✅ Now returns a component, not JSX
                 const gradient = getPlanGradient(index);
                 
                 return (
@@ -367,7 +367,7 @@ const AIPlansAdmin = () => {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-3">
                             <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}>
-                              <PlanIcon className="text-white text-xl" />
+                              <PlanIcon className="text-white text-xl" /> {/* ✅ Now works correctly */}
                             </div>
                             <div>
                               <h3 className="font-bold text-lg text-slate-900 dark:text-white">
