@@ -1,4 +1,4 @@
-// src/context/AuthContext.jsx - UPDATED with lecturer support
+// src/context/AuthContext.jsx - FULLY UPDATED with Program support
 import { createContext, useContext, useState, useEffect } from "react";
 import API from "../api/axios";
 import { initializeSocket } from "../config/socket.js";
@@ -85,10 +85,10 @@ export const AuthProvider = ({ children }) => {
   const login = async (form) => {
     try {
       const res = await API.post("/auth/login", form);
-      const { token, user: userData } = res.data;
+      const { token, user: userData, requiresProgram } = res.data;
 
       setAuth(token, userData);
-      return userData;
+      return { user: userData, requiresProgram };
     } catch (err) {
       console.error("Login error:", err);
       throw err;
@@ -99,25 +99,25 @@ export const AuthProvider = ({ children }) => {
   const register = async (form) => {
     try {
       const res = await API.post("/auth/register", form);
-      const { token, user: userData } = res.data;
+      const { token, user: userData, requiresProgram } = res.data;
 
       setAuth(token, userData);
-      return userData;
+      return { user: userData, requiresProgram };
     } catch (err) {
       console.error("Register error:", err);
       throw err;
     }
   };
 
-  // ================= GOOGLE LOGIN =================
+  // ================= GOOGLE LOGIN (FIXED - returns requiresProgram) =================
   const googleLogin = async (idToken) => {
     try {
       const res = await API.post("/auth/google-login", { idToken });
-      const { token, user: userData, requiresCourse } = res.data;
+      const { token, user: userData, requiresProgram } = res.data;
 
       setAuth(token, userData);
 
-      return { user: userData, requiresCourse };
+      return { user: userData, requiresProgram };
     } catch (err) {
       console.error("Google login error:", err);
       throw err;

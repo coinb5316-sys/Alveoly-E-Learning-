@@ -1,4 +1,4 @@
-// SignupPage.jsx - Billion-Dollar Professional UI with Programs
+// SignupPage.jsx - FULLY UPDATED with Program support
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -35,6 +35,7 @@ const SignupPage = () => {
     programId: "",
   });
 
+  // ================= FETCH PROGRAMS =================
   useEffect(() => {
     const fetchPrograms = async () => {
       try {
@@ -65,9 +66,13 @@ const SignupPage = () => {
     }
     setLoading(true);
     try {
-      await register(form);
+      const result = await register(form);
+      if (result.requiresProgram) {
+        navigate("/select-program");
+      } else {
+        navigate("/student/dashboard");
+      }
       toast.success("Account created successfully!");
-      navigate("/student/dashboard");
     } catch (err) {
       toast.error(err.response?.data?.message || "Signup failed");
     } finally {
@@ -80,12 +85,15 @@ const SignupPage = () => {
       setGoogleLoading(true);
       const idToken = credentialResponse?.credential;
       if (!idToken) throw new Error("No Google credential received");
-      const res = await googleLogin(idToken);
-      if (res.requiresProgram) {
+      const result = await googleLogin(idToken);
+      
+      // Check if user needs to select a program
+      if (result.requiresProgram) {
         navigate("/select-program");
       } else {
         navigate("/student/dashboard");
       }
+      toast.success("Google signup successful!");
     } catch (err) {
       toast.error(err.response?.data?.message || "Google signup failed");
     } finally {
