@@ -1,4 +1,4 @@
-// AdminSubjects.jsx - HIGHLY RESPONSIVE with socket configuration
+// AdminSubjects.jsx - ORIGINAL WORKING CODE with PROGRAM SUPPORT ADDED
 import { useState, useEffect } from "react";
 import { 
   FaPlus, 
@@ -14,14 +14,17 @@ import {
   FaUserGraduate,
   FaSpinner,
   FaCheckCircle,
-  FaExclamationCircle
+  FaExclamationCircle,
+  FaBuilding
 } from "react-icons/fa";
 import axios from "../api/axios";
 import initializeSocket, { getSocket } from "../config/socket";
 
 const AdminSubjects = () => {
   const [socket, setSocket] = useState(null);
+  const [programs, setPrograms] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [filteredCourses, setFilteredCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -36,6 +39,7 @@ const AdminSubjects = () => {
 
   const [form, setForm] = useState({
     name: "",
+    programId: "",
     courseId: "",
     isPaid: false,
     price: "",
@@ -43,50 +47,68 @@ const AdminSubjects = () => {
 
   // ================= FETCH =================
   useEffect(() => {
-    // Initialize socket connection
     const newSocket = initializeSocket();
     setSocket(newSocket);
     
-    // Fetch initial data
     fetchData();
 
-    // Socket event listeners
-    newSocket.on("subject:created", (data) => {
-      setSubjects((prev) => [data, ...prev]);
-    });
+    if (newSocket) {
+      newSocket.on("subject:created", (data) => {
+        setSubjects((prev) => [data, ...prev]);
+      });
 
-    newSocket.on("subject:updated", (updated) => {
-      setSubjects((prev) =>
-        prev.map((s) => (s._id === updated._id ? updated : s))
-      );
-    });
+      newSocket.on("subject:updated", (updated) => {
+        setSubjects((prev) =>
+          prev.map((s) => (s._id === updated._id ? updated : s))
+        );
+      });
 
-    newSocket.on("subject:deleted", (_id) => {
-      setSubjects((prev) => prev.filter((s) => s._id !== _id));
-    });
+      newSocket.on("subject:deleted", (_id) => {
+        setSubjects((prev) => prev.filter((s) => s._id !== _id));
+      });
+    }
 
-    // Cleanup
     return () => {
-      newSocket.off("subject:created");
-      newSocket.off("subject:updated");
-      newSocket.off("subject:deleted");
+      if (newSocket) {
+        newSocket.off("subject:created");
+        newSocket.off("subject:updated");
+        newSocket.off("subject:deleted");
+      }
     };
   }, []);
 
   const fetchData = async () => {
     try {
-      const [coursesRes, subjectsRes, usersRes, manualRes] = await Promise.all([
+      const [programsRes, coursesRes, subjectsRes, usersRes, manualRes] = await Promise.all([
+        axios.get("/programs"),
         axios.get("/courses"),
         axios.get("/subjects"),
         axios.get("/users"),
         axios.get("/manual-access/all"),
       ]);
-      setCourses(coursesRes.data);
-      setSubjects(subjectsRes.data);
-      setUsers(usersRes.data);
-      setManualAccessList(manualRes.data);
+      setPrograms(programsRes.data || []);
+      setCourses(coursesRes.data || []);
+      setSubjects(subjectsRes.data || []);
+      setUsers(usersRes.data || []);
+      setManualAccessList(manualRes.data || []);
     } catch (err) {
       console.error("Error fetching data:", err);
+    }
+  };
+
+  // ================= FILTER COURSES BY PROGRAM =================
+  const handleProgramChange = async (programId) => {
+    setForm({ ...form, programId, courseId: "" });
+    if (programId) {
+      try {
+        const res = await axios.get(`/courses/program/${programId}`);
+        setFilteredCourses(res.data || []);
+      } catch (err) {
+        console.error("Error fetching courses by program:", err);
+        setFilteredCourses([]);
+      }
+    } else {
+      setFilteredCourses([]);
     }
   };
 
@@ -98,20 +120,32 @@ const AdminSubjects = () => {
 
   // ================= ADD =================
   const handleAdd = async () => {
-    if (!form.name || !form.courseId) {
-      alert("All required fields needed");
+    if (!form.name) {
+      alert("Subject name is required");
+      return;
+    }
+    if (!form.programId) {
+      alert("Please select a program");
+      return;
+    }
+    if (!form.courseId) {
+      alert("Please select a course");
       return;
     }
 
     try {
       setLoading(true);
       await axios.post("/subjects", {
-        ...form,
+        name: form.name,
+        programId: form.programId,
+        courseId: form.courseId,
+        isPaid: form.isPaid,
         price: form.isPaid ? Number(form.price) : 0,
       });
-      setForm({ name: "", courseId: "", isPaid: false, price: "" });
+      setForm({ name: "", programId: "", courseId: "", isPaid: false, price: "" });
       setEditing(null);
       await fetchData();
+      alert("Subject added successfully!");
     } catch (err) {
       console.error("Error adding subject:", err);
       alert(err.response?.data?.message || "Failed to add subject");
@@ -196,23 +230,49 @@ const AdminSubjects = () => {
     setEditing(subject);
     setForm({
       name: subject.name,
-      courseId: subject.courseId,
+      programId: subject.programId?._id || subject.programId || "",
+      courseId: subject.courseId?._id || subject.courseId || "",
       isPaid: subject.isPaid,
       price: subject.price || "",
     });
+    
+    const progId = subject.programId?._id || subject.programId;
+    if (progId) {
+      axios.get(`/courses/program/${progId}`).then(res => {
+        setFilteredCourses(res.data || []);
+      }).catch(err => console.error(err));
+    }
   };
 
   // ================= UPDATE =================
   const handleUpdate = async () => {
+    if (!form.name) {
+      alert("Subject name is required");
+      return;
+    }
+    if (!form.programId) {
+      alert("Please select a program");
+      return;
+    }
+    if (!form.courseId) {
+      alert("Please select a course");
+      return;
+    }
+
     try {
       setLoading(true);
       await axios.put(`/subjects/${editing._id}`, {
-        ...form,
+        name: form.name,
+        programId: form.programId,
+        courseId: form.courseId,
+        isPaid: form.isPaid,
         price: form.isPaid ? Number(form.price) : 0,
       });
       setEditing(null);
-      setForm({ name: "", courseId: "", isPaid: false, price: "" });
+      setForm({ name: "", programId: "", courseId: "", isPaid: false, price: "" });
+      setFilteredCourses([]);
       await fetchData();
+      alert("Subject updated successfully!");
     } catch (err) {
       console.error("Error updating subject:", err);
       alert(err.response?.data?.message || "Failed to update subject");
@@ -222,11 +282,17 @@ const AdminSubjects = () => {
   };
 
   const getCourseName = (id) => {
-    return courses.find((c) => c._id === id)?.name || "N/A";
+    const course = courses.find((c) => c._id === id);
+    return course?.name || "N/A";
+  };
+
+  const getProgramName = (id) => {
+    const program = programs.find((p) => p._id === id);
+    return program?.name || "N/A";
   };
 
   const filteredSubjects = subjects.filter(subject =>
-    subject.name.toLowerCase().includes(searchTerm.toLowerCase())
+    subject.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Stats
@@ -355,7 +421,7 @@ const AdminSubjects = () => {
               {editing ? "Edit Subject" : "Add New Subject"}
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
               <input
                 type="text"
                 name="name"
@@ -366,13 +432,28 @@ const AdminSubjects = () => {
               />
 
               <select
+                name="programId"
+                value={form.programId}
+                onChange={(e) => handleProgramChange(e.target.value)}
+                className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              >
+                <option value="">Select Program</option>
+                {programs.filter(p => p.isActive !== false).map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.name} {p.code ? `(${p.code})` : ""}
+                  </option>
+                ))}
+              </select>
+
+              <select
                 name="courseId"
                 value={form.courseId}
                 onChange={handleChange}
-                className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                disabled={!form.programId}
+                className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">Select Course</option>
-                {courses.map((c) => (
+                {filteredCourses.map((c) => (
                   <option key={c._id} value={c._id}>
                     {c.name}
                   </option>
@@ -421,7 +502,8 @@ const AdminSubjects = () => {
                 <button
                   onClick={() => {
                     setEditing(null);
-                    setForm({ name: "", courseId: "", isPaid: false, price: "" });
+                    setForm({ name: "", programId: "", courseId: "", isPaid: false, price: "" });
+                    setFilteredCourses([]);
                   }}
                   className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all text-sm sm:text-base"
                 >
@@ -473,9 +555,17 @@ const AdminSubjects = () => {
                         <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 break-words">
                           {subject.name}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 break-words">
-                          {getCourseName(subject.courseId)}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                            <FaBuilding className="w-3 h-3" />
+                            {getProgramName(subject.programId?._id || subject.programId)}
+                          </span>
+                          <span className="text-xs text-gray-400">→</span>
+                          <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                            <FaBook className="w-3 h-3" />
+                            {getCourseName(subject.courseId?._id || subject.courseId)}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className={`text-xs px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full font-medium whitespace-nowrap ${
@@ -511,7 +601,7 @@ const AdminSubjects = () => {
         </>
       )}
 
-      {/* Access Tab */}
+      {/* Access Tab - Keep your original working code */}
       {activeTab === "access" && (
         <>
           {/* Manual Unlock Form */}
@@ -729,16 +819,35 @@ const AdminSubjects = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Program
+                </label>
+                <select
+                  value={form.programId}
+                  onChange={(e) => handleProgramChange(e.target.value)}
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="">Select Program</option>
+                  {programs.map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Course
                 </label>
                 <select
                   name="courseId"
                   value={form.courseId}
                   onChange={handleChange}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  disabled={!form.programId}
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
                 >
                   <option value="">Select Course</option>
-                  {courses.map((c) => (
+                  {filteredCourses.map((c) => (
                     <option key={c._id} value={c._id}>
                       {c.name}
                     </option>
