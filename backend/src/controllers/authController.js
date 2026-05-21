@@ -1,6 +1,7 @@
 // controllers/authController.js - Updated with Program support
 import User from "../models/User.js";
 import Program from "../models/Program.js";
+import Course from "../models/Course.js"; 
 import bcrypt from "bcryptjs";
 import generateToken from "../utils/generateToken.js";
 import crypto from "crypto";
@@ -359,55 +360,131 @@ export const resetPassword = async (req, res) => {
 };
 
 // ================= REGISTER LECTURER =================
+// controllers/authController.js - FIXED registerLecturer function
+
+// ================= REGISTER LECTURER =================
 export const registerLecturer = async (req, res) => {
   try {
-    const { name, email, password, department, title, specialization } = req.body;
+    const { 
+      name, 
+      email, 
+      password, 
+      programId, 
+      courseId, 
+      title, 
+      assignedSubjects,
+      department,
+      specialization,
+      phoneNumber
+    } = req.body;
     
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Name, email, and password are required" });
     }
     
+    // Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ message: "User already exists with this email" });
     }
     
+    // Validate program if provided
+    if (programId) {
+      const programExists = await Program.findById(programId);
+      if (!programExists) {
+        return res.status(400).json({ message: "Invalid program selected" });
+      }
+    }
+    
+    // Validate course if provided
+    if (courseId) {
+      const courseExists = await Course.findById(courseId);
+      if (!courseExists) {
+        return res.status(400).json({ message: "Invalid course selected" });
+      }
+    }
+    
     const hashedPassword = await bcrypt.hash(password, 10);
     
+    // Prepare lecturer info with ALL fields including assigned subjects
+    const lecturerInfoData = {
+      title: title || "Dr.",
+      department: department || "",
+      specialization: specialization || "",
+      phoneNumber: phoneNumber || "",
+      bio: "",
+      isActive: true,
+      hireDate: new Date(),
+      assignedCourses: courseId ? [courseId] : [],
+      assignedSubjects: assignedSubjects || []
+    };
+    
+    console.log("Creating lecturer with:", {
+      name,
+      email,
+      programId,
+      courseId,
+      assignedSubjects: assignedSubjects || [],
+      lecturerInfoData
+    });
+    
+    // Create the lecturer user with ALL fields
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
       role: "lecturer",
-      lecturerInfo: {
-        department: department || "",
-        title: title || "",
-        specialization: specialization || "",
-        isActive: true,
-        hireDate: new Date()
-      }
+      programId: programId || null,
+      courseId: courseId || null,
+      lecturerInfo: lecturerInfoData
     });
     
+    console.log("Lecturer created with ID:", user._id);
+    console.log("Saved programId:", user.programId);
+    console.log("Saved courseId:", user.courseId);
+    console.log("Saved assignedSubjects:", user.lecturerInfo?.assignedSubjects);
+    
+    // Send welcome notification
     await createNotification(
       user._id,
       "lecturer",
       "success",
       "Welcome to Alveoly! 🎉",
-      `Welcome ${name}! You have been added as a lecturer.`,
+      `Welcome ${name}! You have been added as a lecturer. You can now create and manage content.`,
       "/lecturer/dashboard",
       { action: "welcome" }
     );
     
+    // Notify admins about new lecturer
+    const adminUsers = await User.find({ role: "admin" });
+    for (const admin of adminUsers) {
+      await createNotification(
+        admin._id,
+        "admin",
+        "info",
+        "New Lecturer Added",
+        `${name} (${email}) has been added as a new lecturer.`,
+        "/admin/users",
+        { userId: user._id, action: "new_lecturer" }
+      );
+    }
+    
+    // Fetch the created user with populated fields
+    const createdUser = await User.findById(user._id)
+      .select("-password")
+      .populate("programId", "name code")
+      .populate("courseId", "name")
+      .populate({
+        path: 'lecturerInfo.assignedSubjects',
+        populate: { path: 'courseId', select: 'name code' }
+      });
+    
     res.status(201).json({
       success: true,
       message: "Lecturer created successfully",
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
+      user: createdUser
     });
+    
   } catch (err) {
     console.error("Register lecturer error:", err);
     res.status(500).json({ message: err.message });
