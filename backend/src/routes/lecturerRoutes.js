@@ -403,6 +403,23 @@ router.post("/attempts/:attemptId/allow-retake", async (req, res) => {
   }
 });
 
+// routes/lecturerRoutes.js - Add this endpoint
+router.get("/assigned-subjects", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate({
+        path: 'lecturerInfo.assignedSubjects',
+        populate: { path: 'courseId', select: 'name' }
+      });
+    
+    const subjects = user.lecturerInfo?.assignedSubjects || [];
+    res.json({ success: true, subjects });
+  } catch (err) {
+    console.error("Error fetching assigned subjects:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ================= DELETE ATTEMPT =================
 router.delete("/attempts/:attemptId", async (req, res) => {
   try {

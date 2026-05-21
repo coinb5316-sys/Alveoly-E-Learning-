@@ -1,4 +1,4 @@
-// LecturerContentForm.jsx - COMPLETE FIXED VERSION with Program support
+// LecturerContentForm.jsx - COMPLETE FIXED VERSION with proper subject fetching
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -28,8 +28,9 @@ import {
   Building
 } from "lucide-react";
 
-// Quiz Editor Component (Keep as is - it's working)
+// Quiz Editor Component (keep the same as before)
 const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
+  // ... (keep existing QuizEditor code)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -409,7 +410,7 @@ const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
   );
 };
 
-// Main LecturerContentForm Component - FIXED with Program support
+// Main LecturerContentForm Component - FIXED
 const LecturerContentForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -419,7 +420,6 @@ const LecturerContentForm = () => {
   const [subjects, setSubjects] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
-  const [assignedSubjects, setAssignedSubjects] = useState([]);
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEditing);
@@ -447,13 +447,43 @@ const LecturerContentForm = () => {
     thumbnail: null,
   });
 
-  // Get current user
+  // Get current user from localStorage and also fetch fresh user data
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    const fetchUser = async () => {
+      try {
+        const res = await axios.get("/auth/me");
+        setUser(res.data);
+        localStorage.setItem("user", JSON.stringify(res.data));
+      } catch (err) {
+        console.error("Error fetching user:", err);
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      }
+    };
+    fetchUser();
   }, []);
+
+  // Fetch lecturer's assigned subjects directly from API
+  const fetchAssignedSubjects = async () => {
+    if (!user?._id) return [];
+    try {
+      // Try to get assigned subjects from the backend
+      const res = await axios.get("/lecturer/assigned-subjects");
+      if (res.data && res.data.subjects) {
+        return res.data.subjects;
+      }
+      // Fallback: filter from all subjects
+      if (user.lecturerInfo?.assignedSubjects) {
+        return subjects.filter(s => user.lecturerInfo.assignedSubjects.includes(s._id));
+      }
+      return [];
+    } catch (err) {
+      console.error("Error fetching assigned subjects:", err);
+      return [];
+    }
+  };
 
   // Fetch courses and subjects
   useEffect(() => {
@@ -468,12 +498,14 @@ const LecturerContentForm = () => {
         setCourses(coursesRes.data);
         setSubjects(subjectsRes.data);
         
-        // Get lecturer's assigned subjects
-        if (user && user.role === "lecturer" && user.lecturerInfo?.assignedSubjects) {
-          const assigned = subjectsRes.data.filter(subject => 
-            user.lecturerInfo.assignedSubjects.includes(subject._id)
-          );
-          setAssignedSubjects(assigned);
+        // Fetch lecturer's assigned subjects
+        if (user && user.role === "lecturer") {
+          const assigned = await fetchAssignedSubjects();
+          // If we have assigned subjects, use them; otherwise show all subjects
+          if (assigned.length > 0) {
+            // Keep subjects but we'll filter later
+            console.log("Assigned subjects:", assigned);
+          }
         }
       } catch (err) {
         console.error("Error fetching data:", err);
@@ -482,6 +514,26 @@ const LecturerContentForm = () => {
     };
     fetchData();
   }, [user]);
+
+  // Get filtered subjects based on selected course and lecturer's assignments
+  const getFilteredSubjects = () => {
+    let filtered = subjects;
+    
+    // Filter by selected course
+    if (form.courseId) {
+      filtered = filtered.filter(s => s.courseId === form.courseId || s.courseId?._id === form.courseId);
+    }
+    
+    // If user is lecturer, filter by assigned subjects
+    if (user?.role === "lecturer" && user.lecturerInfo?.assignedSubjects) {
+      const assignedIds = user.lecturerInfo.assignedSubjects.map(id => 
+        typeof id === 'object' ? id._id : id
+      );
+      filtered = filtered.filter(s => assignedIds.includes(s._id));
+    }
+    
+    return filtered;
+  };
 
   // Fetch content for editing
   useEffect(() => {
@@ -547,13 +599,6 @@ const LecturerContentForm = () => {
   // Handle course change - update available subjects
   const handleCourseChange = async (courseId) => {
     setForm(prev => ({ ...prev, courseId, subjectId: "" }));
-    // Refresh subjects list based on selected course
-    try {
-      const res = await axios.get(`/subjects?course=${courseId}`);
-      setSubjects(res.data);
-    } catch (err) {
-      console.error("Error fetching subjects for course:", err);
-    }
   };
 
   const handleUpload = async () => {
@@ -667,6 +712,9 @@ const LecturerContentForm = () => {
   const closeViewer = () => {
     setViewer({ open: false, type: "", url: "", title: "" });
   };
+
+  // Get available subjects for dropdown
+  const availableSubjects = getFilteredSubjects();
 
   if (fetching) {
     return (
@@ -811,13 +859,16 @@ const LecturerContentForm = () => {
                   className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="">Select Subject</option>
-                  {(assignedSubjects.length > 0 ? assignedSubjects : subjects)
-                    .filter(s => !form.courseId || s.courseId === form.courseId)
-                    .map((s) => (
-                      <option key={s._id} value={s._id}>{s.name}</option>
-                    ))}
+                  {availableSubjects.map((s) => (
+                    <option key={s._id} value={s._id}>{s.name}</option>
+                  ))}
                 </select>
               </div>
+              {availableSubjects.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  No subjects available. Please contact admin to assign subjects to you.
+                </p>
+              )}
             </div>
           ) : null}
 
