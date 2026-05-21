@@ -1,4 +1,4 @@
-// LecturerContentForm.jsx - COMPLETELY FIXED VERSION
+// LecturerContentForm.jsx - SIMPLIFIED WORKING VERSION
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -25,23 +25,23 @@ import {
   Unlock,
   AlertCircle,
   ArrowLeft,
-  Building
+  Building,
+  Info
 } from "lucide-react";
 
-// Quiz Editor Component (keep as is - same as before)
+// Quiz Editor Component (keep your existing QuizEditor code)
 const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
-  // ... (keep your existing QuizEditor code exactly as is)
+  // ... keep your existing QuizEditor code exactly as is
 };
 
-// Main LecturerContentForm Component - COMPLETELY FIXED
+// Main LecturerContentForm Component - SIMPLIFIED WORKING VERSION
 const LecturerContentForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = !!id;
   
   const [courses, setCourses] = useState([]);
-  const [allSubjects, setAllSubjects] = useState([]);
-  const [assignedSubjectIds, setAssignedSubjectIds] = useState([]);
+  const [assignedSubjects, setAssignedSubjects] = useState([]); // Already populated subjects!
   const [programs, setPrograms] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
   const [file, setFile] = useState(null);
@@ -51,7 +51,7 @@ const LecturerContentForm = () => {
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [user, setUser] = useState(null);
   const [contentData, setContentData] = useState(null);
-  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [loadingUser, setLoadingUser] = useState(true);
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -72,78 +72,38 @@ const LecturerContentForm = () => {
     thumbnail: null,
   });
 
-  // ================= FIXED: Get current user and fetch assigned subjects =================
+  // ================= STEP 1: Get current user (already has populated assignedSubjects) =================
   useEffect(() => {
-    const fetchUserAndSubjects = async () => {
+    const fetchUser = async () => {
       try {
+        setLoadingUser(true);
         console.log("🔄 Fetching user data...");
         
-        // Fetch current user with populated fields
         const userRes = await axios.get("/auth/me");
         const userData = userRes.data;
         setUser(userData);
         localStorage.setItem("user", JSON.stringify(userData));
         
-        console.log("✅ User data received:", userData);
+        console.log("✅ User role:", userData.role);
         console.log("📚 Lecturer info:", userData.lecturerInfo);
         
-        // Get assigned subject IDs from user data
-        let assignedIds = [];
-        
-        // Check multiple possible locations for assigned subjects
+        // Get assigned subjects - they are already populated with full subject objects!
+        let subjects = [];
         if (userData.lecturerInfo?.assignedSubjects) {
-          assignedIds = userData.lecturerInfo.assignedSubjects;
-        } else if (userData.assignedSubjects) {
-          assignedIds = userData.assignedSubjects;
+          subjects = userData.lecturerInfo.assignedSubjects;
+          console.log(`📚 Found ${subjects.length} assigned subjects (already populated):`);
+          subjects.forEach(s => console.log(`  - ${s.name} (Course: ${s.courseId?.name || 'N/A'})`));
         }
         
-        // Handle if assignedIds contains objects instead of strings
-        const extractedIds = assignedIds.map(id => {
-          if (typeof id === 'object' && id._id) return id._id;
-          if (typeof id === 'object' && id.toString) return id.toString();
-          return id;
-        }).filter(id => id);
+        setAssignedSubjects(subjects);
         
-        setAssignedSubjectIds(extractedIds);
-        
-        console.log("📌 Extracted assigned subject IDs:", extractedIds);
-        
-        if (extractedIds.length === 0) {
-          console.warn("⚠️ No assigned subjects found!");
-          setAllSubjects([]);
-          setLoadingSubjects(false);
-          return;
+        if (subjects.length === 0) {
+          console.warn("⚠️ No subjects assigned to this lecturer!");
         }
-        
-        // Fetch subject details for each assigned ID
-        setLoadingSubjects(true);
-        const fetchedSubjects = [];
-        const failedIds = [];
-        
-        for (const subjectId of extractedIds) {
-          try {
-            console.log(`🔍 Fetching subject: ${subjectId}`);
-            const subjectRes = await axios.get(`/subjects/${subjectId}`);
-            if (subjectRes.data) {
-              fetchedSubjects.push(subjectRes.data);
-              console.log(`✅ Loaded subject: ${subjectRes.data.name}`);
-            }
-          } catch (err) {
-            console.error(`❌ Failed to fetch subject ${subjectId}:`, err.response?.status, err.response?.data);
-            failedIds.push(subjectId);
-          }
-        }
-        
-        if (failedIds.length > 0) {
-          console.warn(`⚠️ Could not fetch ${failedIds.length} subjects:`, failedIds);
-          toast.error(`Failed to load ${failedIds.length} assigned subject(s). Please contact admin.`);
-        }
-        
-        setAllSubjects(fetchedSubjects);
-        console.log(`📚 Total subjects loaded: ${fetchedSubjects.length}`);
         
       } catch (err) {
-        console.error("🔥 Error fetching user or subjects:", err);
+        console.error("🔥 Error fetching user:", err);
+        toast.error("Failed to load user data");
         
         // Fallback to localStorage
         const storedUser = localStorage.getItem("user");
@@ -151,24 +111,20 @@ const LecturerContentForm = () => {
           try {
             const userData = JSON.parse(storedUser);
             setUser(userData);
-            const assignedIds = userData.lecturerInfo?.assignedSubjects || [];
-            setAssignedSubjectIds(assignedIds);
-            console.log("📌 Using cached user data, assigned IDs:", assignedIds);
+            setAssignedSubjects(userData.lecturerInfo?.assignedSubjects || []);
           } catch (e) {
             console.error("Failed to parse stored user:", e);
           }
         }
-        
-        toast.error("Failed to load your assigned subjects. Please refresh and try again.");
       } finally {
-        setLoadingSubjects(false);
+        setLoadingUser(false);
       }
     };
     
-    fetchUserAndSubjects();
+    fetchUser();
   }, []);
 
-  // Fetch courses and programs
+  // ================= STEP 2: Fetch courses and programs =================
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -176,10 +132,10 @@ const LecturerContentForm = () => {
           axios.get("/programs"),
           axios.get("/courses"),
         ]);
-        setPrograms(programsRes.data);
-        setCourses(coursesRes.data);
-        console.log("📚 Programs loaded:", programsRes.data.length);
-        console.log("📚 Courses loaded:", coursesRes.data.length);
+        setPrograms(programsRes.data || []);
+        setCourses(coursesRes.data || []);
+        console.log("📚 Programs loaded:", programsRes.data?.length);
+        console.log("📚 Courses loaded:", coursesRes.data?.length);
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Failed to fetch courses and programs");
@@ -188,35 +144,7 @@ const LecturerContentForm = () => {
     fetchData();
   }, []);
 
-  // ================= FIXED: Get available subjects =================
-  const getAvailableSubjects = () => {
-    console.log("🔍 getAvailableSubjects called");
-    console.log("  - allSubjects:", allSubjects.length);
-    console.log("  - form.courseId:", form.courseId);
-    console.log("  - assignedSubjectIds:", assignedSubjectIds);
-    
-    let available = [...allSubjects];
-    
-    // Filter by selected course if any
-    if (form.courseId) {
-      available = available.filter(s => {
-        const matchesCourse = s.courseId === form.courseId || s.courseId?._id === form.courseId;
-        return matchesCourse;
-      });
-      console.log("  - After course filter:", available.length);
-    }
-    
-    // Also filter by assigned IDs to be safe
-    if (assignedSubjectIds.length > 0) {
-      available = available.filter(s => assignedSubjectIds.includes(s._id));
-      console.log("  - After assignment filter:", available.length);
-    }
-    
-    console.log("  - Final available subjects:", available.map(s => s.name));
-    return available;
-  };
-
-  // Fetch content for editing
+  // ================= STEP 3: Fetch content for editing =================
   useEffect(() => {
     if (isEditing && id) {
       fetchContentForEdit();
@@ -242,7 +170,6 @@ const LecturerContentForm = () => {
         thumbnail: null,
       });
       
-      // Load filtered courses for the program
       if (content.courseId?.programId) {
         const programId = content.courseId.programId._id || content.courseId.programId;
         await handleProgramChange(programId);
@@ -261,16 +188,15 @@ const LecturerContentForm = () => {
     }
   };
 
-  // Handle program change - fetch courses for selected program
+  // ================= Helper functions =================
   const handleProgramChange = async (programId) => {
     setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "" }));
     if (programId) {
       try {
         const res = await axios.get(`/courses/program/${programId}`);
         setFilteredCourses(res.data || []);
-        console.log("📚 Filtered courses for program:", res.data.length);
       } catch (err) {
-        console.error("Error fetching courses by program:", err);
+        console.error("Error fetching courses:", err);
         setFilteredCourses([]);
       }
     } else {
@@ -278,10 +204,21 @@ const LecturerContentForm = () => {
     }
   };
 
-  // Handle course change - reset subject selection
   const handleCourseChange = (courseId) => {
     setForm(prev => ({ ...prev, courseId, subjectId: "" }));
   };
+
+  // Get subjects filtered by selected course (using already populated assignedSubjects)
+  const getSubjectsForCourse = () => {
+    if (!form.courseId) return assignedSubjects;
+    
+    return assignedSubjects.filter(subject => {
+      const subjectCourseId = subject.courseId?._id || subject.courseId;
+      return subjectCourseId === form.courseId;
+    });
+  };
+
+  const availableSubjects = getSubjectsForCourse();
 
   const handleUpload = async () => {
     if (!form.title) {
@@ -317,7 +254,7 @@ const LecturerContentForm = () => {
 
     if (form.linkType === "subject") {
       formData.append("subjectId", form.subjectId);
-      const selectedSubject = allSubjects.find(s => s._id === form.subjectId);
+      const selectedSubject = assignedSubjects.find(s => s._id === form.subjectId);
       if (selectedSubject && selectedSubject.courseId) {
         const courseIdValue = selectedSubject.courseId._id || selectedSubject.courseId;
         formData.append("courseId", courseIdValue);
@@ -389,28 +326,20 @@ const LecturerContentForm = () => {
     }
   };
 
-  const closeViewer = () => {
-    setViewer({ open: false, type: "", url: "", title: "" });
-  };
-
-  // Get available subjects for dropdown
-  const availableSubjects = getAvailableSubjects();
-
   // Debug logging
-  console.log("=== LECTURER CONTENT FORM STATE ===");
-  console.log("Assigned Subject IDs:", assignedSubjectIds);
-  console.log("All Subjects loaded:", allSubjects.length);
-  console.log("Available Subjects (filtered):", availableSubjects.length);
+  console.log("=== STATE DEBUG ===");
+  console.log("Assigned Subjects count:", assignedSubjects.length);
+  console.log("Assigned Subjects:", assignedSubjects.map(s => ({ id: s._id, name: s.name, courseId: s.courseId?._id || s.courseId })));
+  console.log("Available for course:", availableSubjects.length);
   console.log("Form courseId:", form.courseId);
   console.log("Form subjectId:", form.subjectId);
-  console.log("Loading subjects:", loadingSubjects);
+  console.log("Loading user:", loadingUser);
 
-  // Show loading state while fetching subjects
-  if (loadingSubjects) {
+  if (loadingUser) {
     return (
       <div className="flex flex-col justify-center items-center py-20">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
-        <p className="mt-4 text-gray-500 dark:text-gray-400">Loading your assigned subjects...</p>
+        <p className="mt-4 text-gray-500 dark:text-gray-400">Loading your account...</p>
       </div>
     );
   }
@@ -520,7 +449,7 @@ const LecturerContentForm = () => {
               </div>
             </div>
 
-            {/* Course Selection - Filtered by Program */}
+            {/* Course Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Course
@@ -544,7 +473,7 @@ const LecturerContentForm = () => {
             </div>
           </div>
 
-          {/* Subject Selection */}
+          {/* Subject Selection - Using already populated assignedSubjects */}
           {form.linkType === "subject" ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -556,49 +485,44 @@ const LecturerContentForm = () => {
                   value={form.subjectId}
                   onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
                   className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  disabled={availableSubjects.length === 0 && assignedSubjectIds.length > 0}
+                  disabled={availableSubjects.length === 0}
                 >
                   <option value="">Select Subject</option>
                   {availableSubjects.map((s) => (
                     <option key={s._id} value={s._id}>
-                      {s.name} {s.isPaid ? "💰" : "📖"}
+                      {s.name} {s.isPaid ? "💰" : "📖"} {s.courseId?.name ? `(${s.courseId.name})` : ""}
                     </option>
                   ))}
                 </select>
               </div>
               
-              {/* Warning Messages */}
-              {assignedSubjectIds.length === 0 && (
-                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-                  <div className="flex items-start gap-2">
+              {/* No subjects assigned message */}
+              {assignedSubjects.length === 0 && (
+                <div className="mt-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <div className="flex items-start gap-3">
                     <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                        No subjects assigned
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                        No subjects assigned to you
                       </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                        Please contact an administrator to assign subjects to your account.
+                      <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                        You don't have any subjects assigned yet. Please contact an administrator to assign subjects to your lecturer account.
                       </p>
-                      <button
-                        onClick={() => window.location.reload()}
-                        className="mt-2 text-xs text-amber-600 dark:text-amber-400 underline hover:no-underline"
-                      >
-                        Refresh Page
-                      </button>
                     </div>
                   </div>
                 </div>
               )}
               
-              {assignedSubjectIds.length > 0 && availableSubjects.length === 0 && form.courseId && (
-                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              {/* Subjects exist but none for selected course */}
+              {assignedSubjects.length > 0 && availableSubjects.length === 0 && form.courseId && (
+                <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                      <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
                         No subjects for this course
                       </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
                         Your assigned subjects don't include any subjects from the selected course. Please select a different course or contact admin.
                       </p>
                     </div>
@@ -606,15 +530,16 @@ const LecturerContentForm = () => {
                 </div>
               )}
               
-              {assignedSubjectIds.length > 0 && availableSubjects.length === 0 && !form.courseId && (
-                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+              {/* Need to select course first */}
+              {assignedSubjects.length > 0 && availableSubjects.length === 0 && !form.courseId && (
+                <div className="mt-3 p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <Info className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                         Select a course first
                       </p>
-                      <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         Please select a program and course above to see your assigned subjects.
                       </p>
                     </div>
