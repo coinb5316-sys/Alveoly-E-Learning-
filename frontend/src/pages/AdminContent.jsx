@@ -1,4 +1,4 @@
-// AdminContent.jsx - Fixed imports
+// AdminContent.jsx - FIXED with proper courseId extraction
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -26,11 +26,13 @@ import {
   Eye,
   Copy,
   Save,
-  CircleHelp
+  CircleHelp,
+  Building
 } from "lucide-react";
 
-// Quiz Editor Component
+// Quiz Editor Component (same as before - keep it)
 const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => {
+  // ... (keep the existing QuizEditor code - it's working fine)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -410,9 +412,11 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
   );
 };
 
-// Main AdminContent Component
+// Main AdminContent Component - FIXED
 const AdminContent = () => {
+  const [programs, setPrograms] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [filteredCourses, setFilteredCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [file, setFile] = useState(null);
   const [contents, setContents] = useState([]);
@@ -433,6 +437,7 @@ const AdminContent = () => {
     title: "",
     type: "video",
     linkType: "subject",
+    programId: "",
     courseId: "",
     subjectId: "",
     isPaid: false,
@@ -440,15 +445,18 @@ const AdminContent = () => {
     thumbnail: null,
   });
 
+  // Fetch programs, courses, and subjects
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [c, s] = await Promise.all([
+        const [programsRes, coursesRes, subjectsRes] = await Promise.all([
+          axios.get("/programs"),
           axios.get("/courses"),
           axios.get("/subjects"),
         ]);
-        setCourses(c.data);
-        setSubjects(s.data);
+        setPrograms(programsRes.data);
+        setCourses(coursesRes.data);
+        setSubjects(subjectsRes.data);
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Failed to fetch courses and subjects");
@@ -471,100 +479,126 @@ const AdminContent = () => {
     fetchContents();
   }, []);
 
-  // In AdminContent.jsx - Update handleUpload for quiz type
-const handleUpload = async () => {
-  if (!form.title) {
-    toast.error("Please enter a title");
-    return;
-  }
-
-  if (form.linkType === "subject" && !form.subjectId) {
-    toast.error("Please select a subject");
-    return;
-  }
-  
-  if (form.linkType === "course" && !form.courseId) {
-    toast.error("Please select a course");
-    return;
-  }
-
-  // For quiz type, file is NOT required
-  if (form.type !== "quiz" && !file && !editingId) {
-    toast.error("Please select a file to upload");
-    return;
-  }
-
-  setLoading(true);
-  const formData = new FormData();
-  formData.append("title", form.title);
-  formData.append("type", form.type);
-  
-  // Only append file if it's not a quiz and file exists
-  if (file && form.type !== "quiz") {
-    formData.append("file", file);
-  }
-  
-  if (form.thumbnail) formData.append("thumbnail", form.thumbnail);
-
-  if (form.linkType === "subject") {
-    formData.append("subjectId", form.subjectId);
-    const selectedSubject = subjects.find(s => s._id === form.subjectId);
-    if (selectedSubject && selectedSubject.courseId) {
-      formData.append("courseId", selectedSubject.courseId);
+  // Handle program change - fetch courses for selected program
+  const handleProgramChange = async (programId) => {
+    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "" }));
+    if (programId) {
+      try {
+        const res = await axios.get(`/courses/program/${programId}`);
+        setFilteredCourses(res.data || []);
+      } catch (err) {
+        console.error("Error fetching courses by program:", err);
+        setFilteredCourses([]);
+      }
     } else {
-      toast.error("Selected subject is not associated with a course");
-      setLoading(false);
+      setFilteredCourses([]);
+    }
+  };
+
+  // Helper function to extract ID from object or string
+  const extractId = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object' && value._id) return value._id;
+    return value;
+  };
+
+  const handleUpload = async () => {
+    if (!form.title) {
+      toast.error("Please enter a title");
       return;
     }
-  } else {
-    formData.append("courseId", form.courseId);
-  }
 
-  formData.append("isPaid", form.isPaid);
-  formData.append("price", form.price);
+    if (form.linkType === "subject" && !form.subjectId) {
+      toast.error("Please select a subject");
+      return;
+    }
+    
+    if (form.linkType === "course" && !form.courseId) {
+      toast.error("Please select a course");
+      return;
+    }
 
-  // Add quiz-specific fields
-  if (form.type === "quiz") {
-    formData.append("quizTimerMinutes", "0");
-    formData.append("quizPassMark", "70");
-  }
+    if (form.type !== "quiz" && !file && !editingId) {
+      toast.error("Please select a file to upload");
+      return;
+    }
 
-  try {
-    let res;
-    if (editingId) {
-      res = await axios.put(`/content/${editingId}`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setContents((prev) => prev.map((c) => (c._id === editingId ? res.data : c)));
-      toast.success("Content updated");
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("title", form.title);
+    formData.append("type", form.type);
+    
+    if (file && form.type !== "quiz") {
+      formData.append("file", file);
+    }
+    
+    if (form.thumbnail) formData.append("thumbnail", form.thumbnail);
+
+    if (form.linkType === "subject") {
+      formData.append("subjectId", extractId(form.subjectId));
+      const selectedSubject = subjects.find(s => s._id === form.subjectId);
+      if (selectedSubject && selectedSubject.courseId) {
+        // Extract the actual ID string, not the object
+        const courseIdValue = extractId(selectedSubject.courseId);
+        formData.append("courseId", courseIdValue);
+        console.log("Adding courseId:", courseIdValue);
+      } else {
+        toast.error("Selected subject is not associated with a course");
+        setLoading(false);
+        return;
+      }
     } else {
-      res = await axios.post("/content/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setContents((prev) => [res.data, ...prev]);
-      toast.success("Uploaded successfully");
+      // Extract the actual ID string for course
+      const courseIdValue = extractId(form.courseId);
+      formData.append("courseId", courseIdValue);
+      console.log("Adding courseId from course:", courseIdValue);
     }
 
-    // If it's a quiz, open the quiz editor to add questions
-    if (form.type === "quiz" && res.data) {
-      setSelectedLesson(res.data);
-      setShowQuizEditor(true);
+    formData.append("isPaid", form.isPaid);
+    formData.append("price", form.price);
+
+    if (form.type === "quiz") {
+      formData.append("quizTimerMinutes", "0");
+      formData.append("quizPassMark", "70");
     }
 
-    resetForm();
-  } catch (err) {
-    console.error("Upload error:", err);
-    toast.error("Operation failed: " + (err.response?.data?.message || err.message));
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      let res;
+      if (editingId) {
+        res = await axios.put(`/content/${editingId}`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        setContents((prev) => prev.map((c) => (c._id === editingId ? res.data : c)));
+        toast.success("Content updated");
+      } else {
+        res = await axios.post("/content/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        setContents((prev) => [res.data, ...prev]);
+        toast.success("Uploaded successfully");
+      }
+
+      if (form.type === "quiz" && res.data) {
+        setSelectedLesson(res.data);
+        setShowQuizEditor(true);
+      } else {
+        resetForm();
+      }
+    } catch (err) {
+      console.error("Upload error:", err);
+      toast.error("Operation failed: " + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const resetForm = () => {
     setForm({
       title: "",
       type: "video",
       linkType: "subject",
+      programId: "",
       courseId: "",
       subjectId: "",
       isPaid: false,
@@ -574,6 +608,7 @@ const handleUpload = async () => {
     setFile(null);
     setEditingId(null);
     setShowForm(false);
+    setFilteredCourses([]);
   };
 
   const handleDelete = async (id) => {
@@ -594,12 +629,18 @@ const handleUpload = async () => {
       title: content.title,
       type: content.type,
       linkType: content.subjectId ? "subject" : "course",
-      courseId: content.courseId || "",
-      subjectId: content.subjectId || "",
+      programId: content.courseId?.programId?._id || content.courseId?.programId || "",
+      courseId: content.courseId?._id || content.courseId || "",
+      subjectId: content.subjectId?._id || content.subjectId || "",
       isPaid: content.isPaid,
       price: content.price,
       thumbnail: null,
     });
+    // Load filtered courses for the program
+    if (content.courseId?.programId) {
+      const programId = content.courseId.programId._id || content.courseId.programId;
+      handleProgramChange(programId);
+    }
     setFile(null);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -718,29 +759,74 @@ const handleUpload = async () => {
               </select>
             </div>
 
+            {/* Program Selection */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Program
+                </label>
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <select
+                    value={form.programId}
+                    onChange={(e) => handleProgramChange(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Select Program</option>
+                    {programs.filter(p => p.isActive !== false).map((p) => (
+                      <option key={p._id} value={p._id}>
+                        {p.name} {p.code ? `(${p.code})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Course
+                </label>
+                <div className="relative">
+                  <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <select
+                    value={form.courseId}
+                    onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+                    disabled={!form.programId}
+                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Select Course</option>
+                    {filteredCourses.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
             {form.linkType === "subject" ? (
-              <select
-                value={form.subjectId}
-                onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              >
-                <option value="">Select Subject</option>
-                {subjects.map((s) => (
-                  <option key={s._id} value={s._id}>{s.name}</option>
-                ))}
-              </select>
-            ) : (
-              <select
-                value={form.courseId}
-                onChange={(e) => setForm({ ...form, courseId: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              >
-                <option value="">Select Course</option>
-                {courses.map((c) => (
-                  <option key={c._id} value={c._id}>{c.name}</option>
-                ))}
-              </select>
-            )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Subject
+                </label>
+                <div className="relative">
+                  <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <select
+                    value={form.subjectId}
+                    onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
+                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Select Subject</option>
+                    {subjects
+                      .filter(s => !form.courseId || s.courseId === form.courseId || s.courseId?._id === form.courseId)
+                      .map((s) => (
+                        <option key={s._id} value={s._id}>{s.name}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -769,49 +855,48 @@ const handleUpload = async () => {
             {form.type !== "quiz" && (
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-    Content File
-  </label>
-  <input
-    type="file"
-    accept="video/*,image/*,application/pdf"
-    onChange={(e) => {
-      const selectedFile = e.target.files[0];
-      if (selectedFile) {
-        // File size validation
-        const maxSize = form.type === 'video' ? 100 * 1024 * 1024 : 
-                       form.type === 'pdf' ? 50 * 1024 * 1024 : 
-                       10 * 1024 * 1024;
-        if (selectedFile.size > maxSize) {
-          toast.error(`${form.type.toUpperCase()} file too large! Maximum ${maxSize / (1024 * 1024)}MB`);
-          e.target.value = null;
-          return;
-        }
-        setFile(selectedFile);
-      }
-    }}
-    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
-  />
-</div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Content File
+                  </label>
+                  <input
+                    type="file"
+                    accept="video/*,image/*,application/pdf"
+                    onChange={(e) => {
+                      const selectedFile = e.target.files[0];
+                      if (selectedFile) {
+                        const maxSize = form.type === 'video' ? 100 * 1024 * 1024 : 
+                                       form.type === 'pdf' ? 50 * 1024 * 1024 : 
+                                       10 * 1024 * 1024;
+                        if (selectedFile.size > maxSize) {
+                          toast.error(`${form.type.toUpperCase()} file too large! Maximum ${maxSize / (1024 * 1024)}MB`);
+                          e.target.value = null;
+                          return;
+                        }
+                        setFile(selectedFile);
+                      }
+                    }}
+                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
+                  />
+                </div>
                 <div>
-  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-    Thumbnail (Optional)
-  </label>
-  <input
-    type="file"
-    accept="image/*"
-    onChange={(e) => {
-      const selectedFile = e.target.files[0];
-      if (selectedFile && selectedFile.size > 5 * 1024 * 1024) {
-        toast.error("Thumbnail too large! Maximum size is 5MB");
-        e.target.value = null;
-        return;
-      }
-      setForm({ ...form, thumbnail: selectedFile });
-    }}
-    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
-  />
-</div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Thumbnail (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const selectedFile = e.target.files[0];
+                      if (selectedFile && selectedFile.size > 5 * 1024 * 1024) {
+                        toast.error("Thumbnail too large! Maximum size is 5MB");
+                        e.target.value = null;
+                        return;
+                      }
+                      setForm({ ...form, thumbnail: selectedFile });
+                    }}
+                    className="w-full p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-950/30 dark:file:text-blue-400 hover:file:bg-blue-100"
+                  />
+                </div>
               </div>
             )}
 

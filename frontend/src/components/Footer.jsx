@@ -180,7 +180,7 @@ const Footer = () => {
           </div>
           
           <div className="flex items-center space-x-2 text-gray-400 text-sm">
-            <span>Ut in Omnibus Glorificetur Deus!</span>
+            {/* <span>Ut in Omnibus Glorificetur Deus!</span> */}
             <FaHeart className="text-red-500 animate-pulse" />
           </div>
         </div>

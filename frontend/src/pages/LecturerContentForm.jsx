@@ -1,4 +1,4 @@
-// LecturerContentForm.jsx - COMPLETE FIXED VERSION (Handles both Create and Edit)
+// LecturerContentForm.jsx - COMPLETE FIXED VERSION with Program support
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -24,7 +24,8 @@ import {
   Lock,
   Unlock,
   AlertCircle,
-  ArrowLeft
+  ArrowLeft,
+  Building
 } from "lucide-react";
 
 // Quiz Editor Component (Keep as is - it's working)
@@ -408,14 +409,16 @@ const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
   );
 };
 
-// Main LecturerContentForm Component - FIXED to handle edit mode
+// Main LecturerContentForm Component - FIXED with Program support
 const LecturerContentForm = () => {
-  const { id } = useParams(); // Get ID from URL for editing
+  const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = !!id;
   
   const [courses, setCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [filteredCourses, setFilteredCourses] = useState([]);
   const [assignedSubjects, setAssignedSubjects] = useState([]);
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -436,6 +439,7 @@ const LecturerContentForm = () => {
     title: "",
     type: "video",
     linkType: "subject",
+    programId: "",
     courseId: "",
     subjectId: "",
     isPaid: false,
@@ -455,16 +459,18 @@ const LecturerContentForm = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [c, s] = await Promise.all([
+        const [programsRes, coursesRes, subjectsRes] = await Promise.all([
+          axios.get("/programs"),
           axios.get("/courses"),
           axios.get("/subjects"),
         ]);
-        setCourses(c.data);
-        setSubjects(s.data);
+        setPrograms(programsRes.data);
+        setCourses(coursesRes.data);
+        setSubjects(subjectsRes.data);
         
         // Get lecturer's assigned subjects
         if (user && user.role === "lecturer" && user.lecturerInfo?.assignedSubjects) {
-          const assigned = s.data.filter(subject => 
+          const assigned = subjectsRes.data.filter(subject => 
             user.lecturerInfo.assignedSubjects.includes(subject._id)
           );
           setAssignedSubjects(assigned);
@@ -495,6 +501,7 @@ const LecturerContentForm = () => {
         title: content.title,
         type: content.type,
         linkType: content.subjectId ? "subject" : "course",
+        programId: content.courseId?.programId?._id || content.courseId?.programId || "",
         courseId: content.courseId?._id || content.courseId || "",
         subjectId: content.subjectId?._id || content.subjectId || "",
         isPaid: content.isPaid,
@@ -502,7 +509,12 @@ const LecturerContentForm = () => {
         thumbnail: null,
       });
       
-      // If it's a quiz, store it for the quiz editor
+      // Load filtered courses for the program
+      if (content.courseId?.programId) {
+        const programId = content.courseId.programId._id || content.courseId.programId;
+        await handleProgramChange(programId);
+      }
+      
       if (content.type === "quiz") {
         setSelectedLesson(content);
       }
@@ -513,6 +525,34 @@ const LecturerContentForm = () => {
       navigate("/lecturer/content");
     } finally {
       setFetching(false);
+    }
+  };
+
+  // Handle program change - fetch courses for selected program
+  const handleProgramChange = async (programId) => {
+    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "" }));
+    if (programId) {
+      try {
+        const res = await axios.get(`/courses/program/${programId}`);
+        setFilteredCourses(res.data || []);
+      } catch (err) {
+        console.error("Error fetching courses by program:", err);
+        setFilteredCourses([]);
+      }
+    } else {
+      setFilteredCourses([]);
+    }
+  };
+
+  // Handle course change - update available subjects
+  const handleCourseChange = async (courseId) => {
+    setForm(prev => ({ ...prev, courseId, subjectId: "" }));
+    // Refresh subjects list based on selected course
+    try {
+      const res = await axios.get(`/subjects?course=${courseId}`);
+      setSubjects(res.data);
+    } catch (err) {
+      console.error("Error fetching subjects for course:", err);
     }
   };
 
@@ -552,22 +592,26 @@ const LecturerContentForm = () => {
       formData.append("subjectId", form.subjectId);
       const selectedSubject = subjects.find(s => s._id === form.subjectId);
       if (selectedSubject && selectedSubject.courseId) {
-        formData.append("courseId", selectedSubject.courseId);
+        // Extract the actual ID string, not the object
+        const courseIdValue = selectedSubject.courseId._id || selectedSubject.courseId;
+        formData.append("courseId", courseIdValue);
       } else {
         toast.error("Selected subject is not associated with a course");
         setLoading(false);
         return;
       }
     } else {
-      formData.append("courseId", form.courseId);
+      // Extract the actual ID string for course
+      const courseIdValue = form.courseId._id || form.courseId;
+      formData.append("courseId", courseIdValue);
     }
 
     formData.append("isPaid", form.isPaid);
     formData.append("price", form.price);
 
     if (form.type === "quiz") {
-      formData.append("quizTimerMinutes", form.quizTimerMinutes || "0");
-      formData.append("quizPassMark", form.quizPassMark || "70");
+      formData.append("quizTimerMinutes", "0");
+      formData.append("quizPassMark", "70");
     }
 
     try {
@@ -608,6 +652,7 @@ const LecturerContentForm = () => {
         title: "",
         type: "video",
         linkType: "subject",
+        programId: "",
         courseId: "",
         subjectId: "",
         isPaid: false,
@@ -615,6 +660,7 @@ const LecturerContentForm = () => {
         thumbnail: null,
       });
       setFile(null);
+      setFilteredCourses([]);
     }
   };
 
@@ -704,35 +750,76 @@ const LecturerContentForm = () => {
             </select>
           </div>
 
+          {/* Program Selection */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Program
+              </label>
+              <div className="relative">
+                <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select
+                  value={form.programId}
+                  onChange={(e) => handleProgramChange(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="">Select Program</option>
+                  {programs.filter(p => p.isActive !== false).map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.name} {p.code ? `(${p.code})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Course Selection - Filtered by Program */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Course
+              </label>
+              <div className="relative">
+                <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select
+                  value={form.courseId}
+                  onChange={(e) => handleCourseChange(e.target.value)}
+                  disabled={!form.programId}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">Select Course</option>
+                  {filteredCourses.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Subject Selection */}
           {form.linkType === "subject" ? (
-            <select
-              value={form.subjectId}
-              onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
-              className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            >
-              <option value="">Select Subject</option>
-              {assignedSubjects.length > 0 ? (
-                assignedSubjects.map((s) => (
-                  <option key={s._id} value={s._id}>{s.name}</option>
-                ))
-              ) : (
-                subjects.map((s) => (
-                  <option key={s._id} value={s._id}>{s.name}</option>
-                ))
-              )}
-            </select>
-          ) : (
-            <select
-              value={form.courseId}
-              onChange={(e) => setForm({ ...form, courseId: e.target.value })}
-              className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            >
-              <option value="">Select Course</option>
-              {courses.map((c) => (
-                <option key={c._id} value={c._id}>{c.name}</option>
-              ))}
-            </select>
-          )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Subject
+              </label>
+              <div className="relative">
+                <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select
+                  value={form.subjectId}
+                  onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="">Select Subject</option>
+                  {(assignedSubjects.length > 0 ? assignedSubjects : subjects)
+                    .filter(s => !form.courseId || s.courseId === form.courseId)
+                    .map((s) => (
+                      <option key={s._id} value={s._id}>{s.name}</option>
+                    ))}
+                </select>
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
