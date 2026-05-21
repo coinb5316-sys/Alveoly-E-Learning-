@@ -30,6 +30,7 @@ import {
 
 // Quiz Editor Component (keep as is)
 const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
+  // ... (keep the existing QuizEditor code - unchanged)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -463,20 +464,20 @@ const LecturerContentForm = () => {
         
         console.log("Assigned subject IDs from user:", assignedIds);
         
-        // If there are assigned subject IDs, fetch the actual subject details
         if (assignedIds.length > 0) {
-          // Fetch subjects by IDs
-          const subjectsPromises = assignedIds.map(id => axios.get(`/subjects/${id}`));
-          const subjectsResults = await Promise.all(subjectsPromises);
-          const fetchedSubjects = subjectsResults.map(res => res.data);
-          setAllSubjects(fetchedSubjects);
-          console.log("Fetched subjects:", fetchedSubjects);
-        } else {
-          // Fallback: fetch all subjects and filter
+          // Fetch all subjects and filter by assigned IDs
           const subjectsRes = await axios.get("/subjects");
           const allSubjs = subjectsRes.data || [];
-          const filtered = allSubjs.filter(subject => assignedIds.includes(subject._id));
-          setAllSubjects(filtered);
+          
+          // Filter to get only assigned subjects
+          const filteredSubjects = allSubjs.filter(subject => 
+            assignedIds.includes(subject._id)
+          );
+          
+          setAllSubjects(filteredSubjects);
+          console.log("Filtered assigned subjects:", filteredSubjects);
+        } else {
+          setAllSubjects([]);
         }
       } catch (err) {
         console.error("Error fetching user or subjects:", err);

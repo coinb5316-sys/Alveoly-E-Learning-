@@ -265,44 +265,49 @@ const AdminUsers = () => {
 
   // ================= ADD LECTURER =================
   const handleAddLecturer = async (e) => {
-    e.preventDefault();
-    try {
-      setLoading(true);
-      
-      let subjectIds = [];
-      if (newLecturer.subjectIds && Array.isArray(newLecturer.subjectIds)) {
-        subjectIds = newLecturer.subjectIds.filter(id => id && id !== "");
-      }
-      
-      await axios.post("/auth/register-lecturer", {
-        name: newLecturer.name,
-        email: newLecturer.email,
-        password: newLecturer.password,
-        programId: newLecturer.programId,
-        courseId: newLecturer.courseId,
-        title: newLecturer.title,
-        assignedSubjects: subjectIds
-      });
-      
-      toast.success("Lecturer added successfully!");
-      setShowAddLecturerModal(false);
-      setNewLecturer({
-        name: "",
-        email: "",
-        password: "",
-        programId: "",
-        courseId: "",
-        title: "Dr.",
-        subjectIds: []
-      });
-      fetchUsers();
-    } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.message || "Failed to add lecturer");
-    } finally {
-      setLoading(false);
+  e.preventDefault();
+  try {
+    setLoading(true);
+    
+    // Make sure subjectIds are valid ObjectIds
+    let subjectIds = [];
+    if (newLecturer.subjectIds && Array.isArray(newLecturer.subjectIds)) {
+      subjectIds = newLecturer.subjectIds.filter(id => id && id !== "");
     }
-  };
+    
+    console.log("Sending subject IDs to backend:", subjectIds);
+    
+    const response = await axios.post("/auth/register-lecturer", {
+      name: newLecturer.name,
+      email: newLecturer.email,
+      password: newLecturer.password,
+      programId: newLecturer.programId,
+      courseId: newLecturer.courseId,
+      title: newLecturer.title,
+      assignedSubjects: subjectIds  // Make sure this is an array of IDs
+    });
+    
+    console.log("Lecturer creation response:", response.data);
+    
+    toast.success("Lecturer added successfully!");
+    setShowAddLecturerModal(false);
+    setNewLecturer({
+      name: "",
+      email: "",
+      password: "",
+      programId: "",
+      courseId: "",
+      title: "Dr.",
+      subjectIds: []
+    });
+    fetchUsers();
+  } catch (err) {
+    console.error(err);
+    toast.error(err.response?.data?.message || "Failed to add lecturer");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleProgramChange = async (programId) => {
     setEditUserData({...editUserData, programId, courseId: "", subjectIds: []});
