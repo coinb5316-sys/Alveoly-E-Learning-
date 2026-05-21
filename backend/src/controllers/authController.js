@@ -281,11 +281,16 @@ export const login = async (req, res) => {
 };
 
 // ================= GET CURRENT USER =================
+// controllers/authController.js - Make sure getMyInfo is like this:
 export const getMyInfo = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
       .populate("programId", "name code isActive")
-      .populate("courseId", "_id name");
+      .populate("courseId", "_id name")
+      .populate({
+        path: 'lecturerInfo.assignedSubjects',
+        populate: { path: 'courseId', select: 'name code' }
+      });
     
     if (!user) return res.status(404).json({ message: "User not found" });
     
