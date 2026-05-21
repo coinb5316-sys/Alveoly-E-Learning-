@@ -1,4 +1,4 @@
-// LecturerContentForm.jsx - COMPLETE FIXED VERSION with proper subject fetching
+// LecturerContentForm.jsx - COMPLETELY FIXED VERSION
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -28,9 +28,8 @@ import {
   Building
 } from "lucide-react";
 
-// Quiz Editor Component (keep the same as before - working fine)
+// Quiz Editor Component (keep as is)
 const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
-  // ... (keep existing QuizEditor code - unchanged)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -458,22 +457,29 @@ const LecturerContentForm = () => {
         setUser(userData);
         localStorage.setItem("user", JSON.stringify(userData));
         
-        // Fetch assigned subjects for this lecturer
-        if (userData.role === "lecturer") {
-          // Get subjects directly from the lecturer's assigned subjects
-          const assignedIds = userData.lecturerInfo?.assignedSubjects || [];
-          setAssignedSubjectIds(assignedIds);
-          
-          // Fetch all subjects and filter
+        // Get assigned subject IDs from user data
+        const assignedIds = userData.lecturerInfo?.assignedSubjects || [];
+        setAssignedSubjectIds(assignedIds);
+        
+        console.log("Assigned subject IDs from user:", assignedIds);
+        
+        // If there are assigned subject IDs, fetch the actual subject details
+        if (assignedIds.length > 0) {
+          // Fetch subjects by IDs
+          const subjectsPromises = assignedIds.map(id => axios.get(`/subjects/${id}`));
+          const subjectsResults = await Promise.all(subjectsPromises);
+          const fetchedSubjects = subjectsResults.map(res => res.data);
+          setAllSubjects(fetchedSubjects);
+          console.log("Fetched subjects:", fetchedSubjects);
+        } else {
+          // Fallback: fetch all subjects and filter
           const subjectsRes = await axios.get("/subjects");
           const allSubjs = subjectsRes.data || [];
-          setAllSubjects(allSubjs);
-          
-          console.log("Assigned subject IDs:", assignedIds);
-          console.log("All subjects:", allSubjs);
+          const filtered = allSubjs.filter(subject => assignedIds.includes(subject._id));
+          setAllSubjects(filtered);
         }
       } catch (err) {
-        console.error("Error fetching user:", err);
+        console.error("Error fetching user or subjects:", err);
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
           const userData = JSON.parse(storedUser);
@@ -503,25 +509,19 @@ const LecturerContentForm = () => {
     fetchData();
   }, []);
 
-  // Get available subjects - filtered by assigned subject IDs
+  // Get available subjects - filtered by assigned subject IDs and selected course
   const getAvailableSubjects = () => {
-    if (assignedSubjectIds.length === 0) {
-      return [];
-    }
+    let available = [...allSubjects];
     
-    // Filter subjects by assigned IDs
-    let filtered = allSubjects.filter(subject => 
-      assignedSubjectIds.includes(subject._id)
-    );
-    
-    // Further filter by selected course if any
+    // Filter by selected course if any
     if (form.courseId) {
-      filtered = filtered.filter(s => 
+      available = available.filter(s => 
         s.courseId === form.courseId || s.courseId?._id === form.courseId
       );
     }
     
-    return filtered;
+    console.log("Available subjects:", available);
+    return available;
   };
 
   // Fetch content for editing
@@ -863,7 +863,7 @@ const LecturerContentForm = () => {
               )}
               {assignedSubjectIds.length > 0 && availableSubjects.length === 0 && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  No subjects available for the selected course. Please select a different course.
+                  No subjects available for the selected course. Please select a different course or contact admin.
                 </p>
               )}
             </div>

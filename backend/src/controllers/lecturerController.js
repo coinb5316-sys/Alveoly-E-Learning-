@@ -641,14 +641,18 @@ export const getAssignedCourses = async (req, res) => {
   }
 };
 
-// controllers/lecturerController.js - REPLACE the getAssignedSubjects function with this:
-
+// ================= GET ASSIGNED SUBJECTS =================
+// ================= GET ASSIGNED SUBJECTS =================
 export const getAssignedSubjects = async (req, res) => {
   try {
     console.log("=== GET ASSIGNED SUBJECTS CALLED ===");
     console.log("Lecturer ID:", req.user._id);
     
-    // Get the user with populated assigned subjects
+    // First, get the user without population to see what IDs are stored
+    const userRaw = await User.findById(req.user._id);
+    console.log("Raw assigned subjects IDs:", userRaw.lecturerInfo?.assignedSubjects);
+    
+    // Now get with population
     const user = await User.findById(req.user._id)
       .populate({
         path: 'lecturerInfo.assignedSubjects',
@@ -659,42 +663,13 @@ export const getAssignedSubjects = async (req, res) => {
       });
     
     const subjects = user.lecturerInfo?.assignedSubjects || [];
-    
-    console.log("Found subjects count:", subjects.length);
-    
-    // Format subjects for frontend consumption
-    const formattedSubjects = subjects.map(subject => {
-      // Get course name from populated courseId
-      let courseName = "N/A";
-      let courseId = null;
-      
-      if (subject.courseId) {
-        if (typeof subject.courseId === 'object') {
-          courseName = subject.courseId.name || "N/A";
-          courseId = subject.courseId._id;
-        } else {
-          courseName = "Course ID: " + subject.courseId;
-          courseId = subject.courseId;
-        }
-      }
-      
-      return {
-        _id: subject._id,
-        name: subject.name,
-        courseId: courseId,
-        courseName: courseName,
-        isPaid: subject.isPaid || false,
-        price: subject.price || 0,
-        description: subject.description || ""
-      };
-    });
-    
-    console.log("Formatted subjects:", JSON.stringify(formattedSubjects, null, 2));
+    console.log("Populated subjects count:", subjects.length);
+    console.log("Populated subjects:", JSON.stringify(subjects, null, 2));
     
     res.json({
       success: true,
-      subjects: formattedSubjects,
-      total: formattedSubjects.length
+      subjects,
+      total: subjects.length
     });
   } catch (err) {
     console.error("Get assigned subjects error:", err);
