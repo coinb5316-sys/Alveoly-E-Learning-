@@ -28,9 +28,9 @@ import {
   Building
 } from "lucide-react";
 
-// Quiz Editor Component (keep the same as before)
+// Quiz Editor Component (keep the same as before - working fine)
 const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
-  // ... (keep existing QuizEditor code)
+  // ... (keep existing QuizEditor code - unchanged)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -417,7 +417,8 @@ const LecturerContentForm = () => {
   const isEditing = !!id;
   
   const [courses, setCourses] = useState([]);
-  const [subjects, setSubjects] = useState([]);
+  const [allSubjects, setAllSubjects] = useState([]);
+  const [assignedSubjectIds, setAssignedSubjectIds] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
   const [file, setFile] = useState(null);
@@ -447,89 +448,77 @@ const LecturerContentForm = () => {
     thumbnail: null,
   });
 
-  // Get current user from localStorage and also fetch fresh user data
+  // Get current user and fetch assigned subjects
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserAndSubjects = async () => {
       try {
-        const res = await axios.get("/auth/me");
-        setUser(res.data);
-        localStorage.setItem("user", JSON.stringify(res.data));
+        // Fetch current user
+        const userRes = await axios.get("/auth/me");
+        const userData = userRes.data;
+        setUser(userData);
+        localStorage.setItem("user", JSON.stringify(userData));
+        
+        // Fetch assigned subjects for this lecturer
+        if (userData.role === "lecturer") {
+          // Get subjects directly from the lecturer's assigned subjects
+          const assignedIds = userData.lecturerInfo?.assignedSubjects || [];
+          setAssignedSubjectIds(assignedIds);
+          
+          // Fetch all subjects and filter
+          const subjectsRes = await axios.get("/subjects");
+          const allSubjs = subjectsRes.data || [];
+          setAllSubjects(allSubjs);
+          
+          console.log("Assigned subject IDs:", assignedIds);
+          console.log("All subjects:", allSubjs);
+        }
       } catch (err) {
         console.error("Error fetching user:", err);
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
-          setUser(JSON.parse(storedUser));
+          const userData = JSON.parse(storedUser);
+          setUser(userData);
+          setAssignedSubjectIds(userData.lecturerInfo?.assignedSubjects || []);
         }
       }
     };
-    fetchUser();
+    fetchUserAndSubjects();
   }, []);
 
-  // Fetch lecturer's assigned subjects directly from API
-  const fetchAssignedSubjects = async () => {
-    if (!user?._id) return [];
-    try {
-      // Try to get assigned subjects from the backend
-      const res = await axios.get("/lecturer/assigned-subjects");
-      if (res.data && res.data.subjects) {
-        return res.data.subjects;
-      }
-      // Fallback: filter from all subjects
-      if (user.lecturerInfo?.assignedSubjects) {
-        return subjects.filter(s => user.lecturerInfo.assignedSubjects.includes(s._id));
-      }
-      return [];
-    } catch (err) {
-      console.error("Error fetching assigned subjects:", err);
-      return [];
-    }
-  };
-
-  // Fetch courses and subjects
+  // Fetch courses and programs
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [programsRes, coursesRes, subjectsRes] = await Promise.all([
+        const [programsRes, coursesRes] = await Promise.all([
           axios.get("/programs"),
           axios.get("/courses"),
-          axios.get("/subjects"),
         ]);
         setPrograms(programsRes.data);
         setCourses(coursesRes.data);
-        setSubjects(subjectsRes.data);
-        
-        // Fetch lecturer's assigned subjects
-        if (user && user.role === "lecturer") {
-          const assigned = await fetchAssignedSubjects();
-          // If we have assigned subjects, use them; otherwise show all subjects
-          if (assigned.length > 0) {
-            // Keep subjects but we'll filter later
-            console.log("Assigned subjects:", assigned);
-          }
-        }
       } catch (err) {
         console.error("Error fetching data:", err);
-        toast.error("Failed to fetch courses and subjects");
+        toast.error("Failed to fetch courses and programs");
       }
     };
     fetchData();
-  }, [user]);
+  }, []);
 
-  // Get filtered subjects based on selected course and lecturer's assignments
-  const getFilteredSubjects = () => {
-    let filtered = subjects;
-    
-    // Filter by selected course
-    if (form.courseId) {
-      filtered = filtered.filter(s => s.courseId === form.courseId || s.courseId?._id === form.courseId);
+  // Get available subjects - filtered by assigned subject IDs
+  const getAvailableSubjects = () => {
+    if (assignedSubjectIds.length === 0) {
+      return [];
     }
     
-    // If user is lecturer, filter by assigned subjects
-    if (user?.role === "lecturer" && user.lecturerInfo?.assignedSubjects) {
-      const assignedIds = user.lecturerInfo.assignedSubjects.map(id => 
-        typeof id === 'object' ? id._id : id
+    // Filter subjects by assigned IDs
+    let filtered = allSubjects.filter(subject => 
+      assignedSubjectIds.includes(subject._id)
+    );
+    
+    // Further filter by selected course if any
+    if (form.courseId) {
+      filtered = filtered.filter(s => 
+        s.courseId === form.courseId || s.courseId?._id === form.courseId
       );
-      filtered = filtered.filter(s => assignedIds.includes(s._id));
     }
     
     return filtered;
@@ -596,8 +585,8 @@ const LecturerContentForm = () => {
     }
   };
 
-  // Handle course change - update available subjects
-  const handleCourseChange = async (courseId) => {
+  // Handle course change - reset subject selection
+  const handleCourseChange = (courseId) => {
     setForm(prev => ({ ...prev, courseId, subjectId: "" }));
   };
 
@@ -635,9 +624,8 @@ const LecturerContentForm = () => {
 
     if (form.linkType === "subject") {
       formData.append("subjectId", form.subjectId);
-      const selectedSubject = subjects.find(s => s._id === form.subjectId);
+      const selectedSubject = allSubjects.find(s => s._id === form.subjectId);
       if (selectedSubject && selectedSubject.courseId) {
-        // Extract the actual ID string, not the object
         const courseIdValue = selectedSubject.courseId._id || selectedSubject.courseId;
         formData.append("courseId", courseIdValue);
       } else {
@@ -646,7 +634,6 @@ const LecturerContentForm = () => {
         return;
       }
     } else {
-      // Extract the actual ID string for course
       const courseIdValue = form.courseId._id || form.courseId;
       formData.append("courseId", courseIdValue);
     }
@@ -714,7 +701,12 @@ const LecturerContentForm = () => {
   };
 
   // Get available subjects for dropdown
-  const availableSubjects = getFilteredSubjects();
+  const availableSubjects = getAvailableSubjects();
+
+  // Debug logging
+  console.log("Assigned Subject IDs:", assignedSubjectIds);
+  console.log("All Subjects:", allSubjects);
+  console.log("Available Subjects:", availableSubjects);
 
   if (fetching) {
     return (
@@ -864,9 +856,14 @@ const LecturerContentForm = () => {
                   ))}
                 </select>
               </div>
-              {availableSubjects.length === 0 && (
+              {assignedSubjectIds.length === 0 && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  No subjects available. Please contact admin to assign subjects to you.
+                  No subjects assigned. Please contact admin to assign subjects to you.
+                </p>
+              )}
+              {assignedSubjectIds.length > 0 && availableSubjects.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  No subjects available for the selected course. Please select a different course.
                 </p>
               )}
             </div>
