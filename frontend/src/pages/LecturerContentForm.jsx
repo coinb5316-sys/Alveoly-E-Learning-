@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo } from "react";
+// LecturerContentForm.jsx - COMPLETELY FIXED VERSION
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -24,11 +25,10 @@ import {
   Unlock,
   AlertCircle,
   ArrowLeft,
-  Building,
-  CheckCircle
+  Building
 } from "lucide-react";
 
-// Quiz Editor Component (keep as is from your original)
+// Quiz Editor Component (keep as is)
 const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -236,7 +236,7 @@ const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
             </div>
           </div>
 
-          {/* Question Form - keep as is from your original */}
+          {/* Question Form */}
           <div id="question-form" className="bg-gray-50 dark:bg-gray-800/30 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               {editingIndex !== null ? <Edit className="h-5 w-5 text-yellow-500" /> : <Plus className="h-5 w-5 text-blue-500" />}
@@ -327,7 +327,7 @@ const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
             </div>
           </div>
 
-          {/* Questions List - keep as is */}
+          {/* Questions List */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-semibold text-gray-900 dark:text-gray-100">Questions List</h3>
@@ -409,7 +409,7 @@ const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
   );
 };
 
-// Main LecturerContentForm Component - COMPLETELY FIXED
+// Main LecturerContentForm Component - FIXED
 const LecturerContentForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -417,7 +417,6 @@ const LecturerContentForm = () => {
   
   const [courses, setCourses] = useState([]);
   const [assignedSubjects, setAssignedSubjects] = useState([]);
-  const [filteredSubjects, setFilteredSubjects] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
   const [file, setFile] = useState(null);
@@ -427,7 +426,6 @@ const LecturerContentForm = () => {
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [user, setUser] = useState(null);
   const [contentData, setContentData] = useState(null);
-  const [loadingSubjects, setLoadingSubjects] = useState(false);
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -439,7 +437,7 @@ const LecturerContentForm = () => {
   const [form, setForm] = useState({
     title: "",
     type: "video",
-    linkType: "subject", // subject or course
+    linkType: "subject",
     programId: "",
     courseId: "",
     subjectId: "",
@@ -448,141 +446,81 @@ const LecturerContentForm = () => {
     thumbnail: null,
   });
 
-  // Get current user
+  // Get current user and fetch assigned subjects
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserAndSubjects = async () => {
       try {
+        // Fetch current user with populated assigned subjects
         const userRes = await axios.get("/auth/me");
         const userData = userRes.data;
         setUser(userData);
         localStorage.setItem("user", JSON.stringify(userData));
+        
+        console.log("User data from /auth/me:", userData);
+        
+        // Get assigned subject IDs from user data
+        const assignedIds = userData.lecturerInfo?.assignedSubjects || [];
+        console.log("Assigned subject IDs:", assignedIds);
+        
+        if (assignedIds.length > 0) {
+          // Fetch ALL subjects and filter by assigned IDs
+          const subjectsRes = await axios.get("/subjects");
+          const allSubjectsList = subjectsRes.data || [];
+          console.log("All subjects fetched:", allSubjectsList.length);
+          
+          // Filter to get only assigned subjects
+          const filteredAssignedSubjects = allSubjectsList.filter(subject => 
+            assignedIds.includes(subject._id)
+          );
+          
+          setAssignedSubjects(filteredAssignedSubjects);
+          console.log("Filtered assigned subjects:", filteredAssignedSubjects);
+        } else {
+          setAssignedSubjects([]);
+        }
       } catch (err) {
-        console.error("Error fetching user:", err);
+        console.error("Error fetching user or subjects:", err);
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
-          setUser(JSON.parse(storedUser));
+          const userData = JSON.parse(storedUser);
+          setUser(userData);
         }
       }
     };
-    fetchUser();
+    fetchUserAndSubjects();
   }, []);
 
-  // Fetch lecturer's assigned subjects
+  // Fetch courses and programs
   useEffect(() => {
-    const fetchAssignedSubjects = async () => {
-      if (!user) return;
-      
-      setLoadingSubjects(true);
+    const fetchData = async () => {
       try {
-        // Use the dedicated endpoint for lecturer's assigned subjects
-        const response = await axios.get("/lecturer/assigned-subjects");
-        console.log("Assigned subjects response:", response.data);
-        
-        if (response.data.success && response.data.subjects) {
-          setAssignedSubjects(response.data.subjects);
-          console.log("Set assigned subjects:", response.data.subjects.length);
-        } else {
-          // Fallback: try to get from user object
-          const subjectsFromUser = user.lecturerInfo?.assignedSubjects || [];
-          setAssignedSubjects(subjectsFromUser);
-          console.log("Using subjects from user:", subjectsFromUser.length);
-        }
+        const [programsRes, coursesRes] = await Promise.all([
+          axios.get("/programs"),
+          axios.get("/courses"),
+        ]);
+        setPrograms(programsRes.data);
+        setCourses(coursesRes.data);
       } catch (err) {
-        console.error("Error fetching assigned subjects:", err);
-        // Fallback: try to get from user object
-        const subjectsFromUser = user?.lecturerInfo?.assignedSubjects || [];
-        setAssignedSubjects(subjectsFromUser);
-      } finally {
-        setLoadingSubjects(false);
+        console.error("Error fetching data:", err);
+        toast.error("Failed to fetch courses and programs");
       }
     };
-    
-    if (user) {
-      fetchAssignedSubjects();
-    }
-  }, [user]);
-
-  // Fetch programs
-  useEffect(() => {
-    const fetchPrograms = async () => {
-      try {
-        const res = await axios.get("/programs/public");
-        setPrograms(res.data);
-      } catch (err) {
-        console.error("Error fetching programs:", err);
-        toast.error("Failed to fetch programs");
-      }
-    };
-    fetchPrograms();
+    fetchData();
   }, []);
 
-  // Filter subjects based on selected program and course
-  useEffect(() => {
-    if (!assignedSubjects.length) {
-      setFilteredSubjects([]);
-      return;
-    }
+  // Get available subjects based on selected course
+  const getAvailableSubjects = () => {
+    let available = [...assignedSubjects];
     
-    let filtered = [...assignedSubjects];
-    
-    // Filter by program if selected
-    if (form.programId) {
-      filtered = filtered.filter(s => 
-        s.programId?._id === form.programId || s.programId === form.programId
-      );
-    }
-    
-    // Filter by course if selected
+    // Filter by selected course if any
     if (form.courseId) {
-      filtered = filtered.filter(s => 
-        s.courseId?._id === form.courseId || s.courseId === form.courseId
+      available = available.filter(s => 
+        s.courseId === form.courseId || s.courseId?._id === form.courseId
       );
     }
     
-    console.log("Filtered subjects:", filtered.length);
-    setFilteredSubjects(filtered);
-    
-    // Clear selected subject if it's no longer in filtered list
-    if (form.subjectId && !filtered.some(s => s._id === form.subjectId)) {
-      setForm(prev => ({ ...prev, subjectId: "" }));
-    }
-  }, [assignedSubjects, form.programId, form.courseId]);
-
-  // Fetch courses when program changes
-  const handleProgramChange = async (programId) => {
-    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "" }));
-    
-    if (programId) {
-      try {
-        const res = await axios.get(`/courses/program/${programId}`);
-        setFilteredCourses(res.data || []);
-      } catch (err) {
-        console.error("Error fetching courses:", err);
-        setFilteredCourses([]);
-      }
-    } else {
-      setFilteredCourses([]);
-    }
-  };
-
-  // Handle course change - reset subject
-  const handleCourseChange = (courseId) => {
-    setForm(prev => ({ ...prev, courseId, subjectId: "" }));
-  };
-
-  // Handle subject selection - auto-populate course and program
-  const handleSubjectChange = (subjectId) => {
-    const selectedSubject = assignedSubjects.find(s => s._id === subjectId);
-    if (selectedSubject) {
-      setForm(prev => ({
-        ...prev,
-        subjectId,
-        courseId: selectedSubject.courseId?._id || selectedSubject.courseId,
-        programId: selectedSubject.programId?._id || selectedSubject.programId,
-      }));
-    } else {
-      setForm(prev => ({ ...prev, subjectId }));
-    }
+    console.log("Available subjects:", available);
+    return available;
   };
 
   // Fetch content for editing
@@ -611,7 +549,7 @@ const LecturerContentForm = () => {
         thumbnail: null,
       });
       
-      // Load filtered courses
+      // Load filtered courses for the program
       if (content.courseId?.programId) {
         const programId = content.courseId.programId._id || content.courseId.programId;
         await handleProgramChange(programId);
@@ -628,6 +566,27 @@ const LecturerContentForm = () => {
     } finally {
       setFetching(false);
     }
+  };
+
+  // Handle program change - fetch courses for selected program
+  const handleProgramChange = async (programId) => {
+    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "" }));
+    if (programId) {
+      try {
+        const res = await axios.get(`/courses/program/${programId}`);
+        setFilteredCourses(res.data || []);
+      } catch (err) {
+        console.error("Error fetching courses by program:", err);
+        setFilteredCourses([]);
+      }
+    } else {
+      setFilteredCourses([]);
+    }
+  };
+
+  // Handle course change - reset subject selection
+  const handleCourseChange = (courseId) => {
+    setForm(prev => ({ ...prev, courseId, subjectId: "" }));
   };
 
   const handleUpload = async () => {
@@ -664,7 +623,6 @@ const LecturerContentForm = () => {
 
     if (form.linkType === "subject") {
       formData.append("subjectId", form.subjectId);
-      // Get courseId from selected subject
       const selectedSubject = assignedSubjects.find(s => s._id === form.subjectId);
       if (selectedSubject && selectedSubject.courseId) {
         const courseIdValue = selectedSubject.courseId._id || selectedSubject.courseId;
@@ -741,29 +699,12 @@ const LecturerContentForm = () => {
     setViewer({ open: false, type: "", url: "", title: "" });
   };
 
-  // Get unique courses from assigned subjects for dropdown
-  const uniqueCourses = React.useMemo(() => {
-    const coursesMap = new Map();
-    assignedSubjects.forEach(subject => {
-      const course = subject.courseId;
-      if (course && course._id) {
-        if (!coursesMap.has(course._id)) {
-          coursesMap.set(course._id, {
-            _id: course._id,
-            name: course.name,
-            code: course.code
-          });
-        }
-      }
-    });
-    return Array.from(coursesMap.values());
-  }, [assignedSubjects]);
+  // Get available subjects for dropdown
+  const availableSubjects = getAvailableSubjects();
 
   // Debug logging
   console.log("Assigned Subjects:", assignedSubjects);
-  console.log("Filtered Subjects:", filteredSubjects);
-  console.log("Unique Courses:", uniqueCourses);
-  console.log("Form values:", { programId: form.programId, courseId: form.courseId, subjectId: form.subjectId });
+  console.log("Available Subjects after filtering:", availableSubjects);
 
   if (fetching) {
     return (
@@ -812,10 +753,9 @@ const LecturerContentForm = () => {
         </div>
 
         <div className="grid gap-5">
-          {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Title <span className="text-red-500">*</span>
+              Title
             </label>
             <input
               placeholder="Enter content title"
@@ -825,7 +765,6 @@ const LecturerContentForm = () => {
             />
           </div>
 
-          {/* Type and Link Type */}
           <div className="grid md:grid-cols-2 gap-4">
             <select
               value={form.type}
@@ -841,107 +780,93 @@ const LecturerContentForm = () => {
 
             <select
               value={form.linkType}
-              onChange={(e) => setForm({ ...form, linkType: e.target.value, subjectId: "", courseId: "" })}
+              onChange={(e) => setForm({ ...form, linkType: e.target.value })}
               className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             >
-              <option value="subject">Attach to Subject (Recommended)</option>
+              <option value="subject">Attach to Subject</option>
               <option value="course">Attach to Course</option>
             </select>
           </div>
 
-          {/* When attaching to subject - show subjects directly */}
+          {/* Program Selection */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Program
+              </label>
+              <div className="relative">
+                <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select
+                  value={form.programId}
+                  onChange={(e) => handleProgramChange(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="">Select Program</option>
+                  {programs.filter(p => p.isActive !== false).map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.name} {p.code ? `(${p.code})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Course Selection - Filtered by Program */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Course
+              </label>
+              <div className="relative">
+                <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select
+                  value={form.courseId}
+                  onChange={(e) => handleCourseChange(e.target.value)}
+                  disabled={!form.programId}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">Select Course</option>
+                  {filteredCourses.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Subject Selection */}
           {form.linkType === "subject" ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Select Subject <span className="text-red-500">*</span>
+                Subject
               </label>
               <div className="relative">
                 <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <select
                   value={form.subjectId}
-                  onChange={(e) => handleSubjectChange(e.target.value)}
+                  onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
                   className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  disabled={loadingSubjects}
                 >
-                  <option value="">Select a subject...</option>
-                  {filteredSubjects.map((subject) => (
-                    <option key={subject._id} value={subject._id}>
-                      {subject.name} {subject.courseId?.name ? `(${subject.courseId.name})` : ""}
-                    </option>
+                  <option value="">Select Subject</option>
+                  {availableSubjects.map((s) => (
+                    <option key={s._id} value={s._id}>{s.name}</option>
                   ))}
                 </select>
               </div>
-              {loadingSubjects && (
-                <p className="text-xs text-gray-500 mt-1">Loading your assigned subjects...</p>
+              {assignedSubjects.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  No subjects assigned. Please contact admin to assign subjects to you.
+                </p>
               )}
-              {!loadingSubjects && filteredSubjects.length === 0 && assignedSubjects.length > 0 && (
-                <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg">
-                  <p className="text-xs text-yellow-700 dark:text-yellow-400 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    No subjects match the selected filters. Try selecting a different program or course.
-                  </p>
-                </div>
-              )}
-              {!loadingSubjects && assignedSubjects.length === 0 && (
-                <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg">
-                  <p className="text-xs text-yellow-700 dark:text-yellow-400 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    No subjects assigned to you. Please contact an administrator to assign subjects to your account.
-                  </p>
-                </div>
+              {assignedSubjects.length > 0 && availableSubjects.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  No subjects available for the selected course. Please select a different course or contact admin.
+                </p>
               )}
             </div>
-          ) : (
-            /* When attaching to course - show program and course selection */
-            <>
-              {/* Program Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Program
-                </label>
-                <div className="relative">
-                  <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <select
-                    value={form.programId}
-                    onChange={(e) => handleProgramChange(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  >
-                    <option value="">Select Program</option>
-                    {programs.filter(p => p.isActive !== false).map((p) => (
-                      <option key={p._id} value={p._id}>
-                        {p.name} {p.code ? `(${p.code})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+          ) : null}
 
-              {/* Course Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Course <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <select
-                    value={form.courseId}
-                    onChange={(e) => handleCourseChange(e.target.value)}
-                    disabled={!form.programId}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Select Course</option>
-                    {filteredCourses.map((c) => (
-                      <option key={c._id} value={c._id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Payment Settings */}
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input
@@ -966,7 +891,6 @@ const LecturerContentForm = () => {
             )}
           </div>
 
-          {/* File Upload (for non-quiz) */}
           {form.type !== "quiz" && (
             <div className="grid md:grid-cols-2 gap-4">
               <div>
@@ -1018,7 +942,6 @@ const LecturerContentForm = () => {
             </div>
           )}
 
-          {/* Quiz Info */}
           {form.type === "quiz" && (
             <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 rounded-xl p-4">
               <div className="flex items-center gap-3">
@@ -1037,7 +960,6 @@ const LecturerContentForm = () => {
             </div>
           )}
 
-          {/* Action Buttons */}
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleUpload}
