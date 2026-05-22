@@ -1,4 +1,4 @@
-// AdminUsers.jsx - COMPLETE WITH PROGRAM SUPPORT & DARK/LIGHT MODE
+// AdminUsers.jsx - COMPLETE WITH ASSIGNED SUBJECTS DISPLAY & MANAGEMENT
 import { useEffect, useState } from "react";
 import { 
   FaTrash, 
@@ -18,7 +18,13 @@ import {
   FaBuilding,
   FaUserPlus,
   FaChalkboard,
-  FaCheckCircle
+  FaCheckCircle,
+  FaUserTag,
+  FaCalendarAlt,
+  FaPhone,
+  FaIdCard,
+  FaUniversity,
+  FaLayerGroup
 } from "react-icons/fa";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -35,6 +41,7 @@ const AdminUsers = () => {
   const [showAddLecturerModal, setShowAddLecturerModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [expandedLecturer, setExpandedLecturer] = useState(null);
   const [newLecturer, setNewLecturer] = useState({
     name: "",
     email: "",
@@ -54,7 +61,6 @@ const AdminUsers = () => {
     subjectIds: []
   });
   const [availableSubjects, setAvailableSubjects] = useState([]);
-  const [coursesByProgram, setCoursesByProgram] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
 
   // ================= FETCH USERS =================
@@ -108,7 +114,7 @@ const AdminUsers = () => {
 
   // ================= FETCH FILTERED COURSES BY PROGRAM =================
   const fetchFilteredCourses = async (programId) => {
-    if (!programId) {
+    if (!programId || programId === "undefined" || programId === "null") {
       setFilteredCourses([]);
       return [];
     }
@@ -126,7 +132,7 @@ const AdminUsers = () => {
 
   // ================= FETCH FILTERED SUBJECTS =================
   const fetchFilteredSubjects = async (courseId) => {
-    if (!courseId) {
+    if (!courseId || courseId === "undefined" || courseId === "null") {
       setAvailableSubjects([]);
       return [];
     }
@@ -165,7 +171,7 @@ const AdminUsers = () => {
       if (editUserData.role === "lecturer") {
         let subjectIds = [];
         if (editUserData.subjectIds && Array.isArray(editUserData.subjectIds)) {
-          subjectIds = editUserData.subjectIds.filter(id => id && id !== "");
+          subjectIds = editUserData.subjectIds.filter(id => id && id !== "" && id !== "undefined" && id !== "null");
         }
         
         updateData.lecturerInfo = {
@@ -201,7 +207,7 @@ const AdminUsers = () => {
         if (typeof s === 'object' && s._id) return s._id;
         if (typeof s === 'string') return s;
         return s;
-      }).filter(id => id);
+      }).filter(id => id && id !== "" && id !== "undefined" && id !== "null");
     }
     
     const userProgramId = user.programId?._id || user.programId || "";
@@ -218,9 +224,9 @@ const AdminUsers = () => {
       subjectIds: subjectIds
     });
     
-    if (userProgramId) {
+    if (userProgramId && userProgramId !== "undefined" && userProgramId !== "null") {
       fetchFilteredCourses(userProgramId).then(coursesData => {
-        if (userCourseId) {
+        if (userCourseId && userCourseId !== "undefined" && userCourseId !== "null") {
           fetchFilteredSubjects(userCourseId);
         }
       });
@@ -233,11 +239,11 @@ const AdminUsers = () => {
   const handleRoleChange = async (id, role) => {
     try {
       setLoading(true);
-      await axios.put(`/users/${id}/role`, { role });
-      setUsers((prev) =>
-        prev.map((u) => (u._id === id ? { ...u, role } : u))
-      );
-      toast.success(`User role updated to ${role}`);
+      const response = await axios.put(`/users/${id}/role`, { role });
+      if (response.data.success) {
+        fetchUsers();
+        toast.success(`User role updated to ${role}`);
+      }
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to update role");
@@ -248,7 +254,7 @@ const AdminUsers = () => {
 
   // ================= DELETE USER =================
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this user?")) return;
+    if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
 
     try {
       setLoading(true);
@@ -265,53 +271,52 @@ const AdminUsers = () => {
 
   // ================= ADD LECTURER =================
   const handleAddLecturer = async (e) => {
-  e.preventDefault();
-  try {
-    setLoading(true);
-    
-    // Make sure subjectIds are valid ObjectIds
-    let subjectIds = [];
-    if (newLecturer.subjectIds && Array.isArray(newLecturer.subjectIds)) {
-      subjectIds = newLecturer.subjectIds.filter(id => id && id !== "");
+    e.preventDefault();
+    try {
+      setLoading(true);
+      
+      let subjectIds = [];
+      if (newLecturer.subjectIds && Array.isArray(newLecturer.subjectIds)) {
+        subjectIds = newLecturer.subjectIds.filter(id => id && id !== "" && id !== "undefined" && id !== "null");
+      }
+      
+      const response = await axios.post("/auth/register-lecturer", {
+        name: newLecturer.name,
+        email: newLecturer.email,
+        password: newLecturer.password,
+        programId: newLecturer.programId,
+        courseId: newLecturer.courseId,
+        title: newLecturer.title,
+        assignedSubjects: subjectIds
+      });
+      
+      if (response.data.success) {
+        toast.success("Lecturer added successfully!");
+        setShowAddLecturerModal(false);
+        setNewLecturer({
+          name: "",
+          email: "",
+          password: "",
+          programId: "",
+          courseId: "",
+          title: "Dr.",
+          subjectIds: []
+        });
+        fetchUsers();
+      } else {
+        toast.error(response.data.message || "Failed to add lecturer");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to add lecturer");
+    } finally {
+      setLoading(false);
     }
-    
-    console.log("Sending subject IDs to backend:", subjectIds);
-    
-    const response = await axios.post("/auth/register-lecturer", {
-      name: newLecturer.name,
-      email: newLecturer.email,
-      password: newLecturer.password,
-      programId: newLecturer.programId,
-      courseId: newLecturer.courseId,
-      title: newLecturer.title,
-      assignedSubjects: subjectIds  // Make sure this is an array of IDs
-    });
-    
-    console.log("Lecturer creation response:", response.data);
-    
-    toast.success("Lecturer added successfully!");
-    setShowAddLecturerModal(false);
-    setNewLecturer({
-      name: "",
-      email: "",
-      password: "",
-      programId: "",
-      courseId: "",
-      title: "Dr.",
-      subjectIds: []
-    });
-    fetchUsers();
-  } catch (err) {
-    console.error(err);
-    toast.error(err.response?.data?.message || "Failed to add lecturer");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleProgramChange = async (programId) => {
     setEditUserData({...editUserData, programId, courseId: "", subjectIds: []});
-    if (programId) {
+    if (programId && programId !== "undefined" && programId !== "null") {
       const coursesData = await fetchFilteredCourses(programId);
       setFilteredCourses(coursesData);
       setAvailableSubjects([]);
@@ -323,7 +328,7 @@ const AdminUsers = () => {
 
   const handleCourseChange = async (courseId) => {
     setEditUserData({...editUserData, courseId, subjectIds: []});
-    if (courseId) {
+    if (courseId && courseId !== "undefined" && courseId !== "null") {
       await fetchFilteredSubjects(courseId);
     } else {
       setAvailableSubjects([]);
@@ -332,10 +337,8 @@ const AdminUsers = () => {
 
   const handleNewProgramChange = async (programId) => {
     setNewLecturer({...newLecturer, programId, courseId: "", subjectIds: []});
-    if (programId) {
-      const coursesData = await fetchFilteredCourses(programId);
-      setFilteredCourses(coursesData);
-      setAvailableSubjects([]);
+    if (programId && programId !== "undefined" && programId !== "null") {
+      await fetchFilteredCourses(programId);
     } else {
       setFilteredCourses([]);
       setAvailableSubjects([]);
@@ -344,7 +347,7 @@ const AdminUsers = () => {
 
   const handleNewCourseChange = async (courseId) => {
     setNewLecturer({...newLecturer, courseId, subjectIds: []});
-    if (courseId) {
+    if (courseId && courseId !== "undefined" && courseId !== "null") {
       await fetchFilteredSubjects(courseId);
     } else {
       setAvailableSubjects([]);
@@ -371,6 +374,24 @@ const AdminUsers = () => {
       }
     }
     setNewLecturer({...newLecturer, subjectIds: selectedValues});
+  };
+
+  const toggleLecturerExpanded = (userId) => {
+    if (expandedLecturer === userId) {
+      setExpandedLecturer(null);
+    } else {
+      setExpandedLecturer(userId);
+    }
+  };
+
+  const getAssignedSubjectsList = (user) => {
+    if (user.role !== "lecturer") return [];
+    if (!user.lecturerInfo?.assignedSubjects) return [];
+    
+    return user.lecturerInfo.assignedSubjects.map(subject => {
+      if (typeof subject === 'object' && subject.name) return subject;
+      return { _id: subject, name: "Loading..." };
+    });
   };
 
   const filteredUsers = users.filter(user => {
@@ -537,65 +558,135 @@ const AdminUsers = () => {
                   <th className="px-6 py-4 text-left font-medium">Email</th>
                   <th className="px-6 py-4 text-left font-medium">Program</th>
                   <th className="px-6 py-4 text-left font-medium">Course</th>
+                  <th className="px-6 py-4 text-left font-medium">Assigned Subjects</th>
                   <th className="px-6 py-4 text-left font-medium">Role</th>
                   <th className="px-6 py-4 text-left font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {filteredUsers.map((user) => (
-                  <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${
-                          user.role === "admin" ? "from-purple-500 to-purple-600" :
-                          user.role === "lecturer" ? "from-blue-500 to-blue-600" : "from-green-500 to-green-600"
-                        }`}>
-                          <span className="text-white font-semibold text-sm">{user.name?.charAt(0).toUpperCase()}</span>
-                        </div>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
-                      <div className="flex items-center gap-2"><FaEnvelope className="h-3.5 w-3.5 text-gray-400" />{user.email}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <FaBuilding className="h-3.5 w-3.5 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{user.programId?.name || "None"}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <FaGraduationCap className="h-3.5 w-3.5 text-gray-400" />
-                        <span className="text-gray-600 dark:text-gray-400">{user.courseId?.name || "None"}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        {getRoleIcon(user.role)}
-                        <select 
-                          value={user.role} 
-                          onChange={(e) => handleRoleChange(user._id, e.target.value)} 
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${getRoleBadgeStyle(user.role)}`}
-                        >
-                          <option value="student">Student</option>
-                          <option value="lecturer">Lecturer</option>
-                          <option value="admin">Administrator</option>
-                        </select>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openEditModal(user)} className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium">
-                          <FaEdit className="h-3.5 w-3.5" /> Edit
-                        </button>
-                        <button onClick={() => handleDelete(user._id)} className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium">
-                          <FaTrash className="h-3.5 w-3.5" /> Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredUsers.map((user) => {
+                  const assignedSubjects = getAssignedSubjectsList(user);
+                  const isExpanded = expandedLecturer === user._id;
+                  
+                  return (
+                    <>
+                      <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${
+                              user.role === "admin" ? "from-purple-500 to-purple-600" :
+                              user.role === "lecturer" ? "from-blue-500 to-blue-600" : "from-green-500 to-green-600"
+                            }`}>
+                              <span className="text-white font-semibold text-sm">{user.name?.charAt(0).toUpperCase()}</span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
+                              {user.role === "lecturer" && user.lecturerInfo?.title && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{user.lecturerInfo.title}</p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                          <div className="flex items-center gap-2">
+                            <FaEnvelope className="h-3.5 w-3.5 text-gray-400" />
+                            <span>{user.email}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <FaBuilding className="h-3.5 w-3.5 text-gray-400" />
+                            <span className="text-gray-600 dark:text-gray-400">{user.programId?.name || "—"}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <FaGraduationCap className="h-3.5 w-3.5 text-gray-400" />
+                            <span className="text-gray-600 dark:text-gray-400">{user.courseId?.name || "—"}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.role === "lecturer" ? (
+                            assignedSubjects.length > 0 ? (
+                              <div>
+                                <button
+                                  onClick={() => toggleLecturerExpanded(user._id)}
+                                  className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                                >
+                                  <FaBook className="h-3.5 w-3.5" />
+                                  <span className="text-sm font-medium">
+                                    {assignedSubjects.length} subject{assignedSubjects.length !== 1 ? 's' : ''}
+                                  </span>
+                                  <svg className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 dark:text-gray-500 text-sm">No subjects assigned</span>
+                            )
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-500">—</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {getRoleIcon(user.role)}
+                            <select 
+                              value={user.role} 
+                              onChange={(e) => handleRoleChange(user._id, e.target.value)} 
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${getRoleBadgeStyle(user.role)}`}
+                            >
+                              <option value="student">Student</option>
+                              <option value="lecturer">Lecturer</option>
+                              <option value="admin">Administrator</option>
+                            </select>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => openEditModal(user)} 
+                              className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
+                            >
+                              <FaEdit className="h-3.5 w-3.5" /> Edit
+                            </button>
+                            <button 
+                              onClick={() => handleDelete(user._id)} 
+                              className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
+                            >
+                              <FaTrash className="h-3.5 w-3.5" /> Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      
+                      {/* Expanded row for assigned subjects */}
+                      {isExpanded && user.role === "lecturer" && assignedSubjects.length > 0 && (
+                        <tr className="bg-gray-50 dark:bg-gray-800/30">
+                          <td colSpan="7" className="px-6 py-4">
+                            <div className="ml-12">
+                              <div className="flex items-center gap-2 mb-3">
+                                <FaBook className="h-4 w-4 text-blue-500" />
+                                <h4 className="font-medium text-gray-900 dark:text-gray-100">Assigned Subjects</h4>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                {assignedSubjects.map((subject, idx) => (
+                                  <div key={idx} className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <FaCheckCircle className="h-3.5 w-3.5 text-green-500" />
+                                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                                      {subject.name || subject._id}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -678,7 +769,10 @@ const AdminUsers = () => {
 
               <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button type="button" onClick={() => setShowAddLecturerModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all">Add Lecturer</button>
+                <button type="submit" disabled={loading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  {loading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaUserPlus className="h-4 w-4" />}
+                  Add Lecturer
+                </button>
               </div>
             </form>
           </div>
@@ -691,33 +785,97 @@ const AdminUsers = () => {
           <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center"><FaEdit className="h-5 w-5 text-white" /></div>
-                <div><h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Edit User</h2><p className="text-xs text-gray-500 dark:text-gray-400">Update user information</p></div>
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <FaEdit className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Edit User</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Update user information</p>
+                </div>
               </div>
-              <button onClick={() => setShowEditUserModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" /></button>
+              <button onClick={() => setShowEditUserModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+              </button>
             </div>
 
             <div className="space-y-4">
-              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name</label><input type="text" value={editUserData.name} onChange={(e) => setEditUserData({...editUserData, name: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label><input type="email" value={editUserData.email} onChange={(e) => setEditUserData({...editUserData, email: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Role</label><select value={editUserData.role} onChange={(e) => setEditUserData({...editUserData, role: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"><option value="student">Student</option><option value="lecturer">Lecturer</option><option value="admin">Administrator</option></select></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name</label>
+                <input type="text" value={editUserData.name} onChange={(e) => setEditUserData({...editUserData, name: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
+                <input type="email" value={editUserData.email} onChange={(e) => setEditUserData({...editUserData, email: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Role</label>
+                <select value={editUserData.role} onChange={(e) => setEditUserData({...editUserData, role: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                  <option value="student">Student</option>
+                  <option value="lecturer">Lecturer</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
 
-              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Program</label><select value={editUserData.programId} onChange={(e) => handleProgramChange(e.target.value)} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"><option value="">No Program</option>{programs.map(program => <option key={program._id} value={program._id}>{program.name}</option>)}</select></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Program</label>
+                <select value={editUserData.programId} onChange={(e) => handleProgramChange(e.target.value)} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                  <option value="">No Program</option>
+                  {programs.map(program => <option key={program._id} value={program._id}>{program.name}</option>)}
+                </select>
+              </div>
 
-              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Course</label><select value={editUserData.courseId} onChange={(e) => handleCourseChange(e.target.value)} disabled={!editUserData.programId} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"><option value="">No Course</option>{filteredCourses.map(course => <option key={course._id} value={course._id}>{course.name}</option>)}</select></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Course</label>
+                <select value={editUserData.courseId} onChange={(e) => handleCourseChange(e.target.value)} disabled={!editUserData.programId || editUserData.programId === "undefined" || editUserData.programId === "null"} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50">
+                  <option value="">No Course</option>
+                  {filteredCourses.map(course => <option key={course._id} value={course._id}>{course.name}</option>)}
+                </select>
+              </div>
 
               {editUserData.role === "lecturer" && (
                 <>
-                  <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title</label><select value={editUserData.title} onChange={(e) => setEditUserData({...editUserData, title: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"><option>Dr.</option><option>Prof.</option><option>Mr.</option><option>Mrs.</option><option>Ms.</option></select></div>
-                  <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Assigned Subjects</label><select multiple onChange={handleSubjectSelection} value={editUserData.subjectIds} disabled={!editUserData.courseId} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50">
-                    {availableSubjects.map(subject => <option key={subject._id} value={subject._id}>{subject.name}</option>)}
-                  </select><p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p></div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title</label>
+                    <select value={editUserData.title} onChange={(e) => setEditUserData({...editUserData, title: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                      <option>Dr.</option><option>Prof.</option><option>Mr.</option><option>Mrs.</option><option>Ms.</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Assigned Subjects</label>
+                    <select multiple onChange={handleSubjectSelection} value={editUserData.subjectIds} disabled={!editUserData.courseId || editUserData.courseId === "undefined" || editUserData.courseId === "null"} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50">
+                      {availableSubjects.map(subject => (
+                        <option key={subject._id} value={subject._id}>{subject.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p>
+                    {editUserData.subjectIds.length > 0 && (
+                      <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2">Selected Subjects:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {editUserData.subjectIds.map((id, idx) => {
+                            const subject = availableSubjects.find(s => s._id === id);
+                            return (
+                              <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">
+                                <FaCheckCircle className="h-2.5 w-2.5" />
+                                {subject?.name || id}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
               <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button onClick={() => setShowEditUserModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
-                <button onClick={handleUpdateUser} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"><FaSave className="h-4 w-4" /> Save Changes</button>
+                <button onClick={handleUpdateUser} disabled={loading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                  {loading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaSave className="h-4 w-4" />}
+                  Save Changes
+                </button>
               </div>
             </div>
           </div>

@@ -364,10 +364,8 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// ================= REGISTER LECTURER =================
-// controllers/authController.js - FIXED registerLecturer function
+// controllers/authController.js - COMPLETE FIXED VERSION
 
-// ================= REGISTER LECTURER =================
 export const registerLecturer = async (req, res) => {
   try {
     const { 
@@ -394,43 +392,54 @@ export const registerLecturer = async (req, res) => {
     }
     
     // Validate program if provided
-    if (programId) {
+    let validProgramId = null;
+    if (programId && programId !== "undefined" && programId !== "null") {
       const programExists = await Program.findById(programId);
       if (!programExists) {
         return res.status(400).json({ message: "Invalid program selected" });
       }
+      validProgramId = programId;
     }
     
     // Validate course if provided
-    if (courseId) {
+    let validCourseId = null;
+    if (courseId && courseId !== "undefined" && courseId !== "null") {
       const courseExists = await Course.findById(courseId);
       if (!courseExists) {
         return res.status(400).json({ message: "Invalid course selected" });
       }
+      validCourseId = courseId;
     }
     
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Prepare lecturer info with ALL fields including assigned subjects
-    const lecturerInfoData = {
-      title: title || "Dr.",
-      department: department || "",
-      specialization: specialization || "",
-      phoneNumber: phoneNumber || "",
-      bio: "",
-      isActive: true,
-      hireDate: new Date(),
-      assignedCourses: courseId ? [courseId] : [],
-      assignedSubjects: assignedSubjects || []
-    };
+    // Filter valid subject IDs (remove empty/null/undefined)
+    let validSubjectIds = [];
+    if (assignedSubjects && Array.isArray(assignedSubjects)) {
+      validSubjectIds = assignedSubjects.filter(id => 
+        id && id !== "" && id !== "undefined" && id !== "null"
+      );
+      
+      // Verify each subject exists and belongs to the selected course
+      if (validSubjectIds.length > 0 && validCourseId) {
+        const subjects = await Subject.find({ 
+          _id: { $in: validSubjectIds },
+          courseId: validCourseId 
+        });
+        
+        if (subjects.length !== validSubjectIds.length) {
+          console.warn("Some subjects don't belong to the selected course");
+        }
+        validSubjectIds = subjects.map(s => s._id);
+      }
+    }
     
     console.log("Creating lecturer with:", {
       name,
       email,
-      programId,
-      courseId,
-      assignedSubjects: assignedSubjects || [],
-      lecturerInfoData
+      programId: validProgramId,
+      courseId: validCourseId,
+      assignedSubjects: validSubjectIds,
     });
     
     // Create the lecturer user with ALL fields
@@ -439,15 +448,22 @@ export const registerLecturer = async (req, res) => {
       email,
       password: hashedPassword,
       role: "lecturer",
-      programId: programId || null,
-      courseId: courseId || null,
-      lecturerInfo: lecturerInfoData
+      programId: validProgramId,
+      courseId: validCourseId,
+      lecturerInfo: {
+        title: title || "Dr.",
+        department: department || "",
+        specialization: specialization || "",
+        phoneNumber: phoneNumber || "",
+        bio: "",
+        isActive: true,
+        hireDate: new Date(),
+        assignedCourses: validCourseId ? [validCourseId] : [],
+        assignedSubjects: validSubjectIds
+      }
     });
     
-    console.log("Lecturer created with ID:", user._id);
-    console.log("Saved programId:", user.programId);
-    console.log("Saved courseId:", user.courseId);
-    console.log("Saved assignedSubjects:", user.lecturerInfo?.assignedSubjects);
+    console.log("✅ Lecturer created with ID:", user._id);
     
     // Send welcome notification
     await createNotification(
@@ -455,12 +471,12 @@ export const registerLecturer = async (req, res) => {
       "lecturer",
       "success",
       "Welcome to Alveoly! 🎉",
-      `Welcome ${name}! You have been added as a lecturer. You can now create and manage content.`,
+      `Welcome ${name}! You have been added as a lecturer.`,
       "/lecturer/dashboard",
       { action: "welcome" }
     );
     
-    // Notify admins about new lecturer
+    // Notify admins
     const adminUsers = await User.find({ role: "admin" });
     for (const admin of adminUsers) {
       await createNotification(
@@ -474,15 +490,21 @@ export const registerLecturer = async (req, res) => {
       );
     }
     
-    // Fetch the created user with populated fields
+    // Fetch the created user with ALL populated fields
     const createdUser = await User.findById(user._id)
       .select("-password")
-      .populate("programId", "name code")
+      .populate("programId", "name code isActive")
       .populate("courseId", "name")
       .populate({
         path: 'lecturerInfo.assignedSubjects',
-        populate: { path: 'courseId', select: 'name code' }
-      });
+        model: 'Subject',
+        populate: {
+          path: 'courseId',
+          model: 'Course',
+          select: 'name code'
+        }
+      })
+      .populate('lecturerInfo.assignedCourses', 'name code');
     
     res.status(201).json({
       success: true,

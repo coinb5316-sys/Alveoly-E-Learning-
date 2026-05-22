@@ -114,7 +114,8 @@ export const updateUserRole = async (req, res) => {
 };
 
 
-// ================= FULL UPDATE USER =================
+// controllers/userController.js - FIXED updateUser function
+
 export const updateUser = async (req, res) => {
   try {
     const { name, email, role, programId, courseId, lecturerInfo } = req.body;
@@ -136,13 +137,13 @@ export const updateUser = async (req, res) => {
       user.role = role;
     }
     
-    // ADD PROGRAM ID UPDATE
+    // Update program and course
     if (programId !== undefined) {
-      user.programId = programId || null;
+      user.programId = programId && programId !== "undefined" && programId !== "null" ? programId : null;
     }
     
     if (courseId !== undefined) {
-      user.courseId = courseId || null;
+      user.courseId = courseId && courseId !== "undefined" && courseId !== "null" ? courseId : null;
     }
     
     // Update lecturer-specific fields
@@ -159,15 +160,18 @@ export const updateUser = async (req, res) => {
       
       if (lecturerInfo.assignedCourses !== undefined) {
         user.lecturerInfo.assignedCourses = Array.isArray(lecturerInfo.assignedCourses) 
-          ? lecturerInfo.assignedCourses 
+          ? lecturerInfo.assignedCourses.filter(c => c && c !== "")
           : [];
       }
       
       if (lecturerInfo.assignedSubjects !== undefined) {
-        user.lecturerInfo.assignedSubjects = Array.isArray(lecturerInfo.assignedSubjects) 
-          ? lecturerInfo.assignedSubjects 
+        // Filter valid subject IDs
+        const validSubjects = Array.isArray(lecturerInfo.assignedSubjects) 
+          ? lecturerInfo.assignedSubjects.filter(s => s && s !== "" && s !== "undefined" && s !== "null")
           : [];
-        console.log("✅ Saving assigned subjects to user:", user.lecturerInfo.assignedSubjects);
+        
+        user.lecturerInfo.assignedSubjects = validSubjects;
+        console.log("✅ Saving assigned subjects to user:", validSubjects);
       }
       
       if (!user.lecturerInfo.isActive) user.lecturerInfo.isActive = true;
@@ -191,11 +195,16 @@ export const updateUser = async (req, res) => {
     
     const updatedUser = await User.findById(userId)
       .select("-password")
-      .populate("programId", "name code isActive")  // ✅ ADD THIS
+      .populate("programId", "name code isActive")
       .populate("courseId", "name")
       .populate({
         path: 'lecturerInfo.assignedSubjects',
-        populate: { path: 'courseId', select: 'name code' }
+        model: 'Subject',
+        populate: {
+          path: 'courseId',
+          model: 'Course',
+          select: 'name code'
+        }
       })
       .populate('lecturerInfo.assignedCourses', 'name code');
     
@@ -209,7 +218,6 @@ export const updateUser = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 // ================= DELETE USER =================
 export const deleteUser = async (req, res) => {
   try {
