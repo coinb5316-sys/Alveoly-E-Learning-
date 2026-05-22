@@ -1,4 +1,4 @@
-// LecturerContentForm.jsx - SIMPLIFIED WORKING VERSION
+// LecturerContentForm.jsx - COMPLETELY FIXED VERSION
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -26,22 +26,399 @@ import {
   AlertCircle,
   ArrowLeft,
   Building,
-  Info
+  CheckCircle
 } from "lucide-react";
 
-// Quiz Editor Component (keep your existing QuizEditor code)
+// Quiz Editor Component (keep as is from your original)
 const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
-  // ... keep your existing QuizEditor code exactly as is
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
+  const [passMark, setPassMark] = useState(content?.quizPassMark || 70);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [currentQuestion, setCurrentQuestion] = useState({
+    question: "",
+    options: ["", "", "", ""],
+    correctAnswer: "",
+    rationale: "",
+    points: 1,
+  });
+
+  useEffect(() => {
+    if (content?._id) {
+      fetchExistingQuestions();
+    }
+  }, [content]);
+
+  const fetchExistingQuestions = async () => {
+    try {
+      const res = await axios.get(`/lesson-quiz/lesson/${content._id}`);
+      if (res.data && res.data.length) {
+        setQuestions(res.data);
+        if (res.data[0]?.timerMinutes) {
+          setTimerMinutes(res.data[0].timerMinutes);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching questions:", err);
+      toast.error("Failed to fetch existing questions");
+    }
+  };
+
+  const resetForm = () => {
+    setCurrentQuestion({
+      question: "",
+      options: ["", "", "", ""],
+      correctAnswer: "",
+      rationale: "",
+      points: 1,
+    });
+    setEditingIndex(null);
+  };
+
+  const handleEditQuestion = (index) => {
+    const questionToEdit = questions[index];
+    setCurrentQuestion({
+      question: questionToEdit.question,
+      options: [...questionToEdit.options],
+      correctAnswer: questionToEdit.correctAnswer,
+      rationale: questionToEdit.rationale || "",
+      points: questionToEdit.points || 1,
+    });
+    setEditingIndex(index);
+    document.getElementById('question-form')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const addOrUpdateQuestion = () => {
+    if (!currentQuestion.question.trim()) {
+      toast.error("Please enter a question");
+      return;
+    }
+    if (currentQuestion.options.some(opt => !opt.trim())) {
+      toast.error("Please fill all options");
+      return;
+    }
+    if (!currentQuestion.correctAnswer) {
+      toast.error("Please select correct answer");
+      return;
+    }
+
+    if (editingIndex !== null) {
+      const updatedQuestions = [...questions];
+      updatedQuestions[editingIndex] = {
+        ...updatedQuestions[editingIndex],
+        question: currentQuestion.question,
+        options: [...currentQuestion.options],
+        correctAnswer: currentQuestion.correctAnswer,
+        rationale: currentQuestion.rationale,
+        points: currentQuestion.points,
+      };
+      setQuestions(updatedQuestions);
+      toast.success("Question updated successfully!");
+    } else {
+      setQuestions([...questions, { ...currentQuestion, id: Date.now() }]);
+      toast.success("Question added successfully!");
+    }
+    
+    resetForm();
+  };
+
+  const removeQuestion = (index) => {
+    if (window.confirm("Are you sure you want to delete this question?")) {
+      setQuestions(questions.filter((_, i) => i !== index));
+      if (editingIndex === index) {
+        resetForm();
+      } else if (editingIndex !== null && editingIndex > index) {
+        setEditingIndex(editingIndex - 1);
+      }
+      toast.success("Question deleted");
+    }
+  };
+
+  const saveQuiz = async () => {
+    if (questions.length === 0) {
+      toast.error("Please add at least one question");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const formattedQuestions = questions.map(q => ({
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        rationale: q.rationale || "",
+        points: q.points || 1,
+      }));
+
+      await axios.put(`/content/${content._id}`, {
+        title: content.title,
+        quizTimerMinutes: timerMinutes,
+        quizPassMark: passMark,
+      });
+
+      await axios.post("/lesson-quiz/save", {
+        lessonId: content._id,
+        questions: formattedQuestions,
+        timerMinutes: timerMinutes,
+      });
+
+      toast.success(`✅ Saved ${questions.length} questions for "${content.title}"!`);
+      onSave?.();
+      if (refreshContents) refreshContents();
+      onClose();
+    } catch (err) {
+      console.error("Save error:", err);
+      toast.error("Failed to save quiz: " + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalPoints = questions.reduce((sum, q) => sum + (q.points || 1), 0);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-6 flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Quiz Editor: {content?.title}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              {questions.length} question(s) | Total Points: {totalPoints}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Quiz Settings */}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-xl p-5">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <Clock className="h-5 w-5 text-blue-500" />
+              Quiz Settings
+            </h3>
+            <div className="grid md:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Timer (minutes)
+                </label>
+                <select
+                  value={timerMinutes}
+                  onChange={(e) => setTimerMinutes(parseInt(e.target.value))}
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="0">No timer</option>
+                  <option value="5">5 minutes</option>
+                  <option value="10">10 minutes</option>
+                  <option value="15">15 minutes</option>
+                  <option value="20">20 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
+                  <option value="60">60 minutes</option>
+                  <option value="90">90 minutes</option>
+                  <option value="120">120 minutes</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Pass Mark (%)
+                </label>
+                <input
+                  type="number"
+                  value={passMark}
+                  onChange={(e) => setPassMark(Math.min(100, Math.max(0, parseInt(e.target.value) || 70)))}
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  min="0"
+                  max="100"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Question Form - keep as is from your original */}
+          <div id="question-form" className="bg-gray-50 dark:bg-gray-800/30 rounded-xl p-5">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+              {editingIndex !== null ? <Edit className="h-5 w-5 text-yellow-500" /> : <Plus className="h-5 w-5 text-blue-500" />}
+              {editingIndex !== null ? "Edit Question" : "Add New Question"}
+            </h3>
+            
+            <textarea
+              value={currentQuestion.question}
+              onChange={(e) => setCurrentQuestion({ ...currentQuestion, question: e.target.value })}
+              placeholder="Enter your question here..."
+              rows={2}
+              className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none mb-3"
+            />
+
+            <div className="space-y-2 mb-3">
+              {currentQuestion.options.map((opt, idx) => (
+                <div key={idx} className="flex gap-2">
+                  <div className="flex-shrink-0 w-10 h-11 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-lg font-semibold text-gray-600 dark:text-gray-400">
+                    {String.fromCharCode(65 + idx)}
+                  </div>
+                  <input
+                    value={opt}
+                    onChange={(e) => {
+                      const newOpts = [...currentQuestion.options];
+                      newOpts[idx] = e.target.value;
+                      setCurrentQuestion({ ...currentQuestion, options: newOpts });
+                    }}
+                    placeholder={`Option ${String.fromCharCode(65 + idx)}`}
+                    className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3 mb-3">
+              <select
+                value={currentQuestion.correctAnswer}
+                onChange={(e) => setCurrentQuestion({ ...currentQuestion, correctAnswer: e.target.value })}
+                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              >
+                <option value="">Select Correct Answer</option>
+                {currentQuestion.options.map((_, idx) => (
+                  <option key={idx} value={String.fromCharCode(65 + idx)}>
+                    {String.fromCharCode(65 + idx)}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="number"
+                value={currentQuestion.points}
+                onChange={(e) => setCurrentQuestion({ ...currentQuestion, points: parseInt(e.target.value) || 1 })}
+                placeholder="Points"
+                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                min="1"
+              />
+            </div>
+
+            <textarea
+              value={currentQuestion.rationale}
+              onChange={(e) => setCurrentQuestion({ ...currentQuestion, rationale: e.target.value })}
+              placeholder="Rationale (explanation for correct answer)"
+              rows={2}
+              className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none mb-3"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={addOrUpdateQuestion}
+                className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
+                  editingIndex !== null 
+                    ? "bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700" 
+                    : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                } text-white shadow-lg`}
+              >
+                {editingIndex !== null ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {editingIndex !== null ? "Update Question" : "Add Question"}
+              </button>
+              
+              {editingIndex !== null && (
+                <button
+                  onClick={resetForm}
+                  className="px-4 py-2.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-all"
+                >
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Questions List - keep as is */}
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Questions List</h3>
+              <span className="text-sm text-gray-500 dark:text-gray-400">Total Points: {totalPoints}</span>
+            </div>
+            
+            {questions.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
+                <HelpCircle className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                <p className="text-gray-500 dark:text-gray-400">No questions added yet</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Add your first question above</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {questions.map((q, idx) => (
+                  <div key={idx} className="border border-gray-200 dark:border-gray-800 rounded-xl p-4 hover:shadow-md transition-all">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <span className="font-bold text-lg text-gray-900 dark:text-gray-100">{idx + 1}.</span>
+                          <span className="font-medium text-gray-800 dark:text-gray-200">{q.question}</span>
+                          <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-full text-gray-600 dark:text-gray-400">
+                            {q.points || 1} pt{(q.points || 1) !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="ml-6 space-y-1">
+                          {q.options.map((opt, i) => (
+                            <p key={i} className={`text-sm ${String.fromCharCode(65 + i) === q.correctAnswer ? "text-green-600 dark:text-green-400 font-semibold" : "text-gray-600 dark:text-gray-400"}`}>
+                              {String.fromCharCode(65 + i)}. {opt}
+                              {String.fromCharCode(65 + i) === q.correctAnswer && " ✓"}
+                            </p>
+                          ))}
+                        </div>
+                        {q.rationale && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 ml-6 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg">
+                            💡 {q.rationale}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        <button
+                          onClick={() => handleEditQuestion(idx)}
+                          className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                          title="Edit Question"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => removeQuestion(idx)}
+                          className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                          title="Delete Question"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 p-4 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all">
+            Cancel
+          </button>
+          <button
+            onClick={saveQuiz}
+            disabled={loading || questions.length === 0}
+            className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {loading ? "Saving..." : `Save Quiz (${questions.length} questions)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-// Main LecturerContentForm Component - SIMPLIFIED WORKING VERSION
+// Main LecturerContentForm Component - COMPLETELY FIXED
 const LecturerContentForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = !!id;
   
   const [courses, setCourses] = useState([]);
-  const [assignedSubjects, setAssignedSubjects] = useState([]); // Already populated subjects!
+  const [assignedSubjects, setAssignedSubjects] = useState([]);
+  const [filteredSubjects, setFilteredSubjects] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
   const [file, setFile] = useState(null);
@@ -51,7 +428,7 @@ const LecturerContentForm = () => {
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [user, setUser] = useState(null);
   const [contentData, setContentData] = useState(null);
-  const [loadingUser, setLoadingUser] = useState(true);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -63,7 +440,7 @@ const LecturerContentForm = () => {
   const [form, setForm] = useState({
     title: "",
     type: "video",
-    linkType: "subject",
+    linkType: "subject", // subject or course
     programId: "",
     courseId: "",
     subjectId: "",
@@ -72,79 +449,144 @@ const LecturerContentForm = () => {
     thumbnail: null,
   });
 
-  // ================= STEP 1: Get current user (already has populated assignedSubjects) =================
+  // Get current user
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        setLoadingUser(true);
-        console.log("🔄 Fetching user data...");
-        
         const userRes = await axios.get("/auth/me");
         const userData = userRes.data;
         setUser(userData);
         localStorage.setItem("user", JSON.stringify(userData));
-        
-        console.log("✅ User role:", userData.role);
-        console.log("📚 Lecturer info:", userData.lecturerInfo);
-        
-        // Get assigned subjects - they are already populated with full subject objects!
-        let subjects = [];
-        if (userData.lecturerInfo?.assignedSubjects) {
-          subjects = userData.lecturerInfo.assignedSubjects;
-          console.log(`📚 Found ${subjects.length} assigned subjects (already populated):`);
-          subjects.forEach(s => console.log(`  - ${s.name} (Course: ${s.courseId?.name || 'N/A'})`));
-        }
-        
-        setAssignedSubjects(subjects);
-        
-        if (subjects.length === 0) {
-          console.warn("⚠️ No subjects assigned to this lecturer!");
-        }
-        
       } catch (err) {
-        console.error("🔥 Error fetching user:", err);
-        toast.error("Failed to load user data");
-        
-        // Fallback to localStorage
+        console.error("Error fetching user:", err);
         const storedUser = localStorage.getItem("user");
         if (storedUser) {
-          try {
-            const userData = JSON.parse(storedUser);
-            setUser(userData);
-            setAssignedSubjects(userData.lecturerInfo?.assignedSubjects || []);
-          } catch (e) {
-            console.error("Failed to parse stored user:", e);
-          }
+          setUser(JSON.parse(storedUser));
         }
-      } finally {
-        setLoadingUser(false);
       }
     };
-    
     fetchUser();
   }, []);
 
-  // ================= STEP 2: Fetch courses and programs =================
+  // Fetch lecturer's assigned subjects
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchAssignedSubjects = async () => {
+      if (!user) return;
+      
+      setLoadingSubjects(true);
       try {
-        const [programsRes, coursesRes] = await Promise.all([
-          axios.get("/programs"),
-          axios.get("/courses"),
-        ]);
-        setPrograms(programsRes.data || []);
-        setCourses(coursesRes.data || []);
-        console.log("📚 Programs loaded:", programsRes.data?.length);
-        console.log("📚 Courses loaded:", coursesRes.data?.length);
+        // Use the dedicated endpoint for lecturer's assigned subjects
+        const response = await axios.get("/lecturer/assigned-subjects");
+        console.log("Assigned subjects response:", response.data);
+        
+        if (response.data.success && response.data.subjects) {
+          setAssignedSubjects(response.data.subjects);
+          console.log("Set assigned subjects:", response.data.subjects.length);
+        } else {
+          // Fallback: try to get from user object
+          const subjectsFromUser = user.lecturerInfo?.assignedSubjects || [];
+          setAssignedSubjects(subjectsFromUser);
+          console.log("Using subjects from user:", subjectsFromUser.length);
+        }
       } catch (err) {
-        console.error("Error fetching data:", err);
-        toast.error("Failed to fetch courses and programs");
+        console.error("Error fetching assigned subjects:", err);
+        // Fallback: try to get from user object
+        const subjectsFromUser = user?.lecturerInfo?.assignedSubjects || [];
+        setAssignedSubjects(subjectsFromUser);
+      } finally {
+        setLoadingSubjects(false);
       }
     };
-    fetchData();
+    
+    if (user) {
+      fetchAssignedSubjects();
+    }
+  }, [user]);
+
+  // Fetch programs
+  useEffect(() => {
+    const fetchPrograms = async () => {
+      try {
+        const res = await axios.get("/programs/public");
+        setPrograms(res.data);
+      } catch (err) {
+        console.error("Error fetching programs:", err);
+        toast.error("Failed to fetch programs");
+      }
+    };
+    fetchPrograms();
   }, []);
 
-  // ================= STEP 3: Fetch content for editing =================
+  // Filter subjects based on selected program and course
+  useEffect(() => {
+    if (!assignedSubjects.length) {
+      setFilteredSubjects([]);
+      return;
+    }
+    
+    let filtered = [...assignedSubjects];
+    
+    // Filter by program if selected
+    if (form.programId) {
+      filtered = filtered.filter(s => 
+        s.programId?._id === form.programId || s.programId === form.programId
+      );
+    }
+    
+    // Filter by course if selected
+    if (form.courseId) {
+      filtered = filtered.filter(s => 
+        s.courseId?._id === form.courseId || s.courseId === form.courseId
+      );
+    }
+    
+    console.log("Filtered subjects:", filtered.length);
+    setFilteredSubjects(filtered);
+    
+    // Clear selected subject if it's no longer in filtered list
+    if (form.subjectId && !filtered.some(s => s._id === form.subjectId)) {
+      setForm(prev => ({ ...prev, subjectId: "" }));
+    }
+  }, [assignedSubjects, form.programId, form.courseId]);
+
+  // Fetch courses when program changes
+  const handleProgramChange = async (programId) => {
+    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "" }));
+    
+    if (programId) {
+      try {
+        const res = await axios.get(`/courses/program/${programId}`);
+        setFilteredCourses(res.data || []);
+      } catch (err) {
+        console.error("Error fetching courses:", err);
+        setFilteredCourses([]);
+      }
+    } else {
+      setFilteredCourses([]);
+    }
+  };
+
+  // Handle course change - reset subject
+  const handleCourseChange = (courseId) => {
+    setForm(prev => ({ ...prev, courseId, subjectId: "" }));
+  };
+
+  // Handle subject selection - auto-populate course and program
+  const handleSubjectChange = (subjectId) => {
+    const selectedSubject = assignedSubjects.find(s => s._id === subjectId);
+    if (selectedSubject) {
+      setForm(prev => ({
+        ...prev,
+        subjectId,
+        courseId: selectedSubject.courseId?._id || selectedSubject.courseId,
+        programId: selectedSubject.programId?._id || selectedSubject.programId,
+      }));
+    } else {
+      setForm(prev => ({ ...prev, subjectId }));
+    }
+  };
+
+  // Fetch content for editing
   useEffect(() => {
     if (isEditing && id) {
       fetchContentForEdit();
@@ -170,6 +612,7 @@ const LecturerContentForm = () => {
         thumbnail: null,
       });
       
+      // Load filtered courses
       if (content.courseId?.programId) {
         const programId = content.courseId.programId._id || content.courseId.programId;
         await handleProgramChange(programId);
@@ -187,38 +630,6 @@ const LecturerContentForm = () => {
       setFetching(false);
     }
   };
-
-  // ================= Helper functions =================
-  const handleProgramChange = async (programId) => {
-    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "" }));
-    if (programId) {
-      try {
-        const res = await axios.get(`/courses/program/${programId}`);
-        setFilteredCourses(res.data || []);
-      } catch (err) {
-        console.error("Error fetching courses:", err);
-        setFilteredCourses([]);
-      }
-    } else {
-      setFilteredCourses([]);
-    }
-  };
-
-  const handleCourseChange = (courseId) => {
-    setForm(prev => ({ ...prev, courseId, subjectId: "" }));
-  };
-
-  // Get subjects filtered by selected course (using already populated assignedSubjects)
-  const getSubjectsForCourse = () => {
-    if (!form.courseId) return assignedSubjects;
-    
-    return assignedSubjects.filter(subject => {
-      const subjectCourseId = subject.courseId?._id || subject.courseId;
-      return subjectCourseId === form.courseId;
-    });
-  };
-
-  const availableSubjects = getSubjectsForCourse();
 
   const handleUpload = async () => {
     if (!form.title) {
@@ -254,6 +665,7 @@ const LecturerContentForm = () => {
 
     if (form.linkType === "subject") {
       formData.append("subjectId", form.subjectId);
+      // Get courseId from selected subject
       const selectedSubject = assignedSubjects.find(s => s._id === form.subjectId);
       if (selectedSubject && selectedSubject.courseId) {
         const courseIdValue = selectedSubject.courseId._id || selectedSubject.courseId;
@@ -326,23 +738,33 @@ const LecturerContentForm = () => {
     }
   };
 
-  // Debug logging
-  console.log("=== STATE DEBUG ===");
-  console.log("Assigned Subjects count:", assignedSubjects.length);
-  console.log("Assigned Subjects:", assignedSubjects.map(s => ({ id: s._id, name: s.name, courseId: s.courseId?._id || s.courseId })));
-  console.log("Available for course:", availableSubjects.length);
-  console.log("Form courseId:", form.courseId);
-  console.log("Form subjectId:", form.subjectId);
-  console.log("Loading user:", loadingUser);
+  const closeViewer = () => {
+    setViewer({ open: false, type: "", url: "", title: "" });
+  };
 
-  if (loadingUser) {
-    return (
-      <div className="flex flex-col justify-center items-center py-20">
-        <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
-        <p className="mt-4 text-gray-500 dark:text-gray-400">Loading your account...</p>
-      </div>
-    );
-  }
+  // Get unique courses from assigned subjects for dropdown
+  const uniqueCourses = React.useMemo(() => {
+    const coursesMap = new Map();
+    assignedSubjects.forEach(subject => {
+      const course = subject.courseId;
+      if (course && course._id) {
+        if (!coursesMap.has(course._id)) {
+          coursesMap.set(course._id, {
+            _id: course._id,
+            name: course.name,
+            code: course.code
+          });
+        }
+      }
+    });
+    return Array.from(coursesMap.values());
+  }, [assignedSubjects]);
+
+  // Debug logging
+  console.log("Assigned Subjects:", assignedSubjects);
+  console.log("Filtered Subjects:", filteredSubjects);
+  console.log("Unique Courses:", uniqueCourses);
+  console.log("Form values:", { programId: form.programId, courseId: form.courseId, subjectId: form.subjectId });
 
   if (fetching) {
     return (
@@ -391,9 +813,10 @@ const LecturerContentForm = () => {
         </div>
 
         <div className="grid gap-5">
+          {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Title
+              Title <span className="text-red-500">*</span>
             </label>
             <input
               placeholder="Enter content title"
@@ -403,6 +826,7 @@ const LecturerContentForm = () => {
             />
           </div>
 
+          {/* Type and Link Type */}
           <div className="grid md:grid-cols-2 gap-4">
             <select
               value={form.type}
@@ -418,137 +842,107 @@ const LecturerContentForm = () => {
 
             <select
               value={form.linkType}
-              onChange={(e) => setForm({ ...form, linkType: e.target.value })}
+              onChange={(e) => setForm({ ...form, linkType: e.target.value, subjectId: "", courseId: "" })}
               className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             >
-              <option value="subject">Attach to Subject</option>
+              <option value="subject">Attach to Subject (Recommended)</option>
               <option value="course">Attach to Course</option>
             </select>
           </div>
 
-          {/* Program Selection */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Program
-              </label>
-              <div className="relative">
-                <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <select
-                  value={form.programId}
-                  onChange={(e) => handleProgramChange(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                >
-                  <option value="">Select Program</option>
-                  {programs.filter(p => p.isActive !== false).map((p) => (
-                    <option key={p._id} value={p._id}>
-                      {p.name} {p.code ? `(${p.code})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Course Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Course
-              </label>
-              <div className="relative">
-                <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <select
-                  value={form.courseId}
-                  onChange={(e) => handleCourseChange(e.target.value)}
-                  disabled={!form.programId}
-                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="">Select Course</option>
-                  {filteredCourses.map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Subject Selection - Using already populated assignedSubjects */}
+          {/* When attaching to subject - show subjects directly */}
           {form.linkType === "subject" ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Subject
+                Select Subject <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <select
                   value={form.subjectId}
-                  onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
+                  onChange={(e) => handleSubjectChange(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  disabled={availableSubjects.length === 0}
+                  disabled={loadingSubjects}
                 >
-                  <option value="">Select Subject</option>
-                  {availableSubjects.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.name} {s.isPaid ? "💰" : "📖"} {s.courseId?.name ? `(${s.courseId.name})` : ""}
+                  <option value="">Select a subject...</option>
+                  {filteredSubjects.map((subject) => (
+                    <option key={subject._id} value={subject._id}>
+                      {subject.name} {subject.courseId?.name ? `(${subject.courseId.name})` : ""}
                     </option>
                   ))}
                 </select>
               </div>
-              
-              {/* No subjects assigned message */}
-              {assignedSubjects.length === 0 && (
-                <div className="mt-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                        No subjects assigned to you
-                      </p>
-                      <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
-                        You don't have any subjects assigned yet. Please contact an administrator to assign subjects to your lecturer account.
-                      </p>
-                    </div>
-                  </div>
+              {loadingSubjects && (
+                <p className="text-xs text-gray-500 mt-1">Loading your assigned subjects...</p>
+              )}
+              {!loadingSubjects && filteredSubjects.length === 0 && assignedSubjects.length > 0 && (
+                <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg">
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    No subjects match the selected filters. Try selecting a different program or course.
+                  </p>
                 </div>
               )}
-              
-              {/* Subjects exist but none for selected course */}
-              {assignedSubjects.length > 0 && availableSubjects.length === 0 && form.courseId && (
-                <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
-                        No subjects for this course
-                      </p>
-                      <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-                        Your assigned subjects don't include any subjects from the selected course. Please select a different course or contact admin.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Need to select course first */}
-              {assignedSubjects.length > 0 && availableSubjects.length === 0 && !form.courseId && (
-                <div className="mt-3 p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <Info className="h-5 w-5 text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        Select a course first
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Please select a program and course above to see your assigned subjects.
-                      </p>
-                    </div>
-                  </div>
+              {!loadingSubjects && assignedSubjects.length === 0 && (
+                <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg">
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    No subjects assigned to you. Please contact an administrator to assign subjects to your account.
+                  </p>
                 </div>
               )}
             </div>
-          ) : null}
+          ) : (
+            /* When attaching to course - show program and course selection */
+            <>
+              {/* Program Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Program
+                </label>
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <select
+                    value={form.programId}
+                    onChange={(e) => handleProgramChange(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Select Program</option>
+                    {programs.filter(p => p.isActive !== false).map((p) => (
+                      <option key={p._id} value={p._id}>
+                        {p.name} {p.code ? `(${p.code})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
+              {/* Course Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Course <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <select
+                    value={form.courseId}
+                    onChange={(e) => handleCourseChange(e.target.value)}
+                    disabled={!form.programId}
+                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Select Course</option>
+                    {filteredCourses.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Payment Settings */}
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input
@@ -573,6 +967,7 @@ const LecturerContentForm = () => {
             )}
           </div>
 
+          {/* File Upload (for non-quiz) */}
           {form.type !== "quiz" && (
             <div className="grid md:grid-cols-2 gap-4">
               <div>
@@ -624,6 +1019,7 @@ const LecturerContentForm = () => {
             </div>
           )}
 
+          {/* Quiz Info */}
           {form.type === "quiz" && (
             <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 rounded-xl p-4">
               <div className="flex items-center gap-3">
@@ -642,6 +1038,7 @@ const LecturerContentForm = () => {
             </div>
           )}
 
+          {/* Action Buttons */}
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleUpload}
