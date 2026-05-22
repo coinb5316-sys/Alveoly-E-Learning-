@@ -3,17 +3,30 @@ import User from "../models/User.js";
 import { createNotification } from "./notificationController.js";
 
 // ================= GET ALL USERS =================
+// controllers/userController.js - Make sure getAllUsers has proper population
 export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find()
       .select("-password")
-      .populate("programId", "name code isActive")  // ✅ ADD THIS LINE
-      .populate("courseId", "name")                 // ✅ KEEP THIS
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name")
       .populate({
         path: 'lecturerInfo.assignedSubjects',
-        populate: { path: 'courseId', select: 'name code' }
+        model: 'Subject',
+        select: 'name courseId',
+        populate: {
+          path: 'courseId',
+          model: 'Course',
+          select: 'name'
+        }
       })
       .populate('lecturerInfo.assignedCourses', 'name code');
+
+    console.log("Fetched users with subjects:", users.map(u => ({
+      name: u.name,
+      role: u.role,
+      subjects: u.lecturerInfo?.assignedSubjects?.length || 0
+    })));
 
     res.json(users);
   } catch (err) {

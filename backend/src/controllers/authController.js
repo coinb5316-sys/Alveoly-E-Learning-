@@ -2,6 +2,7 @@
 import User from "../models/User.js";
 import Program from "../models/Program.js";
 import Course from "../models/Course.js"; 
+import Subject from "../models/Subject.js";
 import bcrypt from "bcryptjs";
 import generateToken from "../utils/generateToken.js";
 import crypto from "crypto";
@@ -364,8 +365,7 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// controllers/authController.js - COMPLETE FIXED VERSION
-
+// ================= REGISTER LECTURER (COMPLETELY FIXED) =================
 export const registerLecturer = async (req, res) => {
   try {
     const { 
@@ -381,6 +381,8 @@ export const registerLecturer = async (req, res) => {
       phoneNumber
     } = req.body;
     
+    console.log("Received lecturer data:", { name, email, programId, courseId, assignedSubjects });
+    
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Name, email, and password are required" });
     }
@@ -393,7 +395,7 @@ export const registerLecturer = async (req, res) => {
     
     // Validate program if provided
     let validProgramId = null;
-    if (programId && programId !== "undefined" && programId !== "null") {
+    if (programId && programId !== "undefined" && programId !== "null" && programId !== "") {
       const programExists = await Program.findById(programId);
       if (!programExists) {
         return res.status(400).json({ message: "Invalid program selected" });
@@ -403,7 +405,7 @@ export const registerLecturer = async (req, res) => {
     
     // Validate course if provided
     let validCourseId = null;
-    if (courseId && courseId !== "undefined" && courseId !== "null") {
+    if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
       const courseExists = await Course.findById(courseId);
       if (!courseExists) {
         return res.status(400).json({ message: "Invalid course selected" });
@@ -413,24 +415,25 @@ export const registerLecturer = async (req, res) => {
     
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Filter valid subject IDs (remove empty/null/undefined)
+    // Process assigned subjects
     let validSubjectIds = [];
-    if (assignedSubjects && Array.isArray(assignedSubjects)) {
-      validSubjectIds = assignedSubjects.filter(id => 
-        id && id !== "" && id !== "undefined" && id !== "null"
+    if (assignedSubjects && Array.isArray(assignedSubjects) && assignedSubjects.length > 0) {
+      // Filter out invalid IDs
+      const filteredIds = assignedSubjects.filter(id => 
+        id && id !== "" && id !== "undefined" && id !== "null" && id !== "NaN"
       );
       
-      // Verify each subject exists and belongs to the selected course
-      if (validSubjectIds.length > 0 && validCourseId) {
-        const subjects = await Subject.find({ 
-          _id: { $in: validSubjectIds },
-          courseId: validCourseId 
-        });
-        
-        if (subjects.length !== validSubjectIds.length) {
-          console.warn("Some subjects don't belong to the selected course");
+      if (filteredIds.length > 0) {
+        // Verify subjects exist and belong to the selected course
+        const query = { _id: { $in: filteredIds } };
+        if (validCourseId) {
+          query.courseId = validCourseId;
         }
+        
+        const subjects = await Subject.find(query);
         validSubjectIds = subjects.map(s => s._id);
+        
+        console.log(`Found ${validSubjectIds.length} valid subjects out of ${filteredIds.length} provided`);
       }
     }
     
@@ -442,8 +445,8 @@ export const registerLecturer = async (req, res) => {
       assignedSubjects: validSubjectIds,
     });
     
-    // Create the lecturer user with ALL fields
-    const user = await User.create({
+    // Create the lecturer user
+    const user = new User({
       name,
       email,
       password: hashedPassword,
@@ -463,7 +466,9 @@ export const registerLecturer = async (req, res) => {
       }
     });
     
+    await user.save();
     console.log("✅ Lecturer created with ID:", user._id);
+    console.log("Saved assignedSubjects:", user.lecturerInfo.assignedSubjects);
     
     // Send welcome notification
     await createNotification(
@@ -498,10 +503,11 @@ export const registerLecturer = async (req, res) => {
       .populate({
         path: 'lecturerInfo.assignedSubjects',
         model: 'Subject',
+        select: 'name courseId',
         populate: {
           path: 'courseId',
           model: 'Course',
-          select: 'name code'
+          select: 'name'
         }
       })
       .populate('lecturerInfo.assignedCourses', 'name code');
