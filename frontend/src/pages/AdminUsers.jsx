@@ -280,6 +280,16 @@ const AdminUsers = () => {
         subjectIds = newLecturer.subjectIds.filter(id => id && id !== "" && id !== "undefined" && id !== "null");
       }
       
+      // In handleAddLecturer function, add this before axios.post:
+console.log("Subject IDs being sent:", subjectIds);
+console.log("Full payload:", {
+  name: newLecturer.name,
+  email: newLecturer.email,
+  programId: newLecturer.programId,
+  courseId: newLecturer.courseId,
+  assignedSubjects: subjectIds
+});
+
       const response = await axios.post("/auth/register-lecturer", {
         name: newLecturer.name,
         email: newLecturer.email,

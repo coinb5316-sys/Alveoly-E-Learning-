@@ -11,6 +11,7 @@ import {
   googleLogin,
   registerLecturer,
   updateActivity,
+  debugSubjects,
 } from "../controllers/authController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
@@ -35,5 +36,8 @@ router.post("/reset-password/:token", resetPassword);
 
 // ================= LECTURER MANAGEMENT (Admin only) =================
 router.post("/register-lecturer", protect, adminOnly, registerLecturer);
+
+// Debug endpoint (remove in production)
+router.get("/debug-subjects", protect, adminOnly, debugSubjects);
 
 export default router;
