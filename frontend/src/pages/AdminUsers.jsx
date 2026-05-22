@@ -1,4 +1,4 @@
-// AdminUsers.jsx - COMPLETE WITH ASSIGNED SUBJECTS DISPLAY & MANAGEMENT
+// AdminUsers.jsx - COMPLETE WITH DEBUGGING & FIXES
 import { useEffect, useState } from "react";
 import { 
   FaTrash, 
@@ -114,7 +114,7 @@ const AdminUsers = () => {
 
   // ================= FETCH FILTERED COURSES BY PROGRAM =================
   const fetchFilteredCourses = async (programId) => {
-    if (!programId || programId === "undefined" || programId === "null") {
+    if (!programId || programId === "undefined" || programId === "null" || programId === "") {
       setFilteredCourses([]);
       return [];
     }
@@ -130,23 +130,42 @@ const AdminUsers = () => {
     }
   };
 
-  // ================= FETCH FILTERED SUBJECTS =================
+  // ================= FETCH FILTERED SUBJECTS (FIXED WITH DEBUG) =================
   const fetchFilteredSubjects = async (courseId) => {
-    if (!courseId || courseId === "undefined" || courseId === "null") {
+    console.log("=== FETCHING SUBJECTS FOR COURSE:", courseId);
+    
+    if (!courseId || courseId === "undefined" || courseId === "null" || courseId === "") {
+      console.log("No valid course ID, clearing subjects");
       setAvailableSubjects([]);
       return [];
     }
+    
     try {
+      console.log("Making request to:", `/subjects?course=${courseId}`);
       const res = await axios.get(`/subjects?course=${courseId}`);
+      console.log("Response status:", res.status);
+      console.log("Response data:", res.data);
+      
       const subjectsArray = Array.isArray(res.data) ? res.data : [];
+      console.log("Subjects found:", subjectsArray.length);
+      subjectsArray.forEach(s => console.log(`  - ${s.name} (${s._id})`));
+      
       setAvailableSubjects(subjectsArray);
       return subjectsArray;
     } catch (err) {
       console.error("Failed to fetch subjects:", err);
+      console.error("Error response:", err.response);
       setAvailableSubjects([]);
       return [];
     }
   };
+
+  // Debug: Log when availableSubjects changes
+  useEffect(() => {
+    console.log("=== availableSubjects UPDATED ===");
+    console.log("Number of subjects:", availableSubjects.length);
+    console.log("Subjects:", availableSubjects);
+  }, [availableSubjects]);
 
   useEffect(() => {
     fetchUsers();
@@ -269,10 +288,13 @@ const AdminUsers = () => {
     }
   };
 
-  // ================= ADD LECTURER =================
+  // ================= ADD LECTURER (FIXED WITH DEBUG) =================
   const handleAddLecturer = async (e) => {
     e.preventDefault();
     try {
+      console.log("=== SUBMITTING LECTURER ===");
+      console.log("New lecturer state:", newLecturer);
+      
       setLoading(true);
       
       let subjectIds = [];
@@ -280,17 +302,9 @@ const AdminUsers = () => {
         subjectIds = newLecturer.subjectIds.filter(id => id && id !== "" && id !== "undefined" && id !== "null");
       }
       
-      // In handleAddLecturer function, add this before axios.post:
-console.log("Subject IDs being sent:", subjectIds);
-console.log("Full payload:", {
-  name: newLecturer.name,
-  email: newLecturer.email,
-  programId: newLecturer.programId,
-  courseId: newLecturer.courseId,
-  assignedSubjects: subjectIds
-});
-
-      const response = await axios.post("/auth/register-lecturer", {
+      console.log("Filtered subject IDs being sent:", subjectIds);
+      
+      const payload = {
         name: newLecturer.name,
         email: newLecturer.email,
         password: newLecturer.password,
@@ -298,7 +312,13 @@ console.log("Full payload:", {
         courseId: newLecturer.courseId,
         title: newLecturer.title,
         assignedSubjects: subjectIds
-      });
+      };
+      
+      console.log("Full payload:", JSON.stringify(payload, null, 2));
+      
+      const response = await axios.post("/auth/register-lecturer", payload);
+      
+      console.log("Response:", response.data);
       
       if (response.data.success) {
         toast.success("Lecturer added successfully!");
@@ -317,7 +337,8 @@ console.log("Full payload:", {
         toast.error(response.data.message || "Failed to add lecturer");
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error adding lecturer:", err);
+      console.error("Error response:", err.response);
       toast.error(err.response?.data?.message || "Failed to add lecturer");
     } finally {
       setLoading(false);
@@ -326,7 +347,7 @@ console.log("Full payload:", {
 
   const handleProgramChange = async (programId) => {
     setEditUserData({...editUserData, programId, courseId: "", subjectIds: []});
-    if (programId && programId !== "undefined" && programId !== "null") {
+    if (programId && programId !== "undefined" && programId !== "null" && programId !== "") {
       const coursesData = await fetchFilteredCourses(programId);
       setFilteredCourses(coursesData);
       setAvailableSubjects([]);
@@ -338,28 +359,46 @@ console.log("Full payload:", {
 
   const handleCourseChange = async (courseId) => {
     setEditUserData({...editUserData, courseId, subjectIds: []});
-    if (courseId && courseId !== "undefined" && courseId !== "null") {
+    if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
       await fetchFilteredSubjects(courseId);
     } else {
       setAvailableSubjects([]);
     }
   };
 
+  // ================= HANDLE NEW PROGRAM CHANGE (FIXED) =================
   const handleNewProgramChange = async (programId) => {
-    setNewLecturer({...newLecturer, programId, courseId: "", subjectIds: []});
-    if (programId && programId !== "undefined" && programId !== "null") {
-      await fetchFilteredCourses(programId);
+    console.log("=== PROGRAM CHANGED ===");
+    console.log("Selected program ID:", programId);
+    
+    setNewLecturer(prev => ({ ...prev, programId, courseId: "", subjectIds: [] }));
+    
+    if (programId && programId !== "undefined" && programId !== "null" && programId !== "") {
+      console.log("Fetching courses for program:", programId);
+      const coursesData = await fetchFilteredCourses(programId);
+      console.log("Courses found:", coursesData.length);
+      setFilteredCourses(coursesData);
+      setAvailableSubjects([]);
     } else {
       setFilteredCourses([]);
       setAvailableSubjects([]);
     }
   };
 
+  // ================= HANDLE NEW COURSE CHANGE (FIXED WITH DEBUG) =================
   const handleNewCourseChange = async (courseId) => {
-    setNewLecturer({...newLecturer, courseId, subjectIds: []});
-    if (courseId && courseId !== "undefined" && courseId !== "null") {
-      await fetchFilteredSubjects(courseId);
+    console.log("=== COURSE CHANGED ===");
+    console.log("Selected course ID:", courseId);
+    console.log("Current newLecturer state:", newLecturer);
+    
+    setNewLecturer(prev => ({ ...prev, courseId, subjectIds: [] }));
+    
+    if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
+      console.log("Fetching subjects for course:", courseId);
+      const subjects = await fetchFilteredSubjects(courseId);
+      console.log("Subjects loaded:", subjects.length);
     } else {
+      console.log("No course selected, clearing subjects");
       setAvailableSubjects([]);
     }
   };
@@ -372,9 +411,11 @@ console.log("Full payload:", {
         selectedValues.push(options[i].value);
       }
     }
+    console.log("Subjects selected for edit:", selectedValues);
     setEditUserData({...editUserData, subjectIds: selectedValues});
   };
 
+  // ================= HANDLE NEW SUBJECT SELECTION (FIXED WITH DEBUG) =================
   const handleNewSubjectSelection = (e) => {
     const options = e.target.options;
     const selectedValues = [];
@@ -383,7 +424,8 @@ console.log("Full payload:", {
         selectedValues.push(options[i].value);
       }
     }
-    setNewLecturer({...newLecturer, subjectIds: selectedValues});
+    console.log("Subjects selected for new lecturer:", selectedValues);
+    setNewLecturer(prev => ({ ...prev, subjectIds: selectedValues }));
   };
 
   const toggleLecturerExpanded = (userId) => {
@@ -756,7 +798,7 @@ console.log("Full payload:", {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Course <span className="text-red-500">*</span></label>
-                <select required value={newLecturer.courseId} onChange={(e) => handleNewCourseChange(e.target.value)} disabled={!newLecturer.programId} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                <select required value={newLecturer.courseId} onChange={(e) => handleNewCourseChange(e.target.value)} disabled={!newLecturer.programId || newLecturer.programId === ""} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                   <option value="">Select Course</option>
                   {filteredCourses.map(course => <option key={course._id} value={course._id}>{course.name}</option>)}
                 </select>
@@ -764,10 +806,13 @@ console.log("Full payload:", {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subjects</label>
-                <select multiple onChange={handleNewSubjectSelection} value={newLecturer.subjectIds} disabled={!newLecturer.courseId} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                <select multiple onChange={handleNewSubjectSelection} value={newLecturer.subjectIds} disabled={!newLecturer.courseId || newLecturer.courseId === ""} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                   {availableSubjects.map(subject => <option key={subject._id} value={subject._id}>{subject.name}</option>)}
                 </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p>
+                {availableSubjects.length === 0 && newLecturer.courseId && newLecturer.courseId !== "" && (
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">No subjects available for this course. Please create subjects first.</p>
+                )}
               </div>
 
               <div>
