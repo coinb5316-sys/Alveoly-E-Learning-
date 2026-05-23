@@ -4,6 +4,7 @@ import Program from "../models/Program.js";
 import Course from "../models/Course.js"; 
 import Subject from "../models/Subject.js";
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import generateToken from "../utils/generateToken.js";
 import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
@@ -365,8 +366,9 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// ================= REGISTER LECTURER (COMPLETELY FIXED) =================
-// controllers/authController.js - REPLACE the registerLecturer function
+// controllers/authController.js - COMPLETE FIXED VERSION
+
+// Replace the entire registerLecturer function with this:
 
 export const registerLecturer = async (req, res) => {
   try {
@@ -386,8 +388,8 @@ export const registerLecturer = async (req, res) => {
     // ========== DEBUG LOGGING ==========
     console.log("========== REGISTER LECTURER DEBUG ==========");
     console.log("Received body:", JSON.stringify(req.body, null, 2));
+    console.log("assignedSubjects:", assignedSubjects);
     console.log("assignedSubjects type:", typeof assignedSubjects);
-    console.log("assignedSubjects value:", assignedSubjects);
     console.log("assignedSubjects length:", assignedSubjects?.length);
     // ====================================
     
@@ -427,7 +429,7 @@ export const registerLecturer = async (req, res) => {
     let validSubjectIds = [];
     
     // Check if assignedSubjects exists and is an array
-    if (assignedSubjects && Array.isArray(assignedSubjects)) {
+    if (assignedSubjects && Array.isArray(assignedSubjects) && assignedSubjects.length > 0) {
       console.log("Processing assignedSubjects array of length:", assignedSubjects.length);
       
       // Filter out invalid IDs
@@ -440,26 +442,30 @@ export const registerLecturer = async (req, res) => {
       console.log("Filtered IDs:", filteredIds);
       
       if (filteredIds.length > 0) {
-        // First, check if these subjects exist without course filter
-        const allSubjects = await Subject.find({ _id: { $in: filteredIds } });
-        console.log(`Found ${allSubjects.length} subjects in database out of ${filteredIds.length} provided`);
-        
-        if (allSubjects.length > 0) {
-          // If we have a course, filter subjects that belong to that course
-          if (validCourseId) {
-            const subjectsInCourse = allSubjects.filter(s => s.courseId.toString() === validCourseId);
-            validSubjectIds = subjectsInCourse.map(s => s._id);
-            console.log(`After course filter (${validCourseId}): ${validSubjectIds.length} subjects remain`);
-          } else {
-            validSubjectIds = allSubjects.map(s => s._id);
+        // Convert string IDs to ObjectId if needed
+        const objectIds = filteredIds.map(id => {
+          try {
+            return new mongoose.Types.ObjectId(id);
+          } catch (e) {
+            console.log(`Invalid ObjectId: ${id}`);
+            return null;
           }
+        }).filter(id => id !== null);
+        
+        // Find subjects that exist
+        const existingSubjects = await Subject.find({ _id: { $in: objectIds } });
+        console.log(`Found ${existingSubjects.length} subjects in database`);
+        
+        if (existingSubjects.length > 0) {
+          validSubjectIds = existingSubjects.map(s => s._id);
+          console.log("Valid subject IDs to save:", validSubjectIds.map(id => id.toString()));
         }
       }
     } else {
-      console.log("assignedSubjects is not an array or is undefined. Type:", typeof assignedSubjects);
+      console.log("assignedSubjects is not an array or is empty");
     }
     
-    console.log("Final validSubjectIds:", validSubjectIds.map(id => id.toString()));
+    console.log("Final validSubjectIds count:", validSubjectIds.length);
     // ====================================
     
     // Create the lecturer user
@@ -479,17 +485,18 @@ export const registerLecturer = async (req, res) => {
         isActive: true,
         hireDate: new Date(),
         assignedCourses: validCourseId ? [validCourseId] : [],
-        assignedSubjects: validSubjectIds
+        assignedSubjects: validSubjectIds  // Make sure this is set correctly
       }
     };
     
-    console.log("Creating lecturer with data:", JSON.stringify(lecturerData, null, 2));
+    console.log("Creating lecturer with lecturerInfo:", JSON.stringify(lecturerData.lecturerInfo, null, 2));
     
-    const user = new User(lecturerData);
-    await user.save();
+    // Use create instead of new + save to ensure proper validation
+    const user = await User.create(lecturerData);
     
     console.log("✅ Lecturer created with ID:", user._id);
-    console.log("Saved assignedSubjects:", user.lecturerInfo.assignedSubjects);
+    console.log("Saved assignedSubjects:", user.lecturerInfo?.assignedSubjects);
+    console.log("Saved assignedSubjects count:", user.lecturerInfo?.assignedSubjects?.length);
     
     // Send welcome notification
     await createNotification(
@@ -533,6 +540,8 @@ export const registerLecturer = async (req, res) => {
       })
       .populate('lecturerInfo.assignedCourses', 'name code');
     
+    console.log("Returning user with subjects:", createdUser.lecturerInfo?.assignedSubjects?.length || 0);
+    
     res.status(201).json({
       success: true,
       message: "Lecturer created successfully",
@@ -544,7 +553,6 @@ export const registerLecturer = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 // Debug endpoint to check subjects
 export const debugSubjects = async (req, res) => {
   try {
