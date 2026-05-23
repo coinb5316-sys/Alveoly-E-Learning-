@@ -288,62 +288,78 @@ const AdminUsers = () => {
     }
   };
 
-  // ================= ADD LECTURER (FIXED WITH DEBUG) =================
-  const handleAddLecturer = async (e) => {
-    e.preventDefault();
-    try {
-      console.log("=== SUBMITTING LECTURER ===");
-      console.log("New lecturer state:", newLecturer);
-      
-      setLoading(true);
-      
-      let subjectIds = [];
-      if (newLecturer.subjectIds && Array.isArray(newLecturer.subjectIds)) {
-        subjectIds = newLecturer.subjectIds.filter(id => id && id !== "" && id !== "undefined" && id !== "null");
-      }
-      
-      console.log("Filtered subject IDs being sent:", subjectIds);
-      
-      const payload = {
-        name: newLecturer.name,
-        email: newLecturer.email,
-        password: newLecturer.password,
-        programId: newLecturer.programId,
-        courseId: newLecturer.courseId,
-        title: newLecturer.title,
-        assignedSubjects: subjectIds
-      };
-      
-      console.log("Full payload:", JSON.stringify(payload, null, 2));
-      
-      const response = await axios.post("/auth/register-lecturer", payload);
-      
-      console.log("Response:", response.data);
-      
-      if (response.data.success) {
-        toast.success("Lecturer added successfully!");
-        setShowAddLecturerModal(false);
-        setNewLecturer({
-          name: "",
-          email: "",
-          password: "",
-          programId: "",
-          courseId: "",
-          title: "Dr.",
-          subjectIds: []
-        });
-        fetchUsers();
-      } else {
-        toast.error(response.data.message || "Failed to add lecturer");
-      }
-    } catch (err) {
-      console.error("Error adding lecturer:", err);
-      console.error("Error response:", err.response);
-      toast.error(err.response?.data?.message || "Failed to add lecturer");
-    } finally {
-      setLoading(false);
+  // ================= ADD LECTURER (FIXED) =================
+const handleAddLecturer = async (e) => {
+  e.preventDefault();
+  
+  console.log("=== SUBMITTING LECTURER ===");
+  console.log("Current newLecturer state:", newLecturer);
+  console.log("Subject IDs before filter:", newLecturer.subjectIds);
+  
+  try {
+    setLoading(true);
+    
+    // Make sure subjectIds is an array
+    let subjectIds = [];
+    if (newLecturer.subjectIds && Array.isArray(newLecturer.subjectIds)) {
+      // Filter out any invalid IDs
+      subjectIds = newLecturer.subjectIds.filter(id => {
+        const isValid = id && typeof id === 'string' && id !== "" && id !== "undefined" && id !== "null";
+        if (!isValid) console.log(`Filtering out invalid ID: ${id}`);
+        return isValid;
+      });
     }
-  };
+    
+    console.log("Final subject IDs being sent:", subjectIds);
+    console.log("Number of subjects:", subjectIds.length);
+    
+    // Make sure we have the course ID
+    if (!newLecturer.courseId || newLecturer.courseId === "") {
+      toast.error("Please select a course first");
+      setLoading(false);
+      return;
+    }
+    
+    const payload = {
+      name: newLecturer.name,
+      email: newLecturer.email,
+      password: newLecturer.password,
+      programId: newLecturer.programId,
+      courseId: newLecturer.courseId,
+      title: newLecturer.title,
+      assignedSubjects: subjectIds  // Send as array of strings
+    };
+    
+    console.log("Full payload being sent:", JSON.stringify(payload, null, 2));
+    
+    const response = await axios.post("/auth/register-lecturer", payload);
+    
+    console.log("Response:", response.data);
+    
+    if (response.data.success) {
+      toast.success(`Lecturer added successfully with ${subjectIds.length} subject(s)!`);
+      setShowAddLecturerModal(false);
+      setNewLecturer({
+        name: "",
+        email: "",
+        password: "",
+        programId: "",
+        courseId: "",
+        title: "Dr.",
+        subjectIds: []
+      });
+      fetchUsers(); // Refresh the user list
+    } else {
+      toast.error(response.data.message || "Failed to add lecturer");
+    }
+  } catch (err) {
+    console.error("Error adding lecturer:", err);
+    console.error("Error response:", err.response);
+    toast.error(err.response?.data?.message || "Failed to add lecturer");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleProgramChange = async (programId) => {
     setEditUserData({...editUserData, programId, courseId: "", subjectIds: []});
@@ -415,18 +431,24 @@ const AdminUsers = () => {
     setEditUserData({...editUserData, subjectIds: selectedValues});
   };
 
-  // ================= HANDLE NEW SUBJECT SELECTION (FIXED WITH DEBUG) =================
-  const handleNewSubjectSelection = (e) => {
-    const options = e.target.options;
-    const selectedValues = [];
-    for (let i = 0; i < options.length; i++) {
-      if (options[i].selected) {
-        selectedValues.push(options[i].value);
-      }
+ // ================= HANDLE NEW SUBJECT SELECTION (FIXED) =================
+const handleNewSubjectSelection = (e) => {
+  const options = e.target.options;
+  const selectedValues = [];
+  for (let i = 0; i < options.length; i++) {
+    if (options[i].selected) {
+      selectedValues.push(options[i].value);
     }
-    console.log("Subjects selected for new lecturer:", selectedValues);
-    setNewLecturer(prev => ({ ...prev, subjectIds: selectedValues }));
-  };
+  }
+  console.log("Subjects selected for new lecturer:", selectedValues);
+  console.log("Number of subjects selected:", selectedValues.length);
+  
+  // Make sure we're setting the state correctly
+  setNewLecturer(prev => ({ 
+    ...prev, 
+    subjectIds: selectedValues 
+  }));
+};
 
   const toggleLecturerExpanded = (userId) => {
     if (expandedLecturer === userId) {
