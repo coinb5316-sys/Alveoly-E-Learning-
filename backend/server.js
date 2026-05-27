@@ -307,8 +307,7 @@ io.on("connection", (socket) => {
     socket.emit("bot:ready", { message: "Bot ready!" });
   });
   
-  // In server.js - AI-POWERED NURSING BOT HANDLER
-socket.on("bot:question", async (data) => {
+  socket.on("bot:question", async (data) => {
   const { text, userName } = data;
   const questionText = text?.trim();
   
@@ -317,75 +316,62 @@ socket.on("bot:question", async (data) => {
     return;
   }
   
-  console.log(`🤖 Question: "${questionText.substring(0, 100)}"`);
+  console.log(`🤖 Question: "${questionText}"`);
   socket.emit("bot:typing", { isTyping: true });
   
   try {
-    // Import AI service
-    const { askAI, isMedicalQuestion } = await import('./services/aiService.js');
-    const isMedical = isMedicalQuestion(questionText);
-    
-    // STEP 1: Search FAQ database first
+    // STEP 1: Search FAQ database - SIMPLIFIED
     const searchTerm = questionText.toLowerCase().trim();
-    const keywords = searchTerm.split(/\s+/).filter(w => w.length > 2);
     
-    const faqs = await FAQ.find({
+    // Try exact match first
+    let faq = await FAQ.findOne({
       isActive: true,
-      $or: [
-        { question: { $regex: searchTerm, $options: 'i' } },
-        { answer: { $regex: searchTerm, $options: 'i' } },
-        { keywords: { $in: keywords } }
-      ]
-    }).limit(2);
+      question: searchTerm
+    });
+    
+    // Try case-insensitive match
+    if (!faq) {
+      faq = await FAQ.findOne({
+        isActive: true,
+        question: { $regex: new RegExp(`^${searchTerm}$`, 'i') }
+      });
+    }
+    
+    // Try contains match
+    if (!faq) {
+      faq = await FAQ.findOne({
+        isActive: true,
+        question: { $regex: searchTerm, $options: 'i' }
+      });
+    }
     
     let reply;
     let usedAI = false;
-    let isNursingAnswer = false;
     
-    if (faqs && faqs.length > 0) {
+    if (faq) {
       // Found matching FAQ
-      const bestMatch = faqs[0];
-      reply = `📚 **Answer from FAQ:**\n\n${bestMatch.answer}`;
-      bestMatch.views += 1;
-      await bestMatch.save();
-      console.log(`✅ Answered from FAQ: ${bestMatch.question}`);
+      console.log(`✅ Found FAQ: "${faq.question}" -> "${faq.answer}"`);
+      reply = `📚 **Answer:**\n\n${faq.answer}`;
+      faq.views += 1;
+      await faq.save();
     } else {
-      // STEP 2: Use AI with appropriate context
-      try {
-        const aiAnswer = await askAI(questionText, isMedical);
-        
-        if (aiAnswer) {
-          isNursingAnswer = isMedical;
-          const icon = isMedical ? "🩺" : "🤖";
-          const prefix = isMedical ? "**Nurse AI:**" : "**AI Assistant:**";
-          reply = `${icon} ${prefix}\n\n${aiAnswer}\n\n*💡 Tip: For clinical questions, always verify with your instructor.*`;
-          usedAI = true;
-          console.log(`✅ Answered with AI (${isMedical ? 'Medical' : 'General'})`);
-        } else {
-          // AI failed - fallback
-          throw new Error("AI returned null");
-        }
-      } catch (aiError) {
-        console.error("AI error:", aiError);
-        
-        // Fallback to admin notification
-        if (!global.pendingQuestions) global.pendingQuestions = [];
-        const pendingId = Date.now();
-        global.pendingQuestions.push({
-          id: pendingId,
-          text: questionText,
-          userName: userName || "Anonymous",
-          socketId: socket.id,
-          timestamp: new Date(),
-          status: "pending",
-          isMedicalQuestion: isMedical
-        });
-        
-        io.to("admin").emit("admin:unanswered", global.pendingQuestions[global.pendingQuestions.length - 1]);
-        reply = isMedical 
-          ? "📝 Thanks for your nursing question! I've notified our nursing instructors. They'll respond shortly.\n\n*For urgent clinical matters, please consult your clinical instructor directly.*"
-          : "📝 Thanks for your question! I've notified our support team. They'll respond shortly.";
-      }
+      console.log(`No FAQ found for: "${searchTerm}"`);
+      
+      // STEP 2: Return a helpful message
+      reply = `📝 I don't have an answer for "${questionText}" yet.\n\nYou can help by:\n1. Asking an admin to add this to FAQs\n2. Contacting support at alveolyelearning@gmail.com\n\nI've notified our team about this question.`;
+      
+      // Notify admin
+      if (!global.pendingQuestions) global.pendingQuestions = [];
+      const pendingId = Date.now();
+      global.pendingQuestions.push({
+        id: pendingId,
+        text: questionText,
+        userName: userName || "Anonymous",
+        socketId: socket.id,
+        timestamp: new Date(),
+        status: "pending"
+      });
+      io.to("admin").emit("admin:unanswered", global.pendingQuestions[global.pendingQuestions.length - 1]);
     }
     
     setTimeout(() => {
@@ -393,7 +379,6 @@ socket.on("bot:question", async (data) => {
         text: reply, 
         isAuto: true, 
         isAI: usedAI,
-        isNursing: isNursingAnswer,
         timestamp: new Date() 
       });
       socket.emit("bot:typing", { isTyping: false });
