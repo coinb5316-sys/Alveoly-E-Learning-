@@ -446,49 +446,65 @@ const LecturerContentForm = () => {
     thumbnail: null,
   });
 
-  // Get current user and fetch assigned subjects
-  useEffect(() => {
-    const fetchUserAndSubjects = async () => {
-      try {
-        // Fetch current user with populated assigned subjects
-        const userRes = await axios.get("/auth/me");
-        const userData = userRes.data;
-        setUser(userData);
-        localStorage.setItem("user", JSON.stringify(userData));
+  // Get current user and fetch assigned subjects - COMPLETE FIX
+useEffect(() => {
+  const fetchUserAndSubjects = async () => {
+    try {
+      // Fetch current user
+      const userRes = await axios.get("/auth/me");
+      const userData = userRes.data;
+      setUser(userData);
+      localStorage.setItem("user", JSON.stringify(userData));
+      
+      console.log("User data from /auth/me:", userData);
+      console.log("Assigned subjects from user:", userData.lecturerInfo?.assignedSubjects);
+      
+      // If user has assigned subjects, fetch them properly
+      if (userData.lecturerInfo?.assignedSubjects?.length > 0) {
+        // The assigned subjects might already be populated in the user object
+        const populatedSubjects = userData.lecturerInfo.assignedSubjects.filter(s => s && s._id);
         
-        console.log("User data from /auth/me:", userData);
-        
-        // Get assigned subject IDs from user data
-        const assignedIds = userData.lecturerInfo?.assignedSubjects || [];
-        console.log("Assigned subject IDs:", assignedIds);
-        
-        if (assignedIds.length > 0) {
-          // Fetch ALL subjects and filter by assigned IDs
-          const subjectsRes = await axios.get("/subjects");
-          const allSubjectsList = subjectsRes.data || [];
-          console.log("All subjects fetched:", allSubjectsList.length);
+        if (populatedSubjects.length > 0) {
+          setAssignedSubjects(populatedSubjects);
+          console.log("Using populated subjects from user:", populatedSubjects);
+        } else {
+          // If not populated, fetch subjects directly
+          const subjectIds = userData.lecturerInfo.assignedSubjects;
+          console.log("Fetching subjects by IDs:", subjectIds);
           
-          // Filter to get only assigned subjects
-          const filteredAssignedSubjects = allSubjectsList.filter(subject => 
-            assignedIds.includes(subject._id)
+          const subjectsRes = await axios.get("/subjects");
+          const allSubjects = subjectsRes.data || [];
+          
+          const filtered = allSubjects.filter(subject => 
+            subjectIds.includes(subject._id)
           );
           
-          setAssignedSubjects(filteredAssignedSubjects);
-          console.log("Filtered assigned subjects:", filteredAssignedSubjects);
-        } else {
-          setAssignedSubjects([]);
+          setAssignedSubjects(filtered);
+          console.log("Filtered assigned subjects:", filtered);
         }
-      } catch (err) {
-        console.error("Error fetching user or subjects:", err);
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
+      } else {
+        console.log("No assigned subjects found");
+        setAssignedSubjects([]);
+      }
+      
+    } catch (err) {
+      console.error("Error fetching user or subjects:", err);
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        try {
           const userData = JSON.parse(storedUser);
           setUser(userData);
+          if (userData.lecturerInfo?.assignedSubjects?.length > 0) {
+            setAssignedSubjects(userData.lecturerInfo.assignedSubjects);
+          }
+        } catch (e) {
+          console.error("Error parsing stored user:", e);
         }
       }
-    };
-    fetchUserAndSubjects();
-  }, []);
+    }
+  };
+  fetchUserAndSubjects();
+}, []);
 
   // Fetch courses and programs
   useEffect(() => {

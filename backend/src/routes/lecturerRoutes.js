@@ -447,4 +447,34 @@ router.delete("/attempts/:attemptId", async (req, res) => {
   }
 });
 
+// Debug endpoint to check assigned subjects
+router.get("/debug-assigned-subjects", async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate({
+        path: 'lecturerInfo.assignedSubjects',
+        populate: { path: 'courseId', select: 'name' }
+      });
+    
+    const result = {
+      userId: user._id,
+      userName: user.name,
+      assignedSubjectIds: user.lecturerInfo?.assignedSubjects || [],
+      populatedSubjects: user.lecturerInfo?.assignedSubjects?.map(s => ({
+        id: s._id,
+        name: s.name,
+        courseId: s.courseId?._id,
+        courseName: s.courseId?.name
+      })) || [],
+      rawLecturerInfo: user.lecturerInfo
+    };
+    
+    console.log("Debug assigned subjects:", JSON.stringify(result, null, 2));
+    res.json(result);
+  } catch (err) {
+    console.error("Debug error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

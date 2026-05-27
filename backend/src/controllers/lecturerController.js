@@ -641,39 +641,45 @@ export const getAssignedCourses = async (req, res) => {
   }
 };
 
-// ================= GET ASSIGNED SUBJECTS =================
-// ================= GET ASSIGNED SUBJECTS =================
+// ================= GET ASSIGNED SUBJECTS - COMPLETE FIX =================
 export const getAssignedSubjects = async (req, res) => {
   try {
     console.log("=== GET ASSIGNED SUBJECTS CALLED ===");
     console.log("Lecturer ID:", req.user._id);
     
-    // First, get the user without population to see what IDs are stored
-    const userRaw = await User.findById(req.user._id);
-    console.log("Raw assigned subjects IDs:", userRaw.lecturerInfo?.assignedSubjects);
-    
-    // Now get with population
+    // First, get the user and explicitly populate the assignedSubjects
     const user = await User.findById(req.user._id)
       .populate({
         path: 'lecturerInfo.assignedSubjects',
-        populate: { 
-          path: 'courseId', 
+        model: 'Subject',
+        populate: {
+          path: 'courseId',
+          model: 'Course',
           select: 'name code description'
         }
       });
     
+    if (!user) {
+      console.log("User not found");
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    
     const subjects = user.lecturerInfo?.assignedSubjects || [];
-    console.log("Populated subjects count:", subjects.length);
-    console.log("Populated subjects:", JSON.stringify(subjects, null, 2));
+    
+    console.log(`Found ${subjects.length} assigned subjects`);
+    subjects.forEach(s => {
+      console.log(`  - ${s.name} (ID: ${s._id}) - Course: ${s.courseId?.name || 'N/A'}`);
+    });
     
     res.json({
       success: true,
-      subjects,
+      subjects: subjects,
       total: subjects.length
     });
+    
   } catch (err) {
     console.error("Get assigned subjects error:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
