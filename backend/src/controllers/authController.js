@@ -92,7 +92,7 @@ export const googleLogin = async (req, res) => {
   }
 };
 
-// ================= EMAIL/PASSWORD REGISTER =================
+// ================= EMAIL/PASSWORD REGISTER (WITH AUTO COURSE ASSIGNMENT) =================
 export const register = async (req, res) => {
   try {
     const { name, email, password, programId, courseId } = req.body;
@@ -104,11 +104,38 @@ export const register = async (req, res) => {
     const userExists = await User.findOne({ email });
     if (userExists) return res.status(400).json({ message: "User already exists" });
 
-    // If programId is provided, verify it exists and is active
-    if (programId) {
+    // Validate program if provided
+    let validProgramId = null;
+    let validCourseId = null;
+    
+    if (programId && programId !== "undefined" && programId !== "null" && programId !== "") {
       const program = await Program.findById(programId);
       if (!program || program.isActive === false) {
         return res.status(400).json({ message: "Invalid or inactive program selected" });
+      }
+      validProgramId = programId;
+      
+      // ========== CRITICAL FIX: Automatically assign a course ==========
+      // If courseId was provided, use it
+      if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
+        const course = await Course.findById(courseId);
+        if (course && course.programId.toString() === programId) {
+          validCourseId = courseId;
+        } else {
+          // Find first course in this program
+          const firstCourse = await Course.findOne({ programId: programId });
+          if (firstCourse) {
+            validCourseId = firstCourse._id;
+            console.log(`✅ Auto-assigned course: ${firstCourse.name} to student`);
+          }
+        }
+      } else {
+        // No courseId provided, find first course in this program
+        const firstCourse = await Course.findOne({ programId: programId });
+        if (firstCourse) {
+          validCourseId = firstCourse._id;
+          console.log(`✅ Auto-assigned course: ${firstCourse.name} to student`);
+        }
       }
     }
 
@@ -117,8 +144,8 @@ export const register = async (req, res) => {
       name, 
       email, 
       password: hashedPassword,
-      programId: programId || null,
-      courseId: courseId || null,
+      programId: validProgramId,
+      courseId: validCourseId,  // ← Now always has a value if program exists
       lastLoginAt: new Date(),
       lastActivityAt: new Date()
     });
@@ -129,7 +156,7 @@ export const register = async (req, res) => {
       "student",
       "success",
       "Welcome to Alveoly! 🎉",
-      `Welcome ${name}! Start your learning journey with us today.`,
+      `Welcome ${name}! You have been enrolled in ${user.courseId ? 'your course' : 'the platform'}.`,
       "/student/dashboard",
       { action: "welcome" }
     );
@@ -161,10 +188,16 @@ export const register = async (req, res) => {
     
     await user.save();
 
+    // Populate the user before sending response
+    const populatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name");
+
     res.status(201).json({ 
       token: generateToken(user, user.activeSession), 
-      user,
-      requiresProgram: !user.programId && !user.courseId
+      user: populatedUser,
+      requiresProgram: false  // Always false now because we auto-assigned a course
     });
   } catch (err) {
     console.error("REGISTER ERROR:", err);

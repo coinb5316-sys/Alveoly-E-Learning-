@@ -1,4 +1,4 @@
-// src/pages/SignupPage.jsx - FULLY UPDATED with Programs
+// src/pages/SignupPage.jsx - Complete working version with course selection
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -10,6 +10,7 @@ import {
   FaEyeSlash, 
   FaGraduationCap, 
   FaBuilding,
+  FaBook,
   FaSpinner
 } from "react-icons/fa";
 import { GoogleLogin } from "@react-oauth/google";
@@ -26,55 +27,78 @@ const SignupPage = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [programs, setPrograms] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [loadingPrograms, setLoadingPrograms] = useState(true);
+  const [loadingCourses, setLoadingCourses] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
     programId: "",
+    courseId: "",
   });
 
-  // ================= FETCH PROGRAMS =================
-  // src/pages/SignupPage.jsx - UPDATE the fetchPrograms function
-useEffect(() => {
-  const fetchPrograms = async () => {
-    try {
-      setLoadingPrograms(true);
-      // CHANGE: Use the public endpoint instead
-      const res = await API.get("/programs/public");
-      console.log("Fetched programs:", res.data); // Debug log
-      // Only show active programs (already filtered by backend)
-      const activePrograms = (res.data || []).filter(p => p.isActive !== false);
-      setPrograms(activePrograms);
-    } catch (err) {
-      console.error("Error fetching programs:", err);
-      toast.error("Failed to load programs");
-      setPrograms([]);
-    } finally {
-      setLoadingPrograms(false);
+  // Fetch programs
+  useEffect(() => {
+    const fetchPrograms = async () => {
+      try {
+        setLoadingPrograms(true);
+        const res = await API.get("/programs/public");
+        const activePrograms = (res.data || []).filter(p => p.isActive !== false);
+        setPrograms(activePrograms);
+      } catch (err) {
+        console.error("Error fetching programs:", err);
+        toast.error("Failed to load programs");
+      } finally {
+        setLoadingPrograms(false);
+      }
+    };
+    fetchPrograms();
+  }, []);
+
+  // Fetch courses when program changes
+  const handleProgramChange = async (programId) => {
+    setForm({ ...form, programId, courseId: "" });
+    if (programId) {
+      try {
+        setLoadingCourses(true);
+        const res = await API.get(`/courses/program/${programId}`);
+        setCourses(res.data || []);
+        if (res.data.length === 0) {
+          toast.warning("No courses available for this program.");
+        }
+      } catch (err) {
+        console.error("Error fetching courses:", err);
+        setCourses([]);
+      } finally {
+        setLoadingCourses(false);
+      }
+    } else {
+      setCourses([]);
     }
   };
-  fetchPrograms();
-}, []);
 
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     if (!form.programId) {
       toast.error("Please select a program");
       return;
     }
+    
+    if (!form.courseId) {
+      toast.error("Please select a course");
+      return;
+    }
+    
     setLoading(true);
     try {
       const result = await register(form);
-      if (result.requiresProgram) {
-        navigate("/select-program");
-      } else {
-        navigate("/student/dashboard");
-      }
       toast.success("Account created successfully!");
+      navigate("/student/dashboard");
     } catch (err) {
       toast.error(err.response?.data?.message || "Signup failed");
     } finally {
@@ -88,12 +112,7 @@ useEffect(() => {
       const idToken = credentialResponse?.credential;
       if (!idToken) throw new Error("No Google credential received");
       const result = await googleLogin(idToken);
-      
-      if (result.requiresProgram) {
-        navigate("/select-program");
-      } else {
-        navigate("/student/dashboard");
-      }
+      navigate("/student/dashboard");
       toast.success("Google signup successful!");
     } catch (err) {
       toast.error(err.response?.data?.message || "Google signup failed");
@@ -225,12 +244,13 @@ useEffect(() => {
                     </button>
                   </div>
 
+                  {/* Program Selection */}
                   <div className="relative">
                     <FaBuilding className="absolute left-3 top-3 text-slate-400 text-sm md:text-base" />
                     <select
                       name="programId"
                       value={form.programId}
-                      onChange={handleChange}
+                      onChange={(e) => handleProgramChange(e.target.value)}
                       required
                       className="w-full pl-10 pr-4 py-2 md:py-3 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-900 dark:text-white appearance-none cursor-pointer text-sm md:text-base transition-all"
                       disabled={loadingPrograms}
@@ -244,16 +264,40 @@ useEffect(() => {
                         </option>
                       ))}
                     </select>
-                    {!loadingPrograms && programs.length === 0 && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                        No programs available. Please contact support.
-                      </p>
-                    )}
                   </div>
+
+                  {/* Course Selection */}
+                  {form.programId && (
+                    <div className="relative">
+                      <FaBook className="absolute left-3 top-3 text-slate-400 text-sm md:text-base" />
+                      <select
+                        name="courseId"
+                        value={form.courseId}
+                        onChange={handleChange}
+                        required
+                        className="w-full pl-10 pr-4 py-2 md:py-3 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-900 dark:text-white appearance-none cursor-pointer text-sm md:text-base transition-all"
+                        disabled={loadingCourses}
+                      >
+                        <option value="">
+                          {loadingCourses ? "Loading courses..." : "Select Your Course"}
+                        </option>
+                        {courses.map((course) => (
+                          <option key={course._id} value={course._id}>
+                            {course.name}
+                          </option>
+                        ))}
+                      </select>
+                      {courses.length === 0 && !loadingCourses && form.programId && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                          No courses available for this program. Please contact admin.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <button
                     type="submit"
-                    disabled={loading || loadingPrograms || programs.length === 0}
+                    disabled={loading || loadingPrograms || programs.length === 0 || !form.courseId}
                     className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-2 md:py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 text-sm md:text-base shadow-lg shadow-indigo-500/25"
                   >
                     {loading ? (
