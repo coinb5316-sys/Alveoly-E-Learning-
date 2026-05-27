@@ -320,58 +320,45 @@ io.on("connection", (socket) => {
   socket.emit("bot:typing", { isTyping: true });
   
   try {
-    // STEP 1: Search FAQ database - SIMPLIFIED
+    // STEP 1: Search FAQ database first (for exact admin answers)
     const searchTerm = questionText.toLowerCase().trim();
     
-    // Try exact match first
     let faq = await FAQ.findOne({
       isActive: true,
-      question: searchTerm
+      question: { $regex: new RegExp(`^${searchTerm}$`, 'i') }
     });
-    
-    // Try case-insensitive match
-    if (!faq) {
-      faq = await FAQ.findOne({
-        isActive: true,
-        question: { $regex: new RegExp(`^${searchTerm}$`, 'i') }
-      });
-    }
-    
-    // Try contains match
-    if (!faq) {
-      faq = await FAQ.findOne({
-        isActive: true,
-        question: { $regex: searchTerm, $options: 'i' }
-      });
-    }
     
     let reply;
     let usedAI = false;
     
     if (faq) {
-      // Found matching FAQ
-      console.log(`✅ Found FAQ: "${faq.question}" -> "${faq.answer}"`);
+      // Found matching FAQ - use admin answer
+      console.log(`✅ Found FAQ: "${faq.question}"`);
       reply = `📚 **Answer:**\n\n${faq.answer}`;
       faq.views += 1;
       await faq.save();
     } else {
-      console.log(`No FAQ found for: "${searchTerm}"`);
+      // STEP 2: Use AI to answer all other questions
+      console.log(`No FAQ found, calling AI for: "${questionText}"`);
       
-      // STEP 2: Return a helpful message
-      reply = `📝 I don't have an answer for "${questionText}" yet.\n\nYou can help by:\n1. Asking an admin to add this to FAQs\n2. Contacting support at alveolyelearning@gmail.com\n\nI've notified our team about this question.`;
-      
-      // Notify admin
-      if (!global.pendingQuestions) global.pendingQuestions = [];
-      const pendingId = Date.now();
-      global.pendingQuestions.push({
-        id: pendingId,
-        text: questionText,
-        userName: userName || "Anonymous",
-        socketId: socket.id,
-        timestamp: new Date(),
-        status: "pending"
-      });
-      io.to("admin").emit("admin:unanswered", global.pendingQuestions[global.pendingQuestions.length - 1]);
+      try {
+        const { askAI, isMedicalQuestion } = await import('./services/aiService.js');
+        const isMedical = isMedicalQuestion(questionText);
+        const aiAnswer = await askAI(questionText, isMedical);
+        
+        if (aiAnswer && aiAnswer !== null) {
+          const icon = isMedical ? "🩺" : "🤖";
+          const prefix = isMedical ? "**Nurse AI:**" : "**AI Assistant:**";
+          reply = `${icon} ${prefix}\n\n${aiAnswer}`;
+          usedAI = true;
+          console.log(`✅ Answered with AI (${isMedical ? 'Medical' : 'General'})`);
+        } else {
+          throw new Error("AI returned null");
+        }
+      } catch (aiError) {
+        console.error("AI error:", aiError);
+        reply = "📝 I'm having trouble connecting to AI. Please try again later or contact support.";
+      }
     }
     
     setTimeout(() => {

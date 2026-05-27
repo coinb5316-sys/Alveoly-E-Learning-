@@ -3,13 +3,13 @@ import React, { useState, useEffect } from "react";
 import API from "../api/axios";
 import { io } from "socket.io-client";
 import { 
-  FaPlus, 
+  FaPlus,
   FaEdit, 
   FaTrash, 
   FaSearch, 
   FaTimes, 
   FaComments, 
-  FaEye, 
+  FaEye,
   FaThumbsUp, 
   FaSpinner,
   FaRobot,
