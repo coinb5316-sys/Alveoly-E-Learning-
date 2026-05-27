@@ -2,6 +2,7 @@ import express from "express";
 import {
   getCourses,
   getCoursesByProgram,
+  getPublicCoursesByProgram,  // ADD THIS
   createCourse,
   updateCourse,
   deleteCourse,
@@ -10,6 +11,10 @@ import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+// ================= PUBLIC ROUTES (No authentication required) =================
+router.get("/public/program/:programId", getPublicCoursesByProgram);  // NEW: Public endpoint for signup page
+
+// ================= PROTECTED ROUTES (require login) =================
 router.get("/", protect, getCourses);
 router.get("/program/:programId", protect, getCoursesByProgram);
 router.post("/", protect, adminOnly, createCourse);

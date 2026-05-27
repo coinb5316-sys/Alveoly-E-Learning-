@@ -1,4 +1,4 @@
-// pages/lecturer/LecturerStudents.jsx - SHOWS ALL STUDENTS (including those with no attempts)
+// pages/lecturer/LecturerStudents.jsx - COMPLETE FIXED VERSION
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "../api/axios";
@@ -35,24 +35,31 @@ const LecturerStudents = () => {
 
   const fetchAssignedResources = async () => {
     try {
+      console.log("Fetching assigned courses and subjects...");
       const [coursesRes, subjectsRes] = await Promise.all([
         axios.get("/lecturer/assigned-courses"),
         axios.get("/lecturer/assigned-subjects"),
       ]);
       
+      console.log("Courses response:", coursesRes.data);
+      console.log("Subjects response:", subjectsRes.data);
+      
       if (coursesRes.data.success) {
-        setCourses(coursesRes.data.courses || []);
+        const coursesList = coursesRes.data.courses || [];
+        setCourses(coursesList);
         // Auto-select first course if available
-        if (coursesRes.data.courses.length > 0 && !selectedCourse) {
-          setSelectedCourse(coursesRes.data.courses[0]._id);
+        if (coursesList.length > 0 && !selectedCourse) {
+          setSelectedCourse(coursesList[0]._id);
         }
       }
+      
       if (subjectsRes.data.success) {
-        setSubjects(subjectsRes.data.subjects || []);
-        // Auto-select first subject if available
-        if (subjectsRes.data.subjects.length > 0 && !selectedSubject) {
-          setSelectedSubject(subjectsRes.data.subjects[0]._id);
-        }
+        const subjectsList = subjectsRes.data.subjects || [];
+        setSubjects(subjectsList);
+        console.log(`Loaded ${subjectsList.length} assigned subjects`);
+        subjectsList.forEach(s => {
+          console.log(`  Subject: ${s.name}, Course: ${s.courseId?.name || s.courseId}`);
+        });
       }
     } catch (err) {
       console.error("Error fetching assigned resources:", err);
@@ -67,6 +74,7 @@ const LecturerStudents = () => {
       const params = new URLSearchParams();
       if (selectedCourse) params.append("courseId", selectedCourse);
       
+      console.log(`Fetching students for course: ${selectedCourse}`);
       const studentsRes = await axios.get(`/users/students?${params.toString()}`);
       const allCourseStudents = studentsRes.data || [];
       
@@ -93,67 +101,92 @@ const LecturerStudents = () => {
         return;
       }
       
-      // Fetch performance data for the selected subject
-      const perfRes = await axios.get(`/lesson-quiz/subject/${selectedSubject}/performance`);
-      const attempts = perfRes.data.attempts || [];
-      
-      // Create a map of student performance
-      const performanceMap = new Map();
-      
-      attempts.forEach(attempt => {
-        const studentId = attempt.userId?._id || attempt.userId;
-        if (!performanceMap.has(studentId)) {
-          performanceMap.set(studentId, {
-            attempts: [],
-            totalScore: 0,
-            passedCount: 0
-          });
-        }
-        const perf = performanceMap.get(studentId);
-        perf.attempts.push(attempt);
-        perf.totalScore += (attempt.percentage || 0);
-        if (attempt.isPassed) perf.passedCount++;
-      });
-      
-      // Combine ALL students with their performance data (if any)
-      const studentsWithData = allCourseStudents.map(student => {
-        const perf = performanceMap.get(student._id);
+      // Fetch performance data for the selected subject from the correct endpoint
+      console.log(`Fetching performance for subject: ${selectedSubject}`);
+      try {
+        const perfRes = await axios.get(`/lesson-quiz/subject/${selectedSubject}/performance`);
+        const attempts = perfRes.data.attempts || [];
+        console.log(`Found ${attempts.length} attempts for this subject`);
         
-        if (perf) {
-          const totalAttempts = perf.attempts.length;
-          return {
-            _id: student._id,
-            name: student.name,
-            email: student.email,
-            totalAttempts: totalAttempts,
-            averageScore: totalAttempts > 0 
-              ? Math.round(perf.totalScore / totalAttempts) 
-              : 0,
-            passedAttempts: perf.passedCount,
-            createdAt: student.createdAt,
-            lastLoginAt: student.lastLoginAt,
-            isActive: student.isActive,
-            courseName: student.courseId?.name,
-            hasAttempts: true
-          };
-        } else {
-          return {
-            _id: student._id,
-            name: student.name,
-            email: student.email,
-            totalAttempts: 0,
-            averageScore: 0,
-            passedAttempts: 0,
-            createdAt: student.createdAt,
-            lastLoginAt: student.lastLoginAt,
-            isActive: student.isActive,
-            courseName: student.courseId?.name,
-            hasAttempts: false
-          };
-        }
-      });
-      
-      applyFiltersAndStats(studentsWithData);
+        // Create a map of student performance
+        const performanceMap = new Map();
+        
+        attempts.forEach(attempt => {
+          const studentId = attempt.userId?._id || attempt.userId;
+          if (!studentId) return;
+          
+          if (!performanceMap.has(studentId)) {
+            performanceMap.set(studentId, {
+              attempts: [],
+              totalScore: 0,
+              passedCount: 0
+            });
+          }
+          const perf = performanceMap.get(studentId);
+          perf.attempts.push(attempt);
+          perf.totalScore += (attempt.percentage || 0);
+          if (attempt.isPassed) perf.passedCount++;
+        });
+        
+        // Combine ALL students with their performance data (if any)
+        const studentsWithData = allCourseStudents.map(student => {
+          const perf = performanceMap.get(student._id);
+          
+          if (perf && perf.attempts.length > 0) {
+            const totalAttempts = perf.attempts.length;
+            return {
+              _id: student._id,
+              name: student.name,
+              email: student.email,
+              totalAttempts: totalAttempts,
+              averageScore: totalAttempts > 0 
+                ? Math.round(perf.totalScore / totalAttempts) 
+                : 0,
+              passedAttempts: perf.passedCount,
+              createdAt: student.createdAt,
+              lastLoginAt: student.lastLoginAt,
+              isActive: student.isActive,
+              courseName: student.courseId?.name,
+              hasAttempts: true
+            };
+          } else {
+            return {
+              _id: student._id,
+              name: student.name,
+              email: student.email,
+              totalAttempts: 0,
+              averageScore: 0,
+              passedAttempts: 0,
+              createdAt: student.createdAt,
+              lastLoginAt: student.lastLoginAt,
+              isActive: student.isActive,
+              courseName: student.courseId?.name,
+              hasAttempts: false
+            };
+          }
+        });
+        
+        applyFiltersAndStats(studentsWithData);
+        
+      } catch (perfErr) {
+        console.error("Error fetching performance data:", perfErr);
+        // If performance endpoint fails, still show students without performance data
+        const studentsWithoutPerf = allCourseStudents.map(student => ({
+          _id: student._id,
+          name: student.name,
+          email: student.email,
+          totalAttempts: 0,
+          averageScore: 0,
+          passedAttempts: 0,
+          createdAt: student.createdAt,
+          lastLoginAt: student.lastLoginAt,
+          isActive: student.isActive,
+          courseName: student.courseId?.name,
+          hasAttempts: false
+        }));
+        applyFiltersAndStats(studentsWithoutPerf);
+        toast.warning("Could not load performance data. Showing students only.");
+      }
       
     } catch (err) {
       console.error("Error fetching students:", err);
@@ -173,7 +206,7 @@ const LecturerStudents = () => {
       );
     }
     
-    // Apply status filter (only show students with attempts)
+    // Apply status filter
     if (filter.status === "with_attempts") {
       filtered = filtered.filter(s => s.hasAttempts);
     } else if (filter.status === "no_attempts") {
@@ -181,7 +214,7 @@ const LecturerStudents = () => {
     }
     
     // Sort by name
-    filtered.sort((a, b) => a.name?.localeCompare(b.name));
+    filtered.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     
     setStudents(filtered);
     setAllStudents(studentsList);
@@ -218,6 +251,20 @@ const LecturerStudents = () => {
     return <XCircle className="h-3 w-3" />;
   };
 
+  // Helper function to get subjects filtered by selected course
+  const getSubjectsForSelectedCourse = () => {
+    if (!selectedCourse) return [];
+    return subjects.filter(subject => {
+      // Check if subject belongs to selected course
+      const subjectCourseId = subject.courseId?._id || subject.courseId;
+      return subjectCourseId === selectedCourse;
+    });
+  };
+
+  const filteredSubjects = getSubjectsForSelectedCourse();
+  const selectedSubjectObj = subjects.find(s => s._id === selectedSubject);
+  const selectedCourseObj = courses.find(c => c._id === selectedCourse);
+
   if (loading && students.length === 0) {
     return (
       <div className="flex justify-center py-12">
@@ -225,9 +272,6 @@ const LecturerStudents = () => {
       </div>
     );
   }
-
-  const selectedCourseObj = courses.find(c => c._id === selectedCourse);
-  const selectedSubjectObj = subjects.find(s => s._id === selectedSubject);
 
   return (
     <div className="space-y-6">
@@ -249,10 +293,6 @@ const LecturerStudents = () => {
             <RefreshCw className="h-4 w-4" />
             Refresh
           </button>
-          <button className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-            <UserPlus className="h-4 w-4" />
-            Invite Students
-          </button>
         </div>
       </div>
 
@@ -265,7 +305,10 @@ const LecturerStudents = () => {
             </label>
             <select
               value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
+              onChange={(e) => {
+                setSelectedCourse(e.target.value);
+                setSelectedSubject(""); // Reset subject when course changes
+              }}
               className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             >
               <option value="">Select a course</option>
@@ -285,13 +328,16 @@ const LecturerStudents = () => {
               className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50"
               disabled={!selectedCourse}
             >
-              <option value="">All Subjects</option>
-              {subjects
-                .filter(s => s.courseId?._id === selectedCourse || s.courseId === selectedCourse)
-                .map(subject => (
-                  <option key={subject._id} value={subject._id}>{subject.name}</option>
-                ))}
+              <option value="">All Subjects (No performance filter)</option>
+              {filteredSubjects.map(subject => (
+                <option key={subject._id} value={subject._id}>{subject.name}</option>
+              ))}
             </select>
+            {selectedCourse && filteredSubjects.length === 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                No subjects assigned to this course
+              </p>
+            )}
           </div>
           
           <div>
@@ -355,7 +401,7 @@ const LecturerStudents = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.avgScore}%</p>
-              <p className="text-sm text-gray-500">Avg Score (with attempts)</p>
+              <p className="text-sm text-gray-500">Avg Score</p>
             </div>
             <Award className="h-8 w-8 text-purple-500" />
           </div>
@@ -363,7 +409,7 @@ const LecturerStudents = () => {
       </div>
 
       {/* Info Banner */}
-      {selectedSubject && (
+      {selectedSubject && selectedSubjectObj && (
         <div className="rounded-xl bg-blue-50 dark:bg-blue-950/20 p-3 border border-blue-200 dark:border-blue-800">
           <p className="text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />

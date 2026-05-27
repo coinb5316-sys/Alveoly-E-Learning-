@@ -123,3 +123,27 @@ export const deleteCourse = async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 };
+
+// GET COURSES BY PROGRAM - PUBLIC (NO AUTH REQUIRED)
+export const getPublicCoursesByProgram = async (req, res) => {
+  try {
+    const { programId } = req.params;
+    
+    console.log(`[PUBLIC] Fetching courses for program: ${programId}`);
+    
+    if (!programId || programId === "undefined" || programId === "null" || programId === "") {
+      return res.status(400).json({ message: "Invalid program ID" });
+    }
+    
+    const courses = await Course.find({ programId })
+      .select("name _id")  // Only return what's needed
+      .sort({ createdAt: -1 });
+    
+    console.log(`[PUBLIC] Found ${courses.length} courses for program ${programId}`);
+    
+    res.json(courses || []);
+  } catch (error) {
+    console.error("Get Public Courses By Program Error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};

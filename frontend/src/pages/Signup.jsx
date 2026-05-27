@@ -56,21 +56,20 @@ const SignupPage = () => {
     fetchPrograms();
   }, []);
 
-  // Fetch courses when program changes (with better error handling)
-const handleProgramChange = async (programId) => {
+  const handleProgramChange = async (programId) => {
   console.log("Program changed to:", programId);
   
   setForm({ ...form, programId, courseId: "" });
-  setCourses([]); // Clear courses immediately
+  setCourses([]);
   
   if (programId && programId !== "") {
     try {
       setLoadingCourses(true);
       console.log(`Fetching courses for program: ${programId}`);
-      const res = await API.get(`/courses/program/${programId}`);
+      // USE THE PUBLIC ENDPOINT (no authentication required)
+      const res = await API.get(`/courses/public/program/${programId}`);
       console.log("Courses response:", res.data);
       
-      // Ensure we're setting an array
       const coursesData = Array.isArray(res.data) ? res.data : [];
       setCourses(coursesData);
       
