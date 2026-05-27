@@ -1,4 +1,4 @@
-// routes/userRoutes.js - UPDATED
+// routes/userRoutes.js - UPDATED to allow lecturers
 import express from "express";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import {
@@ -14,25 +14,42 @@ const router = express.Router();
 
 // ADMIN ONLY
 router.get("/", protect, adminOnly, getAllUsers);
-router.get("/stats", protect, adminOnly, getUserStats);  // ADD THIS
-router.get("/:id", protect, adminOnly, getUserById);     // ADD THIS
+router.get("/stats", protect, adminOnly, getUserStats);
+router.get("/:id", protect, adminOnly, getUserById);
 router.put("/:id/role", protect, adminOnly, updateUserRole);
 router.delete("/:id", protect, adminOnly, deleteUser);
 router.put("/:id", protect, adminOnly, updateUser);
 
-// Get all students (accessible by lecturers and admins)
+// ================= STUDENTS ROUTE - ALLOW LECTURERS AND ADMINS =================
+// IMPORTANT: Remove adminOnly to allow lecturers
 router.get("/students", protect, async (req, res) => {
   try {
     const { courseId } = req.query;
+    
+    // Build filter for students only
     const filter = { role: "student" };
     
-    if (courseId && courseId !== "undefined" && courseId !== "null") {
+    // If courseId is provided, filter by that course
+    if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
       filter.courseId = courseId;
+    } else {
+      // If no courseId provided, check if user is lecturer and get their assigned courses
+      if (req.user.role === "lecturer") {
+        const user = await User.findById(req.user._id);
+        const assignedCourseIds = user?.lecturerInfo?.assignedCourses || [];
+        if (assignedCourseIds.length > 0) {
+          filter.courseId = { $in: assignedCourseIds };
+        }
+      }
     }
+    
+    console.log("Fetching students with filter:", filter);
     
     const students = await User.find(filter)
       .select("name email courseId _id createdAt lastLoginAt isActive")
       .populate("courseId", "name");
+    
+    console.log(`Found ${students.length} students`);
     
     res.json(students);
   } catch (err) {
@@ -41,7 +58,7 @@ router.get("/students", protect, async (req, res) => {
   }
 });
 
-// Get all students with full details (program, course, subjects)
+// Get all students with full details (ADMIN ONLY - keep this restricted)
 router.get("/students/full", protect, adminOnly, async (req, res) => {
   try {
     const students = await User.find({ role: "student" })
