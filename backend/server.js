@@ -307,7 +307,9 @@ io.on("connection", (socket) => {
     socket.emit("bot:ready", { message: "Bot ready!" });
   });
   
-  socket.on("bot:question", async (data) => {
+ // In server.js, find this section (around line 200-220):
+
+socket.on("bot:question", async (data) => {
   const { text, userName } = data;
   const questionText = text?.trim();
   
@@ -339,7 +341,7 @@ io.on("connection", (socket) => {
       console.log(`No FAQ found, calling AI for: "${questionText}"`);
       
       try {
-        // Dynamic import of aiService
+        // FIX: Use require instead of dynamic import for .js file
         const aiModule = await import('./services/aiService.js');
         const askAI = aiModule.askAI;
         const isMedicalQuestion = aiModule.isMedicalQuestion;
