@@ -56,28 +56,35 @@ const SignupPage = () => {
     fetchPrograms();
   }, []);
 
-  // Fetch courses when program changes
-  const handleProgramChange = async (programId) => {
-    setForm({ ...form, programId, courseId: "" });
-    if (programId) {
-      try {
-        setLoadingCourses(true);
-        const res = await API.get(`/courses/program/${programId}`);
-        setCourses(res.data || []);
-        if (res.data.length === 0) {
-          toast.warning("No courses available for this program.");
-        }
-      } catch (err) {
-        console.error("Error fetching courses:", err);
-        setCourses([]);
-      } finally {
-        setLoadingCourses(false);
+  // Fetch courses when program changes (with better error handling)
+const handleProgramChange = async (programId) => {
+  setForm({ ...form, programId, courseId: "" });
+  setCourses([]); // Clear courses immediately
+  
+  if (programId) {
+    try {
+      setLoadingCourses(true);
+      console.log(`Fetching courses for program: ${programId}`);
+      const res = await API.get(`/courses/program/${programId}`);
+      console.log("Courses response:", res.data);
+      
+      const coursesData = Array.isArray(res.data) ? res.data : [];
+      setCourses(coursesData);
+      
+      if (coursesData.length === 0) {
+        toast.warning("No courses available for this program. Please contact admin.");
+      } else {
+        toast.success(`${coursesData.length} course(s) available`);
       }
-    } else {
+    } catch (err) {
+      console.error("Error fetching courses:", err);
+      toast.error(err.response?.data?.message || "Failed to load courses");
       setCourses([]);
+    } finally {
+      setLoadingCourses(false);
     }
-  };
-
+  }
+};
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 

@@ -13,7 +13,7 @@ import { createNotification } from "./notificationController.js";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
-// ================= GOOGLE LOGIN =================
+// ================= GOOGLE LOGIN (WITH AUTO COURSE ASSIGNMENT) =================
 export const googleLogin = async (req, res) => {
   try {
     const { idToken } = req.body;
@@ -35,10 +35,28 @@ export const googleLogin = async (req, res) => {
 
     if (!user) {
       isNewUser = true;
+      
+      // For new Google users, try to auto-assign a default program and course
+      let defaultProgramId = null;
+      let defaultCourseId = null;
+      
+      // Find first active program
+      const firstProgram = await Program.findOne({ isActive: { $ne: false } });
+      if (firstProgram) {
+        defaultProgramId = firstProgram._id;
+        // Find first course in that program
+        const firstCourse = await Course.findOne({ programId: firstProgram._id });
+        if (firstCourse) {
+          defaultCourseId = firstCourse._id;
+        }
+      }
+      
       user = await User.create({ 
         name, 
         email,
         avatar: picture,
+        programId: defaultProgramId,
+        courseId: defaultCourseId,
         lastLoginAt: new Date(),
         lastActivityAt: new Date()
       });
@@ -48,7 +66,7 @@ export const googleLogin = async (req, res) => {
         "student",
         "success",
         "Welcome to Alveoly! 🎉",
-        `Welcome ${name}! Start your learning journey with us today.`,
+        `Welcome ${name}! You have been enrolled in ${defaultCourseId ? 'your course' : 'the platform'}.`,
         "/student/dashboard",
         { action: "welcome", isNewUser: true }
       );
@@ -79,10 +97,16 @@ export const googleLogin = async (req, res) => {
 
     await user.save();
 
-    const token = generateToken(user, user.activeSession);
-    const requiresProgram = !user.programId && !user.courseId;
+    // Populate user before sending
+    const populatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name");
 
-    res.json({ token, user, requiresProgram });
+    const token = generateToken(user, user.activeSession);
+    const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
+
+    res.json({ token, user: populatedUser, requiresProgram });
   } catch (err) {
     console.error("GOOGLE LOGIN ERROR:", err);
     res.status(401).json({ 

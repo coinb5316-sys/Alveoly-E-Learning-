@@ -41,4 +41,44 @@ router.get("/students", protect, async (req, res) => {
   }
 });
 
+// Get all students with full details (program, course, subjects)
+router.get("/students/full", protect, adminOnly, async (req, res) => {
+  try {
+    const students = await User.find({ role: "student" })
+      .select("-password")
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name")
+      .populate({
+        path: 'lecturerInfo.assignedSubjects',
+        model: 'Subject',
+        select: 'name',
+        populate: {
+          path: 'courseId',
+          model: 'Course',
+          select: 'name'
+        }
+      });
+    
+    const formattedStudents = students.map(student => ({
+      _id: student._id,
+      name: student.name,
+      email: student.email,
+      role: student.role,
+      programId: student.programId,
+      courseId: student.courseId,
+      programName: student.programId?.name || "Not assigned",
+      courseName: student.courseId?.name || "Not assigned",
+      assignedSubjects: student.lecturerInfo?.assignedSubjects || [],
+      createdAt: student.createdAt,
+      lastLoginAt: student.lastLoginAt,
+      isActive: student.isActive
+    }));
+    
+    res.json(formattedStudents);
+  } catch (err) {
+    console.error("Error fetching full student details:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 export default router;
