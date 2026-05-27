@@ -1,4 +1,5 @@
-// components/LiveClassRoom.jsx - FULLY FIXED WITH WORKING VIDEO & AUDIO
+// components/LiveClassRoom.jsx - FULLY FIXED VERSION
+
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -64,6 +65,25 @@ const LiveClassRoom = () => {
   const pendingCandidatesRef = useRef({});
   const createPeerRef = useRef(null);
   
+  // Helper function to safely get user ID
+  const getUserId = useCallback((participant) => {
+    if (!participant) return null;
+    if (participant.userId?._id) return participant.userId._id;
+    if (participant.userId?.toString) return participant.userId.toString();
+    if (participant._id) return participant._id;
+    if (participant.id) return participant.id;
+    return null;
+  }, []);
+
+  // Helper function to safely get user name
+  const getUserName = useCallback((participant) => {
+    if (!participant) return "Unknown";
+    if (participant.userId?.name) return participant.userId.name;
+    if (participant.userName) return participant.userName;
+    if (participant.name) return participant.name;
+    return "Unknown User";
+  }, []);
+
   const getDashboardPath = useCallback(() => {
     if (!currentUser) return "/";
     switch (currentUser.role) {
@@ -189,28 +209,37 @@ const LiveClassRoom = () => {
     socketRef.current.on("new-chat-message", handleNewChatMessage);
   };
 
-  // FIXED: Handle existing participants with proper peer creation
+  // FIXED: Handle existing participants with null safety
   const handleExistingParticipants = useCallback((participantsList) => {
     console.log("📋 Existing participants:", participantsList);
     
-    if (!participantsList || participantsList.length === 0) return;
+    if (!participantsList || !Array.isArray(participantsList) || participantsList.length === 0) return;
     
-    // Update participants list
+    // Update participants list with safe data extraction
     const newParticipants = participantsList
-      .filter(participant => participant.userId !== currentUser?._id)
-      .map(participant => ({
-        userId: { _id: participant.userId, name: participant.userName },
-        role: participant.role,
-        joinedAt: new Date(),
-        active: true,
-        audioEnabled: participant.audioEnabled !== false,
-        videoEnabled: participant.videoEnabled !== false,
-        remoteStream: null
-      }));
+      .filter(participant => {
+        const participantId = participant?.userId;
+        return participantId && participantId !== currentUser?._id;
+      })
+      .map(participant => {
+        const participantId = participant.userId;
+        return {
+          userId: { _id: participantId, name: participant.userName || "Participant" },
+          role: participant.role || "student",
+          joinedAt: new Date(),
+          active: true,
+          audioEnabled: participant.audioEnabled !== false,
+          videoEnabled: participant.videoEnabled !== false,
+          remoteStream: null
+        };
+      });
     
     setParticipants(prev => {
-      const existingIds = new Set(prev.map(p => p.userId?._id));
-      const uniqueNew = newParticipants.filter(p => !existingIds.has(p.userId._id));
+      const existingIds = new Set(prev.map(p => getUserId(p)).filter(Boolean));
+      const uniqueNew = newParticipants.filter(p => {
+        const pid = getUserId(p);
+        return pid && !existingIds.has(pid);
+      });
       return [...prev, ...uniqueNew];
     });
     
@@ -221,15 +250,16 @@ const LiveClassRoom = () => {
     if (userMediaStreamRef.current && localStreamReady && createPeerRef.current) {
       setTimeout(() => {
         participantsList.forEach(participant => {
-          if (participant.userId !== currentUser?._id && !peersRef.current[participant.userId]) {
+          const participantId = participant?.userId;
+          if (participantId && participantId !== currentUser?._id && !peersRef.current[participantId]) {
             console.log(`🔄 Creating peer for existing participant: ${participant.userName}`);
-            createPeerRef.current(participant.userId, userMediaStreamRef.current, true);
+            createPeerRef.current(participantId, userMediaStreamRef.current, true);
           }
         });
         window.pendingExistingParticipants = null;
       }, 100);
     }
-  }, [currentUser, localStreamReady]);
+  }, [currentUser, localStreamReady, getUserId]);
 
   // FIXED: Process pending participants after join confirmed
   const handleJoinConfirmed = useCallback(() => {
@@ -244,8 +274,9 @@ const LiveClassRoom = () => {
       console.log("🔄 Processing pending participants after join confirmed");
       setTimeout(() => {
         window.pendingExistingParticipants.forEach(participant => {
-          if (participant.userId !== currentUser?._id && !peersRef.current[participant.userId]) {
-            createPeerRef.current(participant.userId, userMediaStreamRef.current, true);
+          const participantId = participant?.userId;
+          if (participantId && participantId !== currentUser?._id && !peersRef.current[participantId]) {
+            createPeerRef.current(participantId, userMediaStreamRef.current, true);
           }
         });
         window.pendingExistingParticipants = null;
@@ -274,11 +305,19 @@ const LiveClassRoom = () => {
       
       setLiveClass(res.data);
       
-      const allParticipants = (res.data.participants || []).map(p => ({
-        ...p,
-        active: !p.leftAt,
-        remoteStream: null
-      }));
+      // FIXED: Safely map participants
+      const allParticipants = (res.data.participants || [])
+        .filter(p => p && p.userId) // Filter out null/undefined participants
+        .map(p => ({
+          userId: p.userId,
+          role: p.role || "student",
+          joinedAt: p.joinedAt,
+          leftAt: p.leftAt,
+          active: !p.leftAt,
+          audioEnabled: p.audioEnabled !== false,
+          videoEnabled: p.videoEnabled !== false,
+          remoteStream: null
+        }));
       setParticipants(allParticipants);
       setChatMessages(res.data.chatMessages || []);
       
@@ -433,9 +472,10 @@ const LiveClassRoom = () => {
       });
       
       // Update participants with remote stream
-      setParticipants(prev => prev.map(p => 
-        p.userId?._id === userId ? { ...p, remoteStream } : p
-      ));
+      setParticipants(prev => prev.map(p => {
+        const pid = getUserId(p);
+        return pid === userId ? { ...p, remoteStream } : p;
+      }));
       
       // Update video element if it exists
       const videoElement = videoRefs.current[userId];
@@ -476,7 +516,7 @@ const LiveClassRoom = () => {
     
     peersRef.current[userId] = peer;
     return peer;
-  }, [classId, socketConnected]);
+  }, [classId, socketConnected, getUserId]);
 
   // Store createPeer in ref to avoid dependency issues
   useEffect(() => {
@@ -490,11 +530,11 @@ const LiveClassRoom = () => {
     
     // Add to participants list
     setParticipants(prev => {
-      const exists = prev.find(p => p.userId?._id === userId);
+      const exists = prev.some(p => getUserId(p) === userId);
       if (exists) return prev;
       return [...prev, {
         userId: { _id: userId, name: userName },
-        role: role,
+        role: role || "student",
         joinedAt: new Date(),
         active: true,
         audioEnabled: audioEnabled !== false,
@@ -515,7 +555,7 @@ const LiveClassRoom = () => {
     createPeerWithRetry();
     
     toast.success(`${userName} joined the class`);
-  }, [localStreamReady]);
+  }, [localStreamReady, getUserId]);
 
   const handleUserLeft = useCallback((data) => {
     const { userId, userName } = data;
@@ -527,7 +567,7 @@ const LiveClassRoom = () => {
       delete peersRef.current[userId];
     }
     
-    setParticipants(prev => prev.filter(p => p.userId?._id !== userId));
+    setParticipants(prev => prev.filter(p => getUserId(p) !== userId));
     setRemoteStreamsReady(prev => {
       const newState = { ...prev };
       delete newState[userId];
@@ -538,7 +578,7 @@ const LiveClassRoom = () => {
     setTimeout(() => setShowLeftNotification(null), 3000);
     
     toast.info(`${userName} left the class`);
-  }, []);
+  }, [getUserId]);
 
   const handleSignal = useCallback((data) => {
     const { from, signal } = data;
@@ -573,10 +613,11 @@ const LiveClassRoom = () => {
   }, []);
 
   const handleParticipantUpdated = useCallback((data) => {
-    setParticipants(prev => prev.map(p => 
-      p.userId?._id === data.userId ? { ...p, ...data.updates } : p
-    ));
-  }, []);
+    setParticipants(prev => prev.map(p => {
+      const pid = getUserId(p);
+      return pid === data.userId ? { ...p, ...data.updates } : p;
+    }));
+  }, [getUserId]);
 
   const toggleMute = useCallback(() => {
     if (userMediaStreamRef.current) {
@@ -729,6 +770,9 @@ const LiveClassRoom = () => {
     toast.success("Invite link copied!");
   };
 
+  // Get safe participant count
+  const activeParticipantsCount = participants.filter(p => p && p.active && !p.leftAt).length;
+
   // Loading states
   if (authLoading || loading) {
     return (
@@ -752,7 +796,6 @@ const LiveClassRoom = () => {
   }
 
   const isClassActive = liveClass.status === "ongoing" && !classEnded;
-  const activeParticipantsCount = participants.filter(p => p.active && !p.leftAt).length;
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
@@ -927,21 +970,27 @@ const LiveClassRoom = () => {
 
           {showParticipants && (
             <div className="flex-1 overflow-y-auto p-2 md:p-3 space-y-2">
-              {participants.filter(p => p.active && !p.leftAt).map((p, idx) => (
-                <div key={idx} className="flex items-center gap-2 p-1.5 md:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                  <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                    <span className="text-white font-semibold text-xs md:text-sm">{p.userId?.name?.charAt(0) || "U"}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs md:text-sm font-medium text-gray-900 dark:text-white truncate">{p.userId?.name}</p>
-                    <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">{p.role === "lecturer" ? "Host" : p.role === "admin" ? "Admin" : "Student"}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {p.audioEnabled === false && <MicOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
-                    {p.videoEnabled === false && <VideoOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
-                  </div>
-                </div>
-              ))}
+              {participants
+                .filter(p => p && p.active && !p.leftAt)
+                .map((p, idx) => {
+                  const pid = getUserId(p);
+                  const pName = getUserName(p);
+                  return (
+                    <div key={pid || idx} className="flex items-center gap-2 p-1.5 md:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                      <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                        <span className="text-white font-semibold text-xs md:text-sm">{pName?.charAt(0) || "U"}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs md:text-sm font-medium text-gray-900 dark:text-white truncate">{pName}</p>
+                        <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">{p.role === "lecturer" ? "Host" : p.role === "admin" ? "Admin" : "Student"}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {p.audioEnabled === false && <MicOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
+                        {p.videoEnabled === false && <VideoOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>
@@ -980,21 +1029,21 @@ const VideoTile = memo(({ video, isPinned = false, isSidebar = false,
   
   // Store video element reference
   useEffect(() => {
-    if (video.id && videoElementRef.current) {
+    if (video?.id && videoElementRef.current) {
       videoRefs.current[video.id] = videoElementRef.current;
     }
     
     return () => {
-      if (video.id) {
+      if (video?.id) {
         delete videoRefs.current[video.id];
       }
     };
-  }, [video.id, videoRefs]);
+  }, [video?.id, videoRefs]);
   
   // Handle stream attachment - FIXED with better play handling
   useEffect(() => {
     const videoElement = videoElementRef.current;
-    if (!videoElement) return;
+    if (!videoElement || !video) return;
     
     let streamToUse = null;
     if (video.isLocal) {
@@ -1026,7 +1075,9 @@ const VideoTile = memo(({ video, isPinned = false, isSidebar = false,
         }
       };
     }
-  }, [video.id, video.isLocal, video.remoteStream, userMediaStreamRef, remoteStreamsReady[video.id]]);
+  }, [video?.id, video?.isLocal, video?.remoteStream, userMediaStreamRef, remoteStreamsReady[video?.id], video]);
+  
+  if (!video) return null;
   
   const hasValidStream = video.isLocal ? localStreamReady : !!video.remoteStream;
   const shouldShowVideo = hasValidStream && !video.isVideoOff;
@@ -1080,7 +1131,7 @@ const VideoTile = memo(({ video, isPinned = false, isSidebar = false,
         </div>
       </div>
       
-      {!video.isLocal && !isSidebar && (
+      {!video.isLocal && !isSidebar && setPinnedVideo && (
         <button 
           onClick={() => setPinnedVideo(pinnedVideo === video.id ? null : video.id)} 
           className="absolute top-2 right-2 p-1 md:p-1.5 rounded-lg bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1101,32 +1152,38 @@ const VideoGridComponent = memo(({ layout, pinnedVideo, setPinnedVideo, currentU
     const allVideos = [];
     
     // Add local user
-    allVideos.push({
-      id: currentUser?._id,
-      name: currentUser?.name,
-      remoteStream: userMediaStreamRef.current,
-      isLocal: true,
-      role: currentUser?.role,
-      isMuted: isMuted,
-      isVideoOff: isVideoOff,
-      isSpeaking: speakingUsers[currentUser?._id]
-    });
-    
-    // Add remote participants
-    participants
-      .filter(p => p.userId?._id !== currentUser?._id && p.active && !p.leftAt)
-      .forEach(p => {
-        allVideos.push({
-          id: p.userId._id,
-          name: p.userId.name,
-          remoteStream: p.remoteStream,
-          isLocal: false,
-          role: p.role,
-          isMuted: !p.audioEnabled,
-          isVideoOff: !p.videoEnabled,
-          isSpeaking: speakingUsers[p.userId._id]
-        });
+    if (currentUser?._id) {
+      allVideos.push({
+        id: currentUser._id,
+        name: currentUser.name,
+        remoteStream: userMediaStreamRef.current,
+        isLocal: true,
+        role: currentUser.role,
+        isMuted: isMuted,
+        isVideoOff: isVideoOff,
+        isSpeaking: speakingUsers[currentUser._id]
       });
+    }
+    
+    // Add remote participants - with null safety
+    if (Array.isArray(participants)) {
+      participants
+        .filter(p => p && p.userId && p.userId._id !== currentUser?._id && p.active && !p.leftAt)
+        .forEach(p => {
+          if (p.userId?._id) {
+            allVideos.push({
+              id: p.userId._id,
+              name: p.userId.name || "Participant",
+              remoteStream: p.remoteStream,
+              isLocal: false,
+              role: p.role || "student",
+              isMuted: !p.audioEnabled,
+              isVideoOff: !p.videoEnabled,
+              isSpeaking: speakingUsers[p.userId._id]
+            });
+          }
+        });
+    }
     
     if (pinnedVideo) {
       const pinned = allVideos.find(v => v.id === pinnedVideo);
