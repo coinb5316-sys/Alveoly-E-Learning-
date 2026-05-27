@@ -278,7 +278,7 @@ router.get("/students", async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-// ================= PERFORMANCE ROUTES =================
+// Performance route - make sure it returns the right structure
 router.get("/performance/subject/:subjectId", async (req, res) => {
   try {
     const { subjectId } = req.params;
@@ -290,48 +290,34 @@ router.get("/performance/subject/:subjectId", async (req, res) => {
       return res.status(403).json({ message: "Access denied to this subject" });
     }
     
-    const attempts = await LecturerAttempt.find({ 
+    // Import LessonAttempt model
+    const LessonAttempt = mongoose.model("LessonAttempt");
+    
+    const attempts = await LessonAttempt.find({ 
       subjectId: subjectId, 
-      status: "completed" 
+      status: "completed"
     })
-      .populate("studentId", "name email")
-      .populate("contentId", "title")
+      .populate("userId", "name email")
+      .populate("lessonId", "title")
       .sort({ completedAt: -1 });
+    
+    console.log(`Found ${attempts.length} attempts for subject ${subjectId}`);
     
     const processedAttempts = attempts.map(attempt => ({
       _id: attempt._id,
-      userName: attempt.studentId?.name || attempt.studentName,
-      userEmail: attempt.studentId?.email || attempt.studentEmail,
-      userId: attempt.studentId?._id || attempt.studentId,
-      lessonId: { _id: attempt.contentId?._id, title: attempt.contentId?.title || attempt.contentTitle },
+      userId: attempt.userId?._id || attempt.userId,
+      userName: attempt.userId?.name || attempt.userName,
+      userEmail: attempt.userId?.email || attempt.userEmail,
+      lessonId: attempt.lessonId?._id || attempt.lessonId,
+      lessonTitle: attempt.lessonId?.title || attempt.lessonTitle,
       score: attempt.score || 0,
       totalPoints: attempt.totalPoints || 0,
       percentage: attempt.percentage || 0,
       isPassed: attempt.isPassed || false,
-      lessonCompleted: attempt.lessonCompleted || false,
-      completedAt: attempt.completedAt || attempt.submittedAt
+      submittedAt: attempt.completedAt || attempt.submittedAt
     }));
     
-    let totalScore = 0;
-    let passedCount = 0;
-    const completedLessonsSet = new Set();
-    
-    processedAttempts.forEach(attempt => {
-      totalScore += attempt.percentage || 0;
-      if (attempt.isPassed) passedCount++;
-      if (attempt.lessonCompleted) {
-        completedLessonsSet.add(attempt.lessonId?._id);
-      }
-    });
-    
-    const stats = {
-      totalAttempts: processedAttempts.length,
-      averageScore: processedAttempts.length > 0 ? Math.round(totalScore / processedAttempts.length) : 0,
-      passRate: processedAttempts.length > 0 ? Math.round((passedCount / processedAttempts.length) * 100) : 0,
-      completedLessons: completedLessonsSet.size,
-    };
-    
-    res.json({ attempts: processedAttempts, stats });
+    res.json({ attempts: processedAttempts });
   } catch (err) {
     console.error("Error fetching subject performance:", err);
     res.status(500).json({ message: err.message });

@@ -71,110 +71,127 @@ const LecturerProgressSelect = () => {
   };
 
   const fetchStudentsWithPerformance = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (selectedCourse) params.append("courseId", selectedCourse);
+  setLoading(true);
+  try {
+    // Use the dedicated lecturer endpoint instead of /users/students
+    const studentsRes = await axios.get("/lecturer/my-students-list");
+    
+    if (!studentsRes.data.success) {
+      setStudents([]);
+      setStats({ total: 0, withAttempts: 0, avgScore: 0 });
+      setLoading(false);
+      return;
+    }
+    
+    let allCourseStudents = studentsRes.data.students || [];
+    
+    // Filter by selected course if needed
+    if (selectedCourse) {
+      allCourseStudents = allCourseStudents.filter(s => 
+        s.courseId?._id === selectedCourse || s.courseId === selectedCourse
+      );
+    }
+    
+    if (!selectedSubject) {
+      const formattedStudents = allCourseStudents.map(student => ({
+        _id: student._id,
+        name: student.name,
+        email: student.email,
+        courseName: student.courseName,
+        totalAttempts: 0,
+        averageScore: 0,
+        passedAttempts: 0,
+        hasAttempts: false
+      }));
       
-      const studentsRes = await axios.get(`/users/students?${params.toString()}`);
-      const allCourseStudents = studentsRes.data || [];
+      setStudents(formattedStudents);
+      setStats({ 
+        total: formattedStudents.length, 
+        withAttempts: 0, 
+        avgScore: 0 
+      });
+      setLoading(false);
+      return;
+    }
+    
+    // Fetch performance data for the selected subject
+    const perfRes = await axios.get(`/lecturer/performance/subject/${selectedSubject}`);
+    const attempts = perfRes.data.attempts || [];
+    
+    // Create a map of student performance
+    const performanceMap = new Map();
+    
+    attempts.forEach(attempt => {
+      const studentId = attempt.userId?._id || attempt.userId;
+      if (!studentId) return;
       
-      if (!selectedSubject) {
-        const formattedStudents = allCourseStudents.map(student => ({
-          _id: student._id,
-          name: student.name,
-          email: student.email,
-          courseName: student.courseId?.name,
+      if (!performanceMap.has(studentId)) {
+        performanceMap.set(studentId, {
+          totalScore: 0,
+          passedCount: 0,
+          count: 0
+        });
+      }
+      const perf = performanceMap.get(studentId);
+      perf.totalScore += (attempt.percentage || 0);
+      if (attempt.isPassed) perf.passedCount++;
+      perf.count++;
+    });
+    
+    const studentsWithData = allCourseStudents.map(student => {
+      const perf = performanceMap.get(student._id);
+      
+      if (perf && perf.count > 0) {
+        return {
+          ...student,
+          totalAttempts: perf.count,
+          averageScore: Math.round(perf.totalScore / perf.count),
+          passedAttempts: perf.passedCount,
+          hasAttempts: true
+        };
+      } else {
+        return {
+          ...student,
           totalAttempts: 0,
           averageScore: 0,
           passedAttempts: 0,
           hasAttempts: false
-        }));
-        
-        setStudents(formattedStudents);
-        setStats({ total: formattedStudents.length, withAttempts: 0, avgScore: 0 });
-        setLoading(false);
-        return;
+        };
       }
-      
-      const perfRes = await axios.get(`/lesson-quiz/subject/${selectedSubject}/performance`);
-      const attempts = perfRes.data.attempts || [];
-      
-      const performanceMap = new Map();
-      
-      attempts.forEach(attempt => {
-        const studentId = attempt.userId?._id || attempt.userId;
-        if (!performanceMap.has(studentId)) {
-          performanceMap.set(studentId, {
-            totalScore: 0,
-            passedCount: 0,
-            count: 0
-          });
-        }
-        const perf = performanceMap.get(studentId);
-        perf.totalScore += (attempt.percentage || 0);
-        if (attempt.isPassed) perf.passedCount++;
-        perf.count++;
-      });
-      
-      const studentsWithData = allCourseStudents.map(student => {
-        const perf = performanceMap.get(student._id);
-        
-        if (perf) {
-          return {
-            _id: student._id,
-            name: student.name,
-            email: student.email,
-            courseName: student.courseId?.name,
-            totalAttempts: perf.count,
-            averageScore: Math.round(perf.totalScore / perf.count),
-            passedAttempts: perf.passedCount,
-            hasAttempts: true
-          };
-        } else {
-          return {
-            _id: student._id,
-            name: student.name,
-            email: student.email,
-            courseName: student.courseId?.name,
-            totalAttempts: 0,
-            averageScore: 0,
-            passedAttempts: 0,
-            hasAttempts: false
-          };
-        }
-      });
-      
-      let filtered = studentsWithData;
-      if (search) {
-        const searchLower = search.toLowerCase();
-        filtered = filtered.filter(s => 
-          s.name?.toLowerCase().includes(searchLower) ||
-          s.email?.toLowerCase().includes(searchLower)
-        );
-      }
-      
-      filtered.sort((a, b) => a.name?.localeCompare(b.name));
-      
-      const studentsWithAttempts = studentsWithData.filter(s => s.hasAttempts);
-      const avgScore = studentsWithAttempts.length > 0
-        ? Math.round(studentsWithAttempts.reduce((sum, s) => sum + s.averageScore, 0) / studentsWithAttempts.length)
-        : 0;
-      
-      setStudents(filtered);
-      setStats({
-        total: studentsWithData.length,
-        withAttempts: studentsWithAttempts.length,
-        avgScore
-      });
-      
-    } catch (err) {
-      console.error("Error fetching students:", err);
-      toast.error("Failed to fetch student data");
-    } finally {
-      setLoading(false);
+    });
+    
+    let filtered = studentsWithData;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filtered = filtered.filter(s => 
+        s.name?.toLowerCase().includes(searchLower) ||
+        s.email?.toLowerCase().includes(searchLower)
+      );
     }
-  };
+    
+    filtered.sort((a, b) => a.name?.localeCompare(b.name));
+    
+    const studentsWithAttempts = studentsWithData.filter(s => s.hasAttempts);
+    const avgScore = studentsWithAttempts.length > 0
+      ? Math.round(studentsWithAttempts.reduce((sum, s) => sum + s.averageScore, 0) / studentsWithAttempts.length)
+      : 0;
+    
+    setStudents(filtered);
+    setStats({
+      total: studentsWithData.length,
+      withAttempts: studentsWithAttempts.length,
+      avgScore
+    });
+    
+  } catch (err) {
+    console.error("Error fetching students:", err);
+    toast.error("Failed to fetch student data");
+    setStudents([]);
+    setStats({ total: 0, withAttempts: 0, avgScore: 0 });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getScoreColor = (score) => {
     if (score >= 80) return "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30";

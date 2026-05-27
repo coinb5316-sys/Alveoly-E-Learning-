@@ -208,6 +208,8 @@ const LecturerStudentProgress = () => {
       return attemptStudentId === studentId;
     });
     
+    console.log(`Found ${studentAttempts.length} attempts for student ${studentId}`);
+    
     const formattedAttempts = studentAttempts.map(attempt => ({
       _id: attempt._id,
       title: attempt.lessonId?.title || "Quiz",
