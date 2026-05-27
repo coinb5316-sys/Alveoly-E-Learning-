@@ -15,7 +15,7 @@ export const getCourses = async (req, res) => {
   }
 };
 
-// GET COURSES BY PROGRAM (WITH ERROR HANDLING)
+// GET COURSES BY PROGRAM (WITH PROPER ERROR HANDLING)
 export const getCoursesByProgram = async (req, res) => {
   try {
     const { programId } = req.params;
@@ -24,19 +24,22 @@ export const getCoursesByProgram = async (req, res) => {
       return res.status(400).json({ message: "Invalid program ID" });
     }
     
+    console.log(`Fetching courses for program: ${programId}`);
+    
     const courses = await Course.find({ programId })
       .populate("programId", "name code")
       .sort({ createdAt: -1 });
     
     console.log(`Found ${courses.length} courses for program ${programId}`);
     
-    res.json(courses);
+    // Always return an array, even if empty
+    res.json(courses || []);
   } catch (error) {
     console.error("Get Courses By Program Error:", error);
-    res.status(500).json({ message: "Server Error: " + error.message });
+    // Return empty array on error instead of error response
+    res.json([]);
   }
 };
-
 // CREATE COURSE
 export const createCourse = async (req, res) => {
   try {

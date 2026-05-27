@@ -118,21 +118,22 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ================= GOOGLE LOGIN =================
-  const googleLogin = async (idToken) => {
-    try {
-      const res = await API.post("/auth/google-login", { idToken });
-      const { token: newToken, user: userData, requiresProgram } = res.data;
-      
-      console.log("Google login response:", { userData, requiresProgram });
-      
-      setAuth(newToken, userData);
-      return { user: userData, requiresProgram };
-    } catch (err) {
-      console.error("Google login error:", err);
-      throw err;
-    }
-  };
-
+const googleLogin = async (idToken) => {
+  try {
+    const res = await API.post("/auth/google-login", { idToken });
+    const { token: newToken, user: userData, requiresProgram } = res.data;
+    
+    console.log("Google login response:", { userData, requiresProgram });
+    
+    setAuth(newToken, userData);
+    
+    // Return requiresProgram so the component knows where to redirect
+    return { user: userData, requiresProgram };
+  } catch (err) {
+    console.error("Google login error:", err);
+    throw err;
+  }
+};
   // ================= LOGOUT =================
   const logout = () => {
     clearAuth();

@@ -13,7 +13,7 @@ import { createNotification } from "./notificationController.js";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
-// ================= GOOGLE LOGIN (WITH AUTO COURSE ASSIGNMENT) =================
+// ================= GOOGLE LOGIN (NO AUTO-ASSIGN - REDIRECT TO SELECT PROGRAM) =================
 export const googleLogin = async (req, res) => {
   try {
     const { idToken } = req.body;
@@ -35,28 +35,13 @@ export const googleLogin = async (req, res) => {
 
     if (!user) {
       isNewUser = true;
-      
-      // For new Google users, try to auto-assign a default program and course
-      let defaultProgramId = null;
-      let defaultCourseId = null;
-      
-      // Find first active program
-      const firstProgram = await Program.findOne({ isActive: { $ne: false } });
-      if (firstProgram) {
-        defaultProgramId = firstProgram._id;
-        // Find first course in that program
-        const firstCourse = await Course.findOne({ programId: firstProgram._id });
-        if (firstCourse) {
-          defaultCourseId = firstCourse._id;
-        }
-      }
-      
+      // Create user WITHOUT program and course - they will select it
       user = await User.create({ 
         name, 
         email,
         avatar: picture,
-        programId: defaultProgramId,
-        courseId: defaultCourseId,
+        programId: null,
+        courseId: null,
         lastLoginAt: new Date(),
         lastActivityAt: new Date()
       });
@@ -66,8 +51,8 @@ export const googleLogin = async (req, res) => {
         "student",
         "success",
         "Welcome to Alveoly! 🎉",
-        `Welcome ${name}! You have been enrolled in ${defaultCourseId ? 'your course' : 'the platform'}.`,
-        "/student/dashboard",
+        `Welcome ${name}! Please select your program to get started.`,
+        "/select-program",
         { action: "welcome", isNewUser: true }
       );
       
@@ -104,6 +89,7 @@ export const googleLogin = async (req, res) => {
       .populate("courseId", "name");
 
     const token = generateToken(user, user.activeSession);
+    // IMPORTANT: This tells frontend to redirect to select-program page
     const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
 
     res.json({ token, user: populatedUser, requiresProgram });
@@ -229,7 +215,7 @@ export const register = async (req, res) => {
   }
 };
 
-// ================= ASSIGN PROGRAM (NEW) =================
+// ================= ASSIGN PROGRAM (WITH AUTO COURSE ASSIGNMENT) =================
 export const assignProgram = async (req, res) => {
   try {
     const { programId } = req.body;
@@ -244,21 +230,32 @@ export const assignProgram = async (req, res) => {
       return res.status(400).json({ message: "Invalid or inactive program selected" });
     }
 
+    // Find first course in this program
+    const firstCourse = await Course.findOne({ programId: programId });
+    
+    // Update user with program and auto-assign first course
+    const updateData = { programId };
+    if (firstCourse) {
+      updateData.courseId = firstCourse._id;
+      console.log(`✅ Auto-assigned course: ${firstCourse.name} to student`);
+    }
+    
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { programId },
+      updateData,
       { new: true }
-    ).populate("programId", "name code");
+    ).populate("programId", "name code")
+      .populate("courseId", "name");
 
-    // Notify user about program assignment
+    // Notify user about program and course assignment
     await createNotification(
       user._id,
       "student",
       "success",
-      "Program Assigned! 📚",
-      `You have been enrolled in ${user.programId?.name || "a new program"}.`,
-      "/student/courses",
-      { programId, action: "program_assigned" }
+      "Program & Course Assigned! 📚",
+      `You have been enrolled in ${user.programId?.name || "a new program"}${firstCourse ? ` and course: ${firstCourse.name}` : ''}.`,
+      "/student/dashboard",
+      { programId, courseId: firstCourse?._id, action: "program_assigned" }
     );
 
     res.json(user);

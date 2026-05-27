@@ -67,22 +67,23 @@ const AdminUsers = () => {
 const fetchUsers = async () => {
   try {
     setLoading(true);
-    // Try to get full student details if admin
-    let usersData = [];
-    try {
-      const studentsRes = await axios.get("/users/students/full");
-      const lecturersRes = await axios.get("/users?role=lecturer");
-      const adminsRes = await axios.get("/users?role=admin");
-      usersData = [...studentsRes.data, ...lecturersRes.data, ...adminsRes.data];
-    } catch (err) {
-      // Fallback to regular endpoint
-      const res = await axios.get("/users");
-      usersData = res.data;
-    }
-    setUsers(Array.isArray(usersData) ? usersData : []);
+    
+    // Fetch all users with proper population
+    const res = await axios.get("/users");
+    let allUsers = res.data || [];
+    
+    // Format users to ensure program and course names are displayed
+    const formattedUsers = allUsers.map(user => ({
+      ...user,
+      programName: user.programId?.name || "Not assigned",
+      courseName: user.courseId?.name || "Not assigned",
+    }));
+    
+    setUsers(formattedUsers);
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching users:", err);
     toast.error("Failed to fetch users");
+    setUsers([]);
   } finally {
     setLoading(false);
   }

@@ -58,16 +58,19 @@ const SignupPage = () => {
 
   // Fetch courses when program changes (with better error handling)
 const handleProgramChange = async (programId) => {
+  console.log("Program changed to:", programId);
+  
   setForm({ ...form, programId, courseId: "" });
   setCourses([]); // Clear courses immediately
   
-  if (programId) {
+  if (programId && programId !== "") {
     try {
       setLoadingCourses(true);
       console.log(`Fetching courses for program: ${programId}`);
       const res = await API.get(`/courses/program/${programId}`);
       console.log("Courses response:", res.data);
       
+      // Ensure we're setting an array
       const coursesData = Array.isArray(res.data) ? res.data : [];
       setCourses(coursesData);
       
@@ -78,7 +81,7 @@ const handleProgramChange = async (programId) => {
       }
     } catch (err) {
       console.error("Error fetching courses:", err);
-      toast.error(err.response?.data?.message || "Failed to load courses");
+      toast.error("Failed to load courses. Please try again.");
       setCourses([]);
     } finally {
       setLoadingCourses(false);
@@ -114,19 +117,28 @@ const handleProgramChange = async (programId) => {
   };
 
   const handleGoogleAuth = async (credentialResponse) => {
-    try {
-      setGoogleLoading(true);
-      const idToken = credentialResponse?.credential;
-      if (!idToken) throw new Error("No Google credential received");
-      const result = await googleLogin(idToken);
+  try {
+    setGoogleLoading(true);
+    const idToken = credentialResponse?.credential;
+    if (!idToken) throw new Error("No Google credential received");
+    const result = await googleLogin(idToken);
+    
+    console.log("Google login result:", result);
+    
+    // If user needs to select a program, redirect to select-program page
+    if (result.requiresProgram) {
+      navigate("/select-program");
+    } else {
       navigate("/student/dashboard");
-      toast.success("Google signup successful!");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Google signup failed");
-    } finally {
-      setGoogleLoading(false);
     }
-  };
+    toast.success("Google signup successful!");
+  } catch (err) {
+    console.error("Google auth error:", err);
+    toast.error(err.response?.data?.message || "Google signup failed");
+  } finally {
+    setGoogleLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
