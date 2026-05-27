@@ -320,43 +320,46 @@ io.on("connection", (socket) => {
   socket.emit("bot:typing", { isTyping: true });
   
   try {
-    // STEP 1: Search FAQ database first (for exact admin answers)
+    // Search FAQ database first
     const searchTerm = questionText.toLowerCase().trim();
-    
     let faq = await FAQ.findOne({
       isActive: true,
-      question: { $regex: new RegExp(`^${searchTerm}$`, 'i') }
+      question: { $regex: searchTerm, $options: 'i' }
     });
     
     let reply;
     let usedAI = false;
     
     if (faq) {
-      // Found matching FAQ - use admin answer
       console.log(`✅ Found FAQ: "${faq.question}"`);
       reply = `📚 **Answer:**\n\n${faq.answer}`;
       faq.views += 1;
       await faq.save();
     } else {
-      // STEP 2: Use AI to answer all other questions
       console.log(`No FAQ found, calling AI for: "${questionText}"`);
       
       try {
-        const { askAI, isMedicalQuestion } = await import('./services/aiService.js');
+        // Dynamic import of aiService
+        const aiModule = await import('./services/aiService.js');
+        const askAI = aiModule.askAI;
+        const isMedicalQuestion = aiModule.isMedicalQuestion;
+        
         const isMedical = isMedicalQuestion(questionText);
         const aiAnswer = await askAI(questionText, isMedical);
         
-        if (aiAnswer && aiAnswer !== null) {
+        console.log(`AI Response received:`, aiAnswer ? "Yes" : "No");
+        
+        if (aiAnswer && aiAnswer !== null && typeof aiAnswer === 'string' && aiAnswer.length > 0) {
           const icon = isMedical ? "🩺" : "🤖";
           const prefix = isMedical ? "**Nurse AI:**" : "**AI Assistant:**";
           reply = `${icon} ${prefix}\n\n${aiAnswer}`;
           usedAI = true;
-          console.log(`✅ Answered with AI (${isMedical ? 'Medical' : 'General'})`);
+          console.log(`✅ Answered with AI`);
         } else {
-          throw new Error("AI returned null");
+          throw new Error("AI returned empty response");
         }
       } catch (aiError) {
-        console.error("AI error:", aiError);
+        console.error("AI error details:", aiError.message);
         reply = "📝 I'm having trouble connecting to AI. Please try again later or contact support.";
       }
     }
