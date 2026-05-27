@@ -477,4 +477,53 @@ router.get("/debug-assigned-subjects", async (req, res) => {
   }
 });
 
+// Add this to routes/lecturerRoutes.js - DEDICATED STUDENTS ENDPOINT FOR LECTURERS
+router.get("/my-students-list", async (req, res) => {
+  try {
+    console.log("=== LECTURER MY-STUDENTS-LIST ROUTE HIT ===");
+    console.log("Lecturer ID:", req.user._id);
+    
+    // Get lecturer's assigned courses
+    const user = await User.findById(req.user._id);
+    const assignedCourseIds = user?.lecturerInfo?.assignedCourses || [];
+    
+    console.log("Assigned course IDs:", assignedCourseIds);
+    
+    if (assignedCourseIds.length === 0) {
+      return res.json({ success: true, students: [], total: 0 });
+    }
+    
+    // Get all students enrolled in those courses
+    const students = await User.find({ 
+      role: "student",
+      courseId: { $in: assignedCourseIds }
+    })
+    .select("name email courseId createdAt lastLoginAt isActive _id")
+    .populate("courseId", "name");
+    
+    console.log(`Found ${students.length} students in assigned courses`);
+    
+    // Format the response
+    const formattedStudents = students.map(student => ({
+      _id: student._id,
+      name: student.name,
+      email: student.email,
+      courseId: student.courseId,
+      courseName: student.courseId?.name || "Not assigned",
+      createdAt: student.createdAt,
+      lastLoginAt: student.lastLoginAt,
+      isActive: student.isActive,
+      totalAttempts: 0,
+      averageScore: 0,
+      passedAttempts: 0,
+      hasAttempts: false
+    }));
+    
+    res.json({ success: true, students: formattedStudents, total: formattedStudents.length });
+  } catch (err) {
+    console.error("Error fetching lecturer students:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 export default router;

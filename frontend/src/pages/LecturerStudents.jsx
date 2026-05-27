@@ -68,132 +68,124 @@ const LecturerStudents = () => {
   };
 
   const fetchAllStudents = async () => {
-    setLoading(true);
-    try {
-      // First, fetch ALL students enrolled in the selected course
-      const params = new URLSearchParams();
-      if (selectedCourse) params.append("courseId", selectedCourse);
-      
-      console.log(`Fetching students for course: ${selectedCourse}`);
-      const studentsRes = await axios.get(`/users/students?${params.toString()}`);
-      const allCourseStudents = studentsRes.data || [];
-      
-      console.log(`Found ${allCourseStudents.length} total students in course`);
-      
-      // If no subject selected, just show students without performance data
-      if (!selectedSubject) {
-        const formattedStudents = allCourseStudents.map(student => ({
-          _id: student._id,
-          name: student.name,
-          email: student.email,
-          totalAttempts: 0,
-          averageScore: 0,
-          passedAttempts: 0,
-          createdAt: student.createdAt,
-          lastLoginAt: student.lastLoginAt,
-          isActive: student.isActive,
-          courseName: student.courseId?.name,
-          hasAttempts: false
-        }));
-        
-        applyFiltersAndStats(formattedStudents);
-        setLoading(false);
-        return;
-      }
-      
-      // Fetch performance data for the selected subject from the correct endpoint
-      console.log(`Fetching performance for subject: ${selectedSubject}`);
-      try {
-        const perfRes = await axios.get(`/lesson-quiz/subject/${selectedSubject}/performance`);
-        const attempts = perfRes.data.attempts || [];
-        console.log(`Found ${attempts.length} attempts for this subject`);
-        
-        // Create a map of student performance
-        const performanceMap = new Map();
-        
-        attempts.forEach(attempt => {
-          const studentId = attempt.userId?._id || attempt.userId;
-          if (!studentId) return;
-          
-          if (!performanceMap.has(studentId)) {
-            performanceMap.set(studentId, {
-              attempts: [],
-              totalScore: 0,
-              passedCount: 0
-            });
-          }
-          const perf = performanceMap.get(studentId);
-          perf.attempts.push(attempt);
-          perf.totalScore += (attempt.percentage || 0);
-          if (attempt.isPassed) perf.passedCount++;
-        });
-        
-        // Combine ALL students with their performance data (if any)
-        const studentsWithData = allCourseStudents.map(student => {
-          const perf = performanceMap.get(student._id);
-          
-          if (perf && perf.attempts.length > 0) {
-            const totalAttempts = perf.attempts.length;
-            return {
-              _id: student._id,
-              name: student.name,
-              email: student.email,
-              totalAttempts: totalAttempts,
-              averageScore: totalAttempts > 0 
-                ? Math.round(perf.totalScore / totalAttempts) 
-                : 0,
-              passedAttempts: perf.passedCount,
-              createdAt: student.createdAt,
-              lastLoginAt: student.lastLoginAt,
-              isActive: student.isActive,
-              courseName: student.courseId?.name,
-              hasAttempts: true
-            };
-          } else {
-            return {
-              _id: student._id,
-              name: student.name,
-              email: student.email,
-              totalAttempts: 0,
-              averageScore: 0,
-              passedAttempts: 0,
-              createdAt: student.createdAt,
-              lastLoginAt: student.lastLoginAt,
-              isActive: student.isActive,
-              courseName: student.courseId?.name,
-              hasAttempts: false
-            };
-          }
-        });
-        
-        applyFiltersAndStats(studentsWithData);
-        
-      } catch (perfErr) {
-        console.error("Error fetching performance data:", perfErr);
-        // If performance endpoint fails, still show students without performance data
-        const studentsWithoutPerf = allCourseStudents.map(student => ({
-          _id: student._id,
-          name: student.name,
-          email: student.email,
-          totalAttempts: 0,
-          averageScore: 0,
-          passedAttempts: 0,
-          createdAt: student.createdAt,
-          lastLoginAt: student.lastLoginAt,
-          isActive: student.isActive,
-          courseName: student.courseId?.name,
-          hasAttempts: false
-        }));
-        applyFiltersAndStats(studentsWithoutPerf);
-        toast.warning("Could not load performance data. Showing students only.");
-      }
-      
-    } catch (err) {
-      console.error("Error fetching students:", err);
-      toast.error("Failed to fetch student data");
-      setLoading(false);
+  setLoading(true);
+  try {
+    console.log(`Fetching students for course: ${selectedCourse}`);
+    
+    let allCourseStudents = [];
+    
+    // Use the dedicated lecturer endpoint
+    const studentsRes = await axios.get("/lecturer/my-students-list");
+    
+    if (studentsRes.data.success) {
+      allCourseStudents = studentsRes.data.students || [];
     }
-  };
+    
+    console.log(`Found ${allCourseStudents.length} total students`);
+    
+    // If we have a selected course, filter by it
+    if (selectedCourse) {
+      allCourseStudents = allCourseStudents.filter(s => 
+        s.courseId?._id === selectedCourse || s.courseId === selectedCourse
+      );
+      console.log(`After course filter: ${allCourseStudents.length} students`);
+    }
+    
+    // If no subject selected, just show students without performance data
+    if (!selectedSubject) {
+      const formattedStudents = allCourseStudents.map(student => ({
+        _id: student._id,
+        name: student.name,
+        email: student.email,
+        totalAttempts: 0,
+        averageScore: 0,
+        passedAttempts: 0,
+        createdAt: student.createdAt,
+        lastLoginAt: student.lastLoginAt,
+        isActive: student.isActive,
+        courseName: student.courseName,
+        hasAttempts: false
+      }));
+      
+      applyFiltersAndStats(formattedStudents);
+      setLoading(false);
+      return;
+    }
+    
+    // Fetch performance data for the selected subject
+    console.log(`Fetching performance for subject: ${selectedSubject}`);
+    try {
+      const perfRes = await axios.get(`/lesson-quiz/subject/${selectedSubject}/performance`);
+      const attempts = perfRes.data.attempts || [];
+      console.log(`Found ${attempts.length} attempts for this subject`);
+      
+      // Create a map of student performance
+      const performanceMap = new Map();
+      
+      attempts.forEach(attempt => {
+        const studentId = attempt.userId?._id || attempt.userId;
+        if (!studentId) return;
+        
+        if (!performanceMap.has(studentId)) {
+          performanceMap.set(studentId, {
+            attempts: [],
+            totalScore: 0,
+            passedCount: 0
+          });
+        }
+        const perf = performanceMap.get(studentId);
+        perf.attempts.push(attempt);
+        perf.totalScore += (attempt.percentage || 0);
+        if (attempt.isPassed) perf.passedCount++;
+      });
+      
+      // Combine students with their performance data
+      const studentsWithData = allCourseStudents.map(student => {
+        const perf = performanceMap.get(student._id);
+        
+        if (perf && perf.attempts.length > 0) {
+          const totalAttempts = perf.attempts.length;
+          return {
+            ...student,
+            totalAttempts: totalAttempts,
+            averageScore: totalAttempts > 0 
+              ? Math.round(perf.totalScore / totalAttempts) 
+              : 0,
+            passedAttempts: perf.passedCount,
+            hasAttempts: true
+          };
+        } else {
+          return {
+            ...student,
+            totalAttempts: 0,
+            averageScore: 0,
+            passedAttempts: 0,
+            hasAttempts: false
+          };
+        }
+      });
+      
+      applyFiltersAndStats(studentsWithData);
+      
+    } catch (perfErr) {
+      console.error("Error fetching performance data:", perfErr);
+      const studentsWithoutPerf = allCourseStudents.map(student => ({
+        ...student,
+        totalAttempts: 0,
+        averageScore: 0,
+        passedAttempts: 0,
+        hasAttempts: false
+      }));
+      applyFiltersAndStats(studentsWithoutPerf);
+      toast.warning("Could not load performance data. Showing students only.");
+    }
+    
+  } catch (err) {
+    console.error("Error fetching students:", err);
+    toast.error("Failed to fetch student data");
+    setLoading(false);
+  }
+};
 
   const applyFiltersAndStats = (studentsList) => {
     // Apply search filter
