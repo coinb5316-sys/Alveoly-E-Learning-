@@ -294,50 +294,49 @@ export const getAllAdminQA = async (req, res) => {
   res.json(qas.map(q => ({ id: q._id, question: q.question, answer: q.answer, fromAdmin: q.fromAdmin })));
 };
 
-// Student asks question → only fetch admin-approved answers
+// Update askQuestionStudent with medical intelligence
 export const askQuestionStudent = async (req, res) => {
   try {
-    const { question } = req.body;
+    const { question, useAI = true } = req.body;
 
     if (!question) {
       return res.status(400).json({ message: "Question required" });
     }
 
-    // ================= NORMALIZE QUESTION =================
-    const normalized = question
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s]/g, "")
-      .replace(/\s+/g, " ");
+    const normalized = question.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
 
-    // ================= SEARCH DB (FUZZY) =================
+    // Search existing QA first
     const existingQA = await QA.findOne({
-      question: {
-        $regex: normalized,
-        $options: "i",
-      },
+      question: { $regex: normalized, $options: "i" },
       fromAdmin: true,
     });
 
     if (existingQA) {
-      return res.json({
-        answer: existingQA.answer,
-        fromDB: true,
-      });
+      return res.json({ answer: existingQA.answer, fromDB: true });
     }
 
-    // ================= FALLBACK TO AI =================
-    const aiAnswer = await askAI(question);
+    // If not found and AI is enabled, try AI with medical detection
+    if (useAI) {
+      const { askAI, isMedicalQuestion } = await import('../services/aiService.js');
+      const isMedical = isMedicalQuestion(question);
+      const aiAnswer = await askAI(question, isMedical);
+      
+      if (aiAnswer) {
+        return res.json({ 
+          answer: aiAnswer, 
+          fromAI: true,
+          isMedicalAnswer: isMedical
+        });
+      }
+    }
 
-    return res.json({
-      answer: aiAnswer,
-      fromDB: false,
+    return res.json({ 
+      answer: "I couldn't find an answer. Please contact support at alveolyelearning@gmail.com",
+      fromDB: false 
     });
 
   } catch (err) {
     console.error("🔥 STUDENT ASK ERROR:", err);
-    res.status(500).json({
-      answer: "Something went wrong",
-    });
+    res.status(500).json({ answer: "Something went wrong. Please try again later." });
   }
 };

@@ -307,70 +307,108 @@ io.on("connection", (socket) => {
     socket.emit("bot:ready", { message: "Bot ready!" });
   });
   
-  socket.on("bot:question", async (data) => {
-    const { text, userName } = data;
-    const questionText = text?.trim();
-    if (!questionText) {
-      socket.emit("bot:reply", { text: "Please enter a question.", isAuto: true, timestamp: new Date() });
-      return;
-    }
-    console.log(`🤖 Question: "${questionText.substring(0, 100)}"`);
-    socket.emit("bot:typing", { isTyping: true });
+  // In server.js - AI-POWERED NURSING BOT HANDLER
+socket.on("bot:question", async (data) => {
+  const { text, userName } = data;
+  const questionText = text?.trim();
+  
+  if (!questionText) {
+    socket.emit("bot:reply", { text: "Please enter a question.", isAuto: true, timestamp: new Date() });
+    return;
+  }
+  
+  console.log(`🤖 Question: "${questionText.substring(0, 100)}"`);
+  socket.emit("bot:typing", { isTyping: true });
+  
+  try {
+    // Import AI service
+    const { askAI, isMedicalQuestion } = await import('./services/aiService.js');
+    const isMedical = isMedicalQuestion(questionText);
     
-    try {
-      const searchTerm = questionText.toLowerCase().trim();
-      const keywords = searchTerm.split(/\s+/).filter(w => w.length > 2);
-      const faqs = await FAQ.find({
-        isActive: true,
-        $or: [
-          { question: { $regex: searchTerm, $options: 'i' } },
-          { answer: { $regex: searchTerm, $options: 'i' } },
-          { keywords: { $in: keywords } }
-        ]
-      }).limit(2);
-      
-      let reply;
-      if (faqs && faqs.length > 0) {
-        const bestMatch = faqs[0];
-        reply = `📚 **Answer:**\n\n${bestMatch.answer}`;
-        bestMatch.views += 1;
-        await bestMatch.save();
-      } else {
-        const lowerText = questionText.toLowerCase();
-        if (lowerText.includes("hello") || lowerText.includes("hi")) {
-          reply = "👋 Hello! Welcome to Alveoly! How can I help you today?";
-        } else if (lowerText.includes("course") || lowerText.includes("program")) {
-          reply = "🎓 We offer Nursing, Public Health, Pharmacy, and more. Which interests you?";
-        } else if (lowerText.includes("admission") || lowerText.includes("apply")) {
-          reply = "📝 Apply online through our website! Need step-by-step guidance?";
-        } else if (lowerText.includes("fee") || lowerText.includes("cost")) {
-          reply = "💰 Certificates from  GH¢500, Diplomas from  GH¢1,500, Degrees from  GH¢3,000/year.";
-        } else if (lowerText.includes("contact") || lowerText.includes("support")) {
-          reply = "📞 Email: alveolyelearning@gmail.com | Phone: +233 (0) 549 556 6116";
-        } else if (lowerText.includes("thank")) {
-          reply = "🌟 You're welcome! Anything else I can help with?";
-        } else if (lowerText.includes("bye")) {
-          reply = "👋 Goodbye! Have a great day!";
+    // STEP 1: Search FAQ database first
+    const searchTerm = questionText.toLowerCase().trim();
+    const keywords = searchTerm.split(/\s+/).filter(w => w.length > 2);
+    
+    const faqs = await FAQ.find({
+      isActive: true,
+      $or: [
+        { question: { $regex: searchTerm, $options: 'i' } },
+        { answer: { $regex: searchTerm, $options: 'i' } },
+        { keywords: { $in: keywords } }
+      ]
+    }).limit(2);
+    
+    let reply;
+    let usedAI = false;
+    let isNursingAnswer = false;
+    
+    if (faqs && faqs.length > 0) {
+      // Found matching FAQ
+      const bestMatch = faqs[0];
+      reply = `📚 **Answer from FAQ:**\n\n${bestMatch.answer}`;
+      bestMatch.views += 1;
+      await bestMatch.save();
+      console.log(`✅ Answered from FAQ: ${bestMatch.question}`);
+    } else {
+      // STEP 2: Use AI with appropriate context
+      try {
+        const aiAnswer = await askAI(questionText, isMedical);
+        
+        if (aiAnswer) {
+          isNursingAnswer = isMedical;
+          const icon = isMedical ? "🩺" : "🤖";
+          const prefix = isMedical ? "**Nurse AI:**" : "**AI Assistant:**";
+          reply = `${icon} ${prefix}\n\n${aiAnswer}\n\n*💡 Tip: For clinical questions, always verify with your instructor.*`;
+          usedAI = true;
+          console.log(`✅ Answered with AI (${isMedical ? 'Medical' : 'General'})`);
         } else {
-          if (!global.pendingQuestions) global.pendingQuestions = [];
-          global.pendingQuestions.push({
-            id: Date.now(), text: questionText, userName: userName || "Anonymous",
-            socketId: socket.id, timestamp: new Date(), status: "pending"
-          });
-          io.to("admin").emit("admin:unanswered", global.pendingQuestions[global.pendingQuestions.length - 1]);
-          reply = "📝 Thanks! I've notified our team. They'll respond shortly.";
+          // AI failed - fallback
+          throw new Error("AI returned null");
         }
+      } catch (aiError) {
+        console.error("AI error:", aiError);
+        
+        // Fallback to admin notification
+        if (!global.pendingQuestions) global.pendingQuestions = [];
+        const pendingId = Date.now();
+        global.pendingQuestions.push({
+          id: pendingId,
+          text: questionText,
+          userName: userName || "Anonymous",
+          socketId: socket.id,
+          timestamp: new Date(),
+          status: "pending",
+          isMedicalQuestion: isMedical
+        });
+        
+        io.to("admin").emit("admin:unanswered", global.pendingQuestions[global.pendingQuestions.length - 1]);
+        reply = isMedical 
+          ? "📝 Thanks for your nursing question! I've notified our nursing instructors. They'll respond shortly.\n\n*For urgent clinical matters, please consult your clinical instructor directly.*"
+          : "📝 Thanks for your question! I've notified our support team. They'll respond shortly.";
       }
-      setTimeout(() => {
-        socket.emit("bot:reply", { text: reply, isAuto: true, timestamp: new Date() });
-        socket.emit("bot:typing", { isTyping: false });
-      }, 500);
-    } catch (error) {
-      console.error("Bot error:", error);
-      socket.emit("bot:reply", { text: "Having trouble. Please contact support.", error: true, timestamp: new Date() });
-      socket.emit("bot:typing", { isTyping: false });
     }
-  });
+    
+    setTimeout(() => {
+      socket.emit("bot:reply", { 
+        text: reply, 
+        isAuto: true, 
+        isAI: usedAI,
+        isNursing: isNursingAnswer,
+        timestamp: new Date() 
+      });
+      socket.emit("bot:typing", { isTyping: false });
+    }, 500);
+    
+  } catch (error) {
+    console.error("Bot error:", error);
+    socket.emit("bot:reply", { 
+      text: "Having trouble. Please contact support at alveolyelearning@gmail.com", 
+      error: true, 
+      timestamp: new Date() 
+    });
+    socket.emit("bot:typing", { isTyping: false });
+  }
+});
   
   socket.on("bot:admin-reply", (data) => {
     const { toSocketId, answer, questionId } = data;

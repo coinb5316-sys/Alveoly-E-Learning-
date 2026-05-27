@@ -238,6 +238,11 @@ const SmartChatBot = ({ userId, userName = "Guest" }) => {
                                   <FaCheckCircle className="text-[8px]" /> Admin
                                 </span>
                               )}
+                              {msg.isNursing && (
+  <span className="text-[10px] text-green-500 flex items-center gap-0.5 ml-1">
+    <FaRobot className="text-[8px]" /> Nursing AI
+  </span>
+)}
                             </div>
                           </div>
                         </div>

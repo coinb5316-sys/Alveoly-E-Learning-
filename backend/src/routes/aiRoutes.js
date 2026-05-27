@@ -41,4 +41,16 @@ router.post("/student-ask", protect, checkAISubscription, askStudentAI);
 router.get("/student-history", protect, getStudentChats);
 router.delete("/student-history/:id", protect, deleteChat);
 
+// Nursing quiz generation endpoint
+router.post("/generate-nursing-quiz", protect, async (req, res) => {
+  try {
+    const { topic, difficulty = "medium", numQuestions = 5 } = req.body;
+    const { generateNursingQuiz } = await import('../services/aiService.js');
+    const quiz = await generateNursingQuiz(topic, difficulty, numQuestions);
+    res.json({ success: true, quiz });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
