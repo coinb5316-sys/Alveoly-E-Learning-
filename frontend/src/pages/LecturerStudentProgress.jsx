@@ -141,90 +141,46 @@ const LecturerStudentProgress = () => {
   };
 
   const fetchStudentData = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (selectedCourse) params.append("courseId", selectedCourse);
-      
-      const studentsRes = await axios.get(`/users/students?${params.toString()}`);
-      const allStudents = studentsRes.data || [];
+  try {
+    // Use the dedicated lecturer endpoint instead of /users/students
+    const response = await axios.get("/lecturer/my-students-list");
+    
+    if (response.data.success) {
+      const allStudents = response.data.students || [];
       const foundStudent = allStudents.find(s => s._id === studentId);
       
       if (foundStudent) {
         setStudent(foundStudent);
       } else {
-        toast.error("Student not found");
+        console.log("Student not found in list");
+        // Try to fetch student directly if not found in list
+        try {
+          const directRes = await axios.get(`/users/${studentId}`);
+          if (directRes.data) {
+            setStudent(directRes.data);
+          }
+        } catch (directErr) {
+          console.error("Could not fetch student directly:", directErr);
+          toast.error("Student not found");
+        }
       }
-    } catch (err) {
-      console.error("Error fetching student:", err);
+    } else {
+      toast.error("Failed to fetch student data");
+    }
+  } catch (err) {
+    console.error("Error fetching student:", err);
+    if (err.response?.status === 403) {
+      toast.error("You don't have permission to view this student's data");
+    } else {
       toast.error("Failed to load student data");
     }
-  };
+  }
+};
 
   const fetchStudentProgress = async () => {
-    setLoading(true);
-    try {
-      if (!selectedSubject) {
-        setHasAnyData(false);
-        setAttempts([]);
-        setStats({
-          totalAttempts: 0,
-          averageScore: 0,
-          passedCount: 0,
-          failedCount: 0,
-          bestScore: 0,
-          worstScore: 0,
-          totalTimeSpent: 0,
-          streakCount: 0,
-          improvementRate: 0,
-        });
-        setLoading(false);
-        return;
-      }
-      
-      const perfRes = await axios.get(`/lesson-quiz/subject/${selectedSubject}/performance`);
-      const allAttempts = perfRes.data.attempts || [];
-      
-      const studentAttempts = allAttempts.filter(attempt => {
-        const attemptStudentId = attempt.userId?._id || attempt.userId;
-        return attemptStudentId === studentId;
-      });
-      
-      const formattedAttempts = studentAttempts.map(attempt => ({
-        _id: attempt._id,
-        title: attempt.lessonId?.title || "Quiz",
-        type: "quiz",
-        score: attempt.score || 0,
-        totalPoints: attempt.totalPoints || 0,
-        percentage: attempt.percentage || 0,
-        isPassed: attempt.isPassed || false,
-        submittedAt: attempt.completedAt || attempt.submittedAt,
-        subjectName: subjects.find(s => s._id === selectedSubject)?.name || "Unknown",
-        subjectId: selectedSubject
-      }));
-      
-      const hasValidData = formattedAttempts.length > 0;
-      setHasAnyData(hasValidData);
-      setAttempts(formattedAttempts);
-      
-      if (hasValidData) {
-        calculateStats(formattedAttempts);
-      } else {
-        setStats({
-          totalAttempts: 0,
-          averageScore: 0,
-          passedCount: 0,
-          failedCount: 0,
-          bestScore: 0,
-          worstScore: 0,
-          totalTimeSpent: 0,
-          streakCount: 0,
-          improvementRate: 0,
-        });
-      }
-      
-    } catch (err) {
-      console.error("Error fetching progress:", err);
-      toast.error("Failed to load student progress");
+  setLoading(true);
+  try {
+    if (!selectedSubject) {
       setHasAnyData(false);
       setAttempts([]);
       setStats({
@@ -238,10 +194,73 @@ const LecturerStudentProgress = () => {
         streakCount: 0,
         improvementRate: 0,
       });
-    } finally {
       setLoading(false);
+      return;
     }
-  };
+    
+    // Use the performance endpoint for the subject
+    const perfRes = await axios.get(`/lecturer/performance/subject/${selectedSubject}`);
+    const allAttempts = perfRes.data.attempts || [];
+    
+    // Filter attempts for this specific student
+    const studentAttempts = allAttempts.filter(attempt => {
+      const attemptStudentId = attempt.userId?._id || attempt.userId;
+      return attemptStudentId === studentId;
+    });
+    
+    const formattedAttempts = studentAttempts.map(attempt => ({
+      _id: attempt._id,
+      title: attempt.lessonId?.title || "Quiz",
+      type: "quiz",
+      score: attempt.score || 0,
+      totalPoints: attempt.totalPoints || 0,
+      percentage: attempt.percentage || 0,
+      isPassed: attempt.isPassed || false,
+      submittedAt: attempt.completedAt || attempt.submittedAt,
+      subjectName: subjects.find(s => s._id === selectedSubject)?.name || "Unknown",
+      subjectId: selectedSubject
+    }));
+    
+    const hasValidData = formattedAttempts.length > 0;
+    setHasAnyData(hasValidData);
+    setAttempts(formattedAttempts);
+    
+    if (hasValidData) {
+      calculateStats(formattedAttempts);
+    } else {
+      setStats({
+        totalAttempts: 0,
+        averageScore: 0,
+        passedCount: 0,
+        failedCount: 0,
+        bestScore: 0,
+        worstScore: 0,
+        totalTimeSpent: 0,
+        streakCount: 0,
+        improvementRate: 0,
+      });
+    }
+    
+  } catch (err) {
+    console.error("Error fetching progress:", err);
+    toast.error("Failed to load student progress");
+    setHasAnyData(false);
+    setAttempts([]);
+    setStats({
+      totalAttempts: 0,
+      averageScore: 0,
+      passedCount: 0,
+      failedCount: 0,
+      bestScore: 0,
+      worstScore: 0,
+      totalTimeSpent: 0,
+      streakCount: 0,
+      improvementRate: 0,
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const calculateStats = (attemptsList) => {
     const totalAttempts = attemptsList.length;
