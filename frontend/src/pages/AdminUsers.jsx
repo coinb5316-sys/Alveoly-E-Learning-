@@ -288,37 +288,40 @@ const AdminUsers = () => {
     }
   };
 
-  // ================= ADD LECTURER (FIXED) =================
+  // ================= ADD LECTURER (REWRITTEN) =================
 const handleAddLecturer = async (e) => {
   e.preventDefault();
   
   console.log("=== SUBMITTING LECTURER ===");
-  console.log("Current newLecturer state:", newLecturer);
-  console.log("Subject IDs before filter:", newLecturer.subjectIds);
+  console.log("newLecturer state:", newLecturer);
+  console.log("subjectIds to send:", newLecturer.subjectIds);
   
   try {
     setLoading(true);
     
-    // Make sure subjectIds is an array
-    let subjectIds = [];
-    if (newLecturer.subjectIds && Array.isArray(newLecturer.subjectIds)) {
-      // Filter out any invalid IDs
-      subjectIds = newLecturer.subjectIds.filter(id => {
-        const isValid = id && typeof id === 'string' && id !== "" && id !== "undefined" && id !== "null";
-        if (!isValid) console.log(`Filtering out invalid ID: ${id}`);
-        return isValid;
-      });
-    }
-    
-    console.log("Final subject IDs being sent:", subjectIds);
-    console.log("Number of subjects:", subjectIds.length);
-    
-    // Make sure we have the course ID
-    if (!newLecturer.courseId || newLecturer.courseId === "") {
-      toast.error("Please select a course first");
+    // Validate required fields
+    if (!newLecturer.name || !newLecturer.email || !newLecturer.password) {
+      toast.error("Please fill in all required fields");
       setLoading(false);
       return;
     }
+    
+    if (!newLecturer.programId) {
+      toast.error("Please select a program");
+      setLoading(false);
+      return;
+    }
+    
+    if (!newLecturer.courseId) {
+      toast.error("Please select a course");
+      setLoading(false);
+      return;
+    }
+    
+    // Ensure subjectIds is an array (it should be from state)
+    const subjectIdsToSend = Array.isArray(newLecturer.subjectIds) ? newLecturer.subjectIds : [];
+    
+    console.log("Sending subject IDs:", subjectIdsToSend);
     
     const payload = {
       name: newLecturer.name,
@@ -326,19 +329,20 @@ const handleAddLecturer = async (e) => {
       password: newLecturer.password,
       programId: newLecturer.programId,
       courseId: newLecturer.courseId,
-      title: newLecturer.title,
-      assignedSubjects: subjectIds  // Send as array of strings
+      title: newLecturer.title || "Dr.",
+      assignedSubjects: subjectIdsToSend
     };
     
-    console.log("Full payload being sent:", JSON.stringify(payload, null, 2));
+    console.log("Full payload:", JSON.stringify(payload, null, 2));
     
     const response = await axios.post("/auth/register-lecturer", payload);
     
     console.log("Response:", response.data);
     
     if (response.data.success) {
-      toast.success(`Lecturer added successfully with ${subjectIds.length} subject(s)!`);
+      toast.success(response.data.message || "Lecturer added successfully!");
       setShowAddLecturerModal(false);
+      // Reset form
       setNewLecturer({
         name: "",
         email: "",
@@ -348,13 +352,15 @@ const handleAddLecturer = async (e) => {
         title: "Dr.",
         subjectIds: []
       });
+      setAvailableSubjects([]);
+      setFilteredCourses([]);
       fetchUsers(); // Refresh the user list
     } else {
       toast.error(response.data.message || "Failed to add lecturer");
     }
   } catch (err) {
     console.error("Error adding lecturer:", err);
-    console.error("Error response:", err.response);
+    console.error("Error response:", err.response?.data);
     toast.error(err.response?.data?.message || "Failed to add lecturer");
   } finally {
     setLoading(false);
@@ -431,23 +437,24 @@ const handleAddLecturer = async (e) => {
     setEditUserData({...editUserData, subjectIds: selectedValues});
   };
 
- // ================= HANDLE NEW SUBJECT SELECTION (FIXED) =================
+ // ================= HANDLE NEW SUBJECT SELECTION (REWRITTEN) =================
 const handleNewSubjectSelection = (e) => {
-  const options = e.target.options;
-  const selectedValues = [];
-  for (let i = 0; i < options.length; i++) {
-    if (options[i].selected) {
-      selectedValues.push(options[i].value);
-    }
-  }
-  console.log("Subjects selected for new lecturer:", selectedValues);
-  console.log("Number of subjects selected:", selectedValues.length);
+  const selectedOptions = Array.from(e.target.selectedOptions);
+  const selectedValues = selectedOptions.map(option => option.value);
   
-  // Make sure we're setting the state correctly
-  setNewLecturer(prev => ({ 
-    ...prev, 
-    subjectIds: selectedValues 
-  }));
+  console.log("=== SUBJECT SELECTION CHANGED ===");
+  console.log("Selected values:", selectedValues);
+  console.log("Number selected:", selectedValues.length);
+  
+  // Update the state with the selected subject IDs
+  setNewLecturer(prev => {
+    const updated = { 
+      ...prev, 
+      subjectIds: selectedValues 
+    };
+    console.log("Updated newLecturer state:", updated);
+    return updated;
+  });
 };
 
   const toggleLecturerExpanded = (userId) => {
@@ -828,9 +835,19 @@ const handleNewSubjectSelection = (e) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subjects</label>
-                <select multiple onChange={handleNewSubjectSelection} value={newLecturer.subjectIds} disabled={!newLecturer.courseId || newLecturer.courseId === ""} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                  {availableSubjects.map(subject => <option key={subject._id} value={subject._id}>{subject.name}</option>)}
-                </select>
+                <select 
+  multiple 
+  onChange={handleNewSubjectSelection} 
+  value={newLecturer.subjectIds}
+  disabled={!newLecturer.courseId || newLecturer.courseId === ""} 
+  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+>
+  {availableSubjects.map(subject => (
+    <option key={subject._id} value={subject._id}>
+      {subject.name}
+    </option>
+  ))}
+</select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p>
                 {availableSubjects.length === 0 && newLecturer.courseId && newLecturer.courseId !== "" && (
                   <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">No subjects available for this course. Please create subjects first.</p>

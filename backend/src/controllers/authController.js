@@ -366,7 +366,7 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// ================= REGISTER LECTURER - COMPLETE WORKING FIX =================
+// ================= REGISTER LECTURER - COMPLETELY REWRITTEN =================
 export const registerLecturer = async (req, res) => {
   try {
     const { 
@@ -376,24 +376,17 @@ export const registerLecturer = async (req, res) => {
       programId, 
       courseId, 
       title, 
-      assignedSubjects,
-      department,
-      specialization,
-      phoneNumber
+      assignedSubjects
     } = req.body;
     
-    // ========== DETAILED DEBUG LOGGING ==========
     console.log("========== REGISTER LECTURER ==========");
     console.log("Name:", name);
     console.log("Email:", email);
     console.log("Program ID:", programId);
     console.log("Course ID:", courseId);
-    console.log("Title:", title);
-    console.log("Assigned Subjects received:", JSON.stringify(assignedSubjects, null, 2));
+    console.log("Assigned Subjects RAW:", assignedSubjects);
     console.log("Assigned Subjects type:", typeof assignedSubjects);
     console.log("Is array:", Array.isArray(assignedSubjects));
-    console.log("Array length:", assignedSubjects?.length);
-    // ==============================================
     
     // Validation
     if (!name || !email || !password) {
@@ -414,7 +407,6 @@ export const registerLecturer = async (req, res) => {
         return res.status(400).json({ message: "Invalid program selected" });
       }
       validProgramId = programId;
-      console.log("✅ Program validated:", programExists.name);
     }
     
     // Validate course
@@ -425,53 +417,56 @@ export const registerLecturer = async (req, res) => {
         return res.status(400).json({ message: "Invalid course selected" });
       }
       validCourseId = courseId;
-      console.log("✅ Course validated:", courseExists.name);
     }
     
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // ========== PROCESS SUBJECTS ==========
+    // ========== CRITICAL: Process assignedSubjects ==========
     let validSubjectIds = [];
     
-    if (assignedSubjects && Array.isArray(assignedSubjects) && assignedSubjects.length > 0) {
-      console.log(`\n📚 Processing ${assignedSubjects.length} subject(s)...`);
+    // Handle different possible formats of assignedSubjects
+    if (assignedSubjects) {
+      let subjectsArray = [];
       
-      for (let i = 0; i < assignedSubjects.length; i++) {
-        const subjectId = assignedSubjects[i];
-        console.log(`\n  [${i + 1}] Checking subject ID: ${subjectId}`);
-        
-        if (subjectId && typeof subjectId === 'string' && subjectId.trim() !== "") {
-          try {
-            const subject = await Subject.findById(subjectId);
-            if (subject) {
-              console.log(`  ✅ Found: "${subject.name}"`);
-              
-              // Optional: Verify subject belongs to selected course
-              if (validCourseId && subject.courseId.toString() !== validCourseId) {
-                console.log(`  ⚠️ Warning: Subject belongs to different course (${subject.courseId})`);
-              }
-              
-              validSubjectIds.push(subject._id);
-            } else {
-              console.log(`  ❌ Subject not found in database`);
-            }
-          } catch (err) {
-            console.log(`  ❌ Error: ${err.message}`);
-          }
-        } else {
-          console.log(`  ❌ Invalid ID format`);
+      // If it's already an array
+      if (Array.isArray(assignedSubjects)) {
+        subjectsArray = assignedSubjects;
+      } 
+      // If it's a string (maybe from form data)
+      else if (typeof assignedSubjects === 'string') {
+        try {
+          subjectsArray = JSON.parse(assignedSubjects);
+        } catch (e) {
+          subjectsArray = assignedSubjects.split(',').filter(s => s.trim());
         }
       }
-    } else {
-      console.log("No subjects provided or invalid format");
+      
+      console.log("Subjects array to process:", subjectsArray);
+      
+      // Process each subject ID
+      for (const subjectId of subjectsArray) {
+        if (subjectId && subjectId !== "" && subjectId !== "undefined" && subjectId !== "null") {
+          try {
+            // Verify subject exists
+            const subject = await Subject.findById(subjectId);
+            if (subject) {
+              validSubjectIds.push(subject._id);
+              console.log(`✅ Subject added: ${subject.name} (${subject._id})`);
+            } else {
+              console.log(`❌ Subject not found: ${subjectId}`);
+            }
+          } catch (err) {
+            console.log(`❌ Error finding subject ${subjectId}:`, err.message);
+          }
+        }
+      }
     }
     
-    console.log(`\n📊 Final subject count: ${validSubjectIds.length}`);
-    console.log("Subject IDs:", validSubjectIds.map(id => id.toString()));
-    // ======================================
+    console.log(`Final valid subject IDs count: ${validSubjectIds.length}`);
+    // ==========================================
     
-    // Create lecturer
-    const lecturerData = {
+    // Create the lecturer with proper structure
+    const user = new User({
       name,
       email,
       password: hashedPassword,
@@ -480,27 +475,21 @@ export const registerLecturer = async (req, res) => {
       courseId: validCourseId,
       lecturerInfo: {
         title: title || "Dr.",
-        department: department || "",
-        specialization: specialization || "",
-        phoneNumber: phoneNumber || "",
+        department: "",
+        specialization: "",
+        phoneNumber: "",
         bio: "",
         isActive: true,
         hireDate: new Date(),
         assignedCourses: validCourseId ? [validCourseId] : [],
         assignedSubjects: validSubjectIds
       }
-    };
+    });
     
-    console.log("\n📝 Creating lecturer with data:");
-    console.log("  - Program:", validProgramId || "None");
-    console.log("  - Course:", validCourseId || "None");
-    console.log("  - Subjects assigned:", validSubjectIds.length);
+    await user.save();
     
-    const user = await User.create(lecturerData);
-    
-    console.log(`\n✅ Lecturer created successfully!`);
-    console.log(`  - ID: ${user._id}`);
-    console.log(`  - Subjects in DB: ${user.lecturerInfo?.assignedSubjects?.length || 0}`);
+    console.log(`✅ Lecturer created: ${user._id}`);
+    console.log(`✅ Assigned ${validSubjectIds.length} subjects to lecturer`);
     
     // Send notifications
     await createNotification(
@@ -508,7 +497,7 @@ export const registerLecturer = async (req, res) => {
       "lecturer",
       "success",
       "Welcome to Alveoly! 🎉",
-      `Welcome ${name}! You have been added as a lecturer${validSubjectIds.length > 0 ? ` with ${validSubjectIds.length} subject(s) assigned.` : '.'}`,
+      `Welcome ${name}! You have been added as a lecturer with ${validSubjectIds.length} subject(s).`,
       "/lecturer/dashboard",
       { action: "welcome" }
     );
@@ -527,7 +516,7 @@ export const registerLecturer = async (req, res) => {
       );
     }
     
-    // Fetch created user with populated fields
+    // Fetch and return the created user
     const createdUser = await User.findById(user._id)
       .select("-password")
       .populate("programId", "name code isActive")
@@ -535,27 +524,19 @@ export const registerLecturer = async (req, res) => {
       .populate({
         path: 'lecturerInfo.assignedSubjects',
         model: 'Subject',
-        select: 'name courseId',
-        populate: {
-          path: 'courseId',
-          model: 'Course',
-          select: 'name'
-        }
-      })
-      .populate('lecturerInfo.assignedCourses', 'name code');
-    
-    console.log(`\n📤 Returning user with ${createdUser.lecturerInfo?.assignedSubjects?.length || 0} subjects`);
+        select: 'name courseId'
+      });
     
     res.status(201).json({
       success: true,
-      message: `Lecturer created successfully with ${validSubjectIds.length} subject(s) assigned`,
+      message: `Lecturer created with ${validSubjectIds.length} subject(s) assigned`,
       user: createdUser
     });
     
   } catch (err) {
-    console.error("\n❌ Register lecturer error:", err);
+    console.error("Register lecturer error:", err);
     res.status(500).json({ 
-      success: false,
+      success: false, 
       message: err.message 
     });
   }
