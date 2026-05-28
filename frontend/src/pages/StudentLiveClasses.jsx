@@ -1,4 +1,4 @@
-// pages/student/StudentLiveClasses.jsx - FIXED TO FETCH BY PROGRAM
+// pages/student/StudentLiveClasses.jsx - FIXED to use correct API endpoint
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -12,8 +12,7 @@ import {
   CheckCircle,
   AlertCircle,
   GraduationCap,
-  MonitorPlay,
-  BookOpen
+  MonitorPlay
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -31,40 +30,61 @@ const StudentLiveClasses = () => {
 
   const fetchUserProgram = async () => {
     try {
-      // Fetch the current user's profile to get their program
-      const res = await axios.get("/users/profile");
+      // ✅ FIXED: Use /auth/me instead of /users/profile
+      const res = await axios.get("/auth/me");
       const userData = res.data;
       
+      console.log("User data:", userData);
+      
       // Get the program ID from user's program field
-      const programId = userData.programId || userData.program?._id;
+      const programId = userData.programId?._id || userData.programId;
       setUserProgramId(programId);
       
       if (programId) {
-        // Fetch program details
-        const programRes = await axios.get(`/admin/programs/${programId}`);
-        setUserProgram(programRes.data);
+        // Get program name from user data or fetch separately
+        if (userData.programId?.name) {
+          setUserProgram(userData.programId);
+        } else {
+          // Fetch program details if not populated
+          try {
+            const programRes = await axios.get(`/admin/programs/${programId}`);
+            setUserProgram(programRes.data);
+          } catch (err) {
+            console.error("Error fetching program details:", err);
+          }
+        }
         // Then fetch live classes for this program
         fetchLiveClasses(programId);
       } else {
-        toast.error("You are not assigned to any program. Please contact admin.");
-        setLoading(false);
+        // If no program assigned, show all classes or show message
+        console.log("No program assigned to this student");
+        setUserProgram({ name: "All Classes" });
+        fetchLiveClasses(null);
       }
     } catch (err) {
       console.error("Error fetching user program:", err);
-      toast.error("Failed to load your program information");
-      setLoading(false);
+      toast.error("Failed to load your information");
+      // Try to fetch all classes as fallback
+      fetchLiveClasses(null);
     }
   };
 
   const fetchLiveClasses = async (programId) => {
     try {
       setLoading(true);
-      // Fetch only classes for the student's program
-      const res = await axios.get(`/live-class/student/my-classes?programId=${programId}`);
+      
+      let url = "/live-class/student/my-classes";
+      if (programId) {
+        url += `?programId=${programId}`;
+      }
+      
+      const res = await axios.get(url);
       setLiveClasses(res.data);
+      console.log(`Found ${res.data.length} live classes`);
     } catch (err) {
       console.error("Error fetching live classes:", err);
       toast.error("Failed to load live classes");
+      setLiveClasses([]);
     } finally {
       setLoading(false);
     }
@@ -124,7 +144,7 @@ const StudentLiveClasses = () => {
       </div>
 
       {/* Program Info Card */}
-      {userProgram && (
+      {userProgram && userProgram.name !== "All Classes" && (
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 rounded-xl p-4 border border-indigo-100 dark:border-indigo-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center">
