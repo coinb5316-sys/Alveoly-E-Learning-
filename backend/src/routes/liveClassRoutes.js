@@ -1,48 +1,13 @@
-// routes/liveClassRoutes.js - COMPLETE WITH PROGRAM-BASED ACCESS CONTROL
+// routes/liveClassRoutes.js - COMPLETE FIXED VERSION (NO DUPLICATES)
 import express from "express";
 import { protect } from "../middleware/authMiddleware.js";
 import LiveClass from "../models/LiveClass.js";
 import User from "../models/User.js";
 import Program from "../models/Program.js";
 import Course from "../models/Course.js";
-import Payment from "../models/Payment.js";
-import ManualAccess from "../models/ManualAccess.js";
 import { createNotification } from "../controllers/notificationController.js";
 
 const router = express.Router();
-
-// Helper function to check if a student has access to a program
-const hasProgramAccess = async (userId, programId) => {
-  const now = new Date();
-  
-  // Check if user has a plan covering this program
-  const planPayment = await Payment.findOne({
-    userId,
-    status: "success",
-    expiresAt: { $gt: now },
-  }).populate({
-    path: "planId",
-    populate: { path: "subjects", select: "programId" }
-  });
-  
-  if (planPayment?.planId) {
-    const hasProgramInPlan = planPayment.planId.subjects.some(
-      subject => subject.programId?.toString() === programId.toString()
-    );
-    if (hasProgramInPlan) return true;
-  }
-  
-  // Check manual access for program
-  const manualAccess = await ManualAccess.findOne({
-    userId,
-    programId,
-    status: "active",
-    expiresAt: { $gt: now }
-  });
-  if (manualAccess) return true;
-  
-  return false;
-};
 
 // ================= ADMIN GET ALL CLASSES =================
 router.get("/admin/all", protect, async (req, res) => {
@@ -119,9 +84,7 @@ router.get("/lecturer/my-classes", protect, async (req, res) => {
   }
 });
 
-// routes/liveClassRoutes.js - FIXED STUDENT ENDPOINT (replace the student section)
-
-// ================= STUDENT GET MY CLASSES (filter by program only - no payment check) =================
+// ================= STUDENT GET MY CLASSES (filter by program only) =================
 router.get("/student/my-classes", protect, async (req, res) => {
   try {
     if (req.user.role !== "student") {
@@ -155,115 +118,6 @@ router.get("/student/my-classes", protect, async (req, res) => {
     res.json(liveClasses);
   } catch (err) {
     console.error("Get student classes error:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ================= GET SINGLE CLASS (simplified for students - no payment check) =================
-router.get("/:classId", protect, async (req, res) => {
-  try {
-    const liveClass = await LiveClass.findById(req.params.classId)
-      .populate("programId", "name code")
-      .populate("courseId", "name")
-      .populate("subjectId", "name")
-      .populate("lecturerId", "name email avatar")
-      .populate("participants.userId", "name email avatar")
-      .populate("createdBy", "name");
-
-    if (!liveClass) {
-      return res.status(404).json({ message: "Live class not found" });
-    }
-
-    // For students, check if they are in the same program
-    if (req.user.role === "student") {
-      const user = await User.findById(req.user._id);
-      const userProgramId = user.programId?._id || user.programId;
-      const classProgramId = liveClass.programId?._id || liveClass.programId;
-      
-      if (userProgramId?.toString() !== classProgramId?.toString()) {
-        return res.status(403).json({ 
-          message: "You do not have access to this class. This class is for a different program." 
-        });
-      }
-    }
-    
-    return res.json(liveClass);
-  } catch (err) {
-    console.error("Get live class details error:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ================= JOIN CLASS (simplified - only program check, no payment) =================
-router.post("/:classId/join", protect, async (req, res) => {
-  try {
-    const liveClass = await LiveClass.findById(req.params.classId);
-    if (!liveClass) return res.status(404).json({ message: "Live class not found" });
-
-    // For students, check if they are in the same program
-    if (req.user.role === "student") {
-      const user = await User.findById(req.user._id);
-      const userProgramId = user.programId?._id || user.programId;
-      const classProgramId = liveClass.programId?._id || liveClass.programId;
-      
-      if (!userProgramId) {
-        return res.status(403).json({ message: "You are not assigned to any program." });
-      }
-      
-      if (userProgramId.toString() !== classProgramId.toString()) {
-        return res.status(403).json({ 
-          message: "You cannot join this class. This class is for a different program." 
-        });
-      }
-    }
-
-    const now = new Date();
-    const classStartTime = new Date(liveClass.scheduledStartTime);
-    const canJoin = liveClass.status === "ongoing" || 
-                   (liveClass.status === "scheduled" && (classStartTime - now) <= 15 * 60 * 1000);
-
-    if (!canJoin) {
-      if (liveClass.status === "scheduled" && classStartTime > now) {
-        return res.status(400).json({ message: `Class starts on ${new Date(classStartTime).toLocaleString()}. You can join 15 minutes before start time.` });
-      }
-      if (liveClass.status === "completed" || now > new Date(liveClass.scheduledEndTime)) {
-        return res.status(400).json({ message: "This class has already ended." });
-      }
-      return res.status(400).json({ message: "Cannot join this class at this time." });
-    }
-
-    const isLecturer = liveClass.lecturerId.toString() === req.user._id.toString();
-    const isAdmin = req.user.role === "admin";
-    let role = "student";
-    
-    if (isLecturer) role = "lecturer";
-    else if (isAdmin) role = "admin";
-
-    const existingParticipant = liveClass.participants.find(
-      p => p.userId.toString() === req.user._id.toString()
-    );
-    
-    if (existingParticipant && !existingParticipant.leftAt) {
-      return res.json({ success: true, message: "Already joined", liveClass });
-    }
-
-    if (existingParticipant && existingParticipant.leftAt) {
-      existingParticipant.leftAt = null;
-      existingParticipant.joinedAt = new Date();
-    } else {
-      liveClass.participants.push({
-        userId: req.user._id,
-        role: role,
-        joinedAt: new Date(),
-        audioEnabled: true,
-        videoEnabled: true
-      });
-    }
-
-    await liveClass.save();
-    res.json({ success: true, message: "Joined live class successfully", liveClass });
-  } catch (err) {
-    console.error("Join live class error:", err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -439,7 +293,7 @@ router.delete("/admin/:classId", protect, async (req, res) => {
   }
 });
 
-// ================= GET SINGLE CLASS (with access check) =================
+// ================= GET SINGLE CLASS (with program check for students) =================
 router.get("/:classId", protect, async (req, res) => {
   try {
     const liveClass = await LiveClass.findById(req.params.classId)
@@ -454,19 +308,28 @@ router.get("/:classId", protect, async (req, res) => {
       return res.status(404).json({ message: "Live class not found" });
     }
 
-    // Access control
+    // Admin and Lecturer have full access
     const isAdmin = req.user.role === "admin";
-    const isLecturer = liveClass.lecturerId?._id.toString() === req.user._id.toString();
-    const isStudent = req.user.role === "student";
+    const isLecturer = liveClass.lecturerId?._id?.toString() === req.user._id.toString();
     
     if (isAdmin || isLecturer) {
       return res.json(liveClass);
     }
     
-    if (isStudent) {
-      const hasAccess = await hasProgramAccess(req.user._id, liveClass.programId._id);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "You do not have access to this class. Please purchase the program first." });
+    // For students, check if they are in the same program
+    if (req.user.role === "student") {
+      const user = await User.findById(req.user._id);
+      const userProgramId = user.programId?._id?.toString() || user.programId?.toString();
+      const classProgramId = liveClass.programId?._id?.toString() || liveClass.programId?.toString();
+      
+      if (!userProgramId) {
+        return res.status(403).json({ message: "You are not assigned to any program." });
+      }
+      
+      if (userProgramId !== classProgramId) {
+        return res.status(403).json({ 
+          message: "You do not have access to this class. This class is for a different program." 
+        });
       }
       return res.json(liveClass);
     }
@@ -478,17 +341,26 @@ router.get("/:classId", protect, async (req, res) => {
   }
 });
 
-// ================= JOIN CLASS (with access check) =================
+// ================= JOIN CLASS (with program check for students) =================
 router.post("/:classId/join", protect, async (req, res) => {
   try {
     const liveClass = await LiveClass.findById(req.params.classId);
     if (!liveClass) return res.status(404).json({ message: "Live class not found" });
 
-    // Access control for students
+    // For students, check if they are in the same program
     if (req.user.role === "student") {
-      const hasAccess = await hasProgramAccess(req.user._id, liveClass.programId);
-      if (!hasAccess) {
-        return res.status(403).json({ message: "You do not have access to this class. Please purchase the program first." });
+      const user = await User.findById(req.user._id);
+      const userProgramId = user.programId?._id?.toString() || user.programId?.toString();
+      const classProgramId = liveClass.programId?._id?.toString() || liveClass.programId?.toString();
+      
+      if (!userProgramId) {
+        return res.status(403).json({ message: "You are not assigned to any program." });
+      }
+      
+      if (userProgramId !== classProgramId) {
+        return res.status(403).json({ 
+          message: "You cannot join this class. This class is for a different program." 
+        });
       }
     }
 
@@ -498,7 +370,13 @@ router.post("/:classId/join", protect, async (req, res) => {
                    (liveClass.status === "scheduled" && (classStartTime - now) <= 15 * 60 * 1000);
 
     if (!canJoin) {
-      return res.status(400).json({ message: "Cannot join this class at this time" });
+      if (liveClass.status === "scheduled" && classStartTime > now) {
+        return res.status(400).json({ message: `Class starts on ${new Date(classStartTime).toLocaleString()}. You can join 15 minutes before start time.` });
+      }
+      if (liveClass.status === "completed" || now > new Date(liveClass.scheduledEndTime)) {
+        return res.status(400).json({ message: "This class has already ended." });
+      }
+      return res.status(400).json({ message: "Cannot join this class at this time." });
     }
 
     const isLecturer = liveClass.lecturerId.toString() === req.user._id.toString();
