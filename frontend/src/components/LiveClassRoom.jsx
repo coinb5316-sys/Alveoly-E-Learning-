@@ -7,7 +7,7 @@ import Peer from "simple-peer";
 import { 
   Video, Mic, MicOff, VideoOff, PhoneOff, MessageSquare, Users, Send,
   Clock, Calendar, Grid, List, Maximize2, Minimize2, Pin, Settings,
-  Copy, Check, LogOut, WifiOff, Loader2, Menu, X, Sun, Moon
+  Copy, Check, LogOut, WifiOff, Loader2, Menu, X, Sun, Moon, Volume2, VolumeX
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -50,7 +50,8 @@ const LiveClassRoom = () => {
   const [showMobileControls, setShowMobileControls] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [classEnded, setClassEnded] = useState(false);
-  const [remoteVideoElements, setRemoteVideoElements] = useState({});
+  const [remoteAudioLevels, setRemoteAudioLevels] = useState({});
+  const [localAudioLevel, setLocalAudioLevel] = useState(0);
   
   // WebRTC Refs
   const socketRef = useRef(null);
@@ -66,6 +67,7 @@ const LiveClassRoom = () => {
   const audioContextRef = useRef(null);
   const audioAnalyserRef = useRef(null);
   const audioSourceRef = useRef(null);
+  const remoteAudioAnalysersRef = useRef({});
   
   // Helper function to safely get user ID
   const getUserId = useCallback((participant) => {
@@ -247,7 +249,8 @@ const LiveClassRoom = () => {
             active: true,
             audioEnabled: participant.audioEnabled !== false,
             videoEnabled: participant.videoEnabled !== false,
-            remoteStream: null
+            remoteStream: null,
+            audioLevel: 0
           }];
         });
       }
@@ -309,7 +312,8 @@ const LiveClassRoom = () => {
           active: !p.leftAt,
           audioEnabled: p.audioEnabled !== false,
           videoEnabled: p.videoEnabled !== false,
-          remoteStream: null
+          remoteStream: null,
+          audioLevel: 0
         }));
       setParticipants(allParticipants);
       setChatMessages(res.data.chatMessages || []);
@@ -332,37 +336,56 @@ const LiveClassRoom = () => {
     }
   };
 
-  // FIXED: Initialize local media stream with proper audio
+  // FIXED: Initialize local media stream with proper audio constraints
   const initializeLocalStream = useCallback(async () => {
     if (userMediaStreamRef.current && localStreamReady) {
       return userMediaStreamRef.current;
     }
     
     try {
+      // First, stop any existing tracks
+      if (userMediaStreamRef.current) {
+        userMediaStreamRef.current.getTracks().forEach(track => track.stop());
+        userMediaStreamRef.current = null;
+      }
+      
+      // CRITICAL: Request high-quality audio and video
       const constraints = {
-        video: true,
-        audio: true  // Always request audio
+        video: isVideoOff ? false : {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+          sampleSize: 16,
+          channelCount: 1
+        }
       };
       
       if (selectedCamera && !isVideoOff) {
-        constraints.video = { deviceId: { exact: selectedCamera } };
+        constraints.video = {
+          ...constraints.video,
+          deviceId: { exact: selectedCamera }
+        };
       }
       
-      if (selectedMicrophone && !isMuted) {
-        constraints.audio = { deviceId: { exact: selectedMicrophone } };
+      if (selectedMicrophone) {
+        constraints.audio = {
+          ...constraints.audio,
+          deviceId: { exact: selectedMicrophone }
+        };
       }
       
       console.log("🎥 Requesting media with constraints:", constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      if (userMediaStreamRef.current !== stream) {
-        if (userMediaStreamRef.current) {
-          userMediaStreamRef.current.getTracks().forEach(track => track.stop());
-        }
-        userMediaStreamRef.current = stream;
-      }
+      userMediaStreamRef.current = stream;
       
-      // CRITICAL: Force enable all audio tracks at maximum volume
+      // CRITICAL: Ensure all audio tracks are enabled and at proper volume
       stream.getAudioTracks().forEach(track => {
         track.enabled = true;
         console.log(`🎤 Audio track: ${track.label}, enabled: ${track.enabled}, readyState: ${track.readyState}`);
@@ -378,12 +401,16 @@ const LiveClassRoom = () => {
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
         localVideoRef.current.volume = 0;
-        localVideoRef.current.play().catch(e => console.log("Local video play error:", e));
+        localVideoRef.current.muted = true;
+        await localVideoRef.current.play().catch(e => console.log("Local video play error:", e));
       }
       
       console.log("✅ Local stream ready");
       console.log(`   Audio tracks: ${stream.getAudioTracks().length}`);
       console.log(`   Video tracks: ${stream.getVideoTracks().length}`);
+      
+      // Setup local audio monitoring
+      setupLocalAudioMonitor(stream);
       
       return stream;
     } catch (err) {
@@ -391,9 +418,48 @@ const LiveClassRoom = () => {
       toast.error("Unable to access camera or microphone. Please check permissions.");
       return null;
     }
-  }, [isVideoOff, isMuted, selectedCamera, selectedMicrophone, localStreamReady]);
+  }, [isVideoOff, selectedCamera, selectedMicrophone, localStreamReady]);
 
-  // FIXED: Create peer with proper audio handling
+  // Setup local audio level monitoring
+  const setupLocalAudioMonitor = useCallback((stream) => {
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+    }
+    
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      const updateAudioLevel = () => {
+        if (!analyser) return;
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+        const level = Math.min(100, Math.floor((average / 255) * 100));
+        setLocalAudioLevel(level);
+        requestAnimationFrame(updateAudioLevel);
+      };
+      
+      audioContext.resume();
+      updateAudioLevel();
+      
+      audioContextRef.current = audioContext;
+      audioAnalyserRef.current = analyser;
+      audioSourceRef.current = source;
+    } catch (err) {
+      console.error("Local audio monitoring failed:", err);
+    }
+  }, []);
+
+  // FIXED: Create peer with proper audio and video handling
   const createPeer = useCallback((userId, stream, isInitiator = true, retryCount = 0) => {
     if (!userId) return null;
     
@@ -423,6 +489,14 @@ const LiveClassRoom = () => {
           { urls: 'stun:stun.stunprotocol.org:3478' }
         ],
         iceCandidatePoolSize: 10
+      },
+      sdpTransform: (sdp) => {
+        // CRITICAL: Ensure audio is prioritized and enabled
+        if (sdp.includes('m=audio')) {
+          sdp = sdp.replace(/a=recvonly/g, 'a=sendrecv');
+          sdp = sdp.replace(/a=inactive/g, 'a=sendrecv');
+        }
+        return sdp;
       }
     });
     
@@ -445,7 +519,7 @@ const LiveClassRoom = () => {
       console.log(`   Audio tracks: ${remoteStream.getAudioTracks().length}`);
       console.log(`   Video tracks: ${remoteStream.getVideoTracks().length}`);
       
-      // CRITICAL: Force enable remote audio tracks
+      // CRITICAL: Force enable all remote audio tracks
       remoteStream.getAudioTracks().forEach(track => {
         track.enabled = true;
         console.log(`🎤 Remote audio track for ${userId}: enabled`);
@@ -454,6 +528,9 @@ const LiveClassRoom = () => {
       remoteStream.getVideoTracks().forEach(track => {
         track.enabled = true;
       });
+      
+      // Setup remote audio monitoring
+      setupRemoteAudioMonitor(userId, remoteStream);
       
       setParticipants(prev => {
         const updated = prev.map(p => {
@@ -475,7 +552,8 @@ const LiveClassRoom = () => {
             active: true,
             audioEnabled: true,
             videoEnabled: true,
-            remoteStream
+            remoteStream,
+            audioLevel: 0
           });
         }
         
@@ -520,6 +598,47 @@ const LiveClassRoom = () => {
     return peer;
   }, [classId, socketConnected, currentUser, getUserId]);
 
+  // Setup remote audio monitoring
+  const setupRemoteAudioMonitor = useCallback((userId, stream) => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      const updateAudioLevel = () => {
+        if (!analyser) return;
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+        const level = Math.min(100, Math.floor((average / 255) * 100));
+        
+        setRemoteAudioLevels(prev => ({ ...prev, [userId]: level }));
+        
+        if (level > 15) {
+          setSpeakingUsers(prev => ({ ...prev, [userId]: true }));
+        } else if (level < 5) {
+          setSpeakingUsers(prev => ({ ...prev, [userId]: false }));
+        }
+        
+        requestAnimationFrame(updateAudioLevel);
+      };
+      
+      audioContext.resume();
+      updateAudioLevel();
+      
+      remoteAudioAnalysersRef.current[userId] = { audioContext, source, analyser };
+    } catch (err) {
+      console.error(`Remote audio monitoring failed for ${userId}:`, err);
+    }
+  }, []);
+
   const handleUserJoined = useCallback((data) => {
     const { userId, userName, role, audioEnabled, videoEnabled } = data;
     
@@ -536,7 +655,8 @@ const LiveClassRoom = () => {
         active: true,
         audioEnabled: audioEnabled !== false,
         videoEnabled: videoEnabled !== false,
-        remoteStream: null
+        remoteStream: null,
+        audioLevel: 0
       }];
     });
     
@@ -567,7 +687,26 @@ const LiveClassRoom = () => {
       delete peersRef.current[userId];
     }
     
+    // Clean up remote audio monitoring
+    if (remoteAudioAnalysersRef.current[userId]) {
+      const { audioContext, source, analyser } = remoteAudioAnalysersRef.current[userId];
+      if (source) source.disconnect();
+      if (analyser) analyser.disconnect();
+      if (audioContext) audioContext.close();
+      delete remoteAudioAnalysersRef.current[userId];
+    }
+    
     setParticipants(prev => prev.filter(p => getUserId(p) !== userId));
+    setRemoteAudioLevels(prev => {
+      const newLevels = { ...prev };
+      delete newLevels[userId];
+      return newLevels;
+    });
+    setSpeakingUsers(prev => {
+      const newSpeaking = { ...prev };
+      delete newSpeaking[userId];
+      return newSpeaking;
+    });
     
     setShowLeftNotification({ userId, userName });
     setTimeout(() => setShowLeftNotification(null), 3000);
@@ -627,10 +766,12 @@ const LiveClassRoom = () => {
   // FIXED: Toggle mute with proper audio handling
   const toggleMute = useCallback(async () => {
     if (userMediaStreamRef.current) {
-      const audioTrack = userMediaStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
+      const audioTracks = userMediaStreamRef.current.getAudioTracks();
+      if (audioTracks.length > 0) {
         const newMuteState = !isMuted;
-        audioTrack.enabled = !newMuteState;
+        audioTracks.forEach(track => {
+          track.enabled = !newMuteState;
+        });
         setIsMuted(newMuteState);
         
         socketRef.current?.emit("participant-updated", {
@@ -638,7 +779,7 @@ const LiveClassRoom = () => {
         });
         
         toast.success(newMuteState ? "Microphone muted" : "Microphone unmuted");
-        console.log(`Microphone ${newMuteState ? 'muted' : 'unmuted'}, enabled: ${audioTrack.enabled}`);
+        console.log(`Microphone ${newMuteState ? 'muted' : 'unmuted'}`);
       } else {
         console.log("No audio track found");
         toast.error("No microphone detected");
@@ -650,9 +791,11 @@ const LiveClassRoom = () => {
     const newVideoState = !isVideoOff;
     
     if (userMediaStreamRef.current) {
-      const videoTrack = userMediaStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !newVideoState;
+      const videoTracks = userMediaStreamRef.current.getVideoTracks();
+      if (videoTracks.length > 0) {
+        videoTracks.forEach(track => {
+          track.enabled = !newVideoState;
+        });
         setIsVideoOff(newVideoState);
         
         socketRef.current?.emit("participant-updated", {
@@ -748,6 +891,14 @@ const LiveClassRoom = () => {
     Object.values(retryTimeoutsRef.current).forEach(timeout => clearTimeout(timeout));
     retryTimeoutsRef.current = {};
     
+    // Clean up remote audio analysers
+    Object.values(remoteAudioAnalysersRef.current).forEach(({ audioContext, source, analyser }) => {
+      if (source) source.disconnect();
+      if (analyser) analyser.disconnect();
+      if (audioContext) audioContext.close();
+    });
+    remoteAudioAnalysersRef.current = {};
+    
     Object.values(peersRef.current).forEach(peer => {
       if (peer) peer.destroy();
     });
@@ -818,86 +969,6 @@ const LiveClassRoom = () => {
   };
 
   const activeParticipantsCount = participants.filter(p => p && p.active && !p.leftAt).length;
-
-  // Audio monitoring effect for speaking detection
-  useEffect(() => {
-    if (!userMediaStreamRef.current || !localStreamReady || !isJoined) return;
-    
-    let animationId = null;
-    let lastSpeakingState = false;
-    let silenceFrames = 0;
-    
-    const setupAudioMonitor = async () => {
-      try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(userMediaStreamRef.current);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
-        const checkVolume = () => {
-          if (!analyser) return;
-          
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
-          }
-          const average = sum / dataArray.length;
-          const isSpeakingNow = average > 20;
-          
-          let newSpeakingState = lastSpeakingState;
-          
-          if (isSpeakingNow && !lastSpeakingState) {
-            newSpeakingState = true;
-            silenceFrames = 0;
-            console.log("🎤 Started speaking");
-          } else if (!isSpeakingNow && lastSpeakingState) {
-            silenceFrames++;
-            if (silenceFrames > 15) {
-              newSpeakingState = false;
-              console.log("🎤 Stopped speaking");
-            }
-          }
-          
-          if (newSpeakingState !== lastSpeakingState) {
-            lastSpeakingState = newSpeakingState;
-            setSpeakingUsers(prev => ({ ...prev, [currentUser._id]: newSpeakingState }));
-            
-            socketRef.current?.emit("user-speaking", {
-              classId,
-              userId: currentUser._id,
-              isSpeaking: newSpeakingState
-            });
-          }
-          
-          animationId = requestAnimationFrame(checkVolume);
-        };
-        
-        await audioContext.resume();
-        checkVolume();
-        
-        return () => {
-          if (animationId) cancelAnimationFrame(animationId);
-          source.disconnect();
-          analyser.disconnect();
-          audioContext.close();
-        };
-      } catch (err) {
-        console.error("Audio monitoring setup failed:", err);
-        return null;
-      }
-    };
-    
-    let cleanupFn = null;
-    setupAudioMonitor().then(cleanup => { cleanupFn = cleanup; });
-    
-    return () => {
-      if (cleanupFn) cleanupFn();
-    };
-  }, [userMediaStreamRef, localStreamReady, isJoined, classId, currentUser]);
 
   if (authLoading || loading) {
     return (
@@ -983,6 +1054,8 @@ const LiveClassRoom = () => {
                   isMuted={isMuted}
                   isVideoOff={isVideoOff}
                   speakingUsers={speakingUsers}
+                  remoteAudioLevels={remoteAudioLevels}
+                  localAudioLevel={localAudioLevel}
                   userMediaStreamRef={userMediaStreamRef}
                   localStreamReady={localStreamReady}
                   videoRefs={videoRefs}
@@ -1091,10 +1164,16 @@ const LiveClassRoom = () => {
                 .map((p, idx) => {
                   const pid = getUserId(p);
                   const pName = getUserName(p);
+                  const audioLevel = remoteAudioLevels[pid] || 0;
                   return (
                     <div key={pid || idx} className="flex items-center gap-2 p-1.5 md:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                      <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                        <span className="text-white font-semibold text-xs md:text-sm">{pName?.charAt(0) || "U"}</span>
+                      <div className="relative">
+                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                          <span className="text-white font-semibold text-xs md:text-sm">{pName?.charAt(0) || "U"}</span>
+                        </div>
+                        {audioLevel > 10 && (
+                          <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs md:text-sm font-medium text-gray-900 dark:text-white truncate">{pName}</p>
@@ -1103,7 +1182,9 @@ const LiveClassRoom = () => {
                       <div className="flex items-center gap-1">
                         {p.audioEnabled === false && <MicOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
                         {p.videoEnabled === false && <VideoOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
-                        {speakingUsers[pid] && <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
+                        {audioLevel > 10 && (
+                          <div className="w-1.5 h-4 bg-green-500 rounded-full animate-pulse" style={{ height: `${Math.min(16, audioLevel / 6)}px` }} />
+                        )}
                       </div>
                     </div>
                   );
@@ -1169,13 +1250,15 @@ const VideoTile = memo(({ video, isPinned = false, isSidebar = false,
     if (streamToUse && videoElement.srcObject !== streamToUse) {
       console.log(`🎥 Attaching stream for ${video.name}`);
       
-      streamToUse.getAudioTracks().forEach(track => {
+      // Force enable all tracks
+      streamToUse.getTracks().forEach(track => {
         track.enabled = true;
-        console.log(`🎤 Audio track enabled for ${video.name}`);
+        console.log(`   Track enabled for ${video.name}: ${track.kind}`);
       });
       
       videoElement.srcObject = streamToUse;
       videoElement.volume = video.isLocal ? 0 : 1;
+      videoElement.muted = video.isLocal;
       
       const playPromise = videoElement.play();
       if (playPromise !== undefined) {
@@ -1189,14 +1272,17 @@ const VideoTile = memo(({ video, isPinned = false, isSidebar = false,
         });
       }
       
-      const checkAudioInterval = setInterval(() => {
-        if (videoElement.srcObject && !video.isLocal) {
-          const hasAudio = videoElement.srcObject.getAudioTracks().some(t => t.enabled);
-          setAudioActive(hasAudio);
-        }
-      }, 2000);
-      
-      return () => clearInterval(checkAudioInterval);
+      // Check audio activity
+      if (!video.isLocal) {
+        const checkAudioInterval = setInterval(() => {
+          if (videoElement.srcObject) {
+            const hasAudio = videoElement.srcObject.getAudioTracks().some(track => track.enabled);
+            setAudioActive(hasAudio);
+          }
+        }, 2000);
+        
+        return () => clearInterval(checkAudioInterval);
+      }
     }
   }, [video?.id, video?.isLocal, video?.remoteStream, userMediaStreamRef]);
   
@@ -1236,8 +1322,10 @@ const VideoTile = memo(({ video, isPinned = false, isSidebar = false,
         </div>
       )}
       
+      {/* Audio indicator */}
       {!video.isLocal && audioActive && video.isSpeaking && (
-        <div className="absolute top-2 left-2 bg-green-500/80 rounded-full px-2 py-0.5 text-white text-[10px] font-medium">
+        <div className="absolute top-2 left-2 bg-green-500/80 backdrop-blur-sm rounded-full px-2 py-0.5 text-white text-[10px] font-medium flex items-center gap-1">
+          <Volume2 className="h-2 w-2" />
           Speaking
         </div>
       )}
@@ -1273,7 +1361,8 @@ const VideoTile = memo(({ video, isPinned = false, isSidebar = false,
 
 // ================= VIDEO GRID COMPONENT =================
 const VideoGridComponent = memo(({ layout, pinnedVideo, setPinnedVideo, currentUser, participants, 
-  isMuted, isVideoOff, speakingUsers, userMediaStreamRef, localStreamReady, videoRefs }) => {
+  isMuted, isVideoOff, speakingUsers, remoteAudioLevels, localAudioLevel,
+  userMediaStreamRef, localStreamReady, videoRefs }) => {
   
   const getVideoParticipants = useCallback(() => {
     const allVideos = [];
@@ -1289,7 +1378,8 @@ const VideoGridComponent = memo(({ layout, pinnedVideo, setPinnedVideo, currentU
         role: currentUser.role,
         isMuted: isMuted,
         isVideoOff: isVideoOff,
-        isSpeaking: speakingUsers[currentUser._id]
+        isSpeaking: speakingUsers[currentUser._id] || localAudioLevel > 15,
+        audioLevel: localAudioLevel
       });
     }
     
@@ -1299,6 +1389,7 @@ const VideoGridComponent = memo(({ layout, pinnedVideo, setPinnedVideo, currentU
         .filter(p => p && p.userId && p.userId._id !== currentUser?._id && p.active && !p.leftAt)
         .forEach(p => {
           if (p.userId?._id) {
+            const audioLevel = remoteAudioLevels[p.userId._id] || 0;
             allVideos.push({
               id: p.userId._id,
               userId: p.userId._id,
@@ -1308,7 +1399,8 @@ const VideoGridComponent = memo(({ layout, pinnedVideo, setPinnedVideo, currentU
               role: p.role || "student",
               isMuted: !p.audioEnabled,
               isVideoOff: !p.videoEnabled,
-              isSpeaking: speakingUsers[p.userId._id]
+              isSpeaking: speakingUsers[p.userId._id] || audioLevel > 15,
+              audioLevel: audioLevel
             });
           }
         });
@@ -1320,7 +1412,7 @@ const VideoGridComponent = memo(({ layout, pinnedVideo, setPinnedVideo, currentU
       return { pinned, others };
     }
     return { pinned: null, others: allVideos };
-  }, [currentUser, participants, isMuted, isVideoOff, speakingUsers, pinnedVideo, userMediaStreamRef]);
+  }, [currentUser, participants, isMuted, isVideoOff, speakingUsers, remoteAudioLevels, localAudioLevel, pinnedVideo, userMediaStreamRef]);
   
   const { pinned, others } = getVideoParticipants();
   
