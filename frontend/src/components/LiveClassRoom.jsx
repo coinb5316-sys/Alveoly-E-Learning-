@@ -1,16 +1,13 @@
-// components/LiveClassRoom.jsx - COMPLETE WORKING VERSION
-
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import axios from "../api/axios";
 import { io } from "socket.io-client";
 import Peer from "simple-peer";
-import { getIceServers } from "../utils/webrtc";
 import { 
   Video, Mic, MicOff, VideoOff, PhoneOff, MessageSquare, Users, Send,
-  Clock, Calendar, Grid, List, Pin, Copy, Check, WifiOff, Loader2, 
-  Menu, X, Sun, Moon
+  Clock, Calendar, Grid, List, Maximize2, Minimize2, Pin, Settings,
+  Copy, Check, LogOut, WifiOff, Loader2, Menu, X, Sun, Moon
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -19,7 +16,7 @@ const LiveClassRoom = () => {
   const navigate = useNavigate();
   const { user: currentUser, loading: authLoading } = useAuth();
   
-  // State
+  // State Management
   const [liveClass, setLiveClass] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isJoined, setIsJoined] = useState(false);
@@ -34,36 +31,53 @@ const LiveClassRoom = () => {
   const [duration, setDuration] = useState(0);
   const [isLecturer, setIsLecturer] = useState(false);
   const [layout, setLayout] = useState("grid");
+  const [fullscreenVideo, setFullscreenVideo] = useState(null);
   const [pinnedVideo, setPinnedVideo] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [selectedCamera, setSelectedCamera] = useState("");
+  const [selectedMicrophone, setSelectedMicrophone] = useState("");
+  const [availableCameras, setAvailableCameras] = useState([]);
+  const [availableMicrophones, setAvailableMicrophones] = useState([]);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [speakingUsers, setSpeakingUsers] = useState({});
   const [inviteLink, setInviteLink] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showLeftNotification, setShowLeftNotification] = useState(null);
   const [socketConnected, setSocketConnected] = useState(false);
   const [localStreamReady, setLocalStreamReady] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileControls, setShowMobileControls] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [classEnded, setClassEnded] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [remoteStreams, setRemoteStreams] = useState({});
+  const [remoteVideoElements, setRemoteVideoElements] = useState({});
   
-  // Refs
+  // WebRTC Refs
   const socketRef = useRef(null);
   const peersRef = useRef({});
-  const userStreamRef = useRef(null);
+  const userMediaStreamRef = useRef(null);
   const localVideoRef = useRef(null);
   const durationIntervalRef = useRef(null);
   const videoRefs = useRef({});
   const isLeavingRef = useRef(false);
-  const initPeersRef = useRef(false);
+  const isInitializedRef = useRef(false);
+  const pendingParticipantsRef = useRef([]);
+  const retryTimeoutsRef = useRef({});
+  const audioContextRef = useRef(null);
+  const audioAnalyserRef = useRef(null);
+  const audioSourceRef = useRef(null);
   
-  // Helper functions
+  // Helper function to safely get user ID
   const getUserId = useCallback((participant) => {
     if (!participant) return null;
     if (participant.userId?._id) return participant.userId._id;
     if (participant.userId?.toString) return participant.userId.toString();
     if (participant._id) return participant._id;
+    if (participant.id) return participant.id;
     return null;
   }, []);
 
+  // Helper function to safely get user name
   const getUserName = useCallback((participant) => {
     if (!participant) return "Unknown";
     if (participant.userId?.name) return participant.userId.name;
@@ -92,10 +106,11 @@ const LiveClassRoom = () => {
     }
   }, [currentUser]);
   
-  // Dark mode
+  // Dark mode handling
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
-    const isDark = savedTheme === "dark";
+    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const isDark = savedTheme === "dark" || (!savedTheme && systemPrefersDark);
     setDarkMode(isDark);
     if (isDark) {
       document.documentElement.classList.add("dark");
@@ -116,6 +131,13 @@ const LiveClassRoom = () => {
   };
   
   useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  useEffect(() => {
     if (!authLoading && !currentUser) {
       toast.error("Please login to access this page");
       navigate("/login");
@@ -125,30 +147,47 @@ const LiveClassRoom = () => {
   useEffect(() => {
     if (!currentUser || authLoading) return;
     
-    init();
+    initializeSocket();
+    fetchLiveClassDetails();
+    getMediaDevices();
     
     return () => {
-      cleanup();
+      if (!isLeavingRef.current) {
+        cleanup();
+      }
+      Object.values(retryTimeoutsRef.current).forEach(timeout => clearTimeout(timeout));
     };
   }, [classId, currentUser, authLoading]);
 
-  const init = async () => {
-    initializeSocket();
-    await fetchLiveClassDetails();
+  const getMediaDevices = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(device => device.kind === 'videoinput');
+      const microphones = devices.filter(device => device.kind === 'audioinput');
+      setAvailableCameras(cameras);
+      setAvailableMicrophones(microphones);
+      if (cameras.length > 0) setSelectedCamera(cameras[0].deviceId);
+      if (microphones.length > 0) setSelectedMicrophone(microphones[0].deviceId);
+    } catch (err) {
+      console.error("Error getting media devices:", err);
+    }
   };
 
   const initializeSocket = () => {
     const API_URL = import.meta.env.VITE_APP_API_BASE_URL || "https://alveoly-e-learning-755w.onrender.com";
     
     socketRef.current = io(API_URL, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      forceNew: true
     });
 
     socketRef.current.on("connect", () => {
-      console.log("✅ Socket connected");
+      console.log("✅ Socket connected:", socketRef.current.id);
       setSocketConnected(true);
     });
 
@@ -157,13 +196,96 @@ const LiveClassRoom = () => {
       setSocketConnected(false);
     });
 
+    socketRef.current.on("connect_error", (err) => {
+      console.error("Socket connection error:", err.message);
+      setSocketConnected(false);
+    });
+
     socketRef.current.on("existing-participants", handleExistingParticipants);
+    socketRef.current.on("join-confirmed", handleJoinConfirmed);
     socketRef.current.on("user-joined", handleUserJoined);
     socketRef.current.on("user-left", handleUserLeft);
     socketRef.current.on("signal", handleSignal);
+    socketRef.current.on("user-speaking", handleUserSpeaking);
+    socketRef.current.on("participant-updated", handleParticipantUpdated);
     socketRef.current.on("class-ended", handleClassEnded);
     socketRef.current.on("new-chat-message", handleNewChatMessage);
   };
+
+  const handleExistingParticipants = useCallback(async (participantsList) => {
+    console.log("📋 Received existing participants:", participantsList);
+    
+    if (!participantsList || !Array.isArray(participantsList)) {
+      console.log("No existing participants or invalid format");
+      return;
+    }
+    
+    if (participantsList.length === 0) {
+      console.log("No existing participants in room");
+      return;
+    }
+    
+    if (!userMediaStreamRef.current || !localStreamReady) {
+      console.log("Waiting for local stream before creating peers for existing participants");
+      pendingParticipantsRef.current = participantsList;
+      return;
+    }
+    
+    for (const participant of participantsList) {
+      const participantId = participant.userId;
+      if (participantId && participantId !== currentUser?._id && !peersRef.current[participantId]) {
+        console.log(`🔗 Creating peer for existing participant: ${participant.userName} (${participantId})`);
+        await createPeer(participantId, userMediaStreamRef.current, true);
+        
+        setParticipants(prev => {
+          const exists = prev.some(p => getUserId(p) === participantId);
+          if (exists) return prev;
+          return [...prev, {
+            userId: { _id: participantId, name: participant.userName },
+            role: participant.role || "student",
+            joinedAt: new Date(),
+            active: true,
+            audioEnabled: participant.audioEnabled !== false,
+            videoEnabled: participant.videoEnabled !== false,
+            remoteStream: null
+          }];
+        });
+      }
+    }
+  }, [currentUser, localStreamReady, getUserId]);
+
+  const handleJoinConfirmed = useCallback(() => {
+    console.log("✅ Join confirmed by server");
+    setIsConnecting(false);
+    setIsJoined(true);
+    startDurationTimer();
+    toast.success("Successfully joined the class!");
+    
+    if (pendingParticipantsRef.current.length > 0 && userMediaStreamRef.current && localStreamReady) {
+      console.log("Processing pending participants after join confirmed");
+      const participantsToProcess = [...pendingParticipantsRef.current];
+      pendingParticipantsRef.current = [];
+      
+      setTimeout(() => {
+        participantsToProcess.forEach(participant => {
+          const participantId = participant.userId;
+          if (participantId && participantId !== currentUser?._id && !peersRef.current[participantId]) {
+            console.log(`Creating peer for pending participant: ${participant.userName}`);
+            createPeer(participantId, userMediaStreamRef.current, true);
+          }
+        });
+      }, 500);
+    }
+  }, [currentUser, localStreamReady]);
+
+  const handleNewChatMessage = useCallback((data) => {
+    setChatMessages(prev => [...prev, {
+      userId: data.userId,
+      userName: data.userName,
+      message: data.message,
+      timestamp: data.timestamp
+    }]);
+  }, []);
 
   const fetchLiveClassDetails = async () => {
     try {
@@ -176,12 +298,27 @@ const LiveClassRoom = () => {
       }
       
       setLiveClass(res.data);
+      
+      const allParticipants = (res.data.participants || [])
+        .filter(p => p && p.userId)
+        .map(p => ({
+          userId: p.userId,
+          role: p.role || "student",
+          joinedAt: p.joinedAt,
+          leftAt: p.leftAt,
+          active: !p.leftAt,
+          audioEnabled: p.audioEnabled !== false,
+          videoEnabled: p.videoEnabled !== false,
+          remoteStream: null
+        }));
+      setParticipants(allParticipants);
       setChatMessages(res.data.chatMessages || []);
       
       const isUserLecturer = currentUser?.role === "lecturer" || res.data.lecturerId?._id === currentUser?._id;
       setIsLecturer(isUserLecturer);
       
-      setInviteLink(`${window.location.origin}/join/${classId}`);
+      const inviteUrl = `${window.location.origin}/join/${classId}`;
+      setInviteLink(inviteUrl);
       
       if (res.data.status === "ongoing") {
         await joinClass();
@@ -195,180 +332,235 @@ const LiveClassRoom = () => {
     }
   };
 
-  const getLocalStream = async () => {
-    if (userStreamRef.current) return userStreamRef.current;
+  // FIXED: Initialize local media stream with proper audio
+  const initializeLocalStream = useCallback(async () => {
+    if (userMediaStreamRef.current && localStreamReady) {
+      return userMediaStreamRef.current;
+    }
     
     try {
       const constraints = {
-        video: !isVideoOff,
-        audio: !isMuted
+        video: true,
+        audio: true  // Always request audio
       };
       
-      console.log("🎥 Getting user media with constraints:", constraints);
+      if (selectedCamera && !isVideoOff) {
+        constraints.video = { deviceId: { exact: selectedCamera } };
+      }
+      
+      if (selectedMicrophone && !isMuted) {
+        constraints.audio = { deviceId: { exact: selectedMicrophone } };
+      }
+      
+      console.log("🎥 Requesting media with constraints:", constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      userStreamRef.current = stream;
+      if (userMediaStreamRef.current !== stream) {
+        if (userMediaStreamRef.current) {
+          userMediaStreamRef.current.getTracks().forEach(track => track.stop());
+        }
+        userMediaStreamRef.current = stream;
+      }
       
-      // Enable/disable tracks based on state
-      stream.getAudioTracks().forEach(track => track.enabled = !isMuted);
-      stream.getVideoTracks().forEach(track => track.enabled = !isVideoOff);
+      // CRITICAL: Force enable all audio tracks at maximum volume
+      stream.getAudioTracks().forEach(track => {
+        track.enabled = true;
+        console.log(`🎤 Audio track: ${track.label}, enabled: ${track.enabled}, readyState: ${track.readyState}`);
+      });
+      
+      stream.getVideoTracks().forEach(track => {
+        track.enabled = !isVideoOff;
+        console.log(`📷 Video track: ${track.label}, enabled: ${track.enabled}`);
+      });
       
       setLocalStreamReady(true);
       
-      // Show local video
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        localVideoRef.current.volume = 0;
+        localVideoRef.current.play().catch(e => console.log("Local video play error:", e));
       }
       
-      console.log("✅ Local stream ready - Audio:", stream.getAudioTracks().length, "Video:", stream.getVideoTracks().length);
+      console.log("✅ Local stream ready");
+      console.log(`   Audio tracks: ${stream.getAudioTracks().length}`);
+      console.log(`   Video tracks: ${stream.getVideoTracks().length}`);
+      
       return stream;
     } catch (err) {
-      console.error("Error getting media:", err);
-      toast.error("Cannot access camera/microphone. Please check permissions.");
+      console.error("Error accessing media devices:", err);
+      toast.error("Unable to access camera or microphone. Please check permissions.");
       return null;
     }
-  };
+  }, [isVideoOff, isMuted, selectedCamera, selectedMicrophone, localStreamReady]);
 
-  const createPeer = useCallback((targetUserId, stream, isInitiator = true) => {
-    if (!targetUserId || peersRef.current[targetUserId]) return;
+  // FIXED: Create peer with proper audio handling
+  const createPeer = useCallback((userId, stream, isInitiator = true, retryCount = 0) => {
+    if (!userId) return null;
     
-    console.log(`🔗 Creating peer for ${targetUserId}, initiator: ${isInitiator}`);
+    if (peersRef.current[userId]) {
+      console.log(`⚠️ Peer for ${userId} already exists`);
+      return peersRef.current[userId];
+    }
+    
+    if (retryTimeoutsRef.current[userId]) {
+      clearTimeout(retryTimeoutsRef.current[userId]);
+      delete retryTimeoutsRef.current[userId];
+    }
+    
+    console.log(`🔗 Creating ${isInitiator ? 'initiator' : 'receiver'} peer for ${userId}`);
     
     const peer = new Peer({
       initiator: isInitiator,
       trickle: true,
       stream: stream,
-      config: getIceServers(),
-      sdpTransform: (sdp) => {
-        // Ensure we're sending and receiving audio
-        if (stream.getAudioTracks().length > 0) {
-          sdp = sdp.replace(/a=recvonly/g, 'a=sendrecv');
-        }
-        return sdp;
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' },
+          { urls: 'stun:stun.stunprotocol.org:3478' }
+        ],
+        iceCandidatePoolSize: 10
       }
     });
     
-    peer.on("signal", (signal) => {
-      console.log(`📡 Sending signal to ${targetUserId}`);
-      socketRef.current?.emit("signal", {
-        to: targetUserId,
-        signal,
-        classId
-      });
+    peer.on("signal", signal => {
+      if (socketRef.current && socketConnected) {
+        console.log(`📡 Sending signal to ${userId}`);
+        socketRef.current.emit("signal", { 
+          to: userId, 
+          signal, 
+          classId,
+          from: currentUser?._id
+        });
+      } else {
+        console.log(`⚠️ Cannot send signal to ${userId}: socket not connected`);
+      }
     });
     
-    peer.on("stream", (remoteStream) => {
-      console.log(`📺 Received stream from ${targetUserId}`);
+    peer.on("stream", remoteStream => {
+      console.log(`📺 Received remote stream from ${userId}`);
       console.log(`   Audio tracks: ${remoteStream.getAudioTracks().length}`);
       console.log(`   Video tracks: ${remoteStream.getVideoTracks().length}`);
       
-      // Enable all tracks
-      remoteStream.getAudioTracks().forEach(t => t.enabled = true);
-      remoteStream.getVideoTracks().forEach(t => t.enabled = true);
+      // CRITICAL: Force enable remote audio tracks
+      remoteStream.getAudioTracks().forEach(track => {
+        track.enabled = true;
+        console.log(`🎤 Remote audio track for ${userId}: enabled`);
+      });
       
-      setRemoteStreams(prev => ({ ...prev, [targetUserId]: remoteStream }));
+      remoteStream.getVideoTracks().forEach(track => {
+        track.enabled = true;
+      });
       
-      // Update participants with stream
-      setParticipants(prev => prev.map(p => {
-        if (getUserId(p) === targetUserId) {
-          return { ...p, remoteStream };
+      setParticipants(prev => {
+        const updated = prev.map(p => {
+          const pid = getUserId(p);
+          if (pid === userId) {
+            console.log(`   Updating participant ${userId} with remote stream`);
+            return { ...p, remoteStream };
+          }
+          return p;
+        });
+        
+        const exists = updated.some(p => getUserId(p) === userId);
+        if (!exists) {
+          console.log(`   Adding new participant ${userId} to list`);
+          updated.push({
+            userId: { _id: userId, name: `User ${userId.slice(-4)}` },
+            role: "student",
+            joinedAt: new Date(),
+            active: true,
+            audioEnabled: true,
+            videoEnabled: true,
+            remoteStream
+          });
         }
-        return p;
-      }));
+        
+        return [...updated];
+      });
       
-      // Attach to video element if exists
-      const videoEl = videoRefs.current[targetUserId];
-      if (videoEl) {
-        videoEl.srcObject = remoteStream;
-        videoEl.play().catch(console.log);
-      }
+      // Force re-render to show video
+      setTimeout(() => {
+        setParticipants(prev => [...prev]);
+      }, 100);
     });
     
     peer.on("connect", () => {
-      console.log(`✅ Peer connected to ${targetUserId}`);
+      console.log(`✅ Peer connected to ${userId}`);
     });
     
     peer.on("close", () => {
-      console.log(`❌ Peer closed for ${targetUserId}`);
-      delete peersRef.current[targetUserId];
-      setRemoteStreams(prev => {
-        const newState = { ...prev };
-        delete newState[targetUserId];
-        return newState;
-      });
+      console.log(`❌ Peer closed for ${userId}`);
+      delete peersRef.current[userId];
     });
     
     peer.on("error", (err) => {
-      console.error(`Peer error for ${targetUserId}:`, err.message);
+      console.error(`Peer error for ${userId}:`, err.message);
+      
+      if (retryCount < 3 && (err.message.includes('ICE') || err.message.includes('connect'))) {
+        console.log(`🔄 Retrying peer creation for ${userId}, attempt ${retryCount + 1}`);
+        delete peersRef.current[userId];
+        retryTimeoutsRef.current[userId] = setTimeout(() => {
+          createPeer(userId, stream, isInitiator, retryCount + 1);
+        }, 1000 * (retryCount + 1));
+      }
     });
     
-    peersRef.current[targetUserId] = peer;
-    return peer;
-  }, [classId]);
-
-  const handleExistingParticipants = useCallback(async (participantsList) => {
-    console.log("📋 Existing participants:", participantsList);
-    
-    if (!participantsList || !Array.isArray(participantsList)) return;
-    
-    // Wait for local stream
-    if (!userStreamRef.current || !localStreamReady) {
-      console.log("Waiting for local stream...");
-      setTimeout(() => handleExistingParticipants(participantsList), 1000);
-      return;
-    }
-    
-    for (const p of participantsList) {
-      const pid = p.userId;
-      if (pid !== currentUser?._id && !peersRef.current[pid]) {
-        console.log(`Creating peer for existing participant: ${p.userName}`);
-        
-        // Add to UI
-        setParticipants(prev => {
-          if (prev.some(ex => getUserId(ex) === pid)) return prev;
-          return [...prev, {
-            userId: { _id: pid, name: p.userName },
-            role: p.role || "student",
-            active: true,
-            remoteStream: null
-          }];
-        });
-        
-        // Create peer
-        createPeer(pid, userStreamRef.current, true);
+    peer.on("iceConnectionStateChange", () => {
+      console.log(`ICE connection state for ${userId}: ${peer.iceConnectionState}`);
+      if (peer.iceConnectionState === 'connected') {
+        console.log(`✅ ICE connected for ${userId}`);
       }
-    }
-  }, [currentUser, localStreamReady, createPeer, getUserId]);
+    });
+    
+    peersRef.current[userId] = peer;
+    return peer;
+  }, [classId, socketConnected, currentUser, getUserId]);
 
   const handleUserJoined = useCallback((data) => {
-    const { userId, userName, role } = data;
+    const { userId, userName, role, audioEnabled, videoEnabled } = data;
     
-    if (userId === currentUser?._id) return;
-    
-    console.log(`👤 User joined: ${userName}`);
+    console.log(`👤 User joined: ${userName} (${userId})`);
     
     setParticipants(prev => {
-      if (prev.some(p => getUserId(p) === userId)) return prev;
+      const exists = prev.some(p => getUserId(p) === userId);
+      if (exists) return prev;
+      console.log(`   Adding ${userName} to participants list`);
       return [...prev, {
         userId: { _id: userId, name: userName },
         role: role || "student",
+        joinedAt: new Date(),
         active: true,
+        audioEnabled: audioEnabled !== false,
+        videoEnabled: videoEnabled !== false,
         remoteStream: null
       }];
     });
     
-    // Create peer if stream ready
-    if (userStreamRef.current && localStreamReady && !peersRef.current[userId]) {
-      createPeer(userId, userStreamRef.current, true);
-    }
+    const createPeerWithRetry = (retryCount = 0) => {
+      if (userMediaStreamRef.current && localStreamReady && !peersRef.current[userId]) {
+        console.log(`🔗 Creating peer for new user ${userName} (${userId})`);
+        createPeer(userId, userMediaStreamRef.current, true);
+      } else if (retryCount < 10) {
+        console.log(`⏳ Waiting for local stream, retry ${retryCount + 1} for ${userName}`);
+        setTimeout(() => createPeerWithRetry(retryCount + 1), 500);
+      } else {
+        console.log(`❌ Failed to create peer for ${userName} after 10 retries`);
+      }
+    };
     
-    toast.success(`${userName} joined`);
-  }, [currentUser, localStreamReady, createPeer, getUserId]);
+    createPeerWithRetry();
+    
+    toast.success(`${userName} joined the class`);
+  }, [localStreamReady, createPeer, getUserId]);
 
   const handleUserLeft = useCallback((data) => {
     const { userId, userName } = data;
     
-    console.log(`👋 User left: ${userName}`);
+    console.log(`👋 User left: ${userName} (${userId})`);
     
     if (peersRef.current[userId]) {
       peersRef.current[userId].destroy();
@@ -376,85 +568,151 @@ const LiveClassRoom = () => {
     }
     
     setParticipants(prev => prev.filter(p => getUserId(p) !== userId));
-    setRemoteStreams(prev => {
-      const newState = { ...prev };
-      delete newState[userId];
-      return newState;
-    });
     
-    toast.info(`${userName} left`);
+    setShowLeftNotification({ userId, userName });
+    setTimeout(() => setShowLeftNotification(null), 3000);
+    
+    toast.info(`${userName} left the class`);
   }, [getUserId]);
 
   const handleSignal = useCallback((data) => {
     const { from, signal } = data;
     
-    if (from === currentUser?._id) return;
-    
-    console.log(`📡 Signal from ${from}`);
+    console.log(`📡 Received signal from ${from}`);
     
     if (peersRef.current[from]) {
+      console.log(`   Forwarding signal to existing peer ${from}`);
       peersRef.current[from].signal(signal);
-    } else if (userStreamRef.current && localStreamReady) {
-      console.log(`Creating receiver peer for signal from ${from}`);
-      const peer = createPeer(from, userStreamRef.current, false);
-      if (peer) peer.signal(signal);
+    } else if (userMediaStreamRef.current && from !== currentUser?._id) {
+      console.log(`   Creating new peer for signal from ${from}`);
+      const peer = createPeer(from, userMediaStreamRef.current, false);
+      if (peer) {
+        try {
+          peer.signal(signal);
+        } catch (err) {
+          console.error(`Error signaling peer ${from}:`, err);
+        }
+      }
+    } else {
+      console.log(`   Cannot handle signal from ${from}`);
     }
-  }, [currentUser, localStreamReady, createPeer]);
+  }, [currentUser, createPeer]);
 
   const handleClassEnded = useCallback(() => {
+    if (classEnded) return;
     setClassEnded(true);
-    toast.error("Class has been ended");
+    
+    toast.error("Class has been ended by the lecturer", { duration: 5000, icon: "🔴" });
+    
     setTimeout(() => {
-      cleanup();
-      navigate(getDashboardPath());
+      if (!isLeavingRef.current) {
+        isLeavingRef.current = true;
+        cleanup();
+        navigate(getDashboardPath());
+      }
     }, 2000);
-  }, [navigate, getDashboardPath]);
+  }, [navigate, classEnded, getDashboardPath]);
 
-  const handleNewChatMessage = useCallback((data) => {
-    setChatMessages(prev => [...prev, {
-      userId: data.userId,
-      userName: data.userName,
-      message: data.message,
-      timestamp: data.timestamp
-    }]);
+  const handleUserSpeaking = useCallback((data) => {
+    setSpeakingUsers(prev => ({ ...prev, [data.userId]: data.isSpeaking }));
   }, []);
+
+  const handleParticipantUpdated = useCallback((data) => {
+    setParticipants(prev => prev.map(p => {
+      const pid = getUserId(p);
+      return pid === data.userId ? { ...p, ...data.updates } : p;
+    }));
+  }, [getUserId]);
+
+  // FIXED: Toggle mute with proper audio handling
+  const toggleMute = useCallback(async () => {
+    if (userMediaStreamRef.current) {
+      const audioTrack = userMediaStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        const newMuteState = !isMuted;
+        audioTrack.enabled = !newMuteState;
+        setIsMuted(newMuteState);
+        
+        socketRef.current?.emit("participant-updated", {
+          classId, userId: currentUser._id, updates: { audioEnabled: !newMuteState }
+        });
+        
+        toast.success(newMuteState ? "Microphone muted" : "Microphone unmuted");
+        console.log(`Microphone ${newMuteState ? 'muted' : 'unmuted'}, enabled: ${audioTrack.enabled}`);
+      } else {
+        console.log("No audio track found");
+        toast.error("No microphone detected");
+      }
+    }
+  }, [isMuted, classId, currentUser]);
+
+  const toggleVideo = useCallback(async () => {
+    const newVideoState = !isVideoOff;
+    
+    if (userMediaStreamRef.current) {
+      const videoTrack = userMediaStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !newVideoState;
+        setIsVideoOff(newVideoState);
+        
+        socketRef.current?.emit("participant-updated", {
+          classId, userId: currentUser._id, updates: { videoEnabled: !newVideoState }
+        });
+        
+        toast.success(newVideoState ? "Camera off" : "Camera on");
+        console.log(`Camera ${newVideoState ? 'off' : 'on'}`);
+      }
+    } else if (!newVideoState) {
+      await initializeLocalStream();
+      setIsVideoOff(false);
+    }
+  }, [isVideoOff, classId, currentUser, initializeLocalStream]);
 
   const joinClass = async () => {
     try {
-      // First join via API
       await axios.post(`/live-class/${classId}/join`);
       
-      // Get local stream
-      const stream = await getLocalStream();
+      const stream = await initializeLocalStream();
       if (!stream) {
-        toast.error("Cannot join without camera/microphone");
+        toast.error("Could not access camera/microphone");
+        setIsConnecting(false);
         return;
       }
       
-      // Join via socket
-      setIsConnecting(true);
-      socketRef.current?.emit("join-call", {
-        classId,
-        userId: currentUser._id,
-        userName: currentUser.name,
-        role: currentUser.role,
-        audioEnabled: !isMuted,
-        videoEnabled: !isVideoOff
-      });
-      
-      // Set joined after a moment
-      setTimeout(() => {
-        setIsJoined(true);
-        setIsConnecting(false);
-        startDurationTimer();
-        toast.success("Joined class!");
-      }, 1000);
-      
+      await joinCall();
     } catch (err) {
       console.error("Join error:", err);
-      toast.error(err.response?.data?.message || "Failed to join");
+      toast.error(err.response?.data?.message || "Failed to join class");
       setIsConnecting(false);
     }
+  };
+
+  const joinCall = async () => {
+    if (!socketRef.current || !socketConnected) {
+      toast.error("Not connected to server");
+      return;
+    }
+    
+    if (!userMediaStreamRef.current || !localStreamReady) {
+      const stream = await initializeLocalStream();
+      if (!stream) {
+        toast.error("Cannot join without camera/microphone");
+        setIsConnecting(false);
+        return;
+      }
+    }
+    
+    setIsConnecting(true);
+    console.log("🎥 Joining call with stream ready");
+    
+    socketRef.current.emit("join-call", {
+      classId,
+      userId: currentUser._id,
+      userName: currentUser.name,
+      role: currentUser.role,
+      audioEnabled: !isMuted,
+      videoEnabled: !isVideoOff
+    });
   };
 
   const leaveClass = async () => {
@@ -462,43 +720,51 @@ const LiveClassRoom = () => {
     isLeavingRef.current = true;
     
     try {
-      socketRef.current?.emit("user-leaving", { classId, userId: currentUser._id, userName: currentUser.name });
+      socketRef.current?.emit("user-leaving", { 
+        classId, userId: currentUser._id, userName: currentUser.name, isLecturer
+      });
       
       await axios.post(`/live-class/${classId}/leave`);
       
       if (isLecturer) {
         await axios.post(`/live-class/lecturer/${classId}/end`);
         socketRef.current?.emit("end-class", { classId });
-        toast.success("Class ended");
+        toast.success("Class ended successfully");
         navigate(getLiveClassesPath());
       } else {
-        toast.success("Left class");
+        toast.success("Left the class");
         navigate(getDashboardPath());
       }
       
       cleanup();
     } catch (err) {
       console.error("Leave error:", err);
-      toast.error("Failed to leave");
+      toast.error("Failed to leave class");
       isLeavingRef.current = false;
     }
   };
 
-  const cleanup = () => {
-    // Destroy all peers
-    Object.values(peersRef.current).forEach(peer => peer.destroy());
+  const cleanup = useCallback(() => {
+    Object.values(retryTimeoutsRef.current).forEach(timeout => clearTimeout(timeout));
+    retryTimeoutsRef.current = {};
+    
+    Object.values(peersRef.current).forEach(peer => {
+      if (peer) peer.destroy();
+    });
     peersRef.current = {};
     
-    // Stop local stream
-    if (userStreamRef.current) {
-      userStreamRef.current.getTracks().forEach(track => track.stop());
-      userStreamRef.current = null;
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
     }
     
-    // Clear interval
+    if (userMediaStreamRef.current) {
+      userMediaStreamRef.current.getTracks().forEach(track => track.stop());
+      userMediaStreamRef.current = null;
+    }
+    
     if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
     
-    // Disconnect socket
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -507,48 +773,18 @@ const LiveClassRoom = () => {
     setLocalStreamReady(false);
     setSocketConnected(false);
     setIsJoined(false);
-    setRemoteStreams({});
-  };
+    setParticipants([]);
+  }, []);
 
   const startDurationTimer = () => {
     if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+    
     const startTime = liveClass?.actualStartTime ? new Date(liveClass.actualStartTime) : new Date();
     setDuration(Math.floor((new Date() - startTime) / 1000));
+    
     durationIntervalRef.current = setInterval(() => {
       setDuration(prev => prev + 1);
     }, 1000);
-  };
-
-  const toggleMute = () => {
-    if (userStreamRef.current) {
-      const audioTrack = userStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        const newState = !isMuted;
-        audioTrack.enabled = !newState;
-        setIsMuted(newState);
-        toast.success(newState ? "Muted" : "Unmuted");
-        
-        socketRef.current?.emit("participant-updated", {
-          classId, userId: currentUser._id, updates: { audioEnabled: !newState }
-        });
-      }
-    }
-  };
-
-  const toggleVideo = () => {
-    if (userStreamRef.current) {
-      const videoTrack = userStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        const newState = !isVideoOff;
-        videoTrack.enabled = !newState;
-        setIsVideoOff(newState);
-        toast.success(newState ? "Camera off" : "Camera on");
-        
-        socketRef.current?.emit("participant-updated", {
-          classId, userId: currentUser._id, updates: { videoEnabled: !newState }
-        });
-      }
-    }
   };
 
   const sendMessage = async (e) => {
@@ -562,7 +798,8 @@ const LiveClassRoom = () => {
       });
       setNewMessage("");
     } catch (err) {
-      console.error("Send error:", err);
+      console.error("Send message error:", err);
+      toast.error("Failed to send message");
     }
   };
 
@@ -577,26 +814,105 @@ const LiveClassRoom = () => {
     navigator.clipboard.writeText(inviteLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast.success("Link copied!");
+    toast.success("Invite link copied!");
   };
 
-  const activeParticipantsCount = participants.filter(p => p && p.active).length;
-  const isClassActive = liveClass?.status === "ongoing" && !classEnded;
+  const activeParticipantsCount = participants.filter(p => p && p.active && !p.leftAt).length;
+
+  // Audio monitoring effect for speaking detection
+  useEffect(() => {
+    if (!userMediaStreamRef.current || !localStreamReady || !isJoined) return;
+    
+    let animationId = null;
+    let lastSpeakingState = false;
+    let silenceFrames = 0;
+    
+    const setupAudioMonitor = async () => {
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(userMediaStreamRef.current);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        const checkVolume = () => {
+          if (!analyser) return;
+          
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / dataArray.length;
+          const isSpeakingNow = average > 20;
+          
+          let newSpeakingState = lastSpeakingState;
+          
+          if (isSpeakingNow && !lastSpeakingState) {
+            newSpeakingState = true;
+            silenceFrames = 0;
+            console.log("🎤 Started speaking");
+          } else if (!isSpeakingNow && lastSpeakingState) {
+            silenceFrames++;
+            if (silenceFrames > 15) {
+              newSpeakingState = false;
+              console.log("🎤 Stopped speaking");
+            }
+          }
+          
+          if (newSpeakingState !== lastSpeakingState) {
+            lastSpeakingState = newSpeakingState;
+            setSpeakingUsers(prev => ({ ...prev, [currentUser._id]: newSpeakingState }));
+            
+            socketRef.current?.emit("user-speaking", {
+              classId,
+              userId: currentUser._id,
+              isSpeaking: newSpeakingState
+            });
+          }
+          
+          animationId = requestAnimationFrame(checkVolume);
+        };
+        
+        await audioContext.resume();
+        checkVolume();
+        
+        return () => {
+          if (animationId) cancelAnimationFrame(animationId);
+          source.disconnect();
+          analyser.disconnect();
+          audioContext.close();
+        };
+      } catch (err) {
+        console.error("Audio monitoring setup failed:", err);
+        return null;
+      }
+    };
+    
+    let cleanupFn = null;
+    setupAudioMonitor().then(cleanup => { cleanupFn = cleanup; });
+    
+    return () => {
+      if (cleanupFn) cleanupFn();
+    };
+  }, [userMediaStreamRef, localStreamReady, isJoined, classId, currentUser]);
 
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
-        <Loader2 className="animate-spin h-12 w-12 text-indigo-500" />
+        <Loader2 className="animate-spin h-12 w-12 md:h-16 md:w-16 text-indigo-500" />
       </div>
     );
   }
 
   if (!liveClass) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 px-4">
         <div className="text-center">
-          <h2 className="text-xl font-bold mb-2">Class Not Found</h2>
-          <button onClick={() => navigate(getDashboardPath())} className="px-4 py-2 bg-indigo-500 text-white rounded-lg">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-2">Class Not Found</h2>
+          <button onClick={() => navigate(getDashboardPath())} className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm md:text-base">
             Go to Dashboard
           </button>
         </div>
@@ -604,105 +920,114 @@ const LiveClassRoom = () => {
     );
   }
 
+  const isClassActive = liveClass.status === "ongoing" && !classEnded;
+
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors">
-      {/* Header */}
-      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-4 md:px-6 py-2 md:py-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">{liveClass.title}</h1>
-            <p className="text-xs md:text-sm text-gray-500">{liveClass.lecturerId?.name || "Lecturer"}</p>
+    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
+      {!socketConnected && (
+        <div className="fixed top-16 md:top-20 right-2 md:right-4 z-50 bg-red-500/90 backdrop-blur-sm rounded-lg px-2 md:px-3 py-1 md:py-1.5 flex items-center gap-1 md:gap-2">
+          <WifiOff className="h-2 w-2 md:h-3 md:w-3 text-white" />
+          <span className="text-white text-[10px] md:text-xs">Reconnecting...</span>
+        </div>
+      )}
+      
+      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-3 md:px-6 py-2 md:py-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm md:text-lg font-semibold text-gray-900 dark:text-white truncate">{liveClass.title}</h1>
+            <div className="flex items-center gap-2 md:gap-3 text-[10px] md:text-sm text-gray-500 dark:text-gray-400 mt-0.5 md:mt-1">
+              <span className="hidden sm:inline">{new Date(liveClass.scheduledStartTime).toLocaleDateString()}</span>
+              <span className="truncate">{liveClass.lecturerId?.name || "Lecturer"}</span>
+            </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
-            <button onClick={toggleDarkMode} className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800">
-              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <button onClick={toggleDarkMode} className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+              {darkMode ? <Sun className="h-3 w-3 md:h-4 md:w-4 text-yellow-500" /> : <Moon className="h-3 w-3 md:h-4 md:w-4 text-gray-600" />}
             </button>
             
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800">
-              <div className={`w-2 h-2 rounded-full ${isClassActive && isJoined ? "bg-green-500 animate-pulse" : "bg-gray-500"}`} />
-              <span className="text-xs md:text-sm">{isJoined ? "Connected" : "Live"}</span>
+            <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 rounded-full bg-gray-100 dark:bg-gray-800">
+              <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ${isClassActive && isJoined ? "bg-green-500 animate-pulse" : isClassActive ? "bg-yellow-500" : "bg-gray-500"}`} />
+              <span className="text-[10px] md:text-sm text-gray-600 dark:text-gray-300 hidden sm:inline">
+                {isClassActive && isJoined ? "Connected" : isClassActive ? "Live" : "Scheduled"}
+              </span>
             </div>
             
             {isJoined && (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20">
-                <Clock className="h-3 w-3 text-indigo-600" />
-                <span className="text-xs md:text-sm text-indigo-600 font-mono">{formatDuration(duration)}</span>
+              <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20">
+                <Clock className="h-2 w-2 md:h-3 md:w-3 text-indigo-600 dark:text-indigo-400" />
+                <span className="text-[10px] md:text-sm text-indigo-600 dark:text-indigo-400 font-mono">{formatDuration(duration)}</span>
               </div>
             )}
             
-            <button onClick={() => setShowInviteModal(true)} className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">
-              <Users className="h-4 w-4" /> Invite
+            <button onClick={() => setShowInviteModal(true)} className="hidden sm:flex items-center gap-1 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-[10px] md:text-sm">
+              <Users className="h-3 w-3 md:h-4 md:w-4" /> Invite
             </button>
-            <button onClick={() => setShowSidebar(!showSidebar)} className="sm:hidden p-2 rounded-lg bg-gray-100 dark:bg-gray-800">
-              <Menu className="h-5 w-5" />
+            <button onClick={() => setShowSidebar(!showSidebar)} className="sm:hidden p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800">
+              <Menu className="h-4 w-4 text-gray-600 dark:text-gray-300" />
             </button>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row h-[calc(100vh-57px)] md:h-[calc(100vh-65px)]">
-        {/* Video Area */}
-        <div className="flex-1 p-2 md:p-4">
+      <div className="flex flex-col sm:flex-row h-[calc(100vh-52px)] md:h-[calc(100vh-60px)]">
+        <div className="flex-1 p-2 md:p-4 min-h-0">
           <div className="bg-gray-900 rounded-xl overflow-hidden h-full relative">
             {isJoined && isClassActive && socketConnected ? (
               <>
-                <VideoGrid
-                  currentUser={currentUser}
-                  participants={participants}
-                  remoteStreams={remoteStreams}
-                  localStream={userStreamRef.current}
-                  localStreamReady={localStreamReady}
-                  videoRefs={videoRefs}
-                  isVideoOff={isVideoOff}
+                <VideoGridComponent 
                   layout={layout}
                   pinnedVideo={pinnedVideo}
                   setPinnedVideo={setPinnedVideo}
+                  currentUser={currentUser}
+                  participants={participants}
+                  isMuted={isMuted}
+                  isVideoOff={isVideoOff}
+                  speakingUsers={speakingUsers}
+                  userMediaStreamRef={userMediaStreamRef}
+                  localStreamReady={localStreamReady}
+                  videoRefs={videoRefs}
                 />
+                
                 <video ref={localVideoRef} autoPlay playsInline muted className="hidden" />
                 
-                {/* Controls */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2 md:gap-3 bg-black/80 backdrop-blur-sm rounded-full px-3 md:px-5 py-1.5 md:py-2 z-10">
-                  <button onClick={toggleMute} className={`p-2 md:p-2.5 rounded-full transition-colors ${isMuted ? 'bg-red-500' : 'bg-gray-700'}`}>
+                <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex items-center gap-2 md:gap-3 bg-black/80 backdrop-blur-sm rounded-full px-3 md:px-5 py-1.5 md:py-2 z-10">
+                  <button onClick={toggleMute} className={`p-1.5 md:p-2.5 rounded-full transition-colors ${isMuted ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
                     {isMuted ? <MicOff className="h-3 w-3 md:h-4 md:w-4 text-white" /> : <Mic className="h-3 w-3 md:h-4 md:w-4 text-white" />}
                   </button>
-                  <button onClick={toggleVideo} className={`p-2 md:p-2.5 rounded-full transition-colors ${isVideoOff ? 'bg-red-500' : 'bg-gray-700'}`}>
+                  <button onClick={toggleVideo} className={`p-1.5 md:p-2.5 rounded-full transition-colors ${isVideoOff ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
                     {isVideoOff ? <VideoOff className="h-3 w-3 md:h-4 md:w-4 text-white" /> : <Video className="h-3 w-3 md:h-4 md:w-4 text-white" />}
                   </button>
-                  <button onClick={() => setLayout(layout === "grid" ? "speaker" : "grid")} className="p-2 md:p-2.5 rounded-full bg-gray-700">
+                  <button onClick={() => setLayout(layout === "grid" ? "speaker" : "grid")} className="p-1.5 md:p-2.5 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors">
                     {layout === "grid" ? <List className="h-3 w-3 md:h-4 md:w-4 text-white" /> : <Grid className="h-3 w-3 md:h-4 md:w-4 text-white" />}
                   </button>
-                  <button onClick={leaveClass} className="p-2 md:p-2.5 rounded-full bg-red-500">
+                  <button onClick={leaveClass} className="p-1.5 md:p-2.5 rounded-full bg-red-500 hover:bg-red-600 transition-colors">
                     <PhoneOff className="h-3 w-3 md:h-4 md:w-4 text-white" />
                   </button>
                 </div>
               </>
             ) : isClassActive ? (
-              <div className="flex flex-col items-center justify-center h-full">
+              <div className="flex flex-col items-center justify-center h-full px-4">
                 <div className="text-center">
-                  <div className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                  <div className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-3 md:mb-4 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                     <Video className="h-8 w-8 md:h-10 md:w-10 text-white" />
                   </div>
                   <h2 className="text-lg md:text-xl font-bold text-white mb-2">Ready to join?</h2>
-                  <button 
-                    onClick={joinClass} 
-                    disabled={isConnecting || !socketConnected}
-                    className="px-4 md:px-6 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-semibold"
-                  >
-                    {isConnecting ? <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> : null}
-                    {isConnecting ? "Connecting..." : "Join Class"}
+                  <button onClick={joinClass} disabled={isConnecting || !socketConnected} className="px-4 md:px-6 py-1.5 md:py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-semibold flex items-center gap-2 text-sm md:text-base">
+                    {isConnecting ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : !socketConnected ? <WifiOff className="h-3 w-3 md:h-4 md:w-4" /> : null}
+                    {isConnecting ? "Connecting..." : !socketConnected ? "Connecting..." : "Join Class"}
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full">
+              <div className="flex flex-col items-center justify-center h-full px-4">
                 <div className="text-center">
-                  <div className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
+                  <div className="w-16 h-16 md:w-20 md:h-20 mx-auto mb-3 md:mb-4 rounded-full bg-gray-800 flex items-center justify-center">
                     <Calendar className="h-8 w-8 md:h-10 md:w-10 text-gray-500" />
                   </div>
                   <h2 className="text-lg md:text-xl font-bold text-white mb-2">Class Not Started</h2>
-                  <p className="text-gray-400 text-sm">Starts at {new Date(liveClass.scheduledStartTime).toLocaleTimeString()}</p>
-                  <button onClick={() => navigate(getLiveClassesPath())} className="mt-4 px-4 py-2 bg-gray-700 rounded-lg text-white">
-                    Back
+                  <p className="text-gray-400 text-xs md:text-sm">Starts on {new Date(liveClass.scheduledStartTime).toLocaleString()}</p>
+                  <button onClick={() => navigate(getLiveClassesPath())} className="mt-4 px-4 py-1.5 md:py-2 bg-gray-700 rounded-lg text-white text-xs md:text-sm">
+                    Back to Live Classes
                   </button>
                 </div>
               </div>
@@ -710,57 +1035,49 @@ const LiveClassRoom = () => {
           </div>
         </div>
 
-        {/* Sidebar */}
-        <div className={`fixed inset-y-0 right-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 flex flex-col z-50 transform transition-transform duration-300 sm:relative sm:transform-none ${
+        <div className={`fixed inset-y-0 right-0 w-80 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 flex flex-col z-50 transform transition-transform duration-300 sm:relative sm:transform-none sm:w-80 ${
           showSidebar ? 'translate-x-0' : 'translate-x-full sm:translate-x-0'
         }`}>
-          <div className="flex items-center justify-between p-3 border-b sm:hidden">
-            <h3 className="font-semibold">Chat</h3>
-            <button onClick={() => setShowSidebar(false)} className="p-1 rounded-lg bg-gray-100">
-              <X className="h-5 w-5" />
+          <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-800 sm:hidden">
+            <h3 className="text-gray-900 dark:text-white font-semibold">Chat & Participants</h3>
+            <button onClick={() => setShowSidebar(false)} className="p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
+              <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
             </button>
           </div>
           
-          <div className="flex border-b">
-            <button onClick={() => { setShowChat(true); setShowParticipants(false); }} className={`flex-1 py-2 text-sm ${showChat ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-500"}`}>
-              <MessageSquare className="h-3.5 w-3.5 inline mr-1" /> Chat
+          <div className="flex border-b border-gray-200 dark:border-gray-800">
+            <button onClick={() => { setShowChat(true); setShowParticipants(false); }} className={`flex-1 py-2.5 text-xs md:text-sm transition-colors ${showChat ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400" : "text-gray-500 dark:text-gray-400"}`}>
+              <MessageSquare className="h-3 w-3 md:h-3.5 md:w-3.5 inline mr-1" /> Chat
             </button>
-            <button onClick={() => { setShowChat(false); setShowParticipants(true); }} className={`flex-1 py-2 text-sm ${showParticipants ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-500"}`}>
-              <Users className="h-3.5 w-3.5 inline mr-1" /> Participants ({activeParticipantsCount})
+            <button onClick={() => { setShowChat(false); setShowParticipants(true); }} className={`flex-1 py-2.5 text-xs md:text-sm transition-colors ${showParticipants ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400" : "text-gray-500 dark:text-gray-400"}`}>
+              <Users className="h-3 w-3 md:h-3.5 md:w-3.5 inline mr-1" /> Participants ({activeParticipantsCount})
             </button>
           </div>
 
           {showChat && (
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              <div className="flex-1 overflow-y-auto p-2 md:p-3 space-y-2">
                 {chatMessages.map((msg, idx) => (
                   <div key={idx} className="flex items-start gap-2">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-xs font-bold">{msg.userName?.charAt(0) || "U"}</span>
+                    <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-[10px] md:text-xs font-bold">{msg.userName?.charAt(0) || "U"}</span>
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold">{msg.userName}</span>
-                        <span className="text-[10px] text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 md:gap-2 flex-wrap">
+                        <span className="text-[10px] md:text-xs font-semibold text-gray-900 dark:text-white">{msg.userName}</span>
+                        <span className="text-[8px] md:text-[10px] text-gray-500 dark:text-gray-400">{new Date(msg.timestamp).toLocaleTimeString()}</span>
                       </div>
-                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">{msg.message}</p>
+                      <p className="text-[10px] md:text-xs text-gray-600 dark:text-gray-300 mt-0.5 break-words">{msg.message}</p>
                     </div>
                   </div>
                 ))}
+                {chatMessages.length === 0 && <div className="text-center text-gray-500 dark:text-gray-400 text-xs md:text-sm py-8">No messages yet</div>}
               </div>
-              {isJoined && (
-                <form onSubmit={sendMessage} className="p-3 border-t">
+              {isJoined && isClassActive && (
+                <form onSubmit={sendMessage} className="p-2 md:p-3 border-t border-gray-200 dark:border-gray-800">
                   <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      value={newMessage} 
-                      onChange={(e) => setNewMessage(e.target.value)} 
-                      placeholder="Type a message..." 
-                      className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-800 text-sm rounded-lg border focus:outline-none focus:border-indigo-500"
-                    />
-                    <button type="submit" className="p-2 bg-indigo-500 text-white rounded-lg">
-                      <Send className="h-4 w-4" />
-                    </button>
+                    <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-1 px-2 md:px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-xs md:text-sm rounded-lg border border-gray-300 dark:border-gray-700 focus:outline-none focus:border-indigo-500" />
+                    <button type="submit" className="p-1.5 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"><Send className="h-3 w-3 md:h-4 md:w-4" /></button>
                   </div>
                 </form>
               )}
@@ -768,48 +1085,51 @@ const LiveClassRoom = () => {
           )}
 
           {showParticipants && (
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {participants.filter(p => p.active).map((p, idx) => {
-                const pid = getUserId(p);
-                const pName = getUserName(p);
-                const hasVideo = remoteStreams[pid] && remoteStreams[pid].getVideoTracks().length > 0;
-                
-                return (
-                  <div key={pid || idx} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                      <span className="text-white font-semibold text-sm">{pName?.charAt(0) || "U"}</span>
+            <div className="flex-1 overflow-y-auto p-2 md:p-3 space-y-2">
+              {participants
+                .filter(p => p && p.active && !p.leftAt)
+                .map((p, idx) => {
+                  const pid = getUserId(p);
+                  const pName = getUserName(p);
+                  return (
+                    <div key={pid || idx} className="flex items-center gap-2 p-1.5 md:p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                      <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                        <span className="text-white font-semibold text-xs md:text-sm">{pName?.charAt(0) || "U"}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs md:text-sm font-medium text-gray-900 dark:text-white truncate">{pName}</p>
+                        <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">{p.role === "lecturer" ? "Host" : p.role === "admin" ? "Admin" : "Student"}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {p.audioEnabled === false && <MicOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
+                        {p.videoEnabled === false && <VideoOff className="h-2.5 w-2.5 md:h-3 md:w-3 text-red-400" />}
+                        {speakingUsers[pid] && <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium truncate">{pName}</p>
-                      <p className="text-xs text-gray-500">{p.role === "lecturer" ? "Host" : p.role === "admin" ? "Admin" : "Student"}</p>
-                    </div>
-                    {hasVideo && <div className="w-2 h-2 rounded-full bg-green-500" title="Video on" />}
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
         </div>
         
-        {showSidebar && <div className="fixed inset-0 bg-black/50 z-40 sm:hidden" onClick={() => setShowSidebar(false)} />}
+        {showSidebar && (
+          <div className="fixed inset-0 bg-black/50 z-40 sm:hidden" onClick={() => setShowSidebar(false)} />
+        )}
       </div>
 
-      {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 max-w-md w-full">
-            <h3 className="text-lg font-bold mb-3">Invite Participants</h3>
-            <p className="text-sm text-gray-600 mb-2">Share this link:</p>
-            <div className="flex gap-2 mb-4">
-              <input type="text" value={inviteLink} readOnly className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-sm rounded-lg truncate" />
-              <button onClick={copyInviteLink} className="px-3 py-2 bg-indigo-500 text-white rounded-lg flex items-center gap-1 text-sm">
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-5 max-w-md w-full">
+            <h3 className="text-base md:text-lg font-bold text-gray-900 dark:text-white mb-2 md:mb-3">Invite Participants</h3>
+            <p className="text-gray-600 dark:text-gray-400 text-xs md:text-sm mb-2 md:mb-3">Share this link:</p>
+            <div className="flex gap-2 mb-3 md:mb-4">
+              <input type="text" value={inviteLink} readOnly className="flex-1 px-2 md:px-3 py-1.5 md:py-2 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white text-xs md:text-sm rounded-lg border border-gray-300 dark:border-gray-600 truncate" />
+              <button onClick={copyInviteLink} className="px-2 md:px-3 py-1.5 md:py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 flex items-center gap-1 text-xs md:text-sm transition-colors">
+                {copied ? <Check className="h-3 w-3 md:h-4 md:w-4" /> : <Copy className="h-3 w-3 md:h-4 md:w-4" />}
                 {copied ? "Copied" : "Copy"}
               </button>
             </div>
-            <button onClick={() => setShowInviteModal(false)} className="w-full py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm">
-              Close
-            </button>
+            <button onClick={() => setShowInviteModal(false)} className="w-full py-1.5 md:py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm transition-colors">Close</button>
           </div>
         </div>
       )}
@@ -817,130 +1137,265 @@ const LiveClassRoom = () => {
   );
 };
 
-// Video Grid Component
-const VideoGrid = memo(({ 
-  currentUser, participants, remoteStreams, localStream, localStreamReady,
-  videoRefs, isVideoOff, layout, pinnedVideo, setPinnedVideo 
-}) => {
+// ================= VIDEO TILE COMPONENT =================
+const VideoTile = memo(({ video, isPinned = false, isSidebar = false, 
+  userMediaStreamRef, localStreamReady, videoRefs, pinnedVideo, setPinnedVideo }) => {
+  const videoElementRef = useRef(null);
+  const [audioActive, setAudioActive] = useState(false);
   
-  const videos = [];
+  useEffect(() => {
+    if (video?.id && videoElementRef.current) {
+      videoRefs.current[video.id] = videoElementRef.current;
+    }
+    
+    return () => {
+      if (video?.id) {
+        delete videoRefs.current[video.id];
+      }
+    };
+  }, [video?.id, videoRefs]);
   
-  // Local video
-  videos.push({
-    id: currentUser?._id,
-    name: `${currentUser?.name} (You)`,
-    stream: localStream,
-    isLocal: true,
-    isVideoOff: isVideoOff,
-    role: currentUser?.role
-  });
+  useEffect(() => {
+    const videoElement = videoElementRef.current;
+    if (!videoElement || !video) return;
+    
+    let streamToUse = null;
+    if (video.isLocal) {
+      streamToUse = userMediaStreamRef.current;
+    } else {
+      streamToUse = video.remoteStream;
+    }
+    
+    if (streamToUse && videoElement.srcObject !== streamToUse) {
+      console.log(`🎥 Attaching stream for ${video.name}`);
+      
+      streamToUse.getAudioTracks().forEach(track => {
+        track.enabled = true;
+        console.log(`🎤 Audio track enabled for ${video.name}`);
+      });
+      
+      videoElement.srcObject = streamToUse;
+      videoElement.volume = video.isLocal ? 0 : 1;
+      
+      const playPromise = videoElement.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(e => {
+          console.log(`Play error for ${video.name}:`, e);
+          setTimeout(() => {
+            if (videoElement.srcObject === streamToUse) {
+              videoElement.play().catch(e2 => console.log("Retry error:", e2));
+            }
+          }, 500);
+        });
+      }
+      
+      const checkAudioInterval = setInterval(() => {
+        if (videoElement.srcObject && !video.isLocal) {
+          const hasAudio = videoElement.srcObject.getAudioTracks().some(t => t.enabled);
+          setAudioActive(hasAudio);
+        }
+      }, 2000);
+      
+      return () => clearInterval(checkAudioInterval);
+    }
+  }, [video?.id, video?.isLocal, video?.remoteStream, userMediaStreamRef]);
   
-  // Remote videos
-  participants.forEach(p => {
-    const pid = p.userId?._id || p.userId;
-    if (pid !== currentUser?._id && p.active) {
-      const stream = remoteStreams[pid];
-      videos.push({
-        id: pid,
-        name: p.userId?.name || "Participant",
-        stream: stream,
-        isLocal: false,
-        isVideoOff: !stream || stream.getVideoTracks().length === 0,
-        role: p.role
+  if (!video) return null;
+  
+  const hasValidStream = video.isLocal ? localStreamReady && userMediaStreamRef.current : !!video.remoteStream;
+  const shouldShowVideo = hasValidStream && !video.isVideoOff;
+  
+  return (
+    <div 
+      className={`relative bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden group ${
+        isPinned ? "h-full" : isSidebar ? "h-24 md:h-32" : "aspect-video"
+      } ${video.isSpeaking ? "ring-2 ring-green-500" : ""}`}
+    >
+      <video
+        ref={videoElementRef}
+        autoPlay
+        playsInline
+        muted={video.isLocal}
+        className="w-full h-full object-cover"
+      />
+      
+      {!shouldShowVideo && (
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-100 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
+          <div className="text-center px-2">
+            <div className="w-12 h-12 md:w-16 md:h-16 mx-auto rounded-full bg-indigo-500/20 dark:bg-indigo-500/30 flex items-center justify-center mb-1 md:mb-2">
+              <span className="text-xl md:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                {video.name?.charAt(0) || "U"}
+              </span>
+            </div>
+            <p className="text-gray-800 dark:text-white text-xs md:text-sm font-medium truncate max-w-[100px] md:max-w-[150px]">
+              {video.name}
+            </p>
+            {video.isVideoOff && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Camera off</p>}
+            {!hasValidStream && !video.isLocal && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Connecting...</p>}
+          </div>
+        </div>
+      )}
+      
+      {!video.isLocal && audioActive && video.isSpeaking && (
+        <div className="absolute top-2 left-2 bg-green-500/80 rounded-full px-2 py-0.5 text-white text-[10px] font-medium">
+          Speaking
+        </div>
+      )}
+      
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 md:p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1 md:gap-2">
+            <span className="text-white text-xs md:text-sm font-medium truncate max-w-[80px] md:max-w-[150px]">
+              {video.name}
+            </span>
+            {video.role === "lecturer" && (
+              <span className="px-1 md:px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] md:text-xs">Host</span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {video.isMuted && <MicOff className="h-3 w-3 md:h-4 md:w-4 text-red-400" />}
+            {video.isVideoOff && <VideoOff className="h-3 w-3 md:h-4 md:w-4 text-red-400" />}
+          </div>
+        </div>
+      </div>
+      
+      {!video.isLocal && !isSidebar && setPinnedVideo && (
+        <button 
+          onClick={() => setPinnedVideo(pinnedVideo === video.id ? null : video.id)} 
+          className="absolute top-2 right-2 p-1 md:p-1.5 rounded-lg bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <Pin className={`h-2 w-2 md:h-3 md:w-3 ${pinnedVideo === video.id ? "text-indigo-400 fill-indigo-400" : "text-white"}`} />
+        </button>
+      )}
+    </div>
+  );
+});
+
+// ================= VIDEO GRID COMPONENT =================
+const VideoGridComponent = memo(({ layout, pinnedVideo, setPinnedVideo, currentUser, participants, 
+  isMuted, isVideoOff, speakingUsers, userMediaStreamRef, localStreamReady, videoRefs }) => {
+  
+  const getVideoParticipants = useCallback(() => {
+    const allVideos = [];
+    
+    // Add local user (YOU)
+    if (currentUser?._id && userMediaStreamRef.current) {
+      allVideos.push({
+        id: `local_${currentUser._id}`,
+        userId: currentUser._id,
+        name: `${currentUser.name} (You)`,
+        remoteStream: userMediaStreamRef.current,
+        isLocal: true,
+        role: currentUser.role,
+        isMuted: isMuted,
+        isVideoOff: isVideoOff,
+        isSpeaking: speakingUsers[currentUser._id]
       });
     }
-  });
-  
-  if (layout === "speaker" && videos.length > 1) {
-    const mainVideo = pinnedVideo ? videos.find(v => v.id === pinnedVideo) : videos.find(v => v.role === "lecturer") || videos[0];
-    const sidebarVideos = videos.filter(v => v.id !== mainVideo?.id);
     
+    // Add remote participants (OTHER USERS)
+    if (Array.isArray(participants)) {
+      participants
+        .filter(p => p && p.userId && p.userId._id !== currentUser?._id && p.active && !p.leftAt)
+        .forEach(p => {
+          if (p.userId?._id) {
+            allVideos.push({
+              id: p.userId._id,
+              userId: p.userId._id,
+              name: p.userId.name || "Participant",
+              remoteStream: p.remoteStream,
+              isLocal: false,
+              role: p.role || "student",
+              isMuted: !p.audioEnabled,
+              isVideoOff: !p.videoEnabled,
+              isSpeaking: speakingUsers[p.userId._id]
+            });
+          }
+        });
+    }
+    
+    if (pinnedVideo) {
+      const pinned = allVideos.find(v => v.id === pinnedVideo);
+      const others = allVideos.filter(v => v.id !== pinnedVideo);
+      return { pinned, others };
+    }
+    return { pinned: null, others: allVideos };
+  }, [currentUser, participants, isMuted, isVideoOff, speakingUsers, pinnedVideo, userMediaStreamRef]);
+  
+  const { pinned, others } = getVideoParticipants();
+  
+  if (others.length === 0 && !pinned) {
     return (
-      <div className="flex flex-col md:flex-row h-full gap-4">
-        <div className="flex-1">
-          {mainVideo && <VideoTile video={mainVideo} videoRefs={videoRefs} isMain />}
-        </div>
-        <div className="flex md:flex-col gap-3 overflow-x-auto md:overflow-y-auto md:w-48 p-2">
-          {sidebarVideos.map(v => <VideoTile key={v.id} video={v} videoRefs={videoRefs} isSidebar />)}
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center text-gray-500">
+          <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+          <p>Waiting for participants to join...</p>
         </div>
       </div>
     );
   }
   
-  const count = videos.length;
+  if (layout === "speaker" && others.length > 0) {
+    const mainSpeaker = pinned || others.find(v => v.role === "lecturer") || others[0];
+    const sidebarVideos = others.filter(v => v.id !== mainSpeaker?.id);
+    
+    return (
+      <div className="flex flex-col md:flex-row h-full gap-2 md:gap-4">
+        <div className="flex-1 min-h-0">
+          {mainSpeaker && (
+            <VideoTile 
+              video={mainSpeaker} 
+              isPinned 
+              userMediaStreamRef={userMediaStreamRef}
+              localStreamReady={localStreamReady}
+              videoRefs={videoRefs}
+              pinnedVideo={pinnedVideo}
+              setPinnedVideo={setPinnedVideo}
+            />
+          )}
+        </div>
+        {sidebarVideos.length > 0 && (
+          <div className="flex md:flex-col gap-2 md:gap-3 overflow-x-auto md:overflow-y-auto md:w-32 lg:w-48 p-2">
+            {sidebarVideos.map(video => (
+              <VideoTile 
+                key={video.id} 
+                video={video} 
+                isSidebar 
+                userMediaStreamRef={userMediaStreamRef}
+                localStreamReady={localStreamReady}
+                videoRefs={videoRefs}
+                pinnedVideo={pinnedVideo}
+                setPinnedVideo={setPinnedVideo}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+  const count = others.length;
   const getGridCols = () => {
-    if (count === 1) return "grid-cols-1";
+    if (count <= 1) return "grid-cols-1";
     if (count === 2) return "grid-cols-2";
     if (count <= 4) return "grid-cols-2";
-    return "grid-cols-2 md:grid-cols-3";
+    if (count <= 6) return "grid-cols-2 md:grid-cols-3";
+    return "grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
   };
   
   return (
-    <div className={`grid ${getGridCols()} gap-4 h-full auto-rows-fr overflow-y-auto p-2`}>
-      {videos.map(v => (
+    <div className={`grid ${getGridCols()} gap-2 md:gap-4 h-full auto-rows-fr overflow-y-auto p-1 md:p-2`}>
+      {others.map(video => (
         <VideoTile 
-          key={v.id} 
-          video={v} 
-          videoRefs={videoRefs} 
-          isPinned={pinnedVideo === v.id}
-          onPin={() => setPinnedVideo?.(pinnedVideo === v.id ? null : v.id)}
+          key={video.id} 
+          video={video} 
+          userMediaStreamRef={userMediaStreamRef}
+          localStreamReady={localStreamReady}
+          videoRefs={videoRefs}
+          pinnedVideo={pinnedVideo}
+          setPinnedVideo={setPinnedVideo}
         />
       ))}
-    </div>
-  );
-});
-
-// Video Tile Component
-const VideoTile = memo(({ video, videoRefs, isMain, isSidebar, isPinned, onPin }) => {
-  const videoRef = useRef(null);
-  
-  useEffect(() => {
-    if (video?.id && videoRef.current) {
-      videoRefs.current[video.id] = videoRef.current;
-    }
-    return () => {
-      if (video?.id) delete videoRefs.current[video.id];
-    };
-  }, [video?.id, videoRefs]);
-  
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el || !video?.stream) return;
-    
-    if (el.srcObject !== video.stream) {
-      el.srcObject = video.stream;
-      el.play().catch(console.log);
-    }
-  }, [video?.stream, video?.id]);
-  
-  const showVideo = video?.stream && !video?.isVideoOff;
-  
-  return (
-    <div className={`relative bg-gray-800 rounded-xl overflow-hidden group ${isMain ? "h-full" : isSidebar ? "h-32" : "aspect-video"}`}>
-      <video ref={videoRef} autoPlay playsInline muted={video?.isLocal} className="w-full h-full object-cover" />
-      
-      {!showVideo && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-indigo-500/30 flex items-center justify-center">
-              <span className="text-2xl font-bold text-indigo-400">{video?.name?.charAt(0) || "U"}</span>
-            </div>
-            <p className="text-white text-sm mt-2">{video?.name}</p>
-          </div>
-        </div>
-      )}
-      
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="flex items-center justify-between">
-          <span className="text-white text-sm truncate">{video?.name}</span>
-        </div>
-      </div>
-      
-      {!video?.isLocal && onPin && (
-        <button onClick={onPin} className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Pin className={`h-3 w-3 ${isPinned ? "text-indigo-400 fill-indigo-400" : "text-white"}`} />
-        </button>
-      )}
     </div>
   );
 });
