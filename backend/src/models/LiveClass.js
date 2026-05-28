@@ -1,4 +1,4 @@
-// models/LiveClass.js - COMPLETELY FIXED (NO meetingId unique index)
+// models/LiveClass.js - COMPLETE WITH PROGRAM SUPPORT
 import mongoose from "mongoose";
 
 const participantSchema = new mongoose.Schema({
@@ -48,6 +48,7 @@ const chatMessageSchema = new mongoose.Schema({
 const liveClassSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String },
+  programId: { type: mongoose.Schema.Types.ObjectId, ref: "Program", required: true },
   courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
   subjectId: { type: mongoose.Schema.Types.ObjectId, ref: "Subject", required: true },
   lecturerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -64,9 +65,6 @@ const liveClassSchema = new mongoose.Schema({
   participants: [participantSchema],
   chatMessages: [chatMessageSchema],
   
-  // REMOVED: meetingId field entirely - it was causing duplicate key error
-  // If you need a meeting ID, generate a unique one on creation
-  
   recordingAvailable: { type: Boolean, default: false },
   recordingUrl: { type: String },
   recordingPassword: { type: String },
@@ -74,23 +72,19 @@ const liveClassSchema = new mongoose.Schema({
   recordingEndedAt: { type: Date },
   recordingDuration: { type: Number },
   
-  // Timer features
   timerDuration: { type: Number },
   timerStartedAt: { type: Date },
   timerReminderSent: { type: Boolean, default: false },
   autoEndEnabled: { type: Boolean, default: true },
   
-  // Analytics
   totalAttendance: { type: Number, default: 0 },
   averageAttendanceDuration: { type: Number, default: 0 },
   peakConcurrentParticipants: { type: Number, default: 0 },
   
-  // Recording and streaming
   isBeingRecorded: { type: Boolean, default: false },
   streamKey: { type: String },
   playbackUrl: { type: String },
   
-  // Settings
   settings: {
     allowChat: { type: Boolean, default: true },
     allowScreenShare: { type: Boolean, default: true },
@@ -106,13 +100,13 @@ const liveClassSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for better query performance
+// Indexes
 liveClassSchema.index({ scheduledStartTime: 1, status: 1 });
+liveClassSchema.index({ programId: 1, status: 1 });
 liveClassSchema.index({ courseId: 1, status: 1 });
 liveClassSchema.index({ lecturerId: 1, status: 1 });
 liveClassSchema.index({ "participants.userId": 1 });
 
-// Method to check if class is active
 liveClassSchema.methods.isActive = function() {
   const now = new Date();
   return this.status === "ongoing" && 
@@ -120,12 +114,10 @@ liveClassSchema.methods.isActive = function() {
          now <= this.scheduledEndTime;
 };
 
-// Method to get participant count
 liveClassSchema.methods.getActiveParticipantCount = function() {
   return this.participants.filter(p => !p.leftAt).length;
 };
 
-// Method to update peak concurrent participants
 liveClassSchema.methods.updatePeakParticipants = function() {
   const currentCount = this.getActiveParticipantCount();
   if (currentCount > this.peakConcurrentParticipants) {
@@ -134,7 +126,6 @@ liveClassSchema.methods.updatePeakParticipants = function() {
   return this.peakConcurrentParticipants;
 };
 
-// Method to calculate average attendance duration
 liveClassSchema.methods.calculateAverageAttendance = function() {
   const participantsWithDuration = this.participants.filter(p => p.duration > 0);
   if (participantsWithDuration.length === 0) return 0;
@@ -146,7 +137,6 @@ liveClassSchema.methods.calculateAverageAttendance = function() {
   return this.averageAttendanceDuration;
 };
 
-// Method to safely update timer
 liveClassSchema.methods.updateTimer = function() {
   if (this.status === "ongoing" && this.timerDuration && this.timerStartedAt) {
     const timerEndTime = new Date(this.timerStartedAt.getTime() + this.timerDuration * 60000);

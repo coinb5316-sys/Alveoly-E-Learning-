@@ -1,11 +1,48 @@
-// routes/liveClassRoutes.js - COMPLETE WITH ALL ENDPOINTS (IN CORRECT ORDER)
+// routes/liveClassRoutes.js - COMPLETE WITH PROGRAM-BASED ACCESS CONTROL
 import express from "express";
 import { protect } from "../middleware/authMiddleware.js";
 import LiveClass from "../models/LiveClass.js";
 import User from "../models/User.js";
+import Program from "../models/Program.js";
+import Course from "../models/Course.js";
+import Payment from "../models/Payment.js";
+import ManualAccess from "../models/ManualAccess.js";
 import { createNotification } from "../controllers/notificationController.js";
 
 const router = express.Router();
+
+// Helper function to check if a student has access to a program
+const hasProgramAccess = async (userId, programId) => {
+  const now = new Date();
+  
+  // Check if user has a plan covering this program
+  const planPayment = await Payment.findOne({
+    userId,
+    status: "success",
+    expiresAt: { $gt: now },
+  }).populate({
+    path: "planId",
+    populate: { path: "subjects", select: "programId" }
+  });
+  
+  if (planPayment?.planId) {
+    const hasProgramInPlan = planPayment.planId.subjects.some(
+      subject => subject.programId?.toString() === programId.toString()
+    );
+    if (hasProgramInPlan) return true;
+  }
+  
+  // Check manual access for program
+  const manualAccess = await ManualAccess.findOne({
+    userId,
+    programId,
+    status: "active",
+    expiresAt: { $gt: now }
+  });
+  if (manualAccess) return true;
+  
+  return false;
+};
 
 // ================= ADMIN GET ALL CLASSES =================
 router.get("/admin/all", protect, async (req, res) => {
@@ -15,16 +52,48 @@ router.get("/admin/all", protect, async (req, res) => {
     }
 
     const liveClasses = await LiveClass.find({})
+      .populate("programId", "name code")
       .populate("courseId", "name")
       .populate("subjectId", "name")
       .populate("lecturerId", "name email avatar")
       .populate("createdBy", "name")
       .sort({ createdAt: -1 });
 
-    console.log(`Found ${liveClasses.length} live classes for admin`);
     res.json(liveClasses);
   } catch (err) {
     console.error("Get all live classes error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ================= ADMIN GET PROGRAMS (for form) =================
+router.get("/admin/programs", protect, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+    
+    const programs = await Program.find({ isActive: { $ne: false } })
+      .select("_id name code");
+    res.json(programs);
+  } catch (err) {
+    console.error("Get programs error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ================= ADMIN GET COURSES BY PROGRAM =================
+router.get("/admin/courses/:programId", protect, async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+    
+    const courses = await Course.find({ programId: req.params.programId })
+      .select("_id name");
+    res.json(courses);
+  } catch (err) {
+    console.error("Get courses error:", err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -37,12 +106,12 @@ router.get("/lecturer/my-classes", protect, async (req, res) => {
     }
 
     const liveClasses = await LiveClass.find({ lecturerId: req.user._id })
+      .populate("programId", "name code")
       .populate("courseId", "name")
       .populate("subjectId", "name")
       .populate("lecturerId", "name email avatar")
       .sort({ scheduledStartTime: 1 });
 
-    console.log(`Found ${liveClasses.length} live classes for lecturer ${req.user.name}`);
     res.json(liveClasses);
   } catch (err) {
     console.error("Get lecturer classes error:", err);
@@ -50,23 +119,32 @@ router.get("/lecturer/my-classes", protect, async (req, res) => {
   }
 });
 
-// ================= STUDENT GET MY CLASSES =================
+// ================= STUDENT GET MY CLASSES (with program access check) =================
 router.get("/student/my-classes", protect, async (req, res) => {
   try {
     if (req.user.role !== "student") {
       return res.status(403).json({ message: "Access denied. Student only." });
     }
 
-    // Get all classes (for now, since students might not have enrolledCourses populated)
-    // You can modify this later to filter by enrolled courses
-    const liveClasses = await LiveClass.find({})
+    // Get all classes
+    const allClasses = await LiveClass.find({})
+      .populate("programId", "name code")
       .populate("courseId", "name")
       .populate("subjectId", "name")
       .populate("lecturerId", "name email avatar")
       .sort({ scheduledStartTime: 1 });
 
-    console.log(`Found ${liveClasses.length} live classes for student ${req.user.name}`);
-    res.json(liveClasses);
+    // Filter classes based on program access
+    const accessibleClasses = [];
+    
+    for (const cls of allClasses) {
+      const hasAccess = await hasProgramAccess(req.user._id, cls.programId._id);
+      if (hasAccess || cls.status === "ongoing" || cls.status === "scheduled") {
+        accessibleClasses.push(cls);
+      }
+    }
+
+    res.json(accessibleClasses);
   } catch (err) {
     console.error("Get student classes error:", err);
     res.status(500).json({ message: err.message });
@@ -81,16 +159,39 @@ router.post("/admin/create", protect, async (req, res) => {
     }
 
     const {
-      title, description, courseId, subjectId, lecturerId,
+      title, description, programId, courseId, subjectId, lecturerId,
       scheduledStartTime, scheduledEndTime, maxParticipants, timerDuration
     } = req.body;
 
-    if (!title || !courseId || !subjectId || !lecturerId || !scheduledStartTime || !scheduledEndTime) {
+    if (!title || !programId || !courseId || !subjectId || !lecturerId || !scheduledStartTime || !scheduledEndTime) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    // Verify program exists
+    const program = await Program.findById(programId);
+    if (!program || program.isActive === false) {
+      return res.status(400).json({ message: "Invalid or inactive program" });
+    }
+
+    // Verify course belongs to program
+    const course = await Course.findById(courseId);
+    if (!course || course.programId.toString() !== programId) {
+      return res.status(400).json({ message: "Course does not belong to selected program" });
+    }
+
+    // Verify lecturer exists
+    const lecturer = await User.findById(lecturerId);
+    if (!lecturer || lecturer.role !== "lecturer") {
+      return res.status(400).json({ message: "Invalid lecturer selected" });
+    }
+
     const liveClass = await LiveClass.create({
-      title, description, courseId, subjectId, lecturerId,
+      title,
+      description,
+      programId,
+      courseId,
+      subjectId,
+      lecturerId,
       scheduledStartTime: new Date(scheduledStartTime),
       scheduledEndTime: new Date(scheduledEndTime),
       maxParticipants: maxParticipants || 100,
@@ -101,6 +202,7 @@ router.post("/admin/create", protect, async (req, res) => {
     });
 
     const populatedClass = await LiveClass.findById(liveClass._id)
+      .populate("programId", "name code")
       .populate("courseId", "name")
       .populate("subjectId", "name")
       .populate("lecturerId", "name email avatar");
@@ -109,7 +211,7 @@ router.post("/admin/create", protect, async (req, res) => {
     try {
       await createNotification(lecturerId, "lecturer", "info",
         "📅 Live Class Scheduled",
-        `You have been scheduled to teach "${title}" on ${new Date(scheduledStartTime).toLocaleString()}`,
+        `You have been scheduled to teach "${title}" for ${program.name} on ${new Date(scheduledStartTime).toLocaleString()}`,
         `/lecturer/live-class/${liveClass._id}`,
         { classId: liveClass._id, action: "class_scheduled" }
       );
@@ -132,7 +234,7 @@ router.put("/admin/:classId", protect, async (req, res) => {
     }
 
     const {
-      title, description, courseId, subjectId, lecturerId,
+      title, description, programId, courseId, subjectId, lecturerId,
       scheduledStartTime, scheduledEndTime, maxParticipants, timerDuration
     } = req.body;
 
@@ -149,11 +251,33 @@ router.put("/admin/:classId", protect, async (req, res) => {
       return res.status(400).json({ message: "Cannot edit a completed class" });
     }
 
+    if (programId) {
+      const program = await Program.findById(programId);
+      if (!program || program.isActive === false) {
+        return res.status(400).json({ message: "Invalid or inactive program" });
+      }
+      liveClass.programId = programId;
+    }
+
+    if (courseId && liveClass.programId) {
+      const course = await Course.findById(courseId);
+      if (!course || course.programId.toString() !== liveClass.programId.toString()) {
+        return res.status(400).json({ message: "Course does not belong to selected program" });
+      }
+      liveClass.courseId = courseId;
+    }
+
+    if (lecturerId) {
+      const lecturer = await User.findById(lecturerId);
+      if (!lecturer || lecturer.role !== "lecturer") {
+        return res.status(400).json({ message: "Invalid lecturer selected" });
+      }
+      liveClass.lecturerId = lecturerId;
+    }
+
     if (title) liveClass.title = title;
     if (description !== undefined) liveClass.description = description;
-    if (courseId) liveClass.courseId = courseId;
     if (subjectId) liveClass.subjectId = subjectId;
-    if (lecturerId) liveClass.lecturerId = lecturerId;
     if (scheduledStartTime) liveClass.scheduledStartTime = new Date(scheduledStartTime);
     if (scheduledEndTime) liveClass.scheduledEndTime = new Date(scheduledEndTime);
     if (maxParticipants) liveClass.maxParticipants = maxParticipants;
@@ -162,6 +286,7 @@ router.put("/admin/:classId", protect, async (req, res) => {
     await liveClass.save();
 
     const populatedClass = await LiveClass.findById(liveClass._id)
+      .populate("programId", "name code")
       .populate("courseId", "name")
       .populate("subjectId", "name")
       .populate("lecturerId", "name email avatar");
@@ -197,11 +322,58 @@ router.delete("/admin/:classId", protect, async (req, res) => {
   }
 });
 
-// ================= JOIN/LEAVE ROUTES =================
+// ================= GET SINGLE CLASS (with access check) =================
+router.get("/:classId", protect, async (req, res) => {
+  try {
+    const liveClass = await LiveClass.findById(req.params.classId)
+      .populate("programId", "name code")
+      .populate("courseId", "name")
+      .populate("subjectId", "name")
+      .populate("lecturerId", "name email avatar")
+      .populate("participants.userId", "name email avatar")
+      .populate("createdBy", "name");
+
+    if (!liveClass) {
+      return res.status(404).json({ message: "Live class not found" });
+    }
+
+    // Access control
+    const isAdmin = req.user.role === "admin";
+    const isLecturer = liveClass.lecturerId?._id.toString() === req.user._id.toString();
+    const isStudent = req.user.role === "student";
+    
+    if (isAdmin || isLecturer) {
+      return res.json(liveClass);
+    }
+    
+    if (isStudent) {
+      const hasAccess = await hasProgramAccess(req.user._id, liveClass.programId._id);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You do not have access to this class. Please purchase the program first." });
+      }
+      return res.json(liveClass);
+    }
+    
+    return res.status(403).json({ message: "Access denied" });
+  } catch (err) {
+    console.error("Get live class details error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ================= JOIN CLASS (with access check) =================
 router.post("/:classId/join", protect, async (req, res) => {
   try {
     const liveClass = await LiveClass.findById(req.params.classId);
     if (!liveClass) return res.status(404).json({ message: "Live class not found" });
+
+    // Access control for students
+    if (req.user.role === "student") {
+      const hasAccess = await hasProgramAccess(req.user._id, liveClass.programId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You do not have access to this class. Please purchase the program first." });
+      }
+    }
 
     const now = new Date();
     const classStartTime = new Date(liveClass.scheduledStartTime);
@@ -248,6 +420,7 @@ router.post("/:classId/join", protect, async (req, res) => {
   }
 });
 
+// ================= LEAVE CLASS =================
 router.post("/:classId/leave", protect, async (req, res) => {
   try {
     const liveClass = await LiveClass.findById(req.params.classId);
@@ -270,7 +443,7 @@ router.post("/:classId/leave", protect, async (req, res) => {
   }
 });
 
-// ================= LECTURER START/END CLASS =================
+// ================= LECTURER START CLASS =================
 router.post("/lecturer/:classId/start", protect, async (req, res) => {
   try {
     if (req.user.role !== "lecturer") {
@@ -301,6 +474,7 @@ router.post("/lecturer/:classId/start", protect, async (req, res) => {
   }
 });
 
+// ================= LECTURER/ADMIN END CLASS =================
 router.post("/lecturer/:classId/end", protect, async (req, res) => {
   try {
     const liveClass = await LiveClass.findById(req.params.classId);
@@ -329,7 +503,7 @@ router.post("/lecturer/:classId/end", protect, async (req, res) => {
   }
 });
 
-// ================= CHAT MESSAGE ROUTES =================
+// ================= CHAT MESSAGE =================
 router.post("/:classId/chat", protect, async (req, res) => {
   try {
     const { message } = req.body;
@@ -352,25 +526,6 @@ router.post("/:classId/chat", protect, async (req, res) => {
     res.json({ success: true, message: "Message sent", chatMessage: newMessage });
   } catch (err) {
     console.error("Send chat error:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ================= GET SINGLE CLASS (MUST BE LAST) =================
-router.get("/:classId", protect, async (req, res) => {
-  try {
-    const liveClass = await LiveClass.findById(req.params.classId)
-      .populate("courseId", "name")
-      .populate("subjectId", "name")
-      .populate("lecturerId", "name email avatar")
-      .populate("participants.userId", "name email avatar")
-      .populate("createdBy", "name");
-
-    if (!liveClass) return res.status(404).json({ message: "Live class not found" });
-
-    res.json(liveClass);
-  } catch (err) {
-    console.error("Get live class details error:", err);
     res.status(500).json({ message: err.message });
   }
 });

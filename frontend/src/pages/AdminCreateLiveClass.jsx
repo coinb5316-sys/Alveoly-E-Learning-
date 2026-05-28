@@ -1,7 +1,7 @@
-// pages/admin/AdminCreateLiveClass.jsx - HIGHLY RESPONSIVE
+// pages/admin/AdminCreateLiveClass.jsx - WITH PROGRAM SUPPORT
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import axios from "../api/axios";
+import axios from "../../api/axios";
 import { 
   Calendar, 
   Clock, 
@@ -22,12 +22,14 @@ const AdminCreateLiveClass = () => {
   
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEditing);
+  const [programs, setPrograms] = useState([]);
   const [courses, setCourses] = useState([]);
-  const [lecturers, setLecturers] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [lecturers, setLecturers] = useState([]);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
+    programId: "",
     courseId: "",
     subjectId: "",
     lecturerId: "",
@@ -44,31 +46,51 @@ const AdminCreateLiveClass = () => {
   }, []);
 
   useEffect(() => {
-    if (formData.courseId) {
-      fetchSubjectsByCourse(formData.courseId);
+    if (formData.programId) {
+      fetchCoursesByProgram(formData.programId);
+    } else {
+      setCourses([]);
+      setSubjects([]);
+    }
+  }, [formData.programId]);
+
+  useEffect(() => {
+    if (formData.courseId && formData.programId) {
+      fetchSubjectsByCourse(formData.courseId, formData.programId);
+    } else {
+      setSubjects([]);
     }
   }, [formData.courseId]);
 
   const fetchFormData = async () => {
     try {
-      // Fetch courses
-      const coursesRes = await axios.get("/admin/courses");
-      setCourses(coursesRes.data || []);
+      // Fetch programs
+      const programsRes = await axios.get("/live-class/admin/programs");
+      setPrograms(programsRes.data || []);
       
-      // Fetch lecturers - using /users endpoint with role filter
+      // Fetch lecturers
       const usersRes = await axios.get("/admin/users");
       const lecturersList = usersRes.data.filter(user => user.role === "lecturer");
       setLecturers(lecturersList);
-      
     } catch (err) {
       console.error("Error fetching form data:", err);
       toast.error("Failed to load form data");
     }
   };
 
-  const fetchSubjectsByCourse = async (courseId) => {
+  const fetchCoursesByProgram = async (programId) => {
     try {
-      const res = await axios.get(`/admin/subjects?courseId=${courseId}`);
+      const res = await axios.get(`/live-class/admin/courses/${programId}`);
+      setCourses(res.data || []);
+    } catch (err) {
+      console.error("Error fetching courses:", err);
+      setCourses([]);
+    }
+  };
+
+  const fetchSubjectsByCourse = async (courseId, programId) => {
+    try {
+      const res = await axios.get(`/admin/subjects?course=${courseId}&program=${programId}`);
       setSubjects(res.data || []);
     } catch (err) {
       console.error("Error fetching subjects:", err);
@@ -83,6 +105,7 @@ const AdminCreateLiveClass = () => {
       setFormData({
         title: cls.title || "",
         description: cls.description || "",
+        programId: cls.programId?._id || cls.programId || "",
         courseId: cls.courseId?._id || cls.courseId || "",
         subjectId: cls.subjectId?._id || cls.subjectId || "",
         lecturerId: cls.lecturerId?._id || cls.lecturerId || "",
@@ -91,9 +114,11 @@ const AdminCreateLiveClass = () => {
         maxParticipants: cls.maxParticipants || 100
       });
       
-      // Fetch subjects for the course
-      if (cls.courseId?._id || cls.courseId) {
-        await fetchSubjectsByCourse(cls.courseId?._id || cls.courseId);
+      if (cls.programId?._id) {
+        await fetchCoursesByProgram(cls.programId._id);
+        if (cls.courseId?._id) {
+          await fetchSubjectsByCourse(cls.courseId._id, cls.programId._id);
+        }
       }
     } catch (err) {
       console.error("Error fetching live class:", err);
@@ -107,13 +132,11 @@ const AdminCreateLiveClass = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validate required fields
-    if (!formData.title || !formData.courseId || !formData.subjectId || !formData.lecturerId || !formData.scheduledStartTime || !formData.scheduledEndTime) {
+    if (!formData.title || !formData.programId || !formData.courseId || !formData.subjectId || !formData.lecturerId || !formData.scheduledStartTime || !formData.scheduledEndTime) {
       toast.error("Please fill in all required fields");
       return;
     }
     
-    // Validate dates
     const startTime = new Date(formData.scheduledStartTime);
     const endTime = new Date(formData.scheduledEndTime);
     
@@ -149,6 +172,14 @@ const AdminCreateLiveClass = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Reset dependent fields
+    if (name === "programId") {
+      setFormData(prev => ({ ...prev, courseId: "", subjectId: "" }));
+    }
+    if (name === "courseId") {
+      setFormData(prev => ({ ...prev, subjectId: "" }));
+    }
   };
 
   if (fetching) {
@@ -161,7 +192,6 @@ const AdminCreateLiveClass = () => {
 
   return (
     <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 max-w-full lg:max-w-5xl xl:max-w-6xl mx-auto">
-      {/* Header */}
       <div className="mb-6 sm:mb-8">
         <button
           onClick={() => navigate("/admin/live-classes")}
@@ -178,9 +208,7 @@ const AdminCreateLiveClass = () => {
         </p>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-        {/* Basic Information */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 sm:p-5 md:p-6">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
             <Video className="h-5 w-5 text-indigo-500 flex-shrink-0" />
@@ -219,14 +247,31 @@ const AdminCreateLiveClass = () => {
           </div>
         </div>
 
-        {/* Assignment */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 sm:p-5 md:p-6">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
             <GraduationCap className="h-5 w-5 text-indigo-500 flex-shrink-0" />
-            <span>Assignment</span>
+            <span>Program & Course Assignment</span>
           </h2>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Program *
+              </label>
+              <select
+                name="programId"
+                value={formData.programId}
+                onChange={handleChange}
+                required
+                className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+              >
+                <option value="">Select a program</option>
+                {programs.map(program => (
+                  <option key={program._id} value={program._id}>{program.name}</option>
+                ))}
+              </select>
+            </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Course *
@@ -236,7 +281,8 @@ const AdminCreateLiveClass = () => {
                 value={formData.courseId}
                 onChange={handleChange}
                 required
-                className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+                disabled={!formData.programId}
+                className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <option value="">Select a course</option>
                 {courses.map(course => (
@@ -299,7 +345,6 @@ const AdminCreateLiveClass = () => {
           </div>
         </div>
 
-        {/* Schedule */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 sm:p-5 md:p-6">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4 flex items-center gap-2">
             <Calendar className="h-5 w-5 text-indigo-500 flex-shrink-0" />
@@ -337,7 +382,6 @@ const AdminCreateLiveClass = () => {
           </div>
         </div>
 
-        {/* Form Actions */}
         <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-2 sm:pt-0">
           <button
             type="button"
