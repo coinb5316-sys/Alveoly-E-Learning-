@@ -119,34 +119,151 @@ router.get("/lecturer/my-classes", protect, async (req, res) => {
   }
 });
 
-// ================= STUDENT GET MY CLASSES (with program access check) =================
+// routes/liveClassRoutes.js - FIXED STUDENT ENDPOINT (replace the student section)
+
+// ================= STUDENT GET MY CLASSES (filter by program only - no payment check) =================
 router.get("/student/my-classes", protect, async (req, res) => {
   try {
     if (req.user.role !== "student") {
       return res.status(403).json({ message: "Access denied. Student only." });
     }
 
-    // Get all classes
-    const allClasses = await LiveClass.find({})
+    const { programId } = req.query;
+    
+    // If programId is provided in query, use it
+    let targetProgramId = programId;
+    
+    // If no programId in query, get from user's profile
+    if (!targetProgramId) {
+      const user = await User.findById(req.user._id).populate("programId");
+      targetProgramId = user.programId?._id || user.programId;
+    }
+    
+    if (!targetProgramId) {
+      return res.status(400).json({ message: "No program assigned to this student" });
+    }
+    
+    // Get only classes for the student's program
+    const liveClasses = await LiveClass.find({ programId: targetProgramId })
       .populate("programId", "name code")
       .populate("courseId", "name")
       .populate("subjectId", "name")
       .populate("lecturerId", "name email avatar")
       .sort({ scheduledStartTime: 1 });
 
-    // Filter classes based on program access
-    const accessibleClasses = [];
+    console.log(`Found ${liveClasses.length} live classes for student ${req.user.name} in program ${targetProgramId}`);
+    res.json(liveClasses);
+  } catch (err) {
+    console.error("Get student classes error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ================= GET SINGLE CLASS (simplified for students - no payment check) =================
+router.get("/:classId", protect, async (req, res) => {
+  try {
+    const liveClass = await LiveClass.findById(req.params.classId)
+      .populate("programId", "name code")
+      .populate("courseId", "name")
+      .populate("subjectId", "name")
+      .populate("lecturerId", "name email avatar")
+      .populate("participants.userId", "name email avatar")
+      .populate("createdBy", "name");
+
+    if (!liveClass) {
+      return res.status(404).json({ message: "Live class not found" });
+    }
+
+    // For students, check if they are in the same program
+    if (req.user.role === "student") {
+      const user = await User.findById(req.user._id);
+      const userProgramId = user.programId?._id || user.programId;
+      const classProgramId = liveClass.programId?._id || liveClass.programId;
+      
+      if (userProgramId?.toString() !== classProgramId?.toString()) {
+        return res.status(403).json({ 
+          message: "You do not have access to this class. This class is for a different program." 
+        });
+      }
+    }
     
-    for (const cls of allClasses) {
-      const hasAccess = await hasProgramAccess(req.user._id, cls.programId._id);
-      if (hasAccess || cls.status === "ongoing" || cls.status === "scheduled") {
-        accessibleClasses.push(cls);
+    return res.json(liveClass);
+  } catch (err) {
+    console.error("Get live class details error:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ================= JOIN CLASS (simplified - only program check, no payment) =================
+router.post("/:classId/join", protect, async (req, res) => {
+  try {
+    const liveClass = await LiveClass.findById(req.params.classId);
+    if (!liveClass) return res.status(404).json({ message: "Live class not found" });
+
+    // For students, check if they are in the same program
+    if (req.user.role === "student") {
+      const user = await User.findById(req.user._id);
+      const userProgramId = user.programId?._id || user.programId;
+      const classProgramId = liveClass.programId?._id || liveClass.programId;
+      
+      if (!userProgramId) {
+        return res.status(403).json({ message: "You are not assigned to any program." });
+      }
+      
+      if (userProgramId.toString() !== classProgramId.toString()) {
+        return res.status(403).json({ 
+          message: "You cannot join this class. This class is for a different program." 
+        });
       }
     }
 
-    res.json(accessibleClasses);
+    const now = new Date();
+    const classStartTime = new Date(liveClass.scheduledStartTime);
+    const canJoin = liveClass.status === "ongoing" || 
+                   (liveClass.status === "scheduled" && (classStartTime - now) <= 15 * 60 * 1000);
+
+    if (!canJoin) {
+      if (liveClass.status === "scheduled" && classStartTime > now) {
+        return res.status(400).json({ message: `Class starts on ${new Date(classStartTime).toLocaleString()}. You can join 15 minutes before start time.` });
+      }
+      if (liveClass.status === "completed" || now > new Date(liveClass.scheduledEndTime)) {
+        return res.status(400).json({ message: "This class has already ended." });
+      }
+      return res.status(400).json({ message: "Cannot join this class at this time." });
+    }
+
+    const isLecturer = liveClass.lecturerId.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === "admin";
+    let role = "student";
+    
+    if (isLecturer) role = "lecturer";
+    else if (isAdmin) role = "admin";
+
+    const existingParticipant = liveClass.participants.find(
+      p => p.userId.toString() === req.user._id.toString()
+    );
+    
+    if (existingParticipant && !existingParticipant.leftAt) {
+      return res.json({ success: true, message: "Already joined", liveClass });
+    }
+
+    if (existingParticipant && existingParticipant.leftAt) {
+      existingParticipant.leftAt = null;
+      existingParticipant.joinedAt = new Date();
+    } else {
+      liveClass.participants.push({
+        userId: req.user._id,
+        role: role,
+        joinedAt: new Date(),
+        audioEnabled: true,
+        videoEnabled: true
+      });
+    }
+
+    await liveClass.save();
+    res.json({ success: true, message: "Joined live class successfully", liveClass });
   } catch (err) {
-    console.error("Get student classes error:", err);
+    console.error("Join live class error:", err);
     res.status(500).json({ message: err.message });
   }
 });

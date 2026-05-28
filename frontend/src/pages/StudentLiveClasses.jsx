@@ -1,4 +1,4 @@
-// pages/student/StudentLiveClasses.jsx - FULLY FIXED
+// pages/student/StudentLiveClasses.jsx - FIXED TO FETCH BY PROGRAM
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -12,7 +12,8 @@ import {
   CheckCircle,
   AlertCircle,
   GraduationCap,
-  MonitorPlay
+  MonitorPlay,
+  BookOpen
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -21,14 +22,45 @@ const StudentLiveClasses = () => {
   const [liveClasses, setLiveClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("upcoming");
+  const [userProgram, setUserProgram] = useState(null);
+  const [userProgramId, setUserProgramId] = useState(null);
 
   useEffect(() => {
-    fetchLiveClasses();
+    fetchUserProgram();
   }, []);
 
-  const fetchLiveClasses = async () => {
+  const fetchUserProgram = async () => {
     try {
-      const res = await axios.get("/live-class/student/my-classes");
+      // Fetch the current user's profile to get their program
+      const res = await axios.get("/users/profile");
+      const userData = res.data;
+      
+      // Get the program ID from user's program field
+      const programId = userData.programId || userData.program?._id;
+      setUserProgramId(programId);
+      
+      if (programId) {
+        // Fetch program details
+        const programRes = await axios.get(`/admin/programs/${programId}`);
+        setUserProgram(programRes.data);
+        // Then fetch live classes for this program
+        fetchLiveClasses(programId);
+      } else {
+        toast.error("You are not assigned to any program. Please contact admin.");
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error("Error fetching user program:", err);
+      toast.error("Failed to load your program information");
+      setLoading(false);
+    }
+  };
+
+  const fetchLiveClasses = async (programId) => {
+    try {
+      setLoading(true);
+      // Fetch only classes for the student's program
+      const res = await axios.get(`/live-class/student/my-classes?programId=${programId}`);
       setLiveClasses(res.data);
     } catch (err) {
       console.error("Error fetching live classes:", err);
@@ -38,7 +70,6 @@ const StudentLiveClasses = () => {
     }
   };
 
-  // FIXED: Remove "/student" from the URL - use the general join endpoint
   const joinClass = async (classId) => {
     try {
       await axios.post(`/live-class/${classId}/join`);
@@ -87,8 +118,25 @@ const StudentLiveClasses = () => {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Live Classes</h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-2">Join and participate in your live virtual classes</p>
+        <p className="text-gray-500 dark:text-gray-400 mt-2">
+          {userProgram ? `Classes for ${userProgram.name}` : "Your live virtual classes"}
+        </p>
       </div>
+
+      {/* Program Info Card */}
+      {userProgram && (
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 rounded-xl p-4 border border-indigo-100 dark:border-indigo-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center">
+              <GraduationCap className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Your Program</p>
+              <p className="font-semibold text-gray-900 dark:text-white">{userProgram.name}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-gray-200 dark:border-gray-800">
@@ -118,7 +166,7 @@ const StudentLiveClasses = () => {
           <Video className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No classes found</h3>
           <p className="text-gray-500 dark:text-gray-400">
-            {activeTab === "upcoming" && "No upcoming classes scheduled for your courses"}
+            {activeTab === "upcoming" && "No upcoming classes scheduled for your program"}
             {activeTab === "live" && "No live classes at the moment"}
             {activeTab === "past" && "No recordings available yet"}
           </p>
