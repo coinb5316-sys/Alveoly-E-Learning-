@@ -1,7 +1,7 @@
 // pages/admin/AdminCreateLiveClass.jsx - WITH PROGRAM SUPPORT
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import axios from "../../api/axios";
+import axios from "../api/axios";
 import { 
   Calendar, 
   Clock, 
