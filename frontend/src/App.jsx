@@ -188,9 +188,6 @@ function App() {
             <Route path="live-classes" element={<StudentLiveClasses />} />
             <Route path="live-class/:classId" element={<LiveClassRoom />} />
             <Route path="ai" element={<AIChat />} />
-            <Route path="blog" element={<AdminBlog />} />
-<Route path="blog/create" element={<AdminBlogCreate />} />
-<Route path="blog/edit/:id" element={<AdminBlogEdit />} />
           </Route>
 
           {/* ==================== ADMIN ROUTES ==================== */}
@@ -227,6 +224,9 @@ function App() {
             <Route path="ai" element={<AIAdmin />} />
             <Route path="ai-plans" element={<AIPlansAdmin />} />
             <Route path="ai-generator" element={<AIGenerator />} />
+            <Route path="blog" element={<AdminBlog />} />
+<Route path="blog/create" element={<AdminBlogCreate />} />
+<Route path="blog/edit/:id" element={<AdminBlogEdit />} />
           </Route>
 
           {/* ==================== LECTURER ROUTES ==================== */}
