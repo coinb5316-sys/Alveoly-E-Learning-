@@ -1,4 +1,5 @@
-// backend/src/models/Blog.js - Updated with string avatar
+// backend/src/models/Blog.js - FIXED pre-save middleware
+
 import mongoose from "mongoose";
 
 const quizQuestionSchema = new mongoose.Schema({
@@ -28,7 +29,7 @@ const blogSchema = new mongoose.Schema(
     tags: [{ type: String, trim: true }],
     author: {
       name: { type: String, default: 'Alveoly Admin' },
-      avatar: { type: String, default: '' },  // ✅ Now a string, not an object
+      avatar: { type: String, default: '' },
       bio: { type: String, default: '' }
     },
     status: {
@@ -65,8 +66,9 @@ const blogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Slug generation middleware
-blogSchema.pre('save', function(next) {
+// ========== FIXED pre-save middleware ==========
+blogSchema.pre('save', async function(next) {
+  // Generate slug from title if not present
   if (this.isModified('title') && !this.slug) {
     this.slug = this.title
       .toLowerCase()
@@ -74,6 +76,7 @@ blogSchema.pre('save', function(next) {
       .replace(/^-|-$/g, '');
   }
   
+  // Calculate reading time from content
   if (this.isModified('content')) {
     const text = this.content.replace(/<[^>]*>/g, '');
     const wordCount = text.split(/\s+/).length;
@@ -83,6 +86,10 @@ blogSchema.pre('save', function(next) {
   next();
 });
 
+// Indexes
 blogSchema.index({ title: 'text', content: 'text', tags: 'text' });
+blogSchema.index({ slug: 1 });
+blogSchema.index({ status: 1, publishedAt: -1 });
+blogSchema.index({ category: 1 });
 
 export default mongoose.model('Blog', blogSchema);
