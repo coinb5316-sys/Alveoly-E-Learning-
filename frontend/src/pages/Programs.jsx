@@ -44,7 +44,7 @@ const Programs = () => {
   const fetchCourses = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/courses");
+      const res = await axios.get("/courses/public");
       
       // Map API courses to program format
       const mappedPrograms = res.data.map((course, index) => ({
