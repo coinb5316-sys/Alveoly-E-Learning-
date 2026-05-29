@@ -103,6 +103,7 @@ export const deleteImage = async (req, res) => {
   }
 };
 
+// backend/src/controllers/blogController.js - FIXED createBlog function
 export const createBlog = async (req, res) => {
   try {
     const {
@@ -114,13 +115,6 @@ export const createBlog = async (req, res) => {
       return res.status(400).json({ message: "Title, excerpt, and content are required" });
     }
 
-    // ❌ REMOVE this slug generation - let the middleware handle it
-    // let slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    // let existingBlog = await Blog.findOne({ slug });
-    // if (existingBlog) {
-    //   slug = `${slug}-${Date.now()}`;
-    // }
-
     // Handle featuredImage
     let finalFeaturedImage = { url: "/blog-default.jpg", publicId: "" };
     if (featuredImage) {
@@ -131,9 +125,9 @@ export const createBlog = async (req, res) => {
       }
     }
 
+    // DON'T generate slug here - model will do it
     const blog = await Blog.create({
       title,
-      // slug, // ❌ REMOVE this - let middleware generate it
       excerpt,
       content,
       featuredImage: finalFeaturedImage,

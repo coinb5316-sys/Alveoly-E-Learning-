@@ -1,4 +1,4 @@
-// backend/src/models/Blog.js - COMPLETE WORKING VERSION
+// backend/src/models/Blog.js - PERMANENT FIX
 import mongoose from "mongoose";
 
 const quizQuestionSchema = new mongoose.Schema({
@@ -11,7 +11,7 @@ const quizQuestionSchema = new mongoose.Schema({
 const blogSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, trim: true },
+    slug: { type: String, unique: true, sparse: true }, // NOT required - let middleware handle
     excerpt: { type: String, required: true, maxlength: 200 },
     content: { type: String, required: true },
     
@@ -62,22 +62,26 @@ const blogSchema = new mongoose.Schema(
     
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
   },
-  { timestamps: true }
+  { 
+    timestamps: true 
+  }
 );
 
-// ✅ SINGLE pre-save middleware - handles both slug and readingTime
-blogSchema.pre('save', function(next) {
+// CRITICAL: Run BEFORE validation
+blogSchema.pre('validate', function(next) {
   // Generate slug from title if not present
   if (this.title && (!this.slug || this.slug === '')) {
-    this.slug = this.title
+    let baseSlug = this.title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
+    
+    // Add timestamp to ensure uniqueness
+    this.slug = `${baseSlug}-${Date.now()}`;
   }
   
-  // Calculate reading time from content
+  // Calculate reading time
   if (this.content) {
-    // Remove HTML tags
     const text = this.content.replace(/<[^>]*>/g, '');
     const wordCount = text.split(/\s+/).length;
     this.readingTime = Math.max(1, Math.ceil(wordCount / 200));
@@ -86,8 +90,23 @@ blogSchema.pre('save', function(next) {
   next();
 });
 
-// Indexes - remove duplicate slug index
+// Ensure slug is always unique on save
+blogSchema.pre('save', async function(next) {
+  if (this.isModified('slug')) {
+    const existing = await mongoose.model('Blog').findOne({ 
+      slug: this.slug, 
+      _id: { $ne: this._id } 
+    });
+    if (existing) {
+      this.slug = `${this.slug.split('-')[0]}-${Date.now()}`;
+    }
+  }
+  next();
+});
+
+// Indexes
 blogSchema.index({ title: 'text', content: 'text', tags: 'text' });
+blogSchema.index({ slug: 1 });
 blogSchema.index({ status: 1, publishedAt: -1 });
 blogSchema.index({ category: 1 });
 
