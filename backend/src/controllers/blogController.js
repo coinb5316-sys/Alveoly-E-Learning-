@@ -103,7 +103,6 @@ export const deleteImage = async (req, res) => {
   }
 };
 
-// ================= CREATE BLOG =================
 export const createBlog = async (req, res) => {
   try {
     const {
@@ -122,23 +121,13 @@ export const createBlog = async (req, res) => {
       slug = `${slug}-${Date.now()}`;
     }
 
-    // Handle featuredImage
+    // Handle featuredImage (keep as object)
     let finalFeaturedImage = { url: "/blog-default.jpg", publicId: "" };
     if (featuredImage) {
       if (typeof featuredImage === 'object' && featuredImage.url) {
         finalFeaturedImage = featuredImage;
       } else if (typeof featuredImage === 'string' && featuredImage !== "/blog-default.jpg") {
         finalFeaturedImage = { url: featuredImage, publicId: "" };
-      }
-    }
-
-    // ✅ FIX: Format author avatar properly
-    let authorAvatar = { url: "", publicId: "" };
-    if (req.user.avatar) {
-      if (typeof req.user.avatar === 'string') {
-        authorAvatar = { url: req.user.avatar, publicId: "" };
-      } else if (typeof req.user.avatar === 'object' && req.user.avatar.url) {
-        authorAvatar = req.user.avatar;
       }
     }
 
@@ -152,8 +141,8 @@ export const createBlog = async (req, res) => {
       tags: tags || [],
       author: {
         name: req.user.name || 'Alveoly Admin',
-        avatar: authorAvatar,  // ✅ Now sends an object
-        bio: req.user.bio || ''
+        avatar: typeof req.user.avatar === 'string' ? req.user.avatar : (req.user.avatar?.url || ''),  // ✅ Handle both string and object
+        bio: ''
       },
       status: status || 'draft',
       publishedAt: status === 'published' ? new Date() : (publishedAt || new Date()),
