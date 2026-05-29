@@ -122,7 +122,7 @@ export const createBlog = async (req, res) => {
       slug = `${slug}-${Date.now()}`;
     }
 
-    // ✅ FIX: Handle featuredImage properly (could be object or string)
+    // Handle featuredImage
     let finalFeaturedImage = { url: "/blog-default.jpg", publicId: "" };
     if (featuredImage) {
       if (typeof featuredImage === 'object' && featuredImage.url) {
@@ -132,17 +132,28 @@ export const createBlog = async (req, res) => {
       }
     }
 
+    // ✅ FIX: Format author avatar properly
+    let authorAvatar = { url: "", publicId: "" };
+    if (req.user.avatar) {
+      if (typeof req.user.avatar === 'string') {
+        authorAvatar = { url: req.user.avatar, publicId: "" };
+      } else if (typeof req.user.avatar === 'object' && req.user.avatar.url) {
+        authorAvatar = req.user.avatar;
+      }
+    }
+
     const blog = await Blog.create({
       title,
       slug,
       excerpt,
       content,
-      featuredImage: finalFeaturedImage,  // ✅ Now sends an object
+      featuredImage: finalFeaturedImage,
       category: category || 'Announcements',
       tags: tags || [],
       author: {
         name: req.user.name || 'Alveoly Admin',
-        avatar: req.user.avatar || ''
+        avatar: authorAvatar,  // ✅ Now sends an object
+        bio: req.user.bio || ''
       },
       status: status || 'draft',
       publishedAt: status === 'published' ? new Date() : (publishedAt || new Date()),
@@ -158,7 +169,6 @@ export const createBlog = async (req, res) => {
     res.status(500).json({ message: error.message || "Server Error" });
   }
 };
-
 // ================= GET ALL BLOGS (ADMIN) =================
 export const getBlogs = async (req, res) => {
   try {

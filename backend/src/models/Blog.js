@@ -1,4 +1,4 @@
-// backend/src/models/Blog.js
+// backend/src/models/Blog.js - Updated with string avatar
 import mongoose from "mongoose";
 
 const quizQuestionSchema = new mongoose.Schema({
@@ -17,16 +17,8 @@ const blogSchema = new mongoose.Schema(
     
     featuredImage: {
       url: { type: String, default: "/blog-default.jpg" },
-      publicId: { type: String, default: "" },
-      format: { type: String, default: "" },
-      size: { type: Number, default: 0 }
+      publicId: { type: String, default: "" }
     },
-    
-    gallery: [{
-      url: { type: String },
-      publicId: { type: String },
-      caption: { type: String }
-    }],
     
     category: {
       type: String,
@@ -36,10 +28,7 @@ const blogSchema = new mongoose.Schema(
     tags: [{ type: String, trim: true }],
     author: {
       name: { type: String, default: 'Alveoly Admin' },
-      avatar: {
-        url: { type: String, default: '' },
-        publicId: { type: String, default: '' }
-      },
+      avatar: { type: String, default: '' },  // ✅ Now a string, not an object
       bio: { type: String, default: '' }
     },
     status: {
@@ -52,14 +41,10 @@ const blogSchema = new mongoose.Schema(
     likes: { type: Number, default: 0 },
     readingTime: { type: Number, default: 5 },
     
-    metaTitle: { type: String },
-    metaDescription: { type: String },
-    metaKeywords: [{ type: String }],
-    
     hasQuiz: { type: Boolean, default: false },
     quiz: {
       title: { type: String, default: "Test Your Knowledge" },
-      description: { type: String, default: "How well did you understand this article? Take this quick quiz to find out!" },
+      description: { type: String, default: "How well did you understand this article?" },
       questions: [quizQuestionSchema],
       passingScore: { type: Number, default: 70 },
       attempts: { type: Number, default: 0 },
@@ -80,9 +65,8 @@ const blogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ FIXED: Use regular function, not arrow function
+// Slug generation middleware
 blogSchema.pre('save', function(next) {
-  // Generate slug from title if not provided
   if (this.isModified('title') && !this.slug) {
     this.slug = this.title
       .toLowerCase()
@@ -90,9 +74,7 @@ blogSchema.pre('save', function(next) {
       .replace(/^-|-$/g, '');
   }
   
-  // Calculate reading time (200 words per minute)
   if (this.isModified('content')) {
-    // Remove HTML tags for word count
     const text = this.content.replace(/<[^>]*>/g, '');
     const wordCount = text.split(/\s+/).length;
     this.readingTime = Math.max(1, Math.ceil(wordCount / 200));
@@ -101,7 +83,6 @@ blogSchema.pre('save', function(next) {
   next();
 });
 
-// Index for search
 blogSchema.index({ title: 'text', content: 'text', tags: 'text' });
 
 export default mongoose.model('Blog', blogSchema);
