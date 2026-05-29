@@ -1,4 +1,4 @@
-// backend/src/models/Blog.js - FIXED pre-save middleware
+// backend/src/models/Blog.js - FIXED VERSION
 
 import mongoose from "mongoose";
 
@@ -66,24 +66,31 @@ const blogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ========== FIXED pre-save middleware ==========
-blogSchema.pre('save', async function(next) {
-  // Generate slug from title if not present
-  if (this.isModified('title') && !this.slug) {
-    this.slug = this.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
+// ✅ FIXED: Proper pre-save middleware with async/await and next()
+blogSchema.pre('save', function(next) {
+  try {
+    // Generate slug from title if slug doesn't exist
+    if (this.isModified('title') && (!this.slug || this.slug === '')) {
+      let baseSlug = this.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+      
+      // Add timestamp to ensure uniqueness (will be handled by unique index)
+      this.slug = baseSlug;
+    }
+    
+    // Calculate reading time from content
+    if (this.isModified('content') && this.content) {
+      const text = this.content.replace(/<[^>]*>/g, '');
+      const wordCount = text.split(/\s+/).length;
+      this.readingTime = Math.max(1, Math.ceil(wordCount / 200));
+    }
+    
+    next();
+  } catch (error) {
+    next(error);
   }
-  
-  // Calculate reading time from content
-  if (this.isModified('content')) {
-    const text = this.content.replace(/<[^>]*>/g, '');
-    const wordCount = text.split(/\s+/).length;
-    this.readingTime = Math.max(1, Math.ceil(wordCount / 200));
-  }
-  
-  next();
 });
 
 // Indexes
