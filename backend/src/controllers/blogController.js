@@ -103,24 +103,33 @@ export const deleteImage = async (req, res) => {
   }
 };
 
-// The rest of your controller functions (createBlog, getBlogs, etc.) remain the same...
 // ================= CREATE BLOG =================
 export const createBlog = async (req, res) => {
   try {
     const {
       title, excerpt, content, featuredImage, category,
-      tags, status, publishedAt, hasQuiz, quiz, metaTitle, metaDescription, metaKeywords
+      tags, status, publishedAt, hasQuiz, quiz
     } = req.body;
 
     if (!title || !excerpt || !content) {
       return res.status(400).json({ message: "Title, excerpt, and content are required" });
     }
 
-    // Check for duplicate slug
+    // Generate slug
     let slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     let existingBlog = await Blog.findOne({ slug });
     if (existingBlog) {
       slug = `${slug}-${Date.now()}`;
+    }
+
+    // ✅ FIX: Handle featuredImage properly (could be object or string)
+    let finalFeaturedImage = { url: "/blog-default.jpg", publicId: "" };
+    if (featuredImage) {
+      if (typeof featuredImage === 'object' && featuredImage.url) {
+        finalFeaturedImage = featuredImage;
+      } else if (typeof featuredImage === 'string' && featuredImage !== "/blog-default.jpg") {
+        finalFeaturedImage = { url: featuredImage, publicId: "" };
+      }
     }
 
     const blog = await Blog.create({
@@ -128,7 +137,7 @@ export const createBlog = async (req, res) => {
       slug,
       excerpt,
       content,
-      featuredImage: featuredImage || '/blog-default.jpg',
+      featuredImage: finalFeaturedImage,  // ✅ Now sends an object
       category: category || 'Announcements',
       tags: tags || [],
       author: {
@@ -136,21 +145,17 @@ export const createBlog = async (req, res) => {
         avatar: req.user.avatar || ''
       },
       status: status || 'draft',
-      publishedAt: status === 'published' ? new Date() : publishedAt,
+      publishedAt: status === 'published' ? new Date() : (publishedAt || new Date()),
       hasQuiz: hasQuiz || false,
       quiz: hasQuiz ? quiz : {},
-      metaTitle: metaTitle || title,
-      metaDescription: metaDescription || excerpt,
-      metaKeywords: metaKeywords || [],
       createdBy: req.user.id
     });
 
     io.emit("blog:created", blog);
-
     res.status(201).json(blog);
   } catch (error) {
     console.error("Create Blog Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    res.status(500).json({ message: error.message || "Server Error" });
   }
 };
 
