@@ -1,4 +1,4 @@
-// backend/src/models/Blog.js - FULLY WORKING VERSION
+// backend/src/models/Blog.js - SIMPLIFIED, NO MIDDLEWARE
 import mongoose from "mongoose";
 
 const quizQuestionSchema = new mongoose.Schema({
@@ -11,7 +11,7 @@ const quizQuestionSchema = new mongoose.Schema({
 const blogSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
-    slug: { type: String, unique: true },
+    slug: { type: String, required: true, unique: true, trim: true },
     excerpt: { type: String, required: true, maxlength: 200 },
     content: { type: String, required: true },
     
@@ -65,35 +65,10 @@ const blogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ONLY ONE MIDDLEWARE - Combine everything here
-blogSchema.pre('save', function(next) {
-  try {
-    // Generate slug from title if not present
-    if (this.title && (!this.slug || this.slug === '')) {
-      let baseSlug = this.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-      
-      // Add timestamp to ensure uniqueness
-      this.slug = `${baseSlug}-${Date.now()}`;
-    }
-    
-    // Calculate reading time
-    if (this.content) {
-      const text = this.content.replace(/<[^>]*>/g, '');
-      const wordCount = text.split(/\s+/).length;
-      this.readingTime = Math.max(1, Math.ceil(wordCount / 200));
-    }
-    
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
+// NO MIDDLEWARE - We'll handle everything in the controller
 
-// Indexes - REMOVED duplicate slug index
-blogSchema.index({ title: 'text', content: 'text', tags: 'text' });
+// Simple indexes only
+blogSchema.index({ slug: 1 });
 blogSchema.index({ status: 1, publishedAt: -1 });
 blogSchema.index({ category: 1 });
 

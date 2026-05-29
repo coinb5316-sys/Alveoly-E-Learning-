@@ -103,7 +103,8 @@ export const deleteImage = async (req, res) => {
   }
 };
 
-// backend/src/controllers/blogController.js - FIXED createBlog function
+// backend/src/controllers/blogController.js - REPLACE createBlog function
+
 export const createBlog = async (req, res) => {
   try {
     const {
@@ -115,6 +116,23 @@ export const createBlog = async (req, res) => {
       return res.status(400).json({ message: "Title, excerpt, and content are required" });
     }
 
+    // Generate slug manually in controller (NO MIDDLEWARE)
+    let slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    
+    // Check for duplicate slug
+    let existingBlog = await Blog.findOne({ slug });
+    if (existingBlog) {
+      slug = `${slug}-${Date.now()}`;
+    }
+
+    // Calculate reading time
+    const text = content.replace(/<[^>]*>/g, '');
+    const wordCount = text.split(/\s+/).length;
+    const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+
     // Handle featuredImage
     let finalFeaturedImage = { url: "/blog-default.jpg", publicId: "" };
     if (featuredImage) {
@@ -125,11 +143,12 @@ export const createBlog = async (req, res) => {
       }
     }
 
-    // DON'T generate slug here - model will do it
     const blog = await Blog.create({
       title,
+      slug,
       excerpt,
       content,
+      readingTime,
       featuredImage: finalFeaturedImage,
       category: category || 'Announcements',
       tags: tags || [],
@@ -152,6 +171,7 @@ export const createBlog = async (req, res) => {
     res.status(500).json({ message: error.message || "Server Error" });
   }
 };
+
 // ================= GET ALL BLOGS (ADMIN) =================
 export const getBlogs = async (req, res) => {
   try {
