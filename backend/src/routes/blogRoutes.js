@@ -1,4 +1,4 @@
-// backend/src/routes/blogRoutes.js - Add upload endpoints
+// backend/src/routes/blogRoutes.js
 import express from "express";
 import {
   createBlog,
@@ -18,7 +18,7 @@ import {
   deleteImage
 } from "../controllers/blogController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
-import { upload, uploadImages } from "../middleware/uploadMiddleware.js";
+import upload from "../middleware/upload.js"; // Use your existing upload
 
 const router = express.Router();
 
@@ -38,7 +38,7 @@ router.post("/", protect, adminOnly, createBlog);
 router.put("/:id", protect, adminOnly, updateBlog);
 router.delete("/:id", protect, adminOnly, deleteBlog);
 
-// ================= IMAGE UPLOAD ROUTES =================
+// ================= IMAGE UPLOAD ROUTES (Using existing upload) =================
 router.post(
   "/upload/featured",
   protect,
@@ -51,7 +51,7 @@ router.post(
   "/upload/gallery",
   protect,
   adminOnly,
-  uploadImages.array("images", 10),
+  upload.array("images", 10),
   uploadGalleryImages
 );
 

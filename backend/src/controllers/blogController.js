@@ -1,8 +1,9 @@
-// backend/src/controllers/blogController.js
+// backend/src/controllers/blogController.js - Updated upload functions
 import Blog from "../models/Blog.js";
 import User from "../models/User.js";
 import { io } from "../../server.js";
 import cloudinary from "../../config/cloudinary.js";
+import streamifier from "streamifier";
 
 // ================= UPLOAD FEATURED IMAGE =================
 export const uploadFeaturedImage = async (req, res) => {
@@ -11,12 +12,27 @@ export const uploadFeaturedImage = async (req, res) => {
       return res.status(400).json({ message: "No file uploaded" });
     }
     
+    // Upload buffer to Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "alveoly-blogs",
+          transformation: [{ width: 1200, height: 630, crop: "fill" }]
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+    });
+    
     res.json({
       success: true,
-      url: req.file.path,
-      publicId: req.file.filename,
-      format: req.file.format,
-      size: req.file.size
+      url: result.secure_url,
+      publicId: result.public_id,
+      format: result.format,
+      size: result.bytes
     });
   } catch (error) {
     console.error("Upload Error:", error);
@@ -31,11 +47,29 @@ export const uploadGalleryImages = async (req, res) => {
       return res.status(400).json({ message: "No files uploaded" });
     }
     
-    const images = req.files.map(file => ({
-      url: file.path,
-      publicId: file.filename,
-      caption: ""
-    }));
+    const images = [];
+    
+    for (const file of req.files) {
+      const result = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: "alveoly-blog-images",
+            transformation: [{ width: 1920, height: 1080, crop: "limit" }]
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        streamifier.createReadStream(file.buffer).pipe(uploadStream);
+      });
+      
+      images.push({
+        url: result.secure_url,
+        publicId: result.public_id,
+        caption: ""
+      });
+    }
     
     res.json({
       success: true,
@@ -69,6 +103,7 @@ export const deleteImage = async (req, res) => {
   }
 };
 
+// The rest of your controller functions (createBlog, getBlogs, etc.) remain the same...
 // ================= CREATE BLOG =================
 export const createBlog = async (req, res) => {
   try {

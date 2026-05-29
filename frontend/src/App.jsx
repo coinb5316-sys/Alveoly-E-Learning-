@@ -85,6 +85,7 @@ import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import AdminBlog from "./pages/AdminBlog";
 import AdminBlogCreate from "./pages/AdminBlogCreate";
+import AdminBlogEdit from "./pages/AdminBlogEdit";
 
 function App() {
   useEffect(() => {
