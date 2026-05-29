@@ -1,5 +1,4 @@
-// backend/src/models/Blog.js - FIXED VERSION
-
+// backend/src/models/Blog.js - COMPLETE WORKING VERSION
 import mongoose from "mongoose";
 
 const quizQuestionSchema = new mongoose.Schema({
@@ -66,36 +65,29 @@ const blogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ FIXED: Proper pre-save middleware with async/await and next()
+// ✅ SINGLE pre-save middleware - handles both slug and readingTime
 blogSchema.pre('save', function(next) {
-  try {
-    // Generate slug from title if slug doesn't exist
-    if (this.isModified('title') && (!this.slug || this.slug === '')) {
-      let baseSlug = this.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-      
-      // Add timestamp to ensure uniqueness (will be handled by unique index)
-      this.slug = baseSlug;
-    }
-    
-    // Calculate reading time from content
-    if (this.isModified('content') && this.content) {
-      const text = this.content.replace(/<[^>]*>/g, '');
-      const wordCount = text.split(/\s+/).length;
-      this.readingTime = Math.max(1, Math.ceil(wordCount / 200));
-    }
-    
-    next();
-  } catch (error) {
-    next(error);
+  // Generate slug from title if not present
+  if (this.title && (!this.slug || this.slug === '')) {
+    this.slug = this.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
   }
+  
+  // Calculate reading time from content
+  if (this.content) {
+    // Remove HTML tags
+    const text = this.content.replace(/<[^>]*>/g, '');
+    const wordCount = text.split(/\s+/).length;
+    this.readingTime = Math.max(1, Math.ceil(wordCount / 200));
+  }
+  
+  next();
 });
 
-// Indexes
+// Indexes - remove duplicate slug index
 blogSchema.index({ title: 'text', content: 'text', tags: 'text' });
-blogSchema.index({ slug: 1 });
 blogSchema.index({ status: 1, publishedAt: -1 });
 blogSchema.index({ category: 1 });
 

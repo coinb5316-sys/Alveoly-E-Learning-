@@ -114,14 +114,14 @@ export const createBlog = async (req, res) => {
       return res.status(400).json({ message: "Title, excerpt, and content are required" });
     }
 
-    // Generate slug
-    let slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    let existingBlog = await Blog.findOne({ slug });
-    if (existingBlog) {
-      slug = `${slug}-${Date.now()}`;
-    }
+    // ❌ REMOVE this slug generation - let the middleware handle it
+    // let slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    // let existingBlog = await Blog.findOne({ slug });
+    // if (existingBlog) {
+    //   slug = `${slug}-${Date.now()}`;
+    // }
 
-    // Handle featuredImage (keep as object)
+    // Handle featuredImage
     let finalFeaturedImage = { url: "/blog-default.jpg", publicId: "" };
     if (featuredImage) {
       if (typeof featuredImage === 'object' && featuredImage.url) {
@@ -133,7 +133,7 @@ export const createBlog = async (req, res) => {
 
     const blog = await Blog.create({
       title,
-      slug,
+      // slug, // ❌ REMOVE this - let middleware generate it
       excerpt,
       content,
       featuredImage: finalFeaturedImage,
@@ -141,7 +141,7 @@ export const createBlog = async (req, res) => {
       tags: tags || [],
       author: {
         name: req.user.name || 'Alveoly Admin',
-        avatar: typeof req.user.avatar === 'string' ? req.user.avatar : (req.user.avatar?.url || ''),  // ✅ Handle both string and object
+        avatar: typeof req.user.avatar === 'string' ? req.user.avatar : (req.user.avatar?.url || ''),
         bio: ''
       },
       status: status || 'draft',
