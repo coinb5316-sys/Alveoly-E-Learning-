@@ -1,4 +1,4 @@
-// backend/src/models/Blog.js - Updated with Cloudinary support
+// backend/src/models/Blog.js
 import mongoose from "mongoose";
 
 const quizQuestionSchema = new mongoose.Schema({
@@ -15,7 +15,6 @@ const blogSchema = new mongoose.Schema(
     excerpt: { type: String, required: true, maxlength: 200 },
     content: { type: String, required: true },
     
-    // Cloudinary image support
     featuredImage: {
       url: { type: String, default: "/blog-default.jpg" },
       publicId: { type: String, default: "" },
@@ -53,12 +52,10 @@ const blogSchema = new mongoose.Schema(
     likes: { type: Number, default: 0 },
     readingTime: { type: Number, default: 5 },
     
-    // SEO
     metaTitle: { type: String },
     metaDescription: { type: String },
     metaKeywords: [{ type: String }],
     
-    // Quiz feature
     hasQuiz: { type: Boolean, default: false },
     quiz: {
       title: { type: String, default: "Test Your Knowledge" },
@@ -69,7 +66,6 @@ const blogSchema = new mongoose.Schema(
       completions: { type: Number, default: 0 }
     },
     
-    // Engagement
     comments: [{
       user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
       userName: { type: String, required: true },
@@ -84,8 +80,9 @@ const blogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Create slug from title
+// ✅ FIXED: Use regular function, not arrow function
 blogSchema.pre('save', function(next) {
+  // Generate slug from title if not provided
   if (this.isModified('title') && !this.slug) {
     this.slug = this.title
       .toLowerCase()
@@ -95,7 +92,9 @@ blogSchema.pre('save', function(next) {
   
   // Calculate reading time (200 words per minute)
   if (this.isModified('content')) {
-    const wordCount = this.content.split(/\s+/).length;
+    // Remove HTML tags for word count
+    const text = this.content.replace(/<[^>]*>/g, '');
+    const wordCount = text.split(/\s+/).length;
     this.readingTime = Math.max(1, Math.ceil(wordCount / 200));
   }
   
