@@ -81,6 +81,10 @@ import AIGenerator from "./pages/AdminAIGeneratorU";
 import AIChat from "./pages/AIChat";
 import AdminPrograms from "./pages/AdminPrograms";
 import SelectProgramPage from "./pages/SelectProgramPage";
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/BlogPost";
+import AdminBlog from "./pages/AdminBlog";
+import AdminBlogCreate from "./pages/AdminBlogCreate";
 
 function App() {
   useEffect(() => {
@@ -130,6 +134,8 @@ function App() {
 <Route path="/terms" element={<TermsOfService />} />
 <Route path="/disclaimer" element={<Disclaimer />} />
 <Route path="/cookies" element={<CookiePolicy />} />
+<Route path="/blog" element={<Blog />} />
+<Route path="/blog/:slug" element={<BlogPost />} />
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
@@ -181,6 +187,9 @@ function App() {
             <Route path="live-classes" element={<StudentLiveClasses />} />
             <Route path="live-class/:classId" element={<LiveClassRoom />} />
             <Route path="ai" element={<AIChat />} />
+            <Route path="blog" element={<AdminBlog />} />
+<Route path="blog/create" element={<AdminBlogCreate />} />
+<Route path="blog/edit/:id" element={<AdminBlogEdit />} />
           </Route>
 
           {/* ==================== ADMIN ROUTES ==================== */}

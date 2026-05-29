@@ -1,4 +1,4 @@
-// AdminLayout.jsx - Fixed to fetch and display actual logged-in user
+// AdminLayout.jsx - Fixed to fetch and display actual logged-in user WITH BLOG SECTION
 import { useState, useEffect } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
 import {
@@ -30,6 +30,9 @@ import {
   Zap,
   GraduationCap,
   Video,
+  Newspaper,
+  Edit,
+  PlusCircle
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationPanel from "../components/NotificationPanel";
@@ -42,7 +45,7 @@ const AdminLayout = () => {
   const [searchFocused, setSearchFocused] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationBadge, setNotificationBadge] = useState(3);
-  const { logout, user } = useAuth(); // ✅ Get user from auth context
+  const { logout, user } = useAuth();
   const location = useLocation();
 
   // Handle scroll effect for header
@@ -125,6 +128,10 @@ const AdminLayout = () => {
       { to: "/admin/content-payment", label: "Content Payment", icon: DollarSign, color: "text-indigo-500" },
       { to: "/admin/plans", label: "Plans", icon: Zap, color: "text-red-500" },
       { to: "/admin/content", label: "Content Library", icon: FileText, color: "text-emerald-500" },
+    ]},
+    { section: "Blog Management", items: [
+      { to: "/admin/blog", label: "All Posts", icon: Newspaper, color: "text-emerald-500" },
+      { to: "/admin/blog/create", label: "Create New Post", icon: PlusCircle, color: "text-green-500" },
     ]},
     { section: "Engagement", items: [
       { to: "/admin/results", label: "Student Results", icon: TrendingUp, color: "text-violet-500" },
