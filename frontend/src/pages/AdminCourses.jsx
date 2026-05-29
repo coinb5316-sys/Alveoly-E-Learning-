@@ -163,39 +163,44 @@ const AdminCourses = () => {
   };
 
   // ================= EDIT =================
-  const handleEdit = (course) => {
-    setEditing(course);
-    setForm({
-      name: course.name,
-      programId: course.programId?._id || course.programId,
-    });
-  };
+ // ================= EDIT =================
+const handleEdit = (course) => {
+  setEditing(course);
+  setForm({
+    name: course.name,
+    programId: course.programId?._id || course.programId,
+  });
+  // OPEN THE MODAL
+  document.getElementById('add-course-modal')?.showModal();
+};
 
   // ================= UPDATE =================
-  const handleUpdate = async () => {
-    if (!form.name.trim()) {
-      toast.error("Course name is required");
-      return;
-    }
-    if (!form.programId) {
-      toast.error("Please select a program");
-      return;
-    }
+const handleUpdate = async () => {
+  if (!form.name.trim()) {
+    toast.error("Course name is required");
+    return;
+  }
+  if (!form.programId) {
+    toast.error("Please select a program");
+    return;
+  }
 
-    try {
-      setLoading(true);
-      await API.put(`/courses/${editing._id}`, form);
-      setEditing(null);
-      setForm({ name: "", programId: "" });
-      await fetchCourses();
-      toast.success("Course updated successfully!");
-    } catch (err) {
-      console.error("Error updating course:", err);
-      toast.error(err.response?.data?.message || "Failed to update course");
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    await API.put(`/courses/${editing._id}`, form);
+    setEditing(null);
+    setForm({ name: "", programId: "" });
+    await fetchCourses();
+    toast.success("Course updated successfully!");
+    // CLOSE THE MODAL
+    document.getElementById('add-course-modal')?.close();
+  } catch (err) {
+    console.error("Error updating course:", err);
+    toast.error(err.response?.data?.message || "Failed to update course");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Get program name by ID
   const getProgramName = (programId) => {
@@ -554,16 +559,16 @@ const AdminCourses = () => {
                   </>
                 )}
               </button>
-              <button
-                onClick={() => {
-                  setEditing(null);
-                  setForm({ name: "", programId: "" });
-                  document.getElementById('add-course-modal')?.close();
-                }}
-                className="px-6 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-              >
-                Cancel
-              </button>
+             <button
+  onClick={() => {
+    setEditing(null);
+    setForm({ name: "", programId: "" });
+    document.getElementById('add-course-modal')?.close();
+  }}
+  className="px-6 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+>
+  Cancel
+</button>
             </div>
           </div>
         </div>

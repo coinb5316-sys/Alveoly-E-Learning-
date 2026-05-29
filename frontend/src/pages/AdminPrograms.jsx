@@ -159,36 +159,40 @@ const AdminPrograms = () => {
   };
 
   // ================= EDIT =================
-  const handleEdit = (program) => {
-    setEditing(program);
-    setForm({
-      name: program.name,
-      description: program.description || "",
-      code: program.code || "",
-    });
-  };
+const handleEdit = (program) => {
+  setEditing(program);
+  setForm({
+    name: program.name,
+    description: program.description || "",
+    code: program.code || "",
+  });
+  // OPEN THE MODAL
+  document.getElementById('add-program-modal')?.showModal();
+};
 
   // ================= UPDATE =================
-  const handleUpdate = async () => {
-    if (!form.name.trim()) {
-      toast.error("Program name is required");
-      return;
-    }
+const handleUpdate = async () => {
+  if (!form.name.trim()) {
+    toast.error("Program name is required");
+    return;
+  }
 
-    try {
-      setLoading(true);
-      await API.put(`/programs/${editing._id}`, form);
-      setEditing(null);
-      setForm({ name: "", description: "", code: "" });
-      await fetchPrograms();
-      toast.success("Program updated successfully!");
-    } catch (err) {
-      console.error("Error updating program:", err);
-      toast.error(err.response?.data?.message || "Failed to update program");
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    await API.put(`/programs/${editing._id}`, form);
+    setEditing(null);
+    setForm({ name: "", description: "", code: "" });
+    await fetchPrograms();
+    toast.success("Program updated successfully!");
+    // CLOSE THE MODAL
+    document.getElementById('add-program-modal')?.close();
+  } catch (err) {
+    console.error("Error updating program:", err);
+    toast.error(err.response?.data?.message || "Failed to update program");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ================= TOGGLE STATUS =================
   const handleToggleStatus = async (program) => {
