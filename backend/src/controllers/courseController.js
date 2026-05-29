@@ -147,3 +147,18 @@ export const getPublicCoursesByProgram = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// Add this to your courseController.js file
+export const getPublicCourses = async (req, res) => {
+  try {
+    // Only return essential fields for public view
+    const courses = await Course.find()
+      .populate("programId", "name code")
+      .select("name programId")
+      .sort({ createdAt: -1 });
+    res.json(courses);
+  } catch (error) {
+    console.error("Get Public Courses Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
