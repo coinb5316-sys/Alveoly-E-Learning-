@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import { io } from "../../server.js";
 import cloudinary from "../../config/cloudinary.js";
 import streamifier from "streamifier";
+import QuizAttempt from "../models/QuizAttempt.js";
 
 // ================= UPLOAD FEATURED IMAGE =================
 export const uploadFeaturedImage = async (req, res) => {
@@ -248,6 +249,7 @@ export const getPublicBlogs = async (req, res) => {
   }
 };
 
+// ================= GET BLOG BY SLUG (with IP-based view counting) =================
 export const getBlogBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -257,9 +259,33 @@ export const getBlogBySlug = async (req, res) => {
       return res.status(404).json({ message: "Blog not found" });
     }
     
-    // Increment views
-    blog.views += 1;
-    await blog.save();
+    // Get client IP address
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
+                     req.socket.remoteAddress || 
+                     req.ip;
+    
+    // Initialize viewedBy array if it doesn't exist
+    if (!blog.viewedBy) {
+      blog.viewedBy = [];
+    }
+    
+    // Check if this IP has viewed before (in last 24 hours)
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentView = blog.viewedBy.find(view => 
+      view.ip === clientIp && view.timestamp > twentyFourHoursAgo
+    );
+    
+    // Only count view if no recent view from this IP
+    if (!recentView) {
+      blog.views += 1;
+      blog.viewedBy.push({ ip: clientIp, timestamp: new Date() });
+      
+      // Keep only last 30 days of view records to prevent array growing too large
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      blog.viewedBy = blog.viewedBy.filter(view => view.timestamp > thirtyDaysAgo);
+      
+      await blog.save();
+    }
     
     // Format the blog data
     const blogData = blog.toObject();
@@ -279,6 +305,9 @@ export const getBlogBySlug = async (req, res) => {
         }))
       };
     }
+    
+    // Remove viewedBy from response
+    delete blogData.viewedBy;
     
     res.json(blogData);
   } catch (error) {
@@ -363,12 +392,17 @@ export const toggleLike = async (req, res) => {
     const { userId } = req.body;
     
     if (!userId) {
-      return res.status(401).json({ message: "User ID required" });
+      return res.status(401).json({ message: "User ID required", liked: false, likes: 0 });
     }
     
     const blog = await Blog.findOne({ slug });
     if (!blog) {
       return res.status(404).json({ message: "Blog not found" });
+    }
+    
+    // Initialize likedBy if it doesn't exist
+    if (!blog.likedBy) {
+      blog.likedBy = [];
     }
     
     // Check if user already liked
@@ -377,15 +411,15 @@ export const toggleLike = async (req, res) => {
     if (userLikedIndex === -1) {
       // User hasn't liked - add like
       blog.likedBy.push(userId);
-      blog.likes += 1;
+      blog.likes = (blog.likes || 0) + 1;
       await blog.save();
-      res.json({ liked: true, likes: blog.likes });
+      return res.json({ liked: true, likes: blog.likes });
     } else {
       // User has liked - remove like (dislike)
       blog.likedBy.splice(userLikedIndex, 1);
-      blog.likes -= 1;
+      blog.likes = Math.max(0, (blog.likes || 0) - 1);
       await blog.save();
-      res.json({ liked: false, likes: blog.likes });
+      return res.json({ liked: false, likes: blog.likes });
     }
   } catch (error) {
     console.error("Toggle Like Error:", error);
@@ -431,16 +465,18 @@ export const subscribeNewsletter = async (req, res) => {
     // Find or create master blog document for subscribers
     let masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
     if (!masterBlog) {
-      // Create master blog without requiring user (use a system ID or null)
+      // Create master blog WITHOUT requiring user - use null for createdBy
       masterBlog = new Blog({
         title: "MASTER_SUBSCRIBERS",
         slug: "master-subscribers",
         excerpt: "System document for storing newsletter subscribers",
         content: "System document - Do not delete",
-        createdBy: req.user?._id || null,
+        createdBy: null, // Allow null for system document
         status: "published"
       });
-      await masterBlog.save();
+      
+      // Save with validation disabled temporarily
+      await masterBlog.save({ validateBeforeSave: false });
     }
     
     // Check if already subscribed
@@ -495,7 +531,6 @@ export const getSubscribers = async (req, res) => {
   }
 };
 
-// ================= UNSUBSCRIBE FROM NEWSLETTER =================
 export const unsubscribeNewsletter = async (req, res) => {
   try {
     const { email } = req.params;
@@ -507,10 +542,11 @@ export const unsubscribeNewsletter = async (req, res) => {
         subscriber.isActive = false;
         await masterBlog.save();
         console.log(`✅ Unsubscribed: ${email}`);
+        return res.json({ success: true, message: "Successfully unsubscribed from our newsletter." });
       }
     }
     
-    res.json({ success: true, message: "Successfully unsubscribed from our newsletter." });
+    res.json({ success: true, message: "Email not found in subscribers list." });
   } catch (error) {
     console.error("Unsubscribe Error:", error);
     res.status(500).json({ message: "Server Error" });
@@ -622,11 +658,12 @@ export const checkUserLiked = async (req, res) => {
   }
 };
 
+
 // ================= SUBMIT QUIZ =================
 export const submitQuiz = async (req, res) => {
   try {
     const { slug } = req.params;
-    const { answers, userName, userId } = req.body;
+    const { answers, userName, userId, userEmail } = req.body;
     
     const blog = await Blog.findOne({ slug });
     if (!blog || !blog.hasQuiz) {
@@ -635,21 +672,48 @@ export const submitQuiz = async (req, res) => {
     
     let score = 0;
     const results = [];
+    const answerDetails = [];
     
     blog.quiz.questions.forEach((question, index) => {
-      const isCorrect = answers[index] === question.correctAnswer;
+      const userAnswer = answers[index];
+      const isCorrect = userAnswer === question.correctAnswer;
       if (isCorrect) score++;
+      
+      answerDetails.push({
+        question: question.question,
+        userAnswer: userAnswer,
+        correctAnswer: question.correctAnswer,
+        isCorrect: isCorrect,
+        explanation: question.explanation
+      });
+      
       results.push({
         question: question.question,
-        userAnswer: answers[index],
+        userAnswer: userAnswer,
         correctAnswer: question.correctAnswer,
-        isCorrect,
+        isCorrect: isCorrect,
         explanation: question.explanation
       });
     });
     
     const percentage = (score / blog.quiz.questions.length) * 100;
     const passed = percentage >= blog.quiz.passingScore;
+    
+    // Save quiz attempt to database
+    const quizAttempt = await QuizAttempt.create({
+      blogId: blog._id,
+      blogTitle: blog.title,
+      blogSlug: blog.slug,
+      userId: userId || null,
+      userName: userName || "Anonymous",
+      userEmail: userEmail || "",
+      answers: answerDetails,
+      score: score,
+      totalQuestions: blog.quiz.questions.length,
+      percentage: percentage,
+      passed: passed,
+      passingScore: blog.quiz.passingScore
+    });
     
     // Update quiz stats
     blog.quiz.attempts = (blog.quiz.attempts || 0) + 1;
@@ -670,30 +734,31 @@ export const submitQuiz = async (req, res) => {
   }
 };
 
-// ================= GET ALL BLOG QUIZ RESULTS =================
+// ================= GET ALL QUIZ RESULTS (ADMIN) =================
 export const getAllQuizResults = async (req, res) => {
   try {
-    // Find all blogs that have quizzes and have attempts
-    const blogs = await Blog.find({ 
-      hasQuiz: true,
-      'quiz.attempts': { $gt: 0 }
-    }).select('title slug quiz');
-
-    const allResults = [];
-
-    for (const blog of blogs) {
-      // We need to query quiz attempts - you'll need a QuizAttempt model
-      // For now, this shows structure - you'll need to create a QuizAttempt model
-      // Or store attempts in a separate collection
-      
-      // Placeholder - replace with actual QuizAttempt model query
-      // const attempts = await QuizAttempt.find({ blogId: blog._id });
-      
-      // For demonstration, showing structure
-      console.log(`Blog: ${blog.title} has ${blog.quiz.attempts} attempts`);
-    }
-
-    res.json(allResults);
+    const attempts = await QuizAttempt.find()
+      .sort({ completedAt: -1 })
+      .populate('userId', 'name email');
+    
+    // Format results for frontend
+    const formattedResults = attempts.map(attempt => ({
+      id: attempt._id,
+      userName: attempt.userName,
+      userEmail: attempt.userEmail,
+      blogTitle: attempt.blogTitle,
+      blogSlug: attempt.blogSlug,
+      blogId: attempt.blogId,
+      score: attempt.score,
+      totalQuestions: attempt.totalQuestions,
+      percentage: attempt.percentage,
+      passed: attempt.passed,
+      passingScore: attempt.passingScore,
+      completedAt: attempt.completedAt,
+      answers: attempt.answers
+    }));
+    
+    res.json(formattedResults);
   } catch (error) {
     console.error("Get All Quiz Results Error:", error);
     res.status(500).json({ message: "Server Error" });

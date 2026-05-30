@@ -42,7 +42,7 @@ router.post("/public/:slug/quiz", submitQuiz);
 router.get("/quiz-results", protect, adminOnly, getAllQuizResults);
 router.post("/public/:slug/comment", addComment);
 router.post("/subscribe", subscribeNewsletter);
-router.post("/unsubscribe/:email", unsubscribeNewsletter);
+router.delete("/unsubscribe/:email", unsubscribeNewsletter);
 
 // ================= PROTECTED ROUTES (Admin Only) =================
 router.get("/", protect, adminOnly, getBlogs);

@@ -63,7 +63,11 @@ const blogSchema = new mongoose.Schema(
       attempts: { type: Number, default: 0 },
       completions: { type: Number, default: 0 }
     },
-    
+    // Add this to your blogSchema
+viewedBy: [{
+  ip: { type: String },
+  timestamp: { type: Date, default: Date.now }
+}],
     comments: [commentSchema],
     
     // Newsletter subscribers
