@@ -638,41 +638,46 @@ export const subscribeNewsletter = async (req, res) => {
   }
 };
 
-// ================= GET SUBSCRIBERS =================
+// backend/src/controllers/blogController.js
+
+// ================= GET SUBSCRIBERS (FIXED - using Subscriber model) =================
 export const getSubscribers = async (req, res) => {
   try {
-    const masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
-    if (!masterBlog || !masterBlog.subscribers) {
-      return res.json({ subscribers: [], total: 0, inactive: 0 });
-    }
+    console.log("🔵 Fetching subscribers from Subscriber model...");
     
-    const activeSubscribers = masterBlog.subscribers.filter(s => s.isActive === true);
-    const inactiveSubscribers = masterBlog.subscribers.filter(s => s.isActive === false);
+    // Get all active subscribers
+    const subscribers = await Subscriber.find({ isActive: true })
+      .sort({ subscribedAt: -1 });
+    
+    const inactiveCount = await Subscriber.countDocuments({ isActive: false });
+    
+    console.log(`✅ Found ${subscribers.length} active subscribers`);
     
     res.json({ 
-      subscribers: activeSubscribers,
-      total: activeSubscribers.length,
-      inactive: inactiveSubscribers.length 
+      subscribers: subscribers,
+      total: subscribers.length,
+      inactive: inactiveCount 
     });
   } catch (error) {
     console.error("Get Subscribers Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
-// ================= UNSUBSCRIBE NEWSLETTER =================
+// ================= UNSUBSCRIBE NEWSLETTER (FIXED) =================
 export const unsubscribeNewsletter = async (req, res) => {
   try {
     const { email } = req.params;
     
-    const masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
-    if (masterBlog && masterBlog.subscribers) {
-      const subscriber = masterBlog.subscribers.find(s => s.email === email);
-      if (subscriber) {
-        subscriber.isActive = false;
-        await masterBlog.save();
-        return res.json({ success: true, message: "Successfully unsubscribed from our newsletter." });
-      }
+    console.log(`🔵 Unsubscribe request for: ${email}`);
+    
+    const subscriber = await Subscriber.findOne({ email });
+    
+    if (subscriber) {
+      subscriber.isActive = false;
+      await subscriber.save();
+      console.log(`✅ Unsubscribed: ${email}`);
+      return res.json({ success: true, message: "Successfully unsubscribed from our newsletter." });
     }
     
     res.json({ success: true, message: "Email not found in subscribers list." });

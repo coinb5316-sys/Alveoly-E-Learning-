@@ -1,12 +1,13 @@
 // src/pages/AdminSubscribers.jsx
 import React, { useState, useEffect } from "react";
-import { FaSpinner, FaEnvelope, FaUsers, FaTrash, FaDownload } from "react-icons/fa";
+import { FaSpinner, FaEnvelope, FaUsers, FaTrash, FaDownload, FaRefresh } from "react-icons/fa";
 import API from "../api/axios";
 import toast from "react-hot-toast";
 
 const AdminSubscribers = () => {
   const [subscribers, setSubscribers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     fetchSubscribers();
@@ -16,10 +17,14 @@ const AdminSubscribers = () => {
     try {
       setLoading(true);
       const res = await API.get("/blogs/subscribers");
+      console.log("Subscribers response:", res.data);
+      
       setSubscribers(res.data.subscribers || []);
+      setTotal(res.data.total || 0);
     } catch (err) {
       console.error("Error fetching subscribers:", err);
-      toast.error("Failed to load subscribers");
+      console.error("Error response:", err.response);
+      toast.error(err.response?.data?.message || "Failed to load subscribers");
     } finally {
       setLoading(false);
     }
@@ -29,8 +34,9 @@ const AdminSubscribers = () => {
     if (!window.confirm(`Unsubscribe ${email}?`)) return;
     
     try {
-      await API.post(`/blogs/unsubscribe/${encodeURIComponent(email)}`);
+      await API.delete(`/blogs/unsubscribe/${encodeURIComponent(email)}`);
       setSubscribers(prev => prev.filter(s => s.email !== email));
+      setTotal(prev => prev - 1);
       toast.success("Subscriber removed successfully!");
     } catch (err) {
       console.error("Error unsubscribing:", err);
@@ -77,6 +83,13 @@ const AdminSubscribers = () => {
         </div>
         <div className="flex gap-3">
           <button
+            onClick={fetchSubscribers}
+            disabled={loading}
+            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <FaRefresh className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+          <button
             onClick={exportToCSV}
             disabled={subscribers.length === 0}
             className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
@@ -86,7 +99,7 @@ const AdminSubscribers = () => {
           <div className="flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
             <FaUsers className="text-blue-600" />
             <span className="font-semibold text-blue-700 dark:text-blue-400">
-              {subscribers.length} Subscribers
+              {total} Subscribers
             </span>
           </div>
         </div>
