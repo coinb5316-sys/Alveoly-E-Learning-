@@ -9,6 +9,7 @@ import {
 } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import toast from "react-hot-toast";
 import API from "../api/axios";
 import blogBg from "../images/programs-bg.jpg";
 
@@ -71,7 +72,8 @@ const [subscribing, setSubscribing] = useState(false);
     return "/blog-default.jpg";
   };
 
-  const handleSubscribe = async (e) => {
+  // In Blog.jsx, make sure handleSubscribe is correct
+const handleSubscribe = async (e) => {
   e.preventDefault();
   if (!subscriberEmail) {
     toast.error("Please enter your email");
@@ -80,12 +82,12 @@ const [subscribing, setSubscribing] = useState(false);
   
   setSubscribing(true);
   try {
-    await API.post("/blogs/subscribe", { email: subscriberEmail });
-    toast.success("Subscribed successfully!");
+    const response = await API.post("/blogs/subscribe", { email: subscriberEmail });
+    toast.success(response.data.message || "Subscribed successfully!");
     setSubscriberEmail("");
   } catch (err) {
     console.error("Subscribe error:", err);
-    toast.error(err.response?.data?.message || "Failed to subscribe");
+    toast.error(err.response?.data?.message || "Failed to subscribe. Please try again.");
   } finally {
     setSubscribing(false);
   }

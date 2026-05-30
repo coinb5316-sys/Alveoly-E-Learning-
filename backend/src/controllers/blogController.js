@@ -411,24 +411,65 @@ export const getApprovedComments = async (req, res) => {
   }
 };
 
-// ================= UNSUBSCRIBE FROM NEWSLETTER =================
-export const unsubscribeNewsletter = async (req, res) => {
+// backend/src/controllers/blogController.js - REPLACE the subscribeNewsletter function
+
+// ================= SUBSCRIBE TO NEWSLETTER =================
+export const subscribeNewsletter = async (req, res) => {
   try {
-    const { email } = req.params;
+    const { email } = req.body;
     
-    const masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
-    if (masterBlog) {
-      const subscriber = masterBlog.subscribers.find(s => s.email === email);
-      if (subscriber) {
-        subscriber.isActive = false;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: "Please enter a valid email address" });
+    }
+    
+    // Find or create master blog document for subscribers
+    let masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
+    if (!masterBlog) {
+      // Create master blog without requiring user (use a system ID or null)
+      masterBlog = new Blog({
+        title: "MASTER_SUBSCRIBERS",
+        slug: "master-subscribers",
+        excerpt: "System document for storing newsletter subscribers",
+        content: "System document - Do not delete",
+        createdBy: req.user?._id || null,
+        status: "published"
+      });
+      await masterBlog.save();
+    }
+    
+    // Check if already subscribed
+    const existingSubscriber = masterBlog.subscribers.find(s => s.email === email);
+    if (existingSubscriber) {
+      if (existingSubscriber.isActive) {
+        return res.status(400).json({ message: "This email is already subscribed to our newsletter!" });
+      } else {
+        // Reactivate inactive subscriber
+        existingSubscriber.isActive = true;
+        existingSubscriber.subscribedAt = new Date();
         await masterBlog.save();
+        return res.json({ success: true, message: "Welcome back! You have been re-subscribed successfully!" });
       }
     }
     
-    res.json({ message: "Unsubscribed successfully" });
+    // Add new subscriber
+    masterBlog.subscribers.push({ 
+      email, 
+      subscribedAt: new Date(), 
+      isActive: true 
+    });
+    await masterBlog.save();
+    
+    console.log(`✅ New subscriber: ${email}`);
+    res.json({ success: true, message: "Successfully subscribed to our newsletter!" });
   } catch (error) {
-    console.error("Unsubscribe Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    console.error("Subscribe Error:", error);
+    res.status(500).json({ message: error.message || "Failed to subscribe. Please try again later." });
   }
 };
 
@@ -440,48 +481,38 @@ export const getSubscribers = async (req, res) => {
       return res.json({ subscribers: [] });
     }
     
-    const activeSubscribers = masterBlog.subscribers.filter(s => s.isActive);
-    res.json({ subscribers: activeSubscribers });
+    const activeSubscribers = masterBlog.subscribers.filter(s => s.isActive === true);
+    const inactiveSubscribers = masterBlog.subscribers.filter(s => s.isActive === false);
+    
+    res.json({ 
+      subscribers: activeSubscribers,
+      total: activeSubscribers.length,
+      inactive: inactiveSubscribers.length 
+    });
   } catch (error) {
     console.error("Get Subscribers Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
 
-// ================= SUBSCRIBE TO NEWSLETTER =================
-export const subscribeNewsletter = async (req, res) => {
+// ================= UNSUBSCRIBE FROM NEWSLETTER =================
+export const unsubscribeNewsletter = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email } = req.params;
     
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+    const masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
+    if (masterBlog) {
+      const subscriber = masterBlog.subscribers.find(s => s.email === email);
+      if (subscriber) {
+        subscriber.isActive = false;
+        await masterBlog.save();
+        console.log(`✅ Unsubscribed: ${email}`);
+      }
     }
     
-    // Find any blog to store subscribers (or create a separate collection)
-    // For simplicity, we'll store in a master blog document
-    let masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
-    if (!masterBlog) {
-      masterBlog = new Blog({
-        title: "MASTER_SUBSCRIBERS",
-        slug: "master-subscribers",
-        excerpt: "System document for storing newsletter subscribers",
-        content: "System document",
-        createdBy: req.user?._id || "system"
-      });
-    }
-    
-    // Check if already subscribed
-    const existingSubscriber = masterBlog.subscribers.find(s => s.email === email);
-    if (existingSubscriber) {
-      return res.status(400).json({ message: "Email already subscribed" });
-    }
-    
-    masterBlog.subscribers.push({ email, subscribedAt: new Date(), isActive: true });
-    await masterBlog.save();
-    
-    res.json({ success: true, message: "Subscribed successfully!" });
+    res.json({ success: true, message: "Successfully unsubscribed from our newsletter." });
   } catch (error) {
-    console.error("Subscribe Error:", error);
+    console.error("Unsubscribe Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -635,6 +666,36 @@ export const submitQuiz = async (req, res) => {
     });
   } catch (error) {
     console.error("Submit Quiz Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= GET ALL BLOG QUIZ RESULTS =================
+export const getAllQuizResults = async (req, res) => {
+  try {
+    // Find all blogs that have quizzes and have attempts
+    const blogs = await Blog.find({ 
+      hasQuiz: true,
+      'quiz.attempts': { $gt: 0 }
+    }).select('title slug quiz');
+
+    const allResults = [];
+
+    for (const blog of blogs) {
+      // We need to query quiz attempts - you'll need a QuizAttempt model
+      // For now, this shows structure - you'll need to create a QuizAttempt model
+      // Or store attempts in a separate collection
+      
+      // Placeholder - replace with actual QuizAttempt model query
+      // const attempts = await QuizAttempt.find({ blogId: blog._id });
+      
+      // For demonstration, showing structure
+      console.log(`Blog: ${blog.title} has ${blog.quiz.attempts} attempts`);
+    }
+
+    res.json(allResults);
+  } catch (error) {
+    console.error("Get All Quiz Results Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };

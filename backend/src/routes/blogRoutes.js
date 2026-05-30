@@ -38,6 +38,7 @@ router.get("/public/:slug/comments", getApprovedComments);
 router.post("/public/:slug/like", toggleLike);
 router.get("/public/:slug/liked", checkUserLiked);
 router.post("/public/:slug/quiz", submitQuiz);
+router.get("/quiz-results", protect, adminOnly, getAllQuizResults);
 router.post("/public/:slug/comment", addComment);
 router.post("/subscribe", subscribeNewsletter);
 router.post("/unsubscribe/:email", unsubscribeNewsletter);

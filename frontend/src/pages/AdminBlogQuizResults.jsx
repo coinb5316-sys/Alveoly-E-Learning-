@@ -1,89 +1,79 @@
-// src/pages/AdminStudentResults.jsx
+// src/pages/AdminBlogQuizResults.jsx
 import React, { useState, useEffect } from "react";
 import { 
   FaSpinner, FaSearch, FaFilter, FaEye, FaDownload, 
   FaChartLine, FaUserGraduate, FaCheckCircle, FaTimesCircle,
-  FaCalendarAlt, FaAward, FaTrophy, FaClock, FaTimes,
-  FaFileExcel, FaPrint
+  FaCalendarAlt, FaTrophy, FaClock, FaTimes, FaFileExcel,
+  FaBlog, FaQuestionCircle, FaBrain
 } from "react-icons/fa";
 import API from "../api/axios";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
 
-const AdminStudentResults = () => {
+const AdminBlogQuizResults = () => {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState("all");
-  const [selectedSubject, setSelectedSubject] = useState("all");
+  const [selectedBlog, setSelectedBlog] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [courses, setCourses] = useState([]);
-  const [subjects, setSubjects] = useState([]);
+  const [blogs, setBlogs] = useState([]);
   const [stats, setStats] = useState(null);
   const [selectedResult, setSelectedResult] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   useEffect(() => {
-    fetchResults();
-    fetchCourses();
-    fetchSubjects();
-    fetchStats();
+    fetchQuizResults();
+    fetchBlogs();
   }, []);
 
-  const fetchResults = async () => {
+  const fetchQuizResults = async () => {
     try {
       setLoading(true);
-      const res = await API.get("/results/admin/all");
+      const res = await API.get("/blogs/quiz-results");
       setResults(res.data);
+      calculateStats(res.data);
     } catch (err) {
-      console.error("Error fetching results:", err);
-      toast.error("Failed to load results");
+      console.error("Error fetching quiz results:", err);
+      toast.error("Failed to load quiz results");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchCourses = async () => {
+  const fetchBlogs = async () => {
     try {
-      const res = await API.get("/courses");
-      setCourses(res.data);
+      const res = await API.get("/blogs");
+      const blogsWithQuizzes = res.data.blogs.filter(blog => blog.hasQuiz === true);
+      setBlogs(blogsWithQuizzes);
     } catch (err) {
-      console.error("Error fetching courses:", err);
+      console.error("Error fetching blogs:", err);
     }
   };
 
-  const fetchSubjects = async () => {
-    try {
-      const res = await API.get("/subjects");
-      setSubjects(res.data);
-    } catch (err) {
-      console.error("Error fetching subjects:", err);
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      const res = await API.get("/results/stats");
-      setStats(res.data);
-    } catch (err) {
-      console.error("Error fetching stats:", err);
-    }
+  const calculateStats = (data) => {
+    const totalAttempts = data.length;
+    const passedCount = data.filter(r => r.passed === true).length;
+    const failedCount = data.filter(r => r.passed === false).length;
+    const averageScore = data.length > 0 
+      ? Math.round(data.reduce((sum, r) => sum + (r.percentage || 0), 0) / data.length) 
+      : 0;
+    
+    setStats({ totalAttempts, passedCount, failedCount, averageScore });
   };
 
   const filteredResults = results.filter(result => {
-    const matchesSearch = result.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          result.studentEmail?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCourse = selectedCourse === "all" || result.courseId === selectedCourse;
-    const matchesSubject = selectedSubject === "all" || result.subjectId === selectedSubject;
+    const matchesSearch = result.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          result.userEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          result.blogTitle?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesBlog = selectedBlog === "all" || result.blogId === selectedBlog;
     const matchesStatus = selectedStatus === "all" || 
-                          (selectedStatus === "passed" && result.score >= (result.passingScore || 50)) ||
-                          (selectedStatus === "failed" && result.score < (result.passingScore || 50));
-    return matchesSearch && matchesCourse && matchesSubject && matchesStatus;
+                          (selectedStatus === "passed" && result.passed === true) ||
+                          (selectedStatus === "failed" && result.passed === false);
+    return matchesSearch && matchesBlog && matchesStatus;
   });
 
-  const getStatusBadge = (score, passingScore = 50) => {
-    const passed = score >= passingScore;
+  const getStatusBadge = (passed) => {
     return passed ? (
       <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-xs flex items-center gap-1">
         <FaCheckCircle className="text-xs" /> Passed
@@ -107,19 +97,21 @@ const AdminStudentResults = () => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
   const exportToCSV = () => {
-    const headers = ["Student Name", "Email", "Course", "Subject", "Score", "Status", "Date"];
+    const headers = ["User Name", "Email", "Blog Post", "Score", "Percentage", "Status", "Date"];
     const csvData = filteredResults.map(r => [
-      r.studentName,
-      r.studentEmail,
-      r.courseName || "N/A",
-      r.subjectName || "N/A",
-      `${r.score}%`,
-      r.score >= (r.passingScore || 50) ? "Passed" : "Failed",
+      r.userName,
+      r.userEmail || "N/A",
+      r.blogTitle,
+      `${r.score}/${r.totalQuestions}`,
+      `${r.percentage}%`,
+      r.passed ? "Passed" : "Failed",
       formatDate(r.completedAt)
     ]);
     
@@ -128,10 +120,10 @@ const AdminStudentResults = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `student_results_${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `blog_quiz_results_${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Results exported successfully!");
+    toast.success("Quiz results exported successfully!");
   };
 
   const viewResultDetails = (result) => {
@@ -144,9 +136,9 @@ const AdminStudentResults = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Student Results</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Blog Quiz Results</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            View and manage student exam and quiz results
+            Track and manage student quiz attempts from blog posts
           </p>
         </div>
         <div className="flex gap-3">
@@ -166,16 +158,16 @@ const AdminStudentResults = () => {
           <div className="bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{stats.totalAttempts || 0}</p>
+                <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{stats.totalAttempts}</p>
                 <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Total Attempts</p>
               </div>
-              <FaUserGraduate className="text-3xl text-blue-500 opacity-50" />
+              <FaBrain className="text-3xl text-purple-500 opacity-50" />
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xl md:text-2xl font-bold text-green-600 dark:text-green-400">{stats.passedCount || 0}</p>
+                <p className="text-xl md:text-2xl font-bold text-green-600 dark:text-green-400">{stats.passedCount}</p>
                 <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Passed</p>
               </div>
               <FaTrophy className="text-3xl text-green-500 opacity-50" />
@@ -184,7 +176,7 @@ const AdminStudentResults = () => {
           <div className="bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xl md:text-2xl font-bold text-red-600 dark:text-red-400">{stats.failedCount || 0}</p>
+                <p className="text-xl md:text-2xl font-bold text-red-600 dark:text-red-400">{stats.failedCount}</p>
                 <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Failed</p>
               </div>
               <FaTimesCircle className="text-3xl text-red-500 opacity-50" />
@@ -193,7 +185,7 @@ const AdminStudentResults = () => {
           <div className="bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.averageScore || 0}%</p>
+                <p className="text-xl md:text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.averageScore}%</p>
                 <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Avg. Score</p>
               </div>
               <FaChartLine className="text-3xl text-purple-500 opacity-50" />
@@ -208,7 +200,7 @@ const AdminStudentResults = () => {
           <FaSearch className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
           <input
             type="text"
-            placeholder="Search by student name or email..."
+            placeholder="Search by user name, email, or blog post..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 md:pl-12 pr-4 py-2.5 md:py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm md:text-base"
@@ -226,24 +218,13 @@ const AdminStudentResults = () => {
       {/* Desktop Filters */}
       <div className="hidden sm:flex flex-wrap gap-3">
         <select
-          value={selectedCourse}
-          onChange={(e) => setSelectedCourse(e.target.value)}
+          value={selectedBlog}
+          onChange={(e) => setSelectedBlog(e.target.value)}
           className="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
         >
-          <option value="all">All Courses</option>
-          {courses.map(course => (
-            <option key={course._id} value={course._id}>{course.name}</option>
-          ))}
-        </select>
-
-        <select
-          value={selectedSubject}
-          onChange={(e) => setSelectedSubject(e.target.value)}
-          className="px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
-        >
-          <option value="all">All Subjects</option>
-          {subjects.map(subject => (
-            <option key={subject._id} value={subject._id}>{subject.name}</option>
+          <option value="all">All Blog Posts</option>
+          {blogs.map(blog => (
+            <option key={blog._id} value={blog._id}>{blog.title}</option>
           ))}
         </select>
 
@@ -268,23 +249,13 @@ const AdminStudentResults = () => {
             </button>
           </div>
           <select
-            value={selectedCourse}
-            onChange={(e) => setSelectedCourse(e.target.value)}
+            value={selectedBlog}
+            onChange={(e) => setSelectedBlog(e.target.value)}
             className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           >
-            <option value="all">All Courses</option>
-            {courses.map(course => (
-              <option key={course._id} value={course._id}>{course.name}</option>
-            ))}
-          </select>
-          <select
-            value={selectedSubject}
-            onChange={(e) => setSelectedSubject(e.target.value)}
-            className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          >
-            <option value="all">All Subjects</option>
-            {subjects.map(subject => (
-              <option key={subject._id} value={subject._id}>{subject.name}</option>
+            <option value="all">All Blog Posts</option>
+            {blogs.map(blog => (
+              <option key={blog._id} value={blog._id}>{blog.title.substring(0, 30)}...</option>
             ))}
           </select>
           <select
@@ -306,8 +277,8 @@ const AdminStudentResults = () => {
         </div>
       ) : filteredResults.length === 0 ? (
         <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl">
-          <FaUserGraduate className="text-5xl text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">No results found</p>
+          <FaQuestionCircle className="text-5xl text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">No quiz results found</p>
           <p className="text-sm text-gray-400 mt-1">Try adjusting your search or filters</p>
         </div>
       ) : (
@@ -318,32 +289,41 @@ const AdminStudentResults = () => {
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
                   <tr>
-                    <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">Student</th>
-                    <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">Course</th>
-                    <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">Subject</th>
+                    <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">User</th>
+                    <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">Blog Post</th>
                     <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">Score</th>
+                    <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">Percentage</th>
                     <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">Status</th>
                     <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">Date</th>
                     <th className="text-left p-4 font-semibold text-gray-600 dark:text-gray-400 text-sm">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredResults.map((result) => (
-                    <tr key={result._id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  {filteredResults.map((result, idx) => (
+                    <tr key={idx} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <td className="p-4">
                         <div>
-                          <p className="font-medium text-gray-900 dark:text-white">{result.studentName}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{result.studentEmail}</p>
+                          <p className="font-medium text-gray-900 dark:text-white">{result.userName}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{result.userEmail || "No email"}</p>
                         </div>
                       </td>
-                      <td className="p-4 text-gray-600 dark:text-gray-400">{result.courseName || "N/A"}</td>
-                      <td className="p-4 text-gray-600 dark:text-gray-400">{result.subjectName || "N/A"}</td>
                       <td className="p-4">
-                        <span className={`font-semibold ${getScoreColor(result.score)}`}>
-                          {result.score}%
+                        <div className="flex items-center gap-2">
+                          <FaBlog className="text-blue-500 text-xs" />
+                          <span className="text-gray-600 dark:text-gray-400 text-sm line-clamp-1">
+                            {result.blogTitle}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-4 text-gray-600 dark:text-gray-400">
+                        {result.score}/{result.totalQuestions}
+                      </td>
+                      <td className="p-4">
+                        <span className={`font-semibold ${getScoreColor(result.percentage)}`}>
+                          {result.percentage}%
                         </span>
                       </td>
-                      <td className="p-4">{getStatusBadge(result.score, result.passingScore)}</td>
+                      <td className="p-4">{getStatusBadge(result.passed)}</td>
                       <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">
                         {formatDate(result.completedAt)}
                       </td>
@@ -364,33 +344,38 @@ const AdminStudentResults = () => {
 
           {/* Mobile Cards */}
           <div className="lg:hidden space-y-3">
-            {filteredResults.map((result) => (
-              <div key={result._id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+            {filteredResults.map((result, idx) => (
+              <div key={idx} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <p className="font-semibold text-gray-900 dark:text-white">{result.studentName}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{result.studentEmail}</p>
+                    <p className="font-semibold text-gray-900 dark:text-white">{result.userName}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{result.userEmail || "No email"}</p>
                   </div>
-                  {getStatusBadge(result.score, result.passingScore)}
+                  {getStatusBadge(result.passed)}
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Course:</span>
-                    <span className="text-gray-900 dark:text-white">{result.courseName || "N/A"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Subject:</span>
-                    <span className="text-gray-900 dark:text-white">{result.subjectName || "N/A"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Score:</span>
-                    <span className={`font-semibold ${getScoreColor(result.score)}`}>{result.score}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-gray-400">Date:</span>
-                    <span className="text-gray-600 dark:text-gray-400">{formatDate(result.completedAt)}</span>
+                
+                <div className="mb-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-1">
+                    <FaBlog className="text-blue-500" />
+                    <span className="line-clamp-1">{result.blogTitle}</span>
                   </div>
                 </div>
+                
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-500 dark:text-gray-400">Score</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{result.score}/{result.totalQuestions}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 dark:text-gray-400">Percentage</p>
+                    <p className={`font-semibold ${getScoreColor(result.percentage)}`}>{result.percentage}%</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 dark:text-gray-400">Date</p>
+                    <p className="text-gray-600 dark:text-gray-400 text-xs">{formatDate(result.completedAt)}</p>
+                  </div>
+                </div>
+                
                 <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
                   <button
                     onClick={() => viewResultDetails(result)}
@@ -410,53 +395,62 @@ const AdminStudentResults = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDetailsModal(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex justify-between items-center">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Result Details</h2>
+              <div className="flex items-center gap-2">
+                <FaBrain className="text-purple-500" />
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Quiz Result Details</h2>
+              </div>
               <button onClick={() => setShowDetailsModal(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
                 <FaTimes className="text-gray-500" />
               </button>
             </div>
             
             <div className="p-6 space-y-6">
-              {/* Student Info */}
+              {/* User Info */}
               <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Student Information</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">User Information</h3>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-gray-500 dark:text-gray-400">Name</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedResult.studentName}</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{selectedResult.userName}</p>
                   </div>
                   <div>
                     <p className="text-gray-500 dark:text-gray-400">Email</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedResult.studentEmail}</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{selectedResult.userEmail || "Not provided"}</p>
                   </div>
-                  <div>
-                    <p className="text-gray-500 dark:text-gray-400">Course</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedResult.courseName || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500 dark:text-gray-400">Subject</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedResult.subjectName || "N/A"}</p>
+                  <div className="col-span-2">
+                    <p className="text-gray-500 dark:text-gray-400">Blog Post</p>
+                    <Link to={`/blog/${selectedResult.blogSlug}`} target="_blank" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                      {selectedResult.blogTitle}
+                    </Link>
                   </div>
                 </div>
               </div>
 
               {/* Score Info */}
               <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Score Information</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Quiz Score</h3>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-gray-500 dark:text-gray-400">Score</p>
-                    <p className={`text-2xl font-bold ${getScoreColor(selectedResult.score)}`}>{selectedResult.score}%</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {selectedResult.score}/{selectedResult.totalQuestions}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 dark:text-gray-400">Percentage</p>
+                    <p className={`text-2xl font-bold ${getScoreColor(selectedResult.percentage)}`}>
+                      {selectedResult.percentage}%
+                    </p>
                   </div>
                   <div>
                     <p className="text-gray-500 dark:text-gray-400">Status</p>
-                    <div>{getStatusBadge(selectedResult.score, selectedResult.passingScore)}</div>
+                    <div>{getStatusBadge(selectedResult.passed)}</div>
                   </div>
                   <div>
                     <p className="text-gray-500 dark:text-gray-400">Passing Score</p>
-                    <p className="font-medium text-gray-900 dark:text-white">{selectedResult.passingScore || 50}%</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{selectedResult.passingScore}%</p>
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <p className="text-gray-500 dark:text-gray-400">Completed</p>
                     <p className="font-medium text-gray-900 dark:text-white">{formatDate(selectedResult.completedAt)}</p>
                   </div>
@@ -466,7 +460,10 @@ const AdminStudentResults = () => {
               {/* Questions Breakdown */}
               {selectedResult.answers && selectedResult.answers.length > 0 && (
                 <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Question Breakdown</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <FaQuestionCircle className="text-blue-500" />
+                    Question Breakdown
+                  </h3>
                   <div className="space-y-3">
                     {selectedResult.answers.map((answer, idx) => (
                       <div key={idx} className="border-b border-gray-200 dark:border-gray-600 pb-3 last:border-0">
@@ -499,6 +496,16 @@ const AdminStudentResults = () => {
                 </div>
               )}
             </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
+              <button
+                onClick={() => setShowDetailsModal(false)}
+                className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -506,4 +513,4 @@ const AdminStudentResults = () => {
   );
 };
 
-export default AdminStudentResults;
+export default AdminBlogQuizResults;
