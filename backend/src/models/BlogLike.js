@@ -8,10 +8,10 @@ const blogLikeSchema = new mongoose.Schema(
       ref: 'Blog', 
       required: true 
     },
-    userId: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'User', 
-      required: true 
+    ipAddress: { 
+      type: String, 
+      required: true,
+      index: true
     },
     likedAt: { 
       type: Date, 
@@ -21,7 +21,7 @@ const blogLikeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Ensure one user can only like a blog once
-blogLikeSchema.index({ blogId: 1, userId: 1 }, { unique: true });
+// Ensure one IP can only like a blog once
+blogLikeSchema.index({ blogId: 1, ipAddress: 1 }, { unique: true });
 
 export default mongoose.model('BlogLike', blogLikeSchema);

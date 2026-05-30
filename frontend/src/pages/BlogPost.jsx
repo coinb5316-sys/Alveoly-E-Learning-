@@ -38,10 +38,10 @@ const BlogPost = () => {
   }, [slug]);
 
   useEffect(() => {
-    if (user?._id && blog) {
-      checkUserLiked();
-    }
-  }, [user, blog]);
+  if (blog) {
+    checkUserLiked();
+  }
+}, [blog]); // Remove user dependency since we're using IP now
 
   const getImageUrl = (blogData) => {
     if (!blogData?.featuredImage) return "/blog-default.jpg";
@@ -79,35 +79,20 @@ const BlogPost = () => {
     }
   };
 
-  const checkUserLiked = async () => {
-    if (!user?._id) return;
-    try {
-      const res = await API.get(`/blogs/public/${slug}/liked`, {
-        params: { userId: user._id }
-      });
-      setLiked(res.data.liked === true);
-    } catch (err) {
-      console.error("Error checking like status:", err);
-    }
-  };
+ const checkUserLiked = async () => {
+  try {
+    // No need to send userId, server will read IP address
+    const res = await API.get(`/blogs/public/${slug}/liked`);
+    setLiked(res.data.liked === true);
+  } catch (err) {
+    console.error("Error checking like status:", err);
+  }
+};
 
   const handleLike = async () => {
   console.log("🔵 Like button clicked");
-  console.log("🔵 User:", user);
   console.log("🔵 Current liked state:", liked);
   console.log("🔵 Current likesCount:", likesCount);
-  
-  if (!user) {
-    console.log("🔴 No user logged in");
-    toast.error("Please login to like posts");
-    return;
-  }
-  
-  if (!user._id) {
-    console.log("🔴 No user._id found");
-    toast.error("User ID not found");
-    return;
-  }
   
   // Optimistic update
   const previousLiked = liked;
@@ -116,10 +101,9 @@ const BlogPost = () => {
   setLikesCount(prev => !liked ? prev + 1 : Math.max(0, prev - 1));
   
   console.log("🔵 Sending API request to:", `/blogs/public/${slug}/like`);
-  console.log("🔵 Request body:", { userId: user._id });
   
   try {
-    const res = await API.post(`/blogs/public/${slug}/like`, { userId: user._id });
+    const res = await API.post(`/blogs/public/${slug}/like`, {}); // No body needed, IP is read from request
     console.log("🔵 API Response:", res.data);
     
     setLiked(res.data.liked === true);
@@ -131,7 +115,6 @@ const BlogPost = () => {
     setLikesCount(previousCount);
     console.error("🔴 Error toggling like:", err);
     console.error("🔴 Error response:", err.response);
-    console.error("🔴 Error message:", err.message);
     toast.error(err.response?.data?.message || "Failed to update like");
   }
 };

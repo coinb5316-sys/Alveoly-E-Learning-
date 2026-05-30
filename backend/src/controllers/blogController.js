@@ -299,18 +299,25 @@ export const deleteBlog = async (req, res) => {
   }
 };
 
-// ================= TOGGLE LIKE (FIXED) =================
+// ================= TOGGLE LIKE (Using IP address - NO LOGIN REQUIRED) =================
 export const toggleLike = async (req, res) => {
   console.log("🔵 toggleLike called");
   console.log("🔵 Request params:", req.params);
-  console.log("🔵 Request body:", req.body);
+  console.log("🔵 Request headers - IP:", req.ip);
   
   try {
     const { slug } = req.params;
-    const { userId } = req.body;
     
-    if (!userId) {
-      return res.status(401).json({ liked: false, likes: 0, message: "User ID required" });
+    // Get client IP address
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
+                     req.socket.remoteAddress || 
+                     req.ip ||
+                     'unknown';
+    
+    console.log("🔵 Client IP:", clientIp);
+    
+    if (!clientIp || clientIp === 'unknown') {
+      return res.status(400).json({ liked: false, likes: 0, message: "Could not identify your device" });
     }
     
     const blog = await Blog.findOne({ slug });
@@ -318,22 +325,29 @@ export const toggleLike = async (req, res) => {
       return res.status(404).json({ liked: false, likes: 0, message: "Blog not found" });
     }
     
-    // Check if user already liked
-    const existingLike = await BlogLike.findOne({ blogId: blog._id, userId });
+    // Check if this IP already liked this blog
+    const existingLike = await BlogLike.findOne({ 
+      blogId: blog._id, 
+      ipAddress: clientIp 
+    });
     
     if (!existingLike) {
       // Add like
-      await BlogLike.create({ blogId: blog._id, userId, likedAt: new Date() });
+      await BlogLike.create({ 
+        blogId: blog._id, 
+        ipAddress: clientIp, 
+        likedAt: new Date() 
+      });
       blog.likesCount = (blog.likesCount || 0) + 1;
       await blog.save();
-      console.log(`✅ Like added - New likes count: ${blog.likesCount}`);
+      console.log(`✅ Like added from IP ${clientIp} - New likes count: ${blog.likesCount}`);
       return res.json({ liked: true, likes: blog.likesCount });
     } else {
-      // Remove like
-      await BlogLike.deleteOne({ blogId: blog._id, userId });
+      // Remove like (dislike)
+      await BlogLike.deleteOne({ _id: existingLike._id });
       blog.likesCount = Math.max(0, (blog.likesCount || 0) - 1);
       await blog.save();
-      console.log(`✅ Like removed - New likes count: ${blog.likesCount}`);
+      console.log(`✅ Like removed from IP ${clientIp} - New likes count: ${blog.likesCount}`);
       return res.json({ liked: false, likes: blog.likesCount });
     }
   } catch (error) {
@@ -343,13 +357,18 @@ export const toggleLike = async (req, res) => {
 };
 
 
-// ================= CHECK USER LIKED =================
+// ================= CHECK IF IP HAS LIKED =================
 export const checkUserLiked = async (req, res) => {
   try {
     const { slug } = req.params;
-    const { userId } = req.query;
     
-    if (!userId) {
+    // Get client IP address
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
+                     req.socket.remoteAddress || 
+                     req.ip ||
+                     'unknown';
+    
+    if (!clientIp || clientIp === 'unknown') {
       return res.json({ liked: false });
     }
     
@@ -358,7 +377,11 @@ export const checkUserLiked = async (req, res) => {
       return res.status(404).json({ message: "Blog not found" });
     }
     
-    const like = await BlogLike.findOne({ blogId: blog._id, userId });
+    const like = await BlogLike.findOne({ 
+      blogId: blog._id, 
+      ipAddress: clientIp 
+    });
+    
     res.json({ liked: !!like });
   } catch (error) {
     console.error("Check User Liked Error:", error);
