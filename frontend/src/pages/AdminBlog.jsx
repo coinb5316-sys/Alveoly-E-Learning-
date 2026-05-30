@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { 
   FaPlus, FaEdit, FaTrash, FaEye, FaSearch, FaFilter,
-  FaSpinner, FaCheckCircle, FaClock, FaEyeSlash, FaChartLine,
+  FaSpinner, FaCheckCircle, FaClock, FaChartLine,
   FaTimes, FaCalendarAlt, FaTag, FaEye as FaViewIcon
 } from "react-icons/fa";
 import API from "../api/axios";
@@ -26,7 +26,7 @@ const AdminBlog = () => {
     try {
       setLoading(true);
       const res = await API.get("/blogs");
-      setBlogs(res.data.blogs);
+      setBlogs(res.data.blogs || []);
     } catch (err) {
       console.error("Error fetching blogs:", err);
       toast.error("Failed to load blogs");
@@ -58,7 +58,7 @@ const AdminBlog = () => {
   };
 
   const filteredBlogs = blogs.filter(blog =>
-    blog.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    blog.title?.toLowerCase().includes(searchTerm.toLowerCase()) &&
     (statusFilter === "all" || blog.status === statusFilter)
   );
 
@@ -71,6 +71,13 @@ const AdminBlog = () => {
       default:
         return <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400 rounded-full text-xs">{status}</span>;
     }
+  };
+
+  const getImageUrl = (blog) => {
+    if (!blog?.featuredImage) return null;
+    if (typeof blog.featuredImage === 'string') return blog.featuredImage;
+    if (blog.featuredImage?.url) return blog.featuredImage.url;
+    return null;
   };
 
   return (
@@ -89,27 +96,27 @@ const AdminBlog = () => {
         </Link>
       </div>
 
-      {/* Stats Cards - Responsive Grid */}
+      {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-            <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">{stats.total || 0}</p>
             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Total Posts</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-            <p className="text-xl md:text-2xl font-bold text-green-600 dark:text-green-400">{stats.published}</p>
+            <p className="text-xl md:text-2xl font-bold text-green-600 dark:text-green-400">{stats.published || 0}</p>
             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Published</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-            <p className="text-xl md:text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.drafts}</p>
+            <p className="text-xl md:text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.drafts || 0}</p>
             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Drafts</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-            <p className="text-xl md:text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalViews?.toLocaleString()}</p>
+            <p className="text-xl md:text-2xl font-bold text-blue-600 dark:text-blue-400">{(stats.totalViews || 0).toLocaleString()}</p>
             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Total Views</p>
           </div>
           <div className="col-span-2 sm:col-span-1 bg-white dark:bg-gray-800 rounded-xl p-3 md:p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-            <p className="text-xl md:text-2xl font-bold text-red-500 dark:text-red-400">{stats.totalLikes}</p>
+            <p className="text-xl md:text-2xl font-bold text-red-500 dark:text-red-400">{stats.totalLikes || 0}</p>
             <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Total Likes</p>
           </div>
         </div>
@@ -137,7 +144,7 @@ const AdminBlog = () => {
         </div>
       )}
 
-      {/* Search & Filter - Mobile Optimized */}
+      {/* Search & Filter */}
       <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
         <div className="relative flex-1">
           <FaSearch className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
@@ -150,7 +157,6 @@ const AdminBlog = () => {
           />
         </div>
         
-        {/* Mobile Filter Button */}
         <button
           onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
           className="sm:hidden flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
@@ -158,7 +164,6 @@ const AdminBlog = () => {
           <FaFilter /> Filter {statusFilter !== "all" && `(${statusFilter})`}
         </button>
         
-        {/* Desktop Filter */}
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -201,7 +206,7 @@ const AdminBlog = () => {
         </div>
       )}
 
-      {/* Blog List - Responsive Table/Cards */}
+      {/* Blog List */}
       {loading ? (
         <div className="flex justify-center py-12">
           <FaSpinner className="text-3xl md:text-4xl text-blue-600 animate-spin" />
@@ -215,7 +220,7 @@ const AdminBlog = () => {
         </div>
       ) : (
         <>
-          {/* Desktop Table View - Hidden on Mobile */}
+          {/* Desktop Table View */}
           <div className="hidden lg:block bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -240,7 +245,7 @@ const AdminBlog = () => {
                         <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-xs">{blog.category}</span>
                       </td>
                       <td className="p-4">{getStatusBadge(blog.status)}</td>
-                      <td className="p-4 text-gray-600 dark:text-gray-400">{blog.views}</td>
+                      <td className="p-4 text-gray-600 dark:text-gray-400">{blog.views || 0}</td>
                       <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">
                         {new Date(blog.publishedAt).toLocaleDateString()}
                       </td>
@@ -264,20 +269,18 @@ const AdminBlog = () => {
             </div>
           </div>
 
-          {/* Mobile/Tablet Card View - Hidden on Desktop */}
+          {/* Mobile/Tablet Card View */}
           <div className="lg:hidden space-y-3 md:space-y-4">
             {filteredBlogs.map((blog) => (
               <div key={blog._id} className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                {/* Featured Image (if exists) */}
-                {blog.featuredImage?.url && blog.featuredImage.url !== "/blog-default.jpg" && (
+                {getImageUrl(blog) && getImageUrl(blog) !== "/blog-default.jpg" && (
                   <img 
-                    src={blog.featuredImage.url} 
+                    src={getImageUrl(blog)} 
                     alt={blog.title}
                     className="w-full h-40 object-cover rounded-lg mb-3"
                   />
                 )}
                 
-                {/* Title and Status */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <h3 className="font-semibold text-gray-900 dark:text-white text-base line-clamp-2 flex-1">
                     {blog.title}
@@ -285,12 +288,10 @@ const AdminBlog = () => {
                   {getStatusBadge(blog.status)}
                 </div>
                 
-                {/* Excerpt */}
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
                   {blog.excerpt}
                 </p>
                 
-                {/* Meta Info */}
                 <div className="flex flex-wrap items-center gap-3 mb-3 text-xs text-gray-500 dark:text-gray-400">
                   <span className="flex items-center gap-1">
                     <FaTag className="text-blue-500" /> {blog.category}
@@ -299,11 +300,10 @@ const AdminBlog = () => {
                     <FaCalendarAlt /> {new Date(blog.publishedAt).toLocaleDateString()}
                   </span>
                   <span className="flex items-center gap-1">
-                    <FaViewIcon /> {blog.views} views
+                    <FaViewIcon /> {blog.views || 0} views
                   </span>
                 </div>
                 
-                {/* Actions */}
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-700">
                   <Link to={`/admin/blog/edit/${blog._id}`} className="px-3 py-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg text-sm transition-colors">
                     <FaEdit className="inline mr-1" /> Edit

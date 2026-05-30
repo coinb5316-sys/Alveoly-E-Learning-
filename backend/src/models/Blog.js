@@ -1,4 +1,4 @@
-// backend/src/models/Blog.js - Updated with comment approval
+// backend/src/models/Blog.js
 import mongoose from "mongoose";
 
 const quizQuestionSchema = new mongoose.Schema({
@@ -18,11 +18,22 @@ const commentSchema = new mongoose.Schema({
   isRead: { type: Boolean, default: false }
 });
 
+const subscriberSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  subscribedAt: { type: Date, default: Date.now },
+  isActive: { type: Boolean, default: true }
+});
+
+const viewedBySchema = new mongoose.Schema({
+  ip: { type: String },
+  timestamp: { type: Date, default: Date.now }
+});
+
 const blogSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, trim: true },
-    excerpt: { type: String, required: true, maxlength: 200 },
+    excerpt: { type: String, required: true, maxlength: 500 },
     content: { type: String, required: true },
     
     featuredImage: {
@@ -51,8 +62,8 @@ const blogSchema = new mongoose.Schema(
     likes: { type: Number, default: 0 },
     readingTime: { type: Number, default: 5 },
     
-    // Track likes by users to prevent multiple likes
     likedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    viewedBy: [viewedBySchema],
     
     hasQuiz: { type: Boolean, default: false },
     quiz: {
@@ -63,29 +74,21 @@ const blogSchema = new mongoose.Schema(
       attempts: { type: Number, default: 0 },
       completions: { type: Number, default: 0 }
     },
-    // Add this to your blogSchema
-viewedBy: [{
-  ip: { type: String },
-  timestamp: { type: Date, default: Date.now }
-}],
+    
     comments: [commentSchema],
+    subscribers: [subscriberSchema],
     
-    // Newsletter subscribers
-    subscribers: [{
-      email: { type: String, required: true, unique: true },
-      subscribedAt: { type: Date, default: Date.now },
-      isActive: { type: Boolean, default: true }
-    }],
-    
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
   { timestamps: true }
 );
 
+// Indexes for better performance
 blogSchema.index({ slug: 1 });
 blogSchema.index({ status: 1, publishedAt: -1 });
 blogSchema.index({ category: 1 });
 blogSchema.index({ 'comments.isApproved': 1 });
 blogSchema.index({ 'comments.isRead': 1 });
+blogSchema.index({ title: 'text', excerpt: 'text', content: 'text' });
 
 export default mongoose.model('Blog', blogSchema);

@@ -1,4 +1,4 @@
-// src/pages/BlogPost.jsx - Updated with like/dislike and approved comments
+// src/pages/BlogPost.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -33,15 +33,20 @@ const BlogPost = () => {
 
   useEffect(() => {
     fetchBlog();
-    checkUserLiked();
     fetchApprovedComments();
     window.scrollTo(0, 0);
-  }, [slug, user]);
+  }, [slug]);
 
-  const getImageUrl = (blog) => {
-    if (!blog?.featuredImage) return "/blog-default.jpg";
-    if (typeof blog.featuredImage === 'string') return blog.featuredImage;
-    if (blog.featuredImage.url) return blog.featuredImage.url;
+  useEffect(() => {
+    if (user?._id && blog) {
+      checkUserLiked();
+    }
+  }, [user, blog]);
+
+  const getImageUrl = (blogData) => {
+    if (!blogData?.featuredImage) return "/blog-default.jpg";
+    if (typeof blogData.featuredImage === 'string') return blogData.featuredImage;
+    if (blogData.featuredImage?.url) return blogData.featuredImage.url;
     return "/blog-default.jpg";
   };
 
@@ -53,10 +58,11 @@ const BlogPost = () => {
       setLikesCount(res.data.likes || 0);
       
       const relatedRes = await API.get(`/blogs/public/${slug}/related`);
-      setRelatedPosts(relatedRes.data);
+      setRelatedPosts(relatedRes.data || []);
     } catch (err) {
       console.error("Error fetching blog:", err);
       if (err.response?.status === 404) {
+        toast.error("Blog post not found");
         navigate("/blog");
       }
     } finally {
@@ -67,7 +73,7 @@ const BlogPost = () => {
   const fetchApprovedComments = async () => {
     try {
       const res = await API.get(`/blogs/public/${slug}/comments`);
-      setComments(res.data);
+      setComments(res.data || []);
     } catch (err) {
       console.error("Error fetching comments:", err);
     }
@@ -103,15 +109,17 @@ const BlogPost = () => {
   };
 
   const handleQuizSubmit = async () => {
+    if (!blog?.quiz?.questions) return;
+    
     const answers = {};
-    blog.quiz?.questions.forEach((_, index) => {
+    blog.quiz.questions.forEach((_, index) => {
       const selected = document.querySelector(`input[name="q${index}"]:checked`);
       if (selected) {
         answers[index] = parseInt(selected.value);
       }
     });
     
-    if (Object.keys(answers).length !== blog.quiz?.questions.length) {
+    if (Object.keys(answers).length !== blog.quiz.questions.length) {
       toast.error("Please answer all questions before submitting.");
       return;
     }
@@ -121,7 +129,8 @@ const BlogPost = () => {
       const res = await API.post(`/blogs/public/${slug}/quiz`, {
         answers,
         userName: user?.name || "Anonymous",
-        userId: user?._id
+        userId: user?._id,
+        userEmail: user?.email || ""
       });
       setQuizResult(res.data);
       setQuizSubmitted(true);
@@ -176,6 +185,15 @@ const BlogPost = () => {
     toast.success("Link copied to clipboard!");
   };
 
+  const formatDate = (date) => {
+    if (!date) return "Recent";
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -190,14 +208,6 @@ const BlogPost = () => {
   }
 
   if (!blog) return null;
-
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -256,7 +266,7 @@ const BlogPost = () => {
                 }`}
               >
                 {liked ? <FaHeart className="fill-red-500" /> : <FaHeartBroken />}
-                {likesCount}
+                <span>{likesCount}</span>
               </button>
               <div className="relative group">
                 <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all text-gray-600 dark:text-gray-300">
@@ -304,14 +314,14 @@ const BlogPost = () => {
           )}
 
           {/* Quiz Section */}
-          {blog.hasQuiz && blog.quiz && (
+          {blog.hasQuiz && blog.quiz && blog.quiz.questions?.length > 0 && (
             <div className="border-t border-gray-100 dark:border-gray-700 p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30">
               <div className="text-center mb-6">
                 <FaTrophy className="text-4xl text-yellow-500 mx-auto mb-3" />
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{blog.quiz.title}</h3>
                 <p className="text-gray-600 dark:text-gray-400">{blog.quiz.description}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                  Passing score: {blog.quiz.passingScore}% • {blog.quiz.questions?.length} questions
+                  Passing score: {blog.quiz.passingScore}% • {blog.quiz.questions.length} questions
                 </p>
               </div>
 
@@ -326,7 +336,7 @@ const BlogPost = () => {
                     </button>
                   ) : (
                     <div className="space-y-6">
-                      {blog.quiz.questions?.map((q, idx) => (
+                      {blog.quiz.questions.map((q, idx) => (
                         <div key={idx} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm">
                           <p className="font-semibold text-gray-900 dark:text-white mb-4">
                             {idx + 1}. {q.question}
@@ -357,17 +367,17 @@ const BlogPost = () => {
                   )}
                 </div>
               ) : (
-                <div className={`text-center p-6 rounded-xl ${quizResult.passed ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
-                  <div className="text-6xl mb-4">{quizResult.passed ? '🎉' : '📚'}</div>
+                <div className={`text-center p-6 rounded-xl ${quizResult?.passed ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
+                  <div className="text-6xl mb-4">{quizResult?.passed ? '🎉' : '📚'}</div>
                   <h4 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
-                    You scored {quizResult.score}/{quizResult.total} ({Math.round(quizResult.percentage)}%)
+                    You scored {quizResult?.score}/{quizResult?.total} ({Math.round(quizResult?.percentage || 0)}%)
                   </h4>
                   <p className="mb-4 text-gray-600 dark:text-gray-400">
-                    {quizResult.passed 
+                    {quizResult?.passed 
                       ? "Congratulations! You passed the quiz!" 
-                      : `You needed ${quizResult.passingScore}% to pass. Keep learning and try again!`}
+                      : `You needed ${quizResult?.passingScore}% to pass. Keep learning and try again!`}
                   </p>
-                  {!quizResult.passed && (
+                  {!quizResult?.passed && (
                     <button
                       onClick={() => {
                         setShowQuiz(false);
@@ -383,31 +393,29 @@ const BlogPost = () => {
             </div>
           )}
 
-          {/* Comments Section - Show Approved Comments */}
+          {/* Comments Section */}
           <div className="border-t border-gray-100 dark:border-gray-700 p-6">
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
               <FaCommentDots className="text-blue-500" />
               Comments ({comments.length})
             </h3>
             
-            {/* Display Approved Comments */}
             {comments.length > 0 && (
               <div className="space-y-4 mb-8">
-                {comments.map((comment, idx) => (
+                {comments.map((commentItem, idx) => (
                   <div key={idx} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-gray-900 dark:text-white">{comment.userName}</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">{commentItem.userName}</span>
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatDate(comment.createdAt)}
+                        {formatDate(commentItem.createdAt)}
                       </span>
                     </div>
-                    <p className="text-gray-600 dark:text-gray-300">{comment.content}</p>
+                    <p className="text-gray-600 dark:text-gray-300">{commentItem.content}</p>
                   </div>
                 ))}
               </div>
             )}
             
-            {/* Comment Form */}
             <form onSubmit={handleCommentSubmit} className="space-y-4">
               <h4 className="font-semibold text-gray-900 dark:text-white">Leave a Comment</h4>
               <div className="grid md:grid-cols-2 gap-4">
@@ -458,7 +466,7 @@ const BlogPost = () => {
                 <Link key={post._id} to={`/blog/${post.slug}`} className="group">
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all">
                     <img 
-                      src={typeof post.featuredImage === 'string' ? post.featuredImage : post.featuredImage?.url} 
+                      src={getImageUrl(post)} 
                       alt={post.title} 
                       className="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300" 
                     />

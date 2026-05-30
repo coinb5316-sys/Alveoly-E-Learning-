@@ -23,8 +23,7 @@ const Blog = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [subscriberEmail, setSubscriberEmail] = useState("");
-const [subscribing, setSubscribing] = useState(false);
-
+  const [subscribing, setSubscribing] = useState(false);
 
   useEffect(() => {
     fetchBlogs();
@@ -40,23 +39,19 @@ const [subscribing, setSubscribing] = useState(false);
       });
       
       const res = await API.get(`/blogs/public?${params}`);
-      setBlogs(res.data.blogs);
+      setBlogs(res.data.blogs || []);
       setCategories(res.data.categories || []);
-      setTotalPages(res.data.totalPages);
+      setTotalPages(res.data.totalPages || 1);
     } catch (err) {
       console.error("Error fetching blogs:", err);
+      toast.error("Failed to load blog posts");
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredBlogs = blogs.filter(blog =>
-    blog.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    blog.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    blog.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
   const formatDate = (date) => {
+    if (!date) return "Recent";
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -64,34 +59,39 @@ const [subscribing, setSubscribing] = useState(false);
     });
   };
 
-  // Helper function to get image URL
   const getImageUrl = (blog) => {
-    if (!blog.featuredImage) return "/blog-default.jpg";
+    if (!blog?.featuredImage) return "/blog-default.jpg";
     if (typeof blog.featuredImage === 'string') return blog.featuredImage;
-    if (blog.featuredImage.url) return blog.featuredImage.url;
+    if (blog.featuredImage?.url) return blog.featuredImage.url;
     return "/blog-default.jpg";
   };
 
-  // In Blog.jsx, make sure handleSubscribe is correct
-const handleSubscribe = async (e) => {
-  e.preventDefault();
-  if (!subscriberEmail) {
-    toast.error("Please enter your email");
-    return;
-  }
-  
-  setSubscribing(true);
-  try {
-    const response = await API.post("/blogs/subscribe", { email: subscriberEmail });
-    toast.success(response.data.message || "Subscribed successfully!");
-    setSubscriberEmail("");
-  } catch (err) {
-    console.error("Subscribe error:", err);
-    toast.error(err.response?.data?.message || "Failed to subscribe. Please try again.");
-  } finally {
-    setSubscribing(false);
-  }
-};
+  const handleSubscribe = async (e) => {
+    e.preventDefault();
+    if (!subscriberEmail) {
+      toast.error("Please enter your email");
+      return;
+    }
+    
+    setSubscribing(true);
+    try {
+      const response = await API.post("/blogs/subscribe", { email: subscriberEmail });
+      toast.success(response.data.message || "Subscribed successfully!");
+      setSubscriberEmail("");
+    } catch (err) {
+      console.error("Subscribe error:", err);
+      toast.error(err.response?.data?.message || "Failed to subscribe. Please try again.");
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
+  // Filter blogs by search term
+  const filteredBlogs = blogs.filter(blog =>
+    blog.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    blog.excerpt?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    blog.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
@@ -269,7 +269,7 @@ const handleSubscribe = async (e) => {
               >
                 Previous
               </button>
-              {[...Array(totalPages)].slice(0, 5).map((_, i) => (
+              {[...Array(Math.min(totalPages, 5))].map((_, i) => (
                 <button
                   key={i}
                   onClick={() => setCurrentPage(i + 1)}
@@ -297,30 +297,31 @@ const handleSubscribe = async (e) => {
 
       {/* Newsletter Section */}
       <section className="py-16 px-4 bg-gradient-to-r from-blue-600 to-purple-600">
-  <div className="max-w-4xl mx-auto text-center">
-    <h2 className="text-3xl font-bold text-white mb-4">Stay Updated</h2>
-    <p className="text-blue-100 mb-8">
-      Subscribe to our newsletter for the latest articles and health sciences insights
-    </p>
-    <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-      <input
-        type="email"
-        placeholder="Enter your email"
-        value={subscriberEmail}
-        onChange={(e) => setSubscriberEmail(e.target.value)}
-        className="flex-1 px-6 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-white"
-        required
-      />
-      <button
-        type="submit"
-        disabled={subscribing}
-        className="px-8 py-3 bg-white text-blue-600 rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50"
-      >
-        {subscribing ? <FaSpinner className="animate-spin mx-auto" /> : "Subscribe"}
-      </button>
-    </form>
-  </div>
-</section>
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-white mb-4">Stay Updated</h2>
+          <p className="text-blue-100 mb-8">
+            Subscribe to our newsletter for the latest articles and health sciences insights
+          </p>
+          <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
+            <input
+              type="email"
+              placeholder="Enter your email"
+              value={subscriberEmail}
+              onChange={(e) => setSubscriberEmail(e.target.value)}
+              className="flex-1 px-6 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-white"
+              required
+            />
+            <button
+              type="submit"
+              disabled={subscribing}
+              className="px-8 py-3 bg-white text-blue-600 rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50"
+            >
+              {subscribing ? <FaSpinner className="animate-spin mx-auto" /> : "Subscribe"}
+            </button>
+          </form>
+        </div>
+      </section>
+      
       <Footer />
     </div>
   );
