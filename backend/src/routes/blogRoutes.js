@@ -23,7 +23,8 @@ import {
   deleteImage,
   subscribeNewsletter,
   getSubscribers,
-  unsubscribeNewsletter
+  unsubscribeNewsletter,
+  getAllQuizResults
 } from "../controllers/blogController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import upload from "../middleware/upload.js";
