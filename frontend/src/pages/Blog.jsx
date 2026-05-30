@@ -60,8 +60,16 @@ const Blog = () => {
     });
   };
 
+  // Helper function to get image URL
+  const getImageUrl = (blog) => {
+    if (!blog.featuredImage) return "/blog-default.jpg";
+    if (typeof blog.featuredImage === 'string') return blog.featuredImage;
+    if (blog.featuredImage.url) return blog.featuredImage.url;
+    return "/blog-default.jpg";
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
       <Navbar />
 
       {/* Hero Section */}
@@ -93,7 +101,7 @@ const Blog = () => {
       </header>
 
       {/* Search and Filter Section */}
-      <div className="sticky top-16 z-40 bg-white shadow-md py-4">
+      <div className="sticky top-16 z-40 bg-white dark:bg-gray-800 shadow-md py-4">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
@@ -103,13 +111,13 @@ const Blog = () => {
                 placeholder="Search articles..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
             </div>
             
             <button
               onClick={() => setShowMobileFilters(!showMobileFilters)}
-              className="md:hidden flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 rounded-xl"
+              className="md:hidden flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 dark:bg-gray-700 rounded-xl text-gray-700 dark:text-gray-300"
             >
               <FaFilter /> Filters
             </button>
@@ -120,7 +128,7 @@ const Blog = () => {
                 className={`px-4 py-2 rounded-lg font-medium transition-all ${
                   selectedCategory === "all"
                     ? "bg-blue-600 text-white shadow-lg"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >
                 All
@@ -132,7 +140,7 @@ const Blog = () => {
                   className={`px-4 py-2 rounded-lg font-medium transition-all ${
                     selectedCategory === cat._id
                       ? "bg-blue-600 text-white shadow-lg"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                   }`}
                 >
                   {cat._id} ({cat.count})
@@ -149,13 +157,13 @@ const Blog = () => {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20">
               <FaSpinner className="text-5xl text-blue-600 animate-spin mb-4" />
-              <p className="text-gray-500">Loading articles...</p>
+              <p className="text-gray-500 dark:text-gray-400">Loading articles...</p>
             </div>
           ) : filteredBlogs.length === 0 ? (
             <div className="text-center py-20">
-              <FaBookOpen className="text-6xl text-gray-300 mx-auto mb-4" />
-              <h3 className="text-2xl font-semibold text-gray-700">No articles found</h3>
-              <p className="text-gray-500 mt-2">Try adjusting your search or filter</p>
+              <FaBookOpen className="text-6xl text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+              <h3 className="text-2xl font-semibold text-gray-700 dark:text-gray-300">No articles found</h3>
+              <p className="text-gray-500 dark:text-gray-400 mt-2">Try adjusting your search or filter</p>
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -165,14 +173,17 @@ const Blog = () => {
                   initial={{ opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="group bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 hover:-translate-y-2"
+                  className="group bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 hover:-translate-y-2"
                 >
                   <Link to={`/blog/${blog.slug}`}>
                     <div className="relative h-48 overflow-hidden">
                       <img 
-                        src={blog.featuredImage} 
+                        src={getImageUrl(blog)} 
                         alt={blog.title}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        onError={(e) => {
+                          e.target.src = "/blog-default.jpg";
+                        }}
                       />
                       <div className="absolute top-4 left-4">
                         <span className="px-3 py-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs rounded-full">
@@ -182,37 +193,37 @@ const Blog = () => {
                     </div>
                     
                     <div className="p-6">
-                      <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
+                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mb-3">
                         <span className="flex items-center gap-1">
                           <FaCalendarAlt className="text-blue-500" />
                           {formatDate(blog.publishedAt)}
                         </span>
                         <span className="flex items-center gap-1">
                           <FaClock className="text-blue-500" />
-                          {blog.readingTime} min read
+                          {blog.readingTime || 5} min read
                         </span>
                       </div>
                       
-                      <h2 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors line-clamp-2">
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2">
                         {blog.title}
                       </h2>
                       
-                      <p className="text-gray-600 mb-4 line-clamp-3">
+                      <p className="text-gray-600 dark:text-gray-400 mb-4 line-clamp-3">
                         {blog.excerpt}
                       </p>
                       
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-1 text-sm text-gray-500">
+                          <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                             <FaEye className="text-gray-400" />
-                            {blog.views}
+                            {blog.views || 0}
                           </div>
-                          <div className="flex items-center gap-1 text-sm text-gray-500">
+                          <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                             <FaHeart className="text-red-400" />
-                            {blog.likes}
+                            {blog.likes || 0}
                           </div>
                         </div>
-                        <span className="text-blue-600 font-medium flex items-center gap-1 group-hover:gap-2 transition-all">
+                        <span className="text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1 group-hover:gap-2 transition-all">
                           Read More <FaArrowRight className="text-sm" />
                         </span>
                       </div>
@@ -225,31 +236,32 @@ const Blog = () => {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-12">
+            <div className="flex justify-center gap-2 mt-12 flex-wrap">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="px-4 py-2 rounded-lg border disabled:opacity-50 hover:bg-gray-100"
+                className="px-4 py-2 rounded-lg border disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 Previous
               </button>
-              {[...Array(totalPages)].map((_, i) => (
+              {[...Array(totalPages)].slice(0, 5).map((_, i) => (
                 <button
                   key={i}
                   onClick={() => setCurrentPage(i + 1)}
                   className={`px-4 py-2 rounded-lg transition-all ${
                     currentPage === i + 1
                       ? "bg-blue-600 text-white shadow-lg"
-                      : "border hover:bg-gray-100"
+                      : "border hover:bg-gray-100 dark:hover:bg-gray-700"
                   }`}
                 >
                   {i + 1}
                 </button>
               ))}
+              {totalPages > 5 && <span className="px-4 py-2">...</span>}
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="px-4 py-2 rounded-lg border disabled:opacity-50 hover:bg-gray-100"
+                className="px-4 py-2 rounded-lg border disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 Next
               </button>

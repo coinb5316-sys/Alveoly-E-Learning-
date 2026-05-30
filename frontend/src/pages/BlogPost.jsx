@@ -35,6 +35,13 @@ const BlogPost = () => {
     window.scrollTo(0, 0);
   }, [slug]);
 
+  const getImageUrl = (blog) => {
+  if (!blog?.featuredImage) return "/blog-default.jpg";
+  if (typeof blog.featuredImage === 'string') return blog.featuredImage;
+  if (blog.featuredImage.url) return blog.featuredImage.url;
+  return "/blog-default.jpg";
+};
+
   const fetchBlog = async () => {
     try {
       setLoading(true);
@@ -166,7 +173,7 @@ const BlogPost = () => {
       <Navbar />
       
       {/* Hero Section */}
-      <div className="relative h-[50vh] min-h-[400px] bg-cover bg-center" style={{ backgroundImage: `url(${blog.featuredImage})` }}>
+      <div className="relative h-[50vh] min-h-[400px] bg-cover bg-center" style={{ backgroundImage: `url(${getImageUrl(blog)})` }}>
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70" />
         <div className="absolute inset-0 flex items-center">
           <div className="max-w-4xl mx-auto px-4 text-center text-white">
