@@ -356,24 +356,237 @@ export const deleteBlog = async (req, res) => {
   }
 };
 
-// ================= TOGGLE LIKE =================
+// ================= TOGGLE LIKE (Like/Dislike functionality) =================
 export const toggleLike = async (req, res) => {
   try {
     const { slug } = req.params;
     const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(401).json({ message: "User ID required" });
+    }
     
     const blog = await Blog.findOne({ slug });
     if (!blog) {
       return res.status(404).json({ message: "Blog not found" });
     }
     
-    // Simple like toggle (you can implement user-based likes)
-    blog.likes = (blog.likes || 0) + 1;
-    await blog.save();
+    // Check if user already liked
+    const userLikedIndex = blog.likedBy.findIndex(id => id.toString() === userId);
     
-    res.json({ likes: blog.likes });
+    if (userLikedIndex === -1) {
+      // User hasn't liked - add like
+      blog.likedBy.push(userId);
+      blog.likes += 1;
+      await blog.save();
+      res.json({ liked: true, likes: blog.likes });
+    } else {
+      // User has liked - remove like (dislike)
+      blog.likedBy.splice(userLikedIndex, 1);
+      blog.likes -= 1;
+      await blog.save();
+      res.json({ liked: false, likes: blog.likes });
+    }
   } catch (error) {
     console.error("Toggle Like Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= GET APPROVED COMMENTS =================
+export const getApprovedComments = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    
+    const blog = await Blog.findOne({ slug });
+    if (!blog) {
+      return res.status(404).json({ message: "Blog not found" });
+    }
+    
+    const approvedComments = blog.comments.filter(c => c.isApproved);
+    res.json(approvedComments);
+  } catch (error) {
+    console.error("Get Approved Comments Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= UNSUBSCRIBE FROM NEWSLETTER =================
+export const unsubscribeNewsletter = async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    const masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
+    if (masterBlog) {
+      const subscriber = masterBlog.subscribers.find(s => s.email === email);
+      if (subscriber) {
+        subscriber.isActive = false;
+        await masterBlog.save();
+      }
+    }
+    
+    res.json({ message: "Unsubscribed successfully" });
+  } catch (error) {
+    console.error("Unsubscribe Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= GET SUBSCRIBERS =================
+export const getSubscribers = async (req, res) => {
+  try {
+    const masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
+    if (!masterBlog) {
+      return res.json({ subscribers: [] });
+    }
+    
+    const activeSubscribers = masterBlog.subscribers.filter(s => s.isActive);
+    res.json({ subscribers: activeSubscribers });
+  } catch (error) {
+    console.error("Get Subscribers Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= SUBSCRIBE TO NEWSLETTER =================
+export const subscribeNewsletter = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+    
+    // Find any blog to store subscribers (or create a separate collection)
+    // For simplicity, we'll store in a master blog document
+    let masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
+    if (!masterBlog) {
+      masterBlog = new Blog({
+        title: "MASTER_SUBSCRIBERS",
+        slug: "master-subscribers",
+        excerpt: "System document for storing newsletter subscribers",
+        content: "System document",
+        createdBy: req.user?._id || "system"
+      });
+    }
+    
+    // Check if already subscribed
+    const existingSubscriber = masterBlog.subscribers.find(s => s.email === email);
+    if (existingSubscriber) {
+      return res.status(400).json({ message: "Email already subscribed" });
+    }
+    
+    masterBlog.subscribers.push({ email, subscribedAt: new Date(), isActive: true });
+    await masterBlog.save();
+    
+    res.json({ success: true, message: "Subscribed successfully!" });
+  } catch (error) {
+    console.error("Subscribe Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= DELETE COMMENT =================
+export const deleteComment = async (req, res) => {
+  try {
+    const { blogId, commentId } = req.params;
+    
+    const blog = await Blog.findById(blogId);
+    if (!blog) {
+      return res.status(404).json({ message: "Blog not found" });
+    }
+    
+    blog.comments = blog.comments.filter(c => c._id.toString() !== commentId);
+    await blog.save();
+    
+    res.json({ message: "Comment deleted successfully" });
+  } catch (error) {
+    console.error("Delete Comment Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+ 
+// ================= APPROVE COMMENT =================
+export const approveComment = async (req, res) => {
+  try {
+    const { blogId, commentId } = req.params;
+    
+    const blog = await Blog.findById(blogId);
+    if (!blog) {
+      return res.status(404).json({ message: "Blog not found" });
+    }
+    
+    const comment = blog.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+    
+    comment.isApproved = true;
+    await blog.save();
+    
+    res.json({ message: "Comment approved successfully", comment });
+  } catch (error) {
+    console.error("Approve Comment Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= GET PENDING COMMENTS FOR ADMIN =================
+export const getPendingComments = async (req, res) => {
+  try {
+    const blogs = await Blog.find(
+      { 'comments.isApproved': false },
+      'title slug comments'
+    ).populate('comments.user', 'name email');
+    
+    const pendingComments = [];
+    blogs.forEach(blog => {
+      blog.comments.forEach(comment => {
+        if (!comment.isApproved) {
+          pendingComments.push({
+            id: comment._id,
+            blogId: blog._id,
+            blogTitle: blog.title,
+            blogSlug: blog.slug,
+            userName: comment.userName,
+            userEmail: comment.userEmail,
+            content: comment.content,
+            createdAt: comment.createdAt,
+            isApproved: comment.isApproved
+          });
+        }
+      });
+    });
+    
+    // Sort by newest first
+    pendingComments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    res.json(pendingComments);
+  } catch (error) {
+    console.error("Get Pending Comments Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= CHECK IF USER LIKED BLOG =================
+export const checkUserLiked = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.json({ liked: false });
+    }
+    
+    const blog = await Blog.findOne({ slug });
+    if (!blog) {
+      return res.status(404).json({ message: "Blog not found" });
+    }
+    
+    const liked = blog.likedBy.some(id => id.toString() === userId);
+    res.json({ liked });
+  } catch (error) {
+    console.error("Check User Liked Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -426,7 +639,7 @@ export const submitQuiz = async (req, res) => {
   }
 };
 
-// ================= ADD COMMENT =================
+// ================= ADD COMMENT (Updated to track for admin) =================
 export const addComment = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -446,13 +659,22 @@ export const addComment = async (req, res) => {
       userName,
       userEmail: userEmail || '',
       content,
-      isApproved: false // Auto-approve or require admin approval
+      isApproved: false,
+      isRead: false,
+      createdAt: new Date()
     };
     
     blog.comments.push(comment);
     await blog.save();
     
-    io.emit("blog:comment", { blogId: blog._id, comment });
+    // Emit socket event for real-time admin notification
+    if (io) {
+      io.emit("blog:new-comment", {
+        blogId: blog._id,
+        blogTitle: blog.title,
+        comment: comment
+      });
+    }
     
     res.json({ message: "Comment submitted for approval", comment });
   } catch (error) {

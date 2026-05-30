@@ -1,4 +1,4 @@
-// backend/src/models/Blog.js - SIMPLIFIED, NO MIDDLEWARE
+// backend/src/models/Blog.js - Updated with comment approval
 import mongoose from "mongoose";
 
 const quizQuestionSchema = new mongoose.Schema({
@@ -6,6 +6,16 @@ const quizQuestionSchema = new mongoose.Schema({
   options: [{ type: String, required: true }],
   correctAnswer: { type: Number, required: true, min: 0 },
   explanation: { type: String, default: "" }
+});
+
+const commentSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  userName: { type: String, required: true },
+  userEmail: { type: String },
+  content: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+  isApproved: { type: Boolean, default: false },
+  isRead: { type: Boolean, default: false }
 });
 
 const blogSchema = new mongoose.Schema(
@@ -41,6 +51,9 @@ const blogSchema = new mongoose.Schema(
     likes: { type: Number, default: 0 },
     readingTime: { type: Number, default: 5 },
     
+    // Track likes by users to prevent multiple likes
+    likedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    
     hasQuiz: { type: Boolean, default: false },
     quiz: {
       title: { type: String, default: "Test Your Knowledge" },
@@ -51,13 +64,13 @@ const blogSchema = new mongoose.Schema(
       completions: { type: Number, default: 0 }
     },
     
-    comments: [{
-      user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-      userName: { type: String, required: true },
-      userEmail: { type: String },
-      content: { type: String, required: true },
-      createdAt: { type: Date, default: Date.now },
-      isApproved: { type: Boolean, default: false }
+    comments: [commentSchema],
+    
+    // Newsletter subscribers
+    subscribers: [{
+      email: { type: String, required: true, unique: true },
+      subscribedAt: { type: Date, default: Date.now },
+      isActive: { type: Boolean, default: true }
     }],
     
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
@@ -65,11 +78,10 @@ const blogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// NO MIDDLEWARE - We'll handle everything in the controller
-
-// Simple indexes only
 blogSchema.index({ slug: 1 });
 blogSchema.index({ status: 1, publishedAt: -1 });
 blogSchema.index({ category: 1 });
+blogSchema.index({ 'comments.isApproved': 1 });
+blogSchema.index({ 'comments.isRead': 1 });
 
 export default mongoose.model('Blog', blogSchema);

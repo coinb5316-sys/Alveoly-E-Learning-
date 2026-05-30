@@ -86,6 +86,9 @@ import BlogPost from "./pages/BlogPost";
 import AdminBlog from "./pages/AdminBlog";
 import AdminBlogCreate from "./pages/AdminBlogCreate";
 import AdminBlogEdit from "./pages/AdminBlogEdit";
+import AdminStudentResults from "./pages/AdminStudentResults";
+import AdminSubscribers from "./pages/AdminSubscribers";
+import AdminComments from "./pages/AdminComments";
 
 function App() {
   useEffect(() => {
@@ -227,6 +230,9 @@ function App() {
             <Route path="blog" element={<AdminBlog />} />
 <Route path="blog/create" element={<AdminBlogCreate />} />
 <Route path="blog/edit/:id" element={<AdminBlogEdit />} />
+<Route path="results" element={<AdminStudentResults />} />
+<Route path="subscribers" element={<AdminSubscribers />} />
+<Route path="comments" element={<AdminComments />} />
           </Route>
 
           {/* ==================== LECTURER ROUTES ==================== */}

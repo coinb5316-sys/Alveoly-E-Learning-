@@ -1,18 +1,18 @@
-// src/pages/BlogPost.jsx
+// src/pages/BlogPost.jsx - Updated with like/dislike and approved comments
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
-  FaCalendarAlt, FaUser, FaEye, FaHeart, FaShare, 
-  FaArrowLeft, FaArrowRight, FaCheckCircle, FaTimesCircle,
-  FaBookOpen, FaTrophy, FaChartLine, FaClock, FaTag,
+  FaCalendarAlt, FaUser, FaEye, FaHeart, FaHeartBroken,
+  FaShare, FaArrowRight, FaTrophy, FaClock, FaTag,
   FaFacebook, FaTwitter, FaLinkedin, FaWhatsapp, FaCopy,
-  FaSpinner, FaGraduationCap
+  FaSpinner, FaCheckCircle, FaTimesCircle, FaCommentDots
 } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import API from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import toast from "react-hot-toast";
 
 const BlogPost = () => {
   const { slug } = useParams();
@@ -20,10 +20,11 @@ const BlogPost = () => {
   const { user } = useAuth();
   const [blog, setBlog] = useState(null);
   const [relatedPosts, setRelatedPosts] = useState([]);
+  const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [liked, setLiked] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
   const [showQuiz, setShowQuiz] = useState(false);
-  const [quizAnswers, setQuizAnswers] = useState({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizResult, setQuizResult] = useState(null);
   const [submittingQuiz, setSubmittingQuiz] = useState(false);
@@ -32,23 +33,25 @@ const BlogPost = () => {
 
   useEffect(() => {
     fetchBlog();
+    checkUserLiked();
+    fetchApprovedComments();
     window.scrollTo(0, 0);
-  }, [slug]);
+  }, [slug, user]);
 
   const getImageUrl = (blog) => {
-  if (!blog?.featuredImage) return "/blog-default.jpg";
-  if (typeof blog.featuredImage === 'string') return blog.featuredImage;
-  if (blog.featuredImage.url) return blog.featuredImage.url;
-  return "/blog-default.jpg";
-};
+    if (!blog?.featuredImage) return "/blog-default.jpg";
+    if (typeof blog.featuredImage === 'string') return blog.featuredImage;
+    if (blog.featuredImage.url) return blog.featuredImage.url;
+    return "/blog-default.jpg";
+  };
 
   const fetchBlog = async () => {
     try {
       setLoading(true);
       const res = await API.get(`/blogs/public/${slug}`);
       setBlog(res.data);
+      setLikesCount(res.data.likes || 0);
       
-      // Fetch related posts
       const relatedRes = await API.get(`/blogs/public/${slug}/related`);
       setRelatedPosts(relatedRes.data);
     } catch (err) {
@@ -61,14 +64,41 @@ const BlogPost = () => {
     }
   };
 
-  const handleLike = async () => {
-    if (liked) return;
+  const fetchApprovedComments = async () => {
     try {
-      await API.post(`/blogs/public/${slug}/like`, { userId: user?._id });
-      setLiked(true);
-      setBlog(prev => ({ ...prev, likes: prev.likes + 1 }));
+      const res = await API.get(`/blogs/public/${slug}/comments`);
+      setComments(res.data);
     } catch (err) {
-      console.error("Error liking:", err);
+      console.error("Error fetching comments:", err);
+    }
+  };
+
+  const checkUserLiked = async () => {
+    if (!user?._id) return;
+    try {
+      const res = await API.get(`/blogs/public/${slug}/liked`, {
+        params: { userId: user._id }
+      });
+      setLiked(res.data.liked);
+    } catch (err) {
+      console.error("Error checking like status:", err);
+    }
+  };
+
+  const handleLike = async () => {
+    if (!user) {
+      toast.error("Please login to like posts");
+      return;
+    }
+    
+    try {
+      const res = await API.post(`/blogs/public/${slug}/like`, { userId: user._id });
+      setLiked(res.data.liked);
+      setLikesCount(res.data.likes);
+      toast.success(res.data.liked ? "You liked this post!" : "You removed your like");
+    } catch (err) {
+      console.error("Error toggling like:", err);
+      toast.error("Failed to update like");
     }
   };
 
@@ -82,7 +112,7 @@ const BlogPost = () => {
     });
     
     if (Object.keys(answers).length !== blog.quiz?.questions.length) {
-      alert("Please answer all questions before submitting.");
+      toast.error("Please answer all questions before submitting.");
       return;
     }
     
@@ -95,9 +125,10 @@ const BlogPost = () => {
       });
       setQuizResult(res.data);
       setQuizSubmitted(true);
+      toast.success(`You scored ${res.data.score}/${res.data.total}!`);
     } catch (err) {
       console.error("Error submitting quiz:", err);
-      alert("Failed to submit quiz. Please try again.");
+      toast.error("Failed to submit quiz. Please try again.");
     } finally {
       setSubmittingQuiz(false);
     }
@@ -106,7 +137,7 @@ const BlogPost = () => {
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
     if (!comment.name || !comment.content) {
-      alert("Please enter your name and comment");
+      toast.error("Please enter your name and comment");
       return;
     }
     
@@ -119,10 +150,10 @@ const BlogPost = () => {
         userId: user?._id
       });
       setComment({ name: "", email: "", content: "" });
-      alert("Comment submitted for approval!");
+      toast.success("Comment submitted for approval!");
     } catch (err) {
       console.error("Error submitting comment:", err);
-      alert("Failed to submit comment");
+      toast.error("Failed to submit comment");
     } finally {
       setSubmittingComment(false);
     }
@@ -142,16 +173,16 @@ const BlogPost = () => {
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(window.location.href);
-    alert("Link copied to clipboard!");
+    toast.success("Link copied to clipboard!");
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <Navbar />
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
           <FaSpinner className="text-5xl text-blue-600 animate-spin mb-4" />
-          <p className="text-gray-500">Loading article...</p>
+          <p className="text-gray-500 dark:text-gray-400">Loading article...</p>
         </div>
         <Footer />
       </div>
@@ -169,7 +200,7 @@ const BlogPost = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navbar />
       
       {/* Hero Section */}
@@ -203,39 +234,51 @@ const BlogPost = () => {
 
       {/* Content */}
       <div className="max-w-4xl mx-auto px-4 py-12">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
           {/* Author & Meta */}
-          <div className="border-b border-gray-100 p-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="border-b border-gray-100 dark:border-gray-700 p-6 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
                 {blog.author?.name?.charAt(0) || 'A'}
               </div>
               <div>
-                <p className="font-semibold text-gray-900">{blog.author?.name || 'Alveoly Admin'}</p>
-                <p className="text-sm text-gray-500">Health Sciences Educator</p>
+                <p className="font-semibold text-gray-900 dark:text-white">{blog.author?.name || 'Alveoly Admin'}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Health Sciences Educator</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleLike}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                  liked ? 'bg-red-50 text-red-500' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  liked 
+                    ? 'bg-red-50 dark:bg-red-900/30 text-red-500' 
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
-                <FaHeart className={liked ? 'fill-red-500' : ''} />
-                {blog.likes}
+                {liked ? <FaHeart className="fill-red-500" /> : <FaHeartBroken />}
+                {likesCount}
               </button>
               <div className="relative group">
-                <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all">
+                <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all text-gray-600 dark:text-gray-300">
                   <FaShare /> Share
                 </button>
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
                   <div className="p-2 space-y-1">
-                    <button onClick={() => shareOnSocial('facebook')} className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-lg flex items-center gap-2">📘 Facebook</button>
-                    <button onClick={() => shareOnSocial('twitter')} className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-lg flex items-center gap-2">🐦 Twitter</button>
-                    <button onClick={() => shareOnSocial('linkedin')} className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-lg flex items-center gap-2">🔗 LinkedIn</button>
-                    <button onClick={() => shareOnSocial('whatsapp')} className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-lg flex items-center gap-2">💬 WhatsApp</button>
-                    <button onClick={copyToClipboard} className="w-full text-left px-3 py-2 hover:bg-gray-50 rounded-lg flex items-center gap-2">📋 Copy Link</button>
+                    <button onClick={() => shareOnSocial('facebook')} className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg flex items-center gap-2">
+                      <FaFacebook className="text-blue-600" /> Facebook
+                    </button>
+                    <button onClick={() => shareOnSocial('twitter')} className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg flex items-center gap-2">
+                      <FaTwitter className="text-blue-400" /> Twitter
+                    </button>
+                    <button onClick={() => shareOnSocial('linkedin')} className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg flex items-center gap-2">
+                      <FaLinkedin className="text-blue-700" /> LinkedIn
+                    </button>
+                    <button onClick={() => shareOnSocial('whatsapp')} className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg flex items-center gap-2">
+                      <FaWhatsapp className="text-green-500" /> WhatsApp
+                    </button>
+                    <button onClick={copyToClipboard} className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg flex items-center gap-2">
+                      <FaCopy /> Copy Link
+                    </button>
                   </div>
                 </div>
               </div>
@@ -243,16 +286,16 @@ const BlogPost = () => {
           </div>
 
           {/* Article Content */}
-          <div className="p-6 md:p-8 prose prose-lg max-w-none">
+          <div className="p-6 md:p-8 prose prose-lg max-w-none dark:prose-invert">
             <div dangerouslySetInnerHTML={{ __html: blog.content }} />
           </div>
 
           {/* Tags */}
           {blog.tags && blog.tags.length > 0 && (
-            <div className="border-t border-gray-100 p-6">
+            <div className="border-t border-gray-100 dark:border-gray-700 p-6">
               <div className="flex flex-wrap gap-2">
                 {blog.tags.map((tag, i) => (
-                  <span key={i} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">
+                  <span key={i} className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm">
                     #{tag}
                   </span>
                 ))}
@@ -262,12 +305,12 @@ const BlogPost = () => {
 
           {/* Quiz Section */}
           {blog.hasQuiz && blog.quiz && (
-            <div className="border-t border-gray-100 p-6 bg-gradient-to-r from-blue-50 to-purple-50">
+            <div className="border-t border-gray-100 dark:border-gray-700 p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30">
               <div className="text-center mb-6">
                 <FaTrophy className="text-4xl text-yellow-500 mx-auto mb-3" />
-                <h3 className="text-2xl font-bold text-gray-900">{blog.quiz.title}</h3>
-                <p className="text-gray-600">{blog.quiz.description}</p>
-                <p className="text-sm text-gray-500 mt-2">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{blog.quiz.title}</h3>
+                <p className="text-gray-600 dark:text-gray-400">{blog.quiz.description}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
                   Passing score: {blog.quiz.passingScore}% • {blog.quiz.questions?.length} questions
                 </p>
               </div>
@@ -284,20 +327,20 @@ const BlogPost = () => {
                   ) : (
                     <div className="space-y-6">
                       {blog.quiz.questions?.map((q, idx) => (
-                        <div key={idx} className="bg-white rounded-xl p-6 shadow-sm">
-                          <p className="font-semibold text-gray-900 mb-4">
+                        <div key={idx} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm">
+                          <p className="font-semibold text-gray-900 dark:text-white mb-4">
                             {idx + 1}. {q.question}
                           </p>
                           <div className="space-y-2">
                             {q.options.map((option, optIdx) => (
-                              <label key={optIdx} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer">
+                              <label key={optIdx} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                                 <input
                                   type="radio"
                                   name={`q${idx}`}
                                   value={optIdx}
                                   className="w-4 h-4 text-blue-600"
                                 />
-                                <span className="text-gray-700">{option}</span>
+                                <span className="text-gray-700 dark:text-gray-300">{option}</span>
                               </label>
                             ))}
                           </div>
@@ -314,12 +357,12 @@ const BlogPost = () => {
                   )}
                 </div>
               ) : (
-                <div className={`text-center p-6 rounded-xl ${quizResult.passed ? 'bg-green-50' : 'bg-red-50'}`}>
+                <div className={`text-center p-6 rounded-xl ${quizResult.passed ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
                   <div className="text-6xl mb-4">{quizResult.passed ? '🎉' : '📚'}</div>
-                  <h4 className="text-xl font-bold mb-2">
+                  <h4 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">
                     You scored {quizResult.score}/{quizResult.total} ({Math.round(quizResult.percentage)}%)
                   </h4>
-                  <p className="mb-4">
+                  <p className="mb-4 text-gray-600 dark:text-gray-400">
                     {quizResult.passed 
                       ? "Congratulations! You passed the quiz!" 
                       : `You needed ${quizResult.passingScore}% to pass. Keep learning and try again!`}
@@ -329,7 +372,6 @@ const BlogPost = () => {
                       onClick={() => {
                         setShowQuiz(false);
                         setQuizSubmitted(false);
-                        setQuizAnswers({});
                       }}
                       className="px-6 py-2 bg-blue-600 text-white rounded-lg"
                     >
@@ -341,17 +383,40 @@ const BlogPost = () => {
             </div>
           )}
 
-          {/* Comments Section */}
-          <div className="border-t border-gray-100 p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Leave a Comment</h3>
+          {/* Comments Section - Show Approved Comments */}
+          <div className="border-t border-gray-100 dark:border-gray-700 p-6">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+              <FaCommentDots className="text-blue-500" />
+              Comments ({comments.length})
+            </h3>
+            
+            {/* Display Approved Comments */}
+            {comments.length > 0 && (
+              <div className="space-y-4 mb-8">
+                {comments.map((comment, idx) => (
+                  <div key={idx} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-gray-900 dark:text-white">{comment.userName}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatDate(comment.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-gray-600 dark:text-gray-300">{comment.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Comment Form */}
             <form onSubmit={handleCommentSubmit} className="space-y-4">
+              <h4 className="font-semibold text-gray-900 dark:text-white">Leave a Comment</h4>
               <div className="grid md:grid-cols-2 gap-4">
                 <input
                   type="text"
                   placeholder="Your Name *"
                   value={comment.name}
                   onChange={(e) => setComment({ ...comment, name: e.target.value })}
-                  className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                   required
                 />
                 <input
@@ -359,7 +424,7 @@ const BlogPost = () => {
                   placeholder="Your Email (optional)"
                   value={comment.email}
                   onChange={(e) => setComment({ ...comment, email: e.target.value })}
-                  className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
               </div>
               <textarea
@@ -367,7 +432,7 @@ const BlogPost = () => {
                 placeholder="Your Comment *"
                 value={comment.content}
                 onChange={(e) => setComment({ ...comment, content: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 required
               />
               <button
@@ -377,6 +442,9 @@ const BlogPost = () => {
               >
                 {submittingComment ? <FaSpinner className="animate-spin mx-auto" /> : "Post Comment"}
               </button>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Your comment will be visible after admin approval.
+              </p>
             </form>
           </div>
         </div>
@@ -384,15 +452,19 @@ const BlogPost = () => {
         {/* Related Posts */}
         {relatedPosts.length > 0 && (
           <div className="mt-12">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">Related Articles</h3>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Related Articles</h3>
             <div className="grid md:grid-cols-3 gap-6">
               {relatedPosts.map(post => (
                 <Link key={post._id} to={`/blog/${post.slug}`} className="group">
-                  <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all">
-                    <img src={post.featuredImage} alt={post.title} className="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all">
+                    <img 
+                      src={typeof post.featuredImage === 'string' ? post.featuredImage : post.featuredImage?.url} 
+                      alt={post.title} 
+                      className="w-full h-40 object-cover group-hover:scale-105 transition-transform duration-300" 
+                    />
                     <div className="p-4">
-                      <h4 className="font-semibold text-gray-900 mb-2 line-clamp-2">{post.title}</h4>
-                      <p className="text-sm text-gray-500">{formatDate(post.publishedAt)}</p>
+                      <h4 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">{post.title}</h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{formatDate(post.publishedAt)}</p>
                     </div>
                   </div>
                 </Link>

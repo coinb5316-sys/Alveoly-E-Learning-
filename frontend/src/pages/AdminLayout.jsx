@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationPanel from "../components/NotificationPanel";
-import { FaCheckCircle, FaRobot } from "react-icons/fa";
+import { FaCheckCircle, FaCommentDots, FaEnvelope, FaRobot } from "react-icons/fa";
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -137,6 +137,9 @@ const AdminLayout = () => {
       { to: "/admin/results", label: "Student Results", icon: TrendingUp, color: "text-violet-500" },
       { to: "/admin/testimonials", label: "Testimonials", icon: Award, color: "text-amber-500" },
       { to: "/admin/in-box", label: "Feedback", icon: MessageSquare, color: "text-rose-500" },
+      { to: "/admin/comments", label: "Comments", icon: FaCommentDots, color: "text-yellow-500" },
+  { to: "/admin/subscribers", label: "Subscribers", icon: FaEnvelope, color: "text-green-500" },
+  { to: "/admin/results", label: "Student Quiz Results", icon: TrendingUp, color: "text-violet-500" },
     ]},
     { section: "System", items: [
       { to: "/admin/settings", label: "Settings", icon: Settings, color: "text-gray-500" },
