@@ -8,7 +8,7 @@ import BlogLike from "../models/BlogLike.js";
 import BlogView from "../models/BlogView.js";
 import BlogComment from "../models/BlogComment.js";
 
-// ================= CREATE BLOG =================
+// ================= CREATE BLOG (FIXED) =================
 export const createBlog = async (req, res) => {
   try {
     const {
@@ -30,9 +30,13 @@ export const createBlog = async (req, res) => {
       slug = `${slug}-${Date.now()}`;
     }
 
-    const text = content.replace(/<[^>]*>/g, '');
-    const wordCount = text.split(/\s+/).length;
+    // FIXED: Better reading time calculation
+    const plainText = content.replace(/<[^>]*>/g, '');
+    const words = plainText.split(/\s+/).filter(word => word.length > 0);
+    const wordCount = words.length;
     const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+    
+    console.log(`📖 Reading time: ${wordCount} words → ${readingTime} min`);
 
     let finalFeaturedImage = { url: "/blog-default.jpg", publicId: "" };
     if (featuredImage) {
@@ -48,7 +52,7 @@ export const createBlog = async (req, res) => {
       slug,
       excerpt,
       content,
-      readingTime,
+      readingTime,  // Now correctly calculated
       featuredImage: finalFeaturedImage,
       category: category || 'Announcements',
       tags: tags || [],
@@ -62,10 +66,9 @@ export const createBlog = async (req, res) => {
       hasQuiz: hasQuiz || false,
       quiz: hasQuiz ? quiz : {},
       createdBy: req.user?._id,
-      views: 0,
-      likes: 0,
-      likedBy: [],
-      viewedBy: []
+      viewsCount: 0,      // FIXED: Use viewsCount
+      likesCount: 0,      // FIXED: Use likesCount
+      commentsCount: 0
     });
 
     res.status(201).json(blog);
@@ -107,7 +110,7 @@ export const getBlogs = async (req, res) => {
   }
 };
 
-// ================= GET PUBLIC BLOGS (Updated) =================
+// ================= GET PUBLIC BLOGS (FIXED) =================
 export const getPublicBlogs = async (req, res) => {
   try {
     const { page = 1, limit = 12, category, tag } = req.query;
@@ -127,7 +130,7 @@ export const getPublicBlogs = async (req, res) => {
       if (blogObj.featuredImage && typeof blogObj.featuredImage === 'object') {
         blogObj.featuredImage = blogObj.featuredImage.url || "/blog-default.jpg";
       }
-      // Add count fields with proper names for frontend
+      // FIXED: Use correct field names
       blogObj.views = blogObj.viewsCount || 0;
       blogObj.likes = blogObj.likesCount || 0;
       return blogObj;
@@ -152,7 +155,7 @@ export const getPublicBlogs = async (req, res) => {
   }
 };
 
-// ================= GET BLOG BY SLUG (With view tracking using separate model) =================
+// ================= GET BLOG BY SLUG (Count EVERY view) =================
 export const getBlogBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -171,28 +174,19 @@ export const getBlogBySlug = async (req, res) => {
     const userAgent = req.headers['user-agent'] || 'unknown';
     const userId = req.user?._id || null;
     
-    // Check if this IP has viewed in the last 24 hours
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentView = await BlogView.findOne({
+    // FIXED: ALWAYS record view (NO 24-hour cooldown)
+    await BlogView.create({
       blogId: blog._id,
       ip: clientIp,
-      viewedAt: { $gt: twentyFourHoursAgo }
+      userId,
+      userAgent,
+      viewedAt: new Date()
     });
     
-    // Only record view if no recent view from this IP
-    if (!recentView) {
-      await BlogView.create({
-        blogId: blog._id,
-        ip: clientIp,
-        userId,
-        userAgent,
-        viewedAt: new Date()
-      });
-      
-      blog.viewsCount = (blog.viewsCount || 0) + 1;
-      await blog.save();
-      console.log(`✅ View counted for ${slug} from IP ${clientIp} - Total views: ${blog.viewsCount}`);
-    }
+    // Increment view count
+    blog.viewsCount = (blog.viewsCount || 0) + 1;
+    await blog.save();
+    console.log(`✅ View counted for ${slug} from IP ${clientIp} - Total views: ${blog.viewsCount}`);
     
     // Get like count and comment count
     const likesCount = blog.likesCount || 0;
@@ -208,7 +202,7 @@ export const getBlogBySlug = async (req, res) => {
       blogData.featuredImage = blogData.featuredImage.url || "/blog-default.jpg";
     }
     
-    // Add counts to response
+    // Add counts to response (using 'views' and 'likes' for frontend compatibility)
     blogData.likes = likesCount;
     blogData.views = blog.viewsCount;
     blogData.commentsCount = commentsCount;
@@ -247,7 +241,7 @@ export const getBlogById = async (req, res) => {
   }
 };
 
-// ================= UPDATE BLOG =================
+// ================= UPDATE BLOG (FIXED) =================
 export const updateBlog = async (req, res) => {
   try {
     const blog = await Blog.findById(req.params.id);
@@ -259,6 +253,15 @@ export const updateBlog = async (req, res) => {
     
     if (updates.status === 'published' && blog.status !== 'published') {
       updates.publishedAt = new Date();
+    }
+    
+    // FIXED: If content is updated, recalculate reading time
+    if (updates.content && updates.content !== blog.content) {
+      const plainText = updates.content.replace(/<[^>]*>/g, '');
+      const words = plainText.split(/\s+/).filter(word => word.length > 0);
+      const wordCount = words.length;
+      updates.readingTime = Math.max(1, Math.ceil(wordCount / 200));
+      console.log(`📖 Updated reading time: ${wordCount} words → ${updates.readingTime} min`);
     }
     
     Object.assign(blog, updates);
@@ -296,21 +299,23 @@ export const deleteBlog = async (req, res) => {
   }
 };
 
-// ================= TOGGLE LIKE (Using separate model) =================
+// ================= TOGGLE LIKE (FIXED) =================
 export const toggleLike = async (req, res) => {
   console.log("🔵 toggleLike called");
+  console.log("🔵 Request params:", req.params);
+  console.log("🔵 Request body:", req.body);
   
   try {
     const { slug } = req.params;
     const { userId } = req.body;
     
     if (!userId) {
-      return res.status(401).json({ message: "User ID required", liked: false, likes: 0 });
+      return res.status(401).json({ liked: false, likes: 0, message: "User ID required" });
     }
     
     const blog = await Blog.findOne({ slug });
     if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
+      return res.status(404).json({ liked: false, likes: 0, message: "Blog not found" });
     }
     
     // Check if user already liked
@@ -333,7 +338,7 @@ export const toggleLike = async (req, res) => {
     }
   } catch (error) {
     console.error("🔴 Toggle Like Error:", error);
-    res.status(500).json({ message: "Server Error", error: error.message });
+    res.status(500).json({ liked: false, likes: 0, message: error.message });
   }
 };
 
