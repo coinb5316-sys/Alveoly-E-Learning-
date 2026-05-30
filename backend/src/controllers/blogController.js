@@ -4,6 +4,9 @@ import QuizAttempt from "../models/QuizAttempt.js";
 import cloudinary from "../../config/cloudinary.js";
 import streamifier from "streamifier";
 import Subscriber from "../models/Subscriber.js";
+import BlogLike from "../models/BlogLike.js";
+import BlogView from "../models/BlogView.js";
+import BlogComment from "../models/BlogComment.js";
 
 // ================= CREATE BLOG =================
 export const createBlog = async (req, res) => {
@@ -104,7 +107,7 @@ export const getBlogs = async (req, res) => {
   }
 };
 
-// ================= GET PUBLIC BLOGS =================
+// ================= GET PUBLIC BLOGS (Updated) =================
 export const getPublicBlogs = async (req, res) => {
   try {
     const { page = 1, limit = 12, category, tag } = req.query;
@@ -124,6 +127,9 @@ export const getPublicBlogs = async (req, res) => {
       if (blogObj.featuredImage && typeof blogObj.featuredImage === 'object') {
         blogObj.featuredImage = blogObj.featuredImage.url || "/blog-default.jpg";
       }
+      // Add count fields with proper names for frontend
+      blogObj.views = blogObj.viewsCount || 0;
+      blogObj.likes = blogObj.likesCount || 0;
       return blogObj;
     });
     
@@ -146,7 +152,7 @@ export const getPublicBlogs = async (req, res) => {
   }
 };
 
-// ================= GET BLOG BY SLUG (WITH WORKING VIEW COUNT) =================
+// ================= GET BLOG BY SLUG (With view tracking using separate model) =================
 export const getBlogBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -162,36 +168,38 @@ export const getBlogBySlug = async (req, res) => {
                      req.ip ||
                      'unknown';
     
-    // Initialize viewedBy array if it doesn't exist
-    if (!blog.viewedBy) {
-      blog.viewedBy = [];
-    }
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const userId = req.user?._id || null;
     
     // Check if this IP has viewed in the last 24 hours
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentView = blog.viewedBy.find(view => 
-      view.ip === clientIp && new Date(view.timestamp) > twentyFourHoursAgo
-    );
+    const recentView = await BlogView.findOne({
+      blogId: blog._id,
+      ip: clientIp,
+      viewedAt: { $gt: twentyFourHoursAgo }
+    });
     
-    // Only increment view if no recent view from this IP
+    // Only record view if no recent view from this IP
     if (!recentView) {
-      blog.views = (blog.views || 0) + 1;
-      blog.viewedBy.push({ 
-        ip: clientIp, 
-        timestamp: new Date() 
+      await BlogView.create({
+        blogId: blog._id,
+        ip: clientIp,
+        userId,
+        userAgent,
+        viewedAt: new Date()
       });
       
-      // Keep only last 30 days of records to prevent array bloat
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      blog.viewedBy = blog.viewedBy.filter(view => 
-        new Date(view.timestamp) > thirtyDaysAgo
-      );
-      
+      blog.viewsCount = (blog.viewsCount || 0) + 1;
       await blog.save();
-      console.log(`✅ View counted for ${slug} from IP ${clientIp} - Total views: ${blog.views}`);
-    } else {
-      console.log(`⏭️ Skipping duplicate view from IP ${clientIp} for ${slug}`);
+      console.log(`✅ View counted for ${slug} from IP ${clientIp} - Total views: ${blog.viewsCount}`);
     }
+    
+    // Get like count and comment count
+    const likesCount = blog.likesCount || 0;
+    const commentsCount = await BlogComment.countDocuments({ 
+      blogId: blog._id, 
+      isApproved: true 
+    });
     
     const blogData = blog.toObject();
     
@@ -200,6 +208,11 @@ export const getBlogBySlug = async (req, res) => {
       blogData.featuredImage = blogData.featuredImage.url || "/blog-default.jpg";
     }
     
+    // Add counts to response
+    blogData.likes = likesCount;
+    blogData.views = blog.viewsCount;
+    blogData.commentsCount = commentsCount;
+    
     // Remove correct answers from quiz for security
     if (blogData.quiz && blogData.quiz.questions) {
       blogData.quiz = {
@@ -207,15 +220,10 @@ export const getBlogBySlug = async (req, res) => {
         questions: blogData.quiz.questions.map(q => ({
           question: q.question,
           options: q.options,
-          explanation: q.explanation,
-          // Don't send correctAnswer to frontend
+          explanation: q.explanation
         }))
       };
     }
-    
-    // Remove sensitive/internal data
-    delete blogData.viewedBy;
-    delete blogData.likedBy;
     
     res.json(blogData);
   } catch (error) {
@@ -223,6 +231,7 @@ export const getBlogBySlug = async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 };
+
 
 // ================= GET BLOG BY ID =================
 export const getBlogById = async (req, res) => {
@@ -287,59 +296,47 @@ export const deleteBlog = async (req, res) => {
   }
 };
 
-// ================= TOGGLE LIKE (WITH DEBUG LOGS) =================
+// ================= TOGGLE LIKE (Using separate model) =================
 export const toggleLike = async (req, res) => {
   console.log("🔵 toggleLike called");
-  console.log("🔵 Request params:", req.params);
-  console.log("🔵 Request body:", req.body);
   
   try {
     const { slug } = req.params;
     const { userId } = req.body;
     
-    console.log("🔵 Slug:", slug);
-    console.log("🔵 UserId:", userId);
-    
     if (!userId) {
-      console.log("🔴 No userId provided");
       return res.status(401).json({ message: "User ID required", liked: false, likes: 0 });
     }
     
     const blog = await Blog.findOne({ slug });
-    console.log("🔵 Blog found:", blog ? "Yes" : "No");
-    
     if (!blog) {
-      console.log("🔴 Blog not found");
       return res.status(404).json({ message: "Blog not found" });
     }
     
-    if (!blog.likedBy) {
-      blog.likedBy = [];
-    }
+    // Check if user already liked
+    const existingLike = await BlogLike.findOne({ blogId: blog._id, userId });
     
-    const userLikedIndex = blog.likedBy.findIndex(id => id.toString() === userId);
-    console.log("🔵 User liked index:", userLikedIndex);
-    
-    if (userLikedIndex === -1) {
+    if (!existingLike) {
       // Add like
-      blog.likedBy.push(userId);
-      blog.likes = (blog.likes || 0) + 1;
+      await BlogLike.create({ blogId: blog._id, userId, likedAt: new Date() });
+      blog.likesCount = (blog.likesCount || 0) + 1;
       await blog.save();
-      console.log(`✅ Like added - New likes count: ${blog.likes}`);
-      return res.json({ liked: true, likes: blog.likes });
+      console.log(`✅ Like added - New likes count: ${blog.likesCount}`);
+      return res.json({ liked: true, likes: blog.likesCount });
     } else {
       // Remove like
-      blog.likedBy.splice(userLikedIndex, 1);
-      blog.likes = Math.max(0, (blog.likes || 0) - 1);
+      await BlogLike.deleteOne({ blogId: blog._id, userId });
+      blog.likesCount = Math.max(0, (blog.likesCount || 0) - 1);
       await blog.save();
-      console.log(`✅ Like removed - New likes count: ${blog.likes}`);
-      return res.json({ liked: false, likes: blog.likes });
+      console.log(`✅ Like removed - New likes count: ${blog.likesCount}`);
+      return res.json({ liked: false, likes: blog.likesCount });
     }
   } catch (error) {
     console.error("🔴 Toggle Like Error:", error);
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
+
 
 // ================= CHECK USER LIKED =================
 export const checkUserLiked = async (req, res) => {
@@ -356,13 +353,14 @@ export const checkUserLiked = async (req, res) => {
       return res.status(404).json({ message: "Blog not found" });
     }
     
-    const liked = blog.likedBy ? blog.likedBy.some(id => id.toString() === userId) : false;
-    res.json({ liked });
+    const like = await BlogLike.findOne({ blogId: blog._id, userId });
+    res.json({ liked: !!like });
   } catch (error) {
     console.error("Check User Liked Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
+
 
 // ================= SUBMIT QUIZ =================
 export const submitQuiz = async (req, res) => {
@@ -457,7 +455,7 @@ export const getAllQuizResults = async (req, res) => {
   }
 };
 
-// ================= ADD COMMENT =================
+// ================= ADD COMMENT (Using separate model) =================
 export const addComment = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -472,27 +470,28 @@ export const addComment = async (req, res) => {
       return res.status(404).json({ message: "Blog not found" });
     }
     
-    const comment = {
-      user: userId || null,
+    const comment = await BlogComment.create({
+      blogId: blog._id,
+      userId: userId || null,
       userName,
       userEmail: userEmail || '',
       content,
       isApproved: false,
-      isRead: false,
-      createdAt: new Date()
-    };
+      isRead: false
+    });
     
-    blog.comments.push(comment);
+    // Update comment count on blog
+    blog.commentsCount = (blog.commentsCount || 0) + 1;
     await blog.save();
     
-    res.json({ message: "Comment submitted for approval" });
+    res.json({ message: "Comment submitted for approval", comment });
   } catch (error) {
     console.error("Add Comment Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
 
-// ================= GET APPROVED COMMENTS =================
+// ================= GET APPROVED COMMENTS (Using separate model) =================
 export const getApprovedComments = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -502,13 +501,18 @@ export const getApprovedComments = async (req, res) => {
       return res.status(404).json({ message: "Blog not found" });
     }
     
-    const approvedComments = blog.comments.filter(c => c.isApproved === true);
+    const approvedComments = await BlogComment.find({
+      blogId: blog._id,
+      isApproved: true
+    }).sort({ createdAt: -1 });
+    
     res.json(approvedComments);
   } catch (error) {
     console.error("Get Approved Comments Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
+
 
 // ================= GET RELATED BLOGS =================
 export const getRelatedBlogs = async (req, res) => {
@@ -544,34 +548,51 @@ export const getRelatedBlogs = async (req, res) => {
   }
 };
 
-// ================= GET BLOG STATS =================
+// ================= GET BLOG STATS (Updated with separate models) =================
 export const getBlogStats = async (req, res) => {
   try {
     const total = await Blog.countDocuments();
     const published = await Blog.countDocuments({ status: 'published' });
     const drafts = await Blog.countDocuments({ status: 'draft' });
-    const totalViews = await Blog.aggregate([{ $group: { _id: null, total: { $sum: '$views' } } }]);
-    const totalLikes = await Blog.aggregate([{ $group: { _id: null, total: { $sum: '$likes' } } }]);
+    
+    const totalViewsAgg = await Blog.aggregate([
+      { $group: { _id: null, total: { $sum: '$viewsCount' } } }
+    ]);
+    const totalViews = totalViewsAgg[0]?.total || 0;
+    
+    const totalLikesAgg = await Blog.aggregate([
+      { $group: { _id: null, total: { $sum: '$likesCount' } } }
+    ]);
+    const totalLikes = totalLikesAgg[0]?.total || 0;
     
     const topPosts = await Blog.find({ status: 'published' })
-      .select('title slug views likes featuredImage')
-      .sort({ views: -1 })
+      .select('title slug viewsCount likesCount featuredImage')
+      .sort({ viewsCount: -1 })
       .limit(5);
+    
+    // Format top posts for frontend
+    const formattedTopPosts = topPosts.map(post => ({
+      _id: post._id,
+      title: post.title,
+      slug: post.slug,
+      views: post.viewsCount,
+      likes: post.likesCount,
+      featuredImage: post.featuredImage
+    }));
     
     res.json({
       total,
       published,
       drafts,
-      totalViews: totalViews[0]?.total || 0,
-      totalLikes: totalLikes[0]?.total || 0,
-      topPosts
+      totalViews,
+      totalLikes,
+      topPosts: formattedTopPosts
     });
   } catch (error) {
     console.error("Get Blog Stats Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
-
 // ================= SUBSCRIBE TO NEWSLETTER (SIMPLIFIED) =================
 export const subscribeNewsletter = async (req, res) => {
   console.log("📧 Subscribe request received for:", req.body.email);
@@ -690,55 +711,46 @@ export const unsubscribeNewsletter = async (req, res) => {
 // ================= GET PENDING COMMENTS =================
 export const getPendingComments = async (req, res) => {
   try {
-    const blogs = await Blog.find(
-      { 'comments.isApproved': false },
-      'title slug comments'
-    );
+    const pendingComments = await BlogComment.find({ isApproved: false })
+      .populate('userId', 'name email')
+      .sort({ createdAt: -1 });
     
-    const pendingComments = [];
-    blogs.forEach(blog => {
-      blog.comments.forEach(comment => {
-        if (!comment.isApproved) {
-          pendingComments.push({
-            id: comment._id,
-            blogId: blog._id,
-            blogTitle: blog.title,
-            blogSlug: blog.slug,
-            userName: comment.userName,
-            userEmail: comment.userEmail,
-            content: comment.content,
-            createdAt: comment.createdAt,
-            isApproved: comment.isApproved
-          });
-        }
-      });
-    });
+    // Get blog titles for each comment
+    const commentsWithBlogs = await Promise.all(pendingComments.map(async (comment) => {
+      const blog = await Blog.findById(comment.blogId).select('title slug');
+      return {
+        id: comment._id,
+        blogId: comment.blogId,
+        blogTitle: blog?.title || 'Unknown',
+        blogSlug: blog?.slug || '',
+        userName: comment.userName,
+        userEmail: comment.userEmail,
+        content: comment.content,
+        createdAt: comment.createdAt,
+        isApproved: comment.isApproved
+      };
+    }));
     
-    pendingComments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    res.json(pendingComments);
+    res.json(commentsWithBlogs);
   } catch (error) {
     console.error("Get Pending Comments Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
 
+
 // ================= APPROVE COMMENT =================
 export const approveComment = async (req, res) => {
   try {
     const { blogId, commentId } = req.params;
     
-    const blog = await Blog.findById(blogId);
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
-    }
-    
-    const comment = blog.comments.id(commentId);
+    const comment = await BlogComment.findById(commentId);
     if (!comment) {
       return res.status(404).json({ message: "Comment not found" });
     }
     
     comment.isApproved = true;
-    await blog.save();
+    await comment.save();
     
     res.json({ message: "Comment approved successfully", comment });
   } catch (error) {
@@ -747,18 +759,23 @@ export const approveComment = async (req, res) => {
   }
 };
 
+
 // ================= DELETE COMMENT =================
 export const deleteComment = async (req, res) => {
   try {
     const { blogId, commentId } = req.params;
     
-    const blog = await Blog.findById(blogId);
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
+    const comment = await BlogComment.findByIdAndDelete(commentId);
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
     }
     
-    blog.comments = blog.comments.filter(c => c._id.toString() !== commentId);
-    await blog.save();
+    // Update blog comment count
+    const blog = await Blog.findById(blogId);
+    if (blog) {
+      blog.commentsCount = Math.max(0, (blog.commentsCount || 0) - 1);
+      await blog.save();
+    }
     
     res.json({ message: "Comment deleted successfully" });
   } catch (error) {
