@@ -1,4 +1,4 @@
-// backend/src/controllers/blogController.js
+// backend/src/controllers/blogController.js - COMPLETE FIXED VERSION
 import Blog from "../models/Blog.js";
 import QuizAttempt from "../models/QuizAttempt.js";
 import cloudinary from "../../config/cloudinary.js";
@@ -16,7 +16,6 @@ export const createBlog = async (req, res) => {
       return res.status(400).json({ message: "Title, excerpt, and content are required" });
     }
 
-    // Generate slug
     let slug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
@@ -27,7 +26,6 @@ export const createBlog = async (req, res) => {
       slug = `${slug}-${Date.now()}`;
     }
 
-    // Calculate reading time
     const text = content.replace(/<[^>]*>/g, '');
     const wordCount = text.split(/\s+/).length;
     const readingTime = Math.max(1, Math.ceil(wordCount / 200));
@@ -59,7 +57,11 @@ export const createBlog = async (req, res) => {
       publishedAt: status === 'published' ? new Date() : (publishedAt || new Date()),
       hasQuiz: hasQuiz || false,
       quiz: hasQuiz ? quiz : {},
-      createdBy: req.user?._id
+      createdBy: req.user?._id,
+      views: 0,
+      likes: 0,
+      likedBy: [],
+      viewedBy: []
     });
 
     res.status(201).json(blog);
@@ -143,7 +145,7 @@ export const getPublicBlogs = async (req, res) => {
   }
 };
 
-// ================= GET BLOG BY SLUG =================
+// ================= GET BLOG BY SLUG (WITH WORKING VIEW COUNT) =================
 export const getBlogBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -153,43 +155,66 @@ export const getBlogBySlug = async (req, res) => {
       return res.status(404).json({ message: "Blog not found" });
     }
     
-    // View counting
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || req.ip;
+    // Get client IP address
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
+                     req.socket.remoteAddress || 
+                     req.ip ||
+                     'unknown';
     
+    // Initialize viewedBy array if it doesn't exist
     if (!blog.viewedBy) {
       blog.viewedBy = [];
     }
     
+    // Check if this IP has viewed in the last 24 hours
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentView = blog.viewedBy.find(view => view.ip === clientIp && view.timestamp > twentyFourHoursAgo);
+    const recentView = blog.viewedBy.find(view => 
+      view.ip === clientIp && new Date(view.timestamp) > twentyFourHoursAgo
+    );
     
+    // Only increment view if no recent view from this IP
     if (!recentView) {
-      blog.views += 1;
-      blog.viewedBy.push({ ip: clientIp, timestamp: new Date() });
+      blog.views = (blog.views || 0) + 1;
+      blog.viewedBy.push({ 
+        ip: clientIp, 
+        timestamp: new Date() 
+      });
       
+      // Keep only last 30 days of records to prevent array bloat
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      blog.viewedBy = blog.viewedBy.filter(view => view.timestamp > thirtyDaysAgo);
+      blog.viewedBy = blog.viewedBy.filter(view => 
+        new Date(view.timestamp) > thirtyDaysAgo
+      );
       
       await blog.save();
+      console.log(`✅ View counted for ${slug} from IP ${clientIp} - Total views: ${blog.views}`);
+    } else {
+      console.log(`⏭️ Skipping duplicate view from IP ${clientIp} for ${slug}`);
     }
     
     const blogData = blog.toObject();
     
+    // Format featuredImage for frontend
     if (blogData.featuredImage && typeof blogData.featuredImage === 'object') {
       blogData.featuredImage = blogData.featuredImage.url || "/blog-default.jpg";
     }
     
+    // Remove correct answers from quiz for security
     if (blogData.quiz && blogData.quiz.questions) {
       blogData.quiz = {
         ...blogData.quiz,
         questions: blogData.quiz.questions.map(q => ({
-          ...q,
-          correctAnswer: undefined
+          question: q.question,
+          options: q.options,
+          explanation: q.explanation,
+          // Don't send correctAnswer to frontend
         }))
       };
     }
     
+    // Remove sensitive/internal data
     delete blogData.viewedBy;
+    delete blogData.likedBy;
     
     res.json(blogData);
   } catch (error) {
@@ -552,9 +577,14 @@ export const subscribeNewsletter = async (req, res) => {
         excerpt: "System document for storing newsletter subscribers",
         content: "System document - Do not delete",
         createdBy: null,
-        status: "published"
+        status: "published",
+        subscribers: []
       });
       await masterBlog.save({ validateBeforeSave: false });
+    }
+    
+    if (!masterBlog.subscribers) {
+      masterBlog.subscribers = [];
     }
     
     const existingSubscriber = masterBlog.subscribers.find(s => s.email === email);
@@ -572,6 +602,7 @@ export const subscribeNewsletter = async (req, res) => {
     masterBlog.subscribers.push({ email, subscribedAt: new Date(), isActive: true });
     await masterBlog.save();
     
+    console.log(`✅ New subscriber: ${email}`);
     res.json({ success: true, message: "Successfully subscribed to our newsletter!" });
   } catch (error) {
     console.error("Subscribe Error:", error);
@@ -583,7 +614,7 @@ export const subscribeNewsletter = async (req, res) => {
 export const getSubscribers = async (req, res) => {
   try {
     const masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
-    if (!masterBlog) {
+    if (!masterBlog || !masterBlog.subscribers) {
       return res.json({ subscribers: [], total: 0, inactive: 0 });
     }
     
@@ -607,7 +638,7 @@ export const unsubscribeNewsletter = async (req, res) => {
     const { email } = req.params;
     
     const masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
-    if (masterBlog) {
+    if (masterBlog && masterBlog.subscribers) {
       const subscriber = masterBlog.subscribers.find(s => s.email === email);
       if (subscriber) {
         subscriber.isActive = false;

@@ -1,4 +1,4 @@
-// backend/src/routes/blogRoutes.js - Add new routes
+// backend/src/routes/blogRoutes.js
 import express from "express";
 import {
   createBlog,
@@ -31,7 +31,10 @@ import upload from "../middleware/upload.js";
 
 const router = express.Router();
 
-// ================= PUBLIC ROUTES =================
+// ================= PUBLIC ROUTES (NO AUTH REQUIRED) =================
+// These must come BEFORE any protected routes
+router.post("/subscribe", subscribeNewsletter);
+router.delete("/unsubscribe/:email", unsubscribeNewsletter);
 router.get("/public", getPublicBlogs);
 router.get("/public/:slug", getBlogBySlug);
 router.get("/public/:slug/related", getRelatedBlogs);
@@ -39,12 +42,10 @@ router.get("/public/:slug/comments", getApprovedComments);
 router.post("/public/:slug/like", toggleLike);
 router.get("/public/:slug/liked", checkUserLiked);
 router.post("/public/:slug/quiz", submitQuiz);
-router.get("/quiz-results", protect, adminOnly, getAllQuizResults);
 router.post("/public/:slug/comment", addComment);
-router.post("/subscribe", subscribeNewsletter);
-router.delete("/unsubscribe/:email", unsubscribeNewsletter);
 
 // ================= PROTECTED ROUTES (Admin Only) =================
+router.get("/quiz-results", protect, adminOnly, getAllQuizResults);
 router.get("/", protect, adminOnly, getBlogs);
 router.get("/stats", protect, adminOnly, getBlogStats);
 router.get("/comments/pending", protect, adminOnly, getPendingComments);

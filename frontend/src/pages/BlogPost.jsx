@@ -1,4 +1,4 @@
-// src/pages/BlogPost.jsx
+// src/pages/BlogPost.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -85,7 +85,7 @@ const BlogPost = () => {
       const res = await API.get(`/blogs/public/${slug}/liked`, {
         params: { userId: user._id }
       });
-      setLiked(res.data.liked);
+      setLiked(res.data.liked === true);
     } catch (err) {
       console.error("Error checking like status:", err);
     }
@@ -97,12 +97,21 @@ const BlogPost = () => {
       return;
     }
     
+    // Optimistic update
+    const previousLiked = liked;
+    const previousCount = likesCount;
+    setLiked(!liked);
+    setLikesCount(prev => !liked ? prev + 1 : Math.max(0, prev - 1));
+    
     try {
       const res = await API.post(`/blogs/public/${slug}/like`, { userId: user._id });
-      setLiked(res.data.liked);
+      setLiked(res.data.liked === true);
       setLikesCount(res.data.likes);
       toast.success(res.data.liked ? "You liked this post!" : "You removed your like");
     } catch (err) {
+      // Rollback on error
+      setLiked(previousLiked);
+      setLikesCount(previousCount);
       console.error("Error toggling like:", err);
       toast.error("Failed to update like");
     }
@@ -265,7 +274,11 @@ const BlogPost = () => {
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
-                {liked ? <FaHeart className="fill-red-500" /> : <FaHeartBroken />}
+                {liked ? (
+                  <FaHeart className="text-red-500 fill-current" />
+                ) : (
+                  <FaHeartBroken className="text-gray-500" />
+                )}
                 <span>{likesCount}</span>
               </button>
               <div className="relative group">

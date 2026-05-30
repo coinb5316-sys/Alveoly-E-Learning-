@@ -66,25 +66,37 @@ const Blog = () => {
     return "/blog-default.jpg";
   };
 
-  const handleSubscribe = async (e) => {
-    e.preventDefault();
-    if (!subscriberEmail) {
-      toast.error("Please enter your email");
-      return;
-    }
-    
-    setSubscribing(true);
-    try {
-      const response = await API.post("/blogs/subscribe", { email: subscriberEmail });
-      toast.success(response.data.message || "Subscribed successfully!");
+  // src/pages/Blog.jsx - Fixed handleSubscribe function
+const handleSubscribe = async (e) => {
+  e.preventDefault();
+  
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!subscriberEmail) {
+    toast.error("Please enter your email address");
+    return;
+  }
+  if (!emailPattern.test(subscriberEmail)) {
+    toast.error("Please enter a valid email address");
+    return;
+  }
+  
+  setSubscribing(true);
+  try {
+    const response = await API.post("/blogs/subscribe", { email: subscriberEmail });
+    if (response.data.success) {
+      toast.success(response.data.message || "Successfully subscribed to our newsletter!");
       setSubscriberEmail("");
-    } catch (err) {
-      console.error("Subscribe error:", err);
-      toast.error(err.response?.data?.message || "Failed to subscribe. Please try again.");
-    } finally {
-      setSubscribing(false);
+    } else {
+      toast.error(response.data.message || "Subscription failed");
     }
-  };
+  } catch (err) {
+    console.error("Subscribe error:", err);
+    const errorMessage = err.response?.data?.message || "Failed to subscribe. Please try again.";
+    toast.error(errorMessage);
+  } finally {
+    setSubscribing(false);
+  }
+};
 
   // Filter blogs by search term
   const filteredBlogs = blogs.filter(blog =>
