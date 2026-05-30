@@ -204,7 +204,7 @@ export const getBlogs = async (req, res) => {
   }
 };
 
-// ================= GET PUBLIC BLOGS =================
+// In getPublicBlogs function, ensure featuredImage is properly formatted
 export const getPublicBlogs = async (req, res) => {
   try {
     const { page = 1, limit = 12, category, tag } = req.query;
@@ -219,6 +219,16 @@ export const getPublicBlogs = async (req, res) => {
       .limit(limit * 1)
       .skip((page - 1) * limit);
     
+    // Format featuredImage for frontend
+    const formattedBlogs = blogs.map(blog => {
+      const blogObj = blog.toObject();
+      // Ensure featuredImage is a string URL for frontend
+      if (blogObj.featuredImage && typeof blogObj.featuredImage === 'object') {
+        blogObj.featuredImage = blogObj.featuredImage.url || "/blog-default.jpg";
+      }
+      return blogObj;
+    });
+    
     const total = await Blog.countDocuments(query);
     const categories = await Blog.aggregate([
       { $match: { status: 'published' } },
@@ -226,7 +236,7 @@ export const getPublicBlogs = async (req, res) => {
     ]);
     
     res.json({
-      blogs,
+      blogs: formattedBlogs,
       categories,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
@@ -238,7 +248,6 @@ export const getPublicBlogs = async (req, res) => {
   }
 };
 
-// ================= GET BLOG BY SLUG =================
 export const getBlogBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -252,8 +261,15 @@ export const getBlogBySlug = async (req, res) => {
     blog.views += 1;
     await blog.save();
     
-    // Remove correct answers from quiz for security
+    // Format the blog data
     const blogData = blog.toObject();
+    
+    // Ensure featuredImage is a string URL
+    if (blogData.featuredImage && typeof blogData.featuredImage === 'object') {
+      blogData.featuredImage = blogData.featuredImage.url || "/blog-default.jpg";
+    }
+    
+    // Remove correct answers from quiz for security
     if (blogData.quiz && blogData.quiz.questions) {
       blogData.quiz = {
         ...blogData.quiz,
