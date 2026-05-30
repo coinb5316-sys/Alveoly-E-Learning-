@@ -3,6 +3,7 @@ import Blog from "../models/Blog.js";
 import QuizAttempt from "../models/QuizAttempt.js";
 import cloudinary from "../../config/cloudinary.js";
 import streamifier from "streamifier";
+import Subscriber from "../models/Subscriber.js";
 
 // ================= CREATE BLOG =================
 export const createBlog = async (req, res) => {
@@ -286,18 +287,29 @@ export const deleteBlog = async (req, res) => {
   }
 };
 
-// ================= TOGGLE LIKE =================
+// ================= TOGGLE LIKE (WITH DEBUG LOGS) =================
 export const toggleLike = async (req, res) => {
+  console.log("🔵 toggleLike called");
+  console.log("🔵 Request params:", req.params);
+  console.log("🔵 Request body:", req.body);
+  
   try {
     const { slug } = req.params;
     const { userId } = req.body;
     
+    console.log("🔵 Slug:", slug);
+    console.log("🔵 UserId:", userId);
+    
     if (!userId) {
+      console.log("🔴 No userId provided");
       return res.status(401).json({ message: "User ID required", liked: false, likes: 0 });
     }
     
     const blog = await Blog.findOne({ slug });
+    console.log("🔵 Blog found:", blog ? "Yes" : "No");
+    
     if (!blog) {
+      console.log("🔴 Blog not found");
       return res.status(404).json({ message: "Blog not found" });
     }
     
@@ -306,21 +318,26 @@ export const toggleLike = async (req, res) => {
     }
     
     const userLikedIndex = blog.likedBy.findIndex(id => id.toString() === userId);
+    console.log("🔵 User liked index:", userLikedIndex);
     
     if (userLikedIndex === -1) {
+      // Add like
       blog.likedBy.push(userId);
       blog.likes = (blog.likes || 0) + 1;
       await blog.save();
+      console.log(`✅ Like added - New likes count: ${blog.likes}`);
       return res.json({ liked: true, likes: blog.likes });
     } else {
+      // Remove like
       blog.likedBy.splice(userLikedIndex, 1);
       blog.likes = Math.max(0, (blog.likes || 0) - 1);
       await blog.save();
+      console.log(`✅ Like removed - New likes count: ${blog.likes}`);
       return res.json({ liked: false, likes: blog.likes });
     }
   } catch (error) {
-    console.error("Toggle Like Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    console.error("🔴 Toggle Like Error:", error);
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
@@ -555,58 +572,69 @@ export const getBlogStats = async (req, res) => {
   }
 };
 
-// ================= SUBSCRIBE TO NEWSLETTER =================
+// ================= SUBSCRIBE TO NEWSLETTER (SIMPLIFIED) =================
 export const subscribeNewsletter = async (req, res) => {
+  console.log("📧 Subscribe request received for:", req.body.email);
+  
   try {
     const { email } = req.body;
     
     if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json({ success: false, message: "Email is required" });
     }
     
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: "Please enter a valid email address" });
+      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
     }
     
-    let masterBlog = await Blog.findOne({ title: "MASTER_SUBSCRIBERS" });
-    if (!masterBlog) {
-      masterBlog = new Blog({
-        title: "MASTER_SUBSCRIBERS",
-        slug: "master-subscribers",
-        excerpt: "System document for storing newsletter subscribers",
-        content: "System document - Do not delete",
-        createdBy: null,
-        status: "published",
-        subscribers: []
-      });
-      await masterBlog.save({ validateBeforeSave: false });
-    }
+    // Check if already subscribed
+    let existingSubscriber = await Subscriber.findOne({ email });
     
-    if (!masterBlog.subscribers) {
-      masterBlog.subscribers = [];
-    }
-    
-    const existingSubscriber = masterBlog.subscribers.find(s => s.email === email);
     if (existingSubscriber) {
       if (existingSubscriber.isActive) {
-        return res.status(400).json({ message: "This email is already subscribed to our newsletter!" });
+        return res.status(400).json({ 
+          success: false, 
+          message: "This email is already subscribed to our newsletter!" 
+        });
       } else {
         existingSubscriber.isActive = true;
         existingSubscriber.subscribedAt = new Date();
-        await masterBlog.save();
-        return res.json({ success: true, message: "Welcome back! You have been re-subscribed successfully!" });
+        await existingSubscriber.save();
+        console.log(`✅ Reactivated subscriber: ${email}`);
+        return res.json({ 
+          success: true, 
+          message: "Welcome back! You have been re-subscribed successfully!" 
+        });
       }
     }
     
-    masterBlog.subscribers.push({ email, subscribedAt: new Date(), isActive: true });
-    await masterBlog.save();
+    // Create new subscriber
+    const newSubscriber = new Subscriber({
+      email,
+      subscribedAt: new Date(),
+      isActive: true
+    });
     
-    console.log(`✅ New subscriber: ${email}`);
-    res.json({ success: true, message: "Successfully subscribed to our newsletter!" });
+    await newSubscriber.save();
+    console.log(`✅ New subscriber added: ${email}`);
+    
+    res.json({ 
+      success: true, 
+      message: "Successfully subscribed to our newsletter!" 
+    });
   } catch (error) {
     console.error("Subscribe Error:", error);
-    res.status(500).json({ message: error.message || "Failed to subscribe. Please try again later." });
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "This email is already subscribed!" 
+      });
+    }
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to subscribe. Please try again later." 
+    });
   }
 };
 

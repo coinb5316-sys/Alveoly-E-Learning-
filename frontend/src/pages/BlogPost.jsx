@@ -92,30 +92,49 @@ const BlogPost = () => {
   };
 
   const handleLike = async () => {
-    if (!user) {
-      toast.error("Please login to like posts");
-      return;
-    }
+  console.log("🔵 Like button clicked");
+  console.log("🔵 User:", user);
+  console.log("🔵 Current liked state:", liked);
+  console.log("🔵 Current likesCount:", likesCount);
+  
+  if (!user) {
+    console.log("🔴 No user logged in");
+    toast.error("Please login to like posts");
+    return;
+  }
+  
+  if (!user._id) {
+    console.log("🔴 No user._id found");
+    toast.error("User ID not found");
+    return;
+  }
+  
+  // Optimistic update
+  const previousLiked = liked;
+  const previousCount = likesCount;
+  setLiked(!liked);
+  setLikesCount(prev => !liked ? prev + 1 : Math.max(0, prev - 1));
+  
+  console.log("🔵 Sending API request to:", `/blogs/public/${slug}/like`);
+  console.log("🔵 Request body:", { userId: user._id });
+  
+  try {
+    const res = await API.post(`/blogs/public/${slug}/like`, { userId: user._id });
+    console.log("🔵 API Response:", res.data);
     
-    // Optimistic update
-    const previousLiked = liked;
-    const previousCount = likesCount;
-    setLiked(!liked);
-    setLikesCount(prev => !liked ? prev + 1 : Math.max(0, prev - 1));
-    
-    try {
-      const res = await API.post(`/blogs/public/${slug}/like`, { userId: user._id });
-      setLiked(res.data.liked === true);
-      setLikesCount(res.data.likes);
-      toast.success(res.data.liked ? "You liked this post!" : "You removed your like");
-    } catch (err) {
-      // Rollback on error
-      setLiked(previousLiked);
-      setLikesCount(previousCount);
-      console.error("Error toggling like:", err);
-      toast.error("Failed to update like");
-    }
-  };
+    setLiked(res.data.liked === true);
+    setLikesCount(res.data.likes);
+    toast.success(res.data.liked ? "You liked this post!" : "You removed your like");
+  } catch (err) {
+    // Rollback on error
+    setLiked(previousLiked);
+    setLikesCount(previousCount);
+    console.error("🔴 Error toggling like:", err);
+    console.error("🔴 Error response:", err.response);
+    console.error("🔴 Error message:", err.message);
+    toast.error(err.response?.data?.message || "Failed to update like");
+  }
+};
 
   const handleQuizSubmit = async () => {
     if (!blog?.quiz?.questions) return;
@@ -267,20 +286,21 @@ const BlogPost = () => {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={handleLike}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                  liked 
-                    ? 'bg-red-50 dark:bg-red-900/30 text-red-500' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                {liked ? (
-                  <FaHeart className="text-red-500 fill-current" />
-                ) : (
-                  <FaHeartBroken className="text-gray-500" />
-                )}
-                <span>{likesCount}</span>
-              </button>
+  onClick={handleLike}
+  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+    liked 
+      ? 'bg-red-50 dark:bg-red-900/30 text-red-500' 
+      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+  }`}
+  type="button"
+>
+  {liked ? (
+    <FaHeart className="text-red-500 fill-current" />
+  ) : (
+    <FaHeartBroken className="text-gray-500" />
+  )}
+  <span>{likesCount}</span>
+</button>
               <div className="relative group">
                 <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all text-gray-600 dark:text-gray-300">
                   <FaShare /> Share
