@@ -1,6 +1,6 @@
 // src/pages/AdminSubscribers.jsx
 import React, { useState, useEffect } from "react";
-import { FaSpinner, FaEnvelope, FaUsers, FaTrash, FaDownload, FaRefresh } from "react-icons/fa";
+import { FaSpinner, FaEnvelope, FaUsers, FaTrash, FaDownload, FaSync } from "react-icons/fa";
 import API from "../api/axios";
 import toast from "react-hot-toast";
 
@@ -87,7 +87,7 @@ const AdminSubscribers = () => {
             disabled={loading}
             className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
           >
-            <FaRefresh className={loading ? "animate-spin" : ""} /> Refresh
+            <FaSync className={loading ? "animate-spin" : ""} /> Refresh
           </button>
           <button
             onClick={exportToCSV}
