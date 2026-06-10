@@ -50,7 +50,7 @@ players: [{
   },
   joinedAt: { type: Date, default: Date.now },
   completedAt: Date,
-  attemptId: { type: mongoose.Schema.Types.ObjectId }  // ← ADD THIS FIELD
+  attemptId: { type: mongoose.Schema.Types.ObjectId, ref: 'NursingGameAttempt' }  // ADD THIS
 }],
   
   // Match Configuration
