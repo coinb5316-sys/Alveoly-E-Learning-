@@ -58,34 +58,40 @@ const NursingGamesHub = () => {
   ];
 
   // Get current user info on mount
-  useEffect(() => {
-    const getUserInfo = async () => {
-      try {
-        // Get user from localStorage
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          setCurrentUserId(user._id || user.id);
-          setCurrentUserProgramId(user.programId?._id || user.programId);
-        }
-        
-        // Also try to fetch from API to get updated info
-        try {
-          const response = await axios.get('/users/me');
-          if (response.data) {
-            setCurrentUserId(response.data._id);
-            setCurrentUserProgramId(response.data.programId?._id || response.data.programId);
+  // In NursingGamesHub.jsx - FIXED getUserInfo
+useEffect(() => {
+  const getUserInfo = async () => {
+    try {
+      // Get user from localStorage only - don't call /users/me
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUserId(user._id || user.id);
+        // Try to get program ID from user object
+        const programId = user.programId?._id || user.programId;
+        if (programId) {
+          setCurrentUserProgramId(programId);
+        } else {
+          // If no program in localStorage, try to fetch from a working endpoint
+          try {
+            // Use a different endpoint that exists
+            const response = await axios.get('/nursing-games/progress');
+            if (response.data.success) {
+              // If we need program info here, we might need another endpoint
+              console.log('Got progress data');
+            }
+          } catch (err) {
+            console.log('Could not fetch additional user data');
           }
-        } catch (err) {
-          console.log('Could not fetch /users/me, using localStorage data');
         }
-      } catch (e) {
-        console.error('Error getting current user:', e);
       }
-    };
-    
-    getUserInfo();
-  }, []);
+    } catch (e) {
+      console.error('Error getting current user:', e);
+    }
+  };
+  
+  getUserInfo();
+}, []);
 
   useEffect(() => {
     fetchGames();
@@ -148,61 +154,37 @@ const NursingGamesHub = () => {
     }
   };
 
-  const fetchStudents = async () => {
-    try {
-      console.log('Fetching students by program:', currentUserProgramId);
-      
-      let studentsList = [];
-      
-      // Try to fetch by program first
-      if (currentUserProgramId) {
-        try {
-          const response = await axios.get(`/users/students/by-program/${currentUserProgramId}`);
-          if (Array.isArray(response.data)) {
-            studentsList = response.data;
-          }
-        } catch (err) {
-          console.log('Program endpoint failed, trying fallback');
-        }
-      }
-      
-      // If no students found by program, try the main endpoint
-      if (studentsList.length === 0) {
-        try {
-          const response = await axios.get('/users/students');
-          if (Array.isArray(response.data)) {
-            studentsList = response.data;
-          } else if (response.data.success && Array.isArray(response.data.students)) {
-            studentsList = response.data.students;
-          }
-        } catch (err) {
-          console.log('Main students endpoint failed');
-        }
-      }
-      
-      // Filter out current user
-      if (currentUserId && studentsList.length > 0) {
-        studentsList = studentsList.filter(s => {
-          const studentId = s._id || s.id;
-          return studentId !== currentUserId;
-        });
-      }
-      
-      console.log(`Found ${studentsList.length} students in your program`);
-      studentsList.forEach(s => {
-        console.log(`  - ${s.name} (${s._id})`);
-      });
-      
-      setStudents(studentsList);
-      
-      if (studentsList.length === 0) {
-        console.log('No other students found');
-      }
-    } catch (error) {
-      console.error('Error fetching students:', error.response?.data || error.message);
-      setStudents([]);
+  // In NursingGamesHub.jsx - UPDATED fetchStudents function
+const fetchStudents = async () => {
+  try {
+    console.log('Fetching students from nursing-games/program-students...');
+    
+    // Use the dedicated endpoint that we just created
+    const response = await axios.get('/nursing-games/program-students');
+    
+    let studentsList = [];
+    
+    if (response.data.success && Array.isArray(response.data.students)) {
+      studentsList = response.data.students;
+    } else if (Array.isArray(response.data)) {
+      studentsList = response.data;
     }
-  };
+    
+    console.log(`Found ${studentsList.length} students in your program`);
+    studentsList.forEach(s => {
+      console.log(`  - ${s.name} (${s._id})`);
+    });
+    
+    setStudents(studentsList);
+    
+    if (studentsList.length === 0) {
+      console.log('No other students found in your program');
+    }
+  } catch (error) {
+    console.error('Error fetching students:', error.response?.data || error.message);
+    setStudents([]);
+  }
+};
 
   const fetchDailyChallenges = async () => {
     try {
@@ -225,27 +207,29 @@ const NursingGamesHub = () => {
     }
   };
 
-  const fetchUserProgress = async () => {
-    try {
-      const response = await axios.get('/nursing-games/progress');
-      console.log('Progress response:', response.data);
-      
-      if (response.data.success) {
-        setUserLevel(response.data.level || 1);
-        setUserXP(response.data.xp || 0);
-      } else if (response.data.level !== undefined) {
-        setUserLevel(response.data.level);
-        setUserXP(response.data.xp || 0);
-      } else {
-        setUserLevel(1);
-        setUserXP(0);
-      }
-    } catch (error) {
-      console.error('Error fetching user progress:', error);
+  // In NursingGamesHub.jsx - FIXED fetchUserProgress
+const fetchUserProgress = async () => {
+  try {
+    // Use the working endpoint - nursing-games/progress
+    const response = await axios.get('/nursing-games/progress');
+    console.log('Progress response:', response.data);
+    
+    if (response.data.success) {
+      setUserLevel(response.data.level || 1);
+      setUserXP(response.data.xp || 0);
+    } else if (response.data.level !== undefined) {
+      setUserLevel(response.data.level);
+      setUserXP(response.data.xp || 0);
+    } else {
       setUserLevel(1);
       setUserXP(0);
     }
-  };
+  } catch (error) {
+    console.error('Error fetching user progress:', error);
+    setUserLevel(1);
+    setUserXP(0);
+  }
+};
 
   const filterGames = () => {
     let filtered = [...games];

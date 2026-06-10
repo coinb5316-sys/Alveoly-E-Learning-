@@ -133,6 +133,41 @@ router.get('/matches/:matchId/status', protect, async (req, res) => {
   }
 });
 
+// Add to routes/nursingGameRoutes.js - STUDENTS FETCHING OTHER STUDENTS
+router.get('/program-students', protect, async (req, res) => {
+  try {
+    // Get current user with their program
+    const currentUser = await User.findById(req.user._id);
+    
+    console.log("Current user:", {
+      id: currentUser._id,
+      name: currentUser.name,
+      programId: currentUser.programId
+    });
+    
+    // If user has no program, return empty
+    if (!currentUser.programId) {
+      console.log("User has no program assigned");
+      return res.json({ success: true, students: [], message: "No program assigned" });
+    }
+    
+    // Find all students in the same program, excluding current user
+    const students = await User.find({
+      role: "student",
+      programId: currentUser.programId,
+      _id: { $ne: currentUser._id },
+      isActive: true
+    }).select("name email _id avatar");
+    
+    console.log(`Found ${students.length} students in program ${currentUser.programId}`);
+    
+    res.json({ success: true, students });
+  } catch (error) {
+    console.error("Error fetching program students:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ================= STUDENT ROUTES =================
 router.get('/games', protect, nursingGameController.getStudentGames);
 router.post('/games/:id/start', protect, nursingGameController.startGame);
