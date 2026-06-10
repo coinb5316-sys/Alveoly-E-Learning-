@@ -1,4 +1,4 @@
-// components/student/NursingGamesHub.jsx - COMPLETE PROFESSIONAL VERSION (FIXED)
+// components/student/NursingGamesHub.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import axios from '../../api/axios';
 import { toast } from 'react-toastify';
@@ -37,6 +37,7 @@ const NursingGamesHub = () => {
   const [userLevel, setUserLevel] = useState(1);
   const [userXP, setUserXP] = useState(0);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentUserProgramId, setCurrentUserProgramId] = useState(null);
 
   const categories = [
     { value: 'all', label: 'All', icon: BookOpen },
@@ -56,26 +57,49 @@ const NursingGamesHub = () => {
     { value: 'expert', label: 'Expert', color: 'red' }
   ];
 
-  // Get current user ID on mount
+  // Get current user info on mount
   useEffect(() => {
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        setCurrentUserId(user._id || user.id);
+    const getUserInfo = async () => {
+      try {
+        // Get user from localStorage
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setCurrentUserId(user._id || user.id);
+          setCurrentUserProgramId(user.programId?._id || user.programId);
+        }
+        
+        // Also try to fetch from API to get updated info
+        try {
+          const response = await axios.get('/users/me');
+          if (response.data) {
+            setCurrentUserId(response.data._id);
+            setCurrentUserProgramId(response.data.programId?._id || response.data.programId);
+          }
+        } catch (err) {
+          console.log('Could not fetch /users/me, using localStorage data');
+        }
+      } catch (e) {
+        console.error('Error getting current user:', e);
       }
-    } catch (e) {
-      console.error('Error getting current user:', e);
-    }
+    };
+    
+    getUserInfo();
   }, []);
 
   useEffect(() => {
     fetchGames();
     fetchStudentStats();
-    fetchStudents();
     fetchDailyChallenges();
     fetchUserProgress();
   }, []);
+
+  // Fetch students separately when we have the program ID
+  useEffect(() => {
+    if (currentUserProgramId) {
+      fetchStudents();
+    }
+  }, [currentUserProgramId]);
 
   useEffect(() => {
     filterGames();
@@ -124,70 +148,61 @@ const NursingGamesHub = () => {
     }
   };
 
-  // In NursingGamesHub.jsx - Updated fetchStudents function
-const fetchStudents = async () => {
-  try {
-    console.log('Fetching students...');
-    
-    // First get current user to know their program
-    const userResponse = await axios.get('/users/me');
-    const currentUser = userResponse.data;
-    console.log('Current user:', currentUser);
-    
-    let studentsList = [];
-    
-    // Try to fetch by program first
-    if (currentUser.programId) {
-      const programId = currentUser.programId._id || currentUser.programId;
-      console.log(`Fetching students by program: ${programId}`);
+  const fetchStudents = async () => {
+    try {
+      console.log('Fetching students by program:', currentUserProgramId);
       
-      const response = await axios.get(`/users/students/by-program/${programId}`);
-      if (Array.isArray(response.data)) {
-        studentsList = response.data;
-      }
-    } 
-    // Fallback to course-based
-    else if (currentUser.courseId) {
-      const courseId = currentUser.courseId._id || currentUser.courseId;
-      console.log(`Fetching students by course: ${courseId}`);
+      let studentsList = [];
       
-      const response = await axios.get(`/users/students/by-course/${courseId}`);
-      if (Array.isArray(response.data)) {
-        studentsList = response.data;
+      // Try to fetch by program first
+      if (currentUserProgramId) {
+        try {
+          const response = await axios.get(`/users/students/by-program/${currentUserProgramId}`);
+          if (Array.isArray(response.data)) {
+            studentsList = response.data;
+          }
+        } catch (err) {
+          console.log('Program endpoint failed, trying fallback');
+        }
       }
-    }
-    else {
-      // Try the main endpoint as fallback
-      const response = await axios.get('/users/students');
-      if (Array.isArray(response.data)) {
-        studentsList = response.data;
-      } else if (response.data.success && Array.isArray(response.data.students)) {
-        studentsList = response.data.students;
+      
+      // If no students found by program, try the main endpoint
+      if (studentsList.length === 0) {
+        try {
+          const response = await axios.get('/users/students');
+          if (Array.isArray(response.data)) {
+            studentsList = response.data;
+          } else if (response.data.success && Array.isArray(response.data.students)) {
+            studentsList = response.data.students;
+          }
+        } catch (err) {
+          console.log('Main students endpoint failed');
+        }
       }
+      
+      // Filter out current user
+      if (currentUserId && studentsList.length > 0) {
+        studentsList = studentsList.filter(s => {
+          const studentId = s._id || s.id;
+          return studentId !== currentUserId;
+        });
+      }
+      
+      console.log(`Found ${studentsList.length} students in your program`);
+      studentsList.forEach(s => {
+        console.log(`  - ${s.name} (${s._id})`);
+      });
+      
+      setStudents(studentsList);
+      
+      if (studentsList.length === 0) {
+        console.log('No other students found');
+      }
+    } catch (error) {
+      console.error('Error fetching students:', error.response?.data || error.message);
+      setStudents([]);
     }
-    
-    // Filter out current user (double-check)
-    const currentUserId = currentUser._id;
-    studentsList = studentsList.filter(s => {
-      const studentId = s._id || s.id;
-      return studentId !== currentUserId;
-    });
-    
-    console.log(`Found ${studentsList.length} students in your program/course`);
-    studentsList.forEach(s => {
-      console.log(`  - ${s.name} (${s._id})`);
-    });
-    
-    setStudents(studentsList);
-    
-    if (studentsList.length === 0) {
-      console.log('No other students found');
-    }
-  } catch (error) {
-    console.error('Error fetching students:', error.response?.data || error.message);
-    setStudents([]);
-  }
-};
+  };
 
   const fetchDailyChallenges = async () => {
     try {
@@ -212,7 +227,7 @@ const fetchStudents = async () => {
 
   const fetchUserProgress = async () => {
     try {
-      const response = await axios.get('/users/progress');
+      const response = await axios.get('/nursing-games/progress');
       console.log('Progress response:', response.data);
       
       if (response.data.success) {
@@ -865,47 +880,46 @@ const fetchStudents = async () => {
                       <p className="text-xs text-gray-500">{selectedMatchGame.description}</p>
                     </div>
                     
-                    {/* In the Challenge Modal - update the student display */}
-<div className="mb-4">
-  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-    Select Opponent ({students.length} available)
-  </label>
-  <div className="max-h-60 overflow-y-auto space-y-2">
-    {students.map((student) => (
-      <button
-        key={student._id}
-        onClick={() => setSelectedOpponent(student)}
-        className={`w-full text-left p-3 rounded-lg border transition-all ${
-          selectedOpponent?._id === student._id
-            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-            : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-            {student.name?.charAt(0) || '?'}
-          </div>
-          <div className="flex-1">
-            <p className="font-medium">{student.name || 'Student'}</p>
-            <p className="text-xs text-gray-500">
-              {student.programId?.name || student.courseId?.name || 'Student'}
-            </p>
-          </div>
-          {selectedOpponent?._id === student._id && (
-            <UserCheck className="h-5 w-5 text-blue-500" />
-          )}
-        </div>
-      </button>
-    ))}
-    {students.length === 0 && (
-      <div className="text-center py-8 text-gray-500">
-        <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-        <p>No other students found in your program</p>
-        <p className="text-xs mt-1">Make sure you and other students have a program assigned</p>
-      </div>
-    )}
-  </div>
-</div>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Select Opponent ({students.length} available)
+                      </label>
+                      <div className="max-h-60 overflow-y-auto space-y-2">
+                        {students.map((student) => (
+                          <button
+                            key={student._id}
+                            onClick={() => setSelectedOpponent(student)}
+                            className={`w-full text-left p-3 rounded-lg border transition-all ${
+                              selectedOpponent?._id === student._id
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                                {student.name?.charAt(0) || '?'}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium">{student.name || 'Student'}</p>
+                                <p className="text-xs text-gray-500">
+                                  {student.email || ''}
+                                </p>
+                              </div>
+                              {selectedOpponent?._id === student._id && (
+                                <UserCheck className="h-5 w-5 text-blue-500" />
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                        {students.length === 0 && (
+                          <div className="text-center py-8 text-gray-500">
+                            <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                            <p>No other students found</p>
+                            <p className="text-xs mt-1">Make sure you and other students have a program assigned</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     
                     <button
                       onClick={handleChallengeStudent}
