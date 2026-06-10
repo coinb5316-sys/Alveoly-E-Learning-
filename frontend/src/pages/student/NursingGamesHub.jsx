@@ -409,32 +409,49 @@ const fetchUserProgress = async () => {
   };
 
   const handleChallengeStudent = async () => {
-    if (!selectedMatchGame || !selectedOpponent) {
-      toast.error('Please select a game and opponent');
-      return;
-    }
+  if (!selectedMatchGame || !selectedOpponent) {
+    toast.error('Please select a game and opponent');
+    return;
+  }
 
-    try {
-      const response = await axios.post('/nursing-games/matches/create', {
-        gameId: selectedMatchGame._id,
-        opponentId: selectedOpponent._id
-      });
+  try {
+    const response = await axios.post('/nursing-games/matches/create', {
+      gameId: selectedMatchGame._id,
+      opponentId: selectedOpponent._id
+    });
 
-      if (response.data.success) {
-        toast.success(`Challenge sent to ${selectedOpponent.name}!`);
-        setMatchRequestSent(true);
-        setTimeout(() => {
-          setShowMatchModal(false);
-          setSelectedMatchGame(null);
-          setSelectedOpponent(null);
-          setMatchRequestSent(false);
-        }, 2000);
+    if (response.data.success) {
+      const matchId = response.data.match._id;
+      
+      toast.success(`Challenge sent to ${selectedOpponent.name}!`);
+      
+      // IMPORTANT: The sender needs to join the match too
+      try {
+        // Auto-join the match as the sender
+        await axios.post(`/nursing-games/matches/${matchId}/join`);
+        console.log('Sender automatically joined the match');
+      } catch (joinErr) {
+        console.error('Error auto-joining match:', joinErr);
       }
-    } catch (error) {
-      console.error('Error creating match:', error);
-      toast.error(error.response?.data?.message || 'Failed to send challenge');
+      
+      setMatchRequestSent(true);
+      
+      // Navigate to the match waiting room after a short delay
+      setTimeout(() => {
+        setShowMatchModal(false);
+        setSelectedMatchGame(null);
+        setSelectedOpponent(null);
+        setMatchRequestSent(false);
+        
+        // Navigate to the match page so sender can wait for opponent
+        window.location.href = `/student/game-match/${matchId}`;
+      }, 1500);
     }
-  };
+  } catch (error) {
+    console.error('Error creating match:', error);
+    toast.error(error.response?.data?.message || 'Failed to send challenge');
+  }
+};
 
   const handleJoinMatch = async () => {
     if (!matchCode) {
