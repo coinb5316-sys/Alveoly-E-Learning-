@@ -6,7 +6,8 @@ import {
   Search, Filter, Award, Clock, TrendingUp, Users,
   Heart, Stethoscope, Activity, Brain, Shield,
   Star, Zap, Target, ChevronRight, Play,
-  Trophy, Medal, BarChart3, BookOpen
+  Trophy, Medal, BarChart3, BookOpen,
+  CheckCircle, XCircle  // ← ADD THESE TWO IMPORTANT IMPORTS
 } from 'lucide-react';
 
 const NursingGamesHub = () => {
@@ -81,7 +82,7 @@ const NursingGamesHub = () => {
       filtered = filtered.filter(game => 
         game.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         game.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        game.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+        (game.tags && game.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
       );
     }
     
@@ -193,7 +194,6 @@ const NursingGamesHub = () => {
           </h1>
         </div>
         
-        {/* User Stats */}
         {leaderboard.userRank && (
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 text-white">
             <div className="flex justify-between items-center">
@@ -210,27 +210,16 @@ const NursingGamesHub = () => {
           </div>
         )}
         
-        {/* Leaderboard Table */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Rank
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Student
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Best Score
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Fastest Time
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Badges
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Rank</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Student</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Best Score</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fastest Time</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Badges</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -289,7 +278,6 @@ const NursingGamesHub = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           Nursing Game Challenges
@@ -299,16 +287,13 @@ const NursingGamesHub = () => {
         </p>
       </div>
 
-      {/* Student Stats */}
       {studentStats && studentStats.totalGamesPlayed > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Games Played</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {studentStats.totalGamesPlayed}
-                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{studentStats.totalGamesPlayed}</p>
               </div>
               <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                 <Play className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -320,9 +305,7 @@ const NursingGamesHub = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Passed</p>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {studentStats.totalGamesPassed}
-                </p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{studentStats.totalGamesPassed}</p>
               </div>
               <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
                 <Target className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -360,7 +343,6 @@ const NursingGamesHub = () => {
         </div>
       )}
 
-      {/* Filters */}
       <div className="space-y-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -374,7 +356,6 @@ const NursingGamesHub = () => {
         </div>
         
         <div className="flex flex-wrap gap-3">
-          {/* Category Filters */}
           <div className="flex flex-wrap gap-2">
             {categories.map(cat => {
               const Icon = cat.icon;
@@ -395,7 +376,6 @@ const NursingGamesHub = () => {
             })}
           </div>
           
-          {/* Difficulty Filters */}
           <div className="flex gap-2">
             {difficulties.map(diff => (
               <button
@@ -414,11 +394,9 @@ const NursingGamesHub = () => {
         </div>
       </div>
 
-      {/* Games Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredGames.map((game) => (
           <div key={game._id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all">
-            {/* Game Card */}
             <div className="p-6">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex-1">
@@ -452,7 +430,6 @@ const NursingGamesHub = () => {
                 )}
               </div>
               
-              {/* Progress if attempted */}
               {game.studentData.hasAttempted && (
                 <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                   <div className="flex justify-between text-sm mb-1">
@@ -479,7 +456,6 @@ const NursingGamesHub = () => {
                 </div>
               )}
               
-              {/* Action Buttons */}
               <div className="mt-4 flex gap-3">
                 <button
                   onClick={() => handleStartGame(game)}
