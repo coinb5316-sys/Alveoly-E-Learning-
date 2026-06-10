@@ -1263,3 +1263,71 @@ export const getGameLeaderboard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Add to controllers/nursingGameController.js
+
+// Get all students in same course
+export const getStudentsInCourse = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    const students = await User.find({
+      role: 'student',
+      courseId: user.courseId,
+      _id: { $ne: req.user._id }
+    }).select('name email avatar gamingStats');
+    
+    res.json({ success: true, students });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get daily challenges
+export const getDailyChallenges = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    let challenges = await DailyChallenge.findOne({
+      date: { $gte: today, $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) },
+      courseId: user.courseId
+    }).populate('gameId');
+    
+    if (!challenges) {
+      // Create new daily challenges
+      const games = await NursingGame.find({
+        courseId: user.courseId,
+        isPublished: true
+      }).limit(3);
+      
+      challenges = await DailyChallenge.create({
+        date: today,
+        gameId: games[0]?._id,
+        title: "Quick Diagnosis",
+        xpReward: 100,
+        status: 'active'
+      });
+    }
+    
+    res.json({ success: true, challenges: [challenges] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get user progress
+export const getUserProgress = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    res.json({
+      success: true,
+      level: user.gamingStats?.level || 1,
+      xp: user.gamingStats?.totalXp || 0,
+      nextLevelXp: ((user.gamingStats?.level || 1) * 100),
+      rank: user.gamingStats?.rank || 'Bronze'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

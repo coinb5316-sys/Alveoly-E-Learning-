@@ -67,6 +67,72 @@ router.get('/games/:id', protect, async (req, res) => {
   }
 });
 
+// Add to routes/nursingGameRoutes.js
+
+// Get all students (for challenging)
+router.get('/students', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    const students = await User.find({
+      role: 'student',
+      courseId: user.courseId,
+      _id: { $ne: req.user._id }
+    }).select('name email avatar');
+    
+    res.json({ success: true, students });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get daily challenges
+router.get('/daily-challenges', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    const challenges = await NursingGame.find({
+      courseId: user.courseId,
+      isPublished: true,
+      isActive: true
+    }).limit(3);
+    
+    res.json({ success: true, challenges });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get user progress (level and XP)
+router.get('/progress', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    res.json({
+      success: true,
+      level: user.gamingStats?.level || 1,
+      xp: user.gamingStats?.totalXp || 0
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Match status polling
+router.get('/matches/:matchId/status', protect, async (req, res) => {
+  try {
+    const match = await StudentMatch.findById(req.params.matchId);
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    
+    res.json({
+      success: true,
+      status: match.status,
+      attemptId: match.players.find(p => p.studentId.toString() === req.user._id.toString())?.attemptId
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ================= STUDENT ROUTES =================
 router.get('/games', protect, nursingGameController.getStudentGames);
 router.post('/games/:id/start', protect, nursingGameController.startGame);
