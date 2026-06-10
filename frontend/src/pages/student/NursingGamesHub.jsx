@@ -83,49 +83,116 @@ const NursingGamesHub = () => {
   };
 
   const fetchStudentStats = async () => {
-    try {
-      const response = await axios.get('/nursing-games/my-history');
-      if (response.data.success) {
-        setStudentStats(response.data.stats);
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
+  try {
+    const response = await axios.get('/nursing-games/my-history');
+    console.log('Student stats response:', response.data);
+    
+    if (response.data.success) {
+      setStudentStats(response.data.stats);
+    } else if (response.data.stats) {
+      setStudentStats(response.data.stats);
+    } else {
+      // Set default stats if needed
+      setStudentStats({
+        totalGamesPlayed: 0,
+        totalGamesPassed: 0,
+        averageScore: 0,
+        badgesEarned: []
+      });
     }
-  };
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    // Set default stats to avoid errors
+    setStudentStats({
+      totalGamesPlayed: 0,
+      totalGamesPassed: 0,
+      averageScore: 0,
+      badgesEarned: []
+    });
+  }
+};
 
-  const fetchStudents = async () => {
-    try {
-      const response = await axios.get('/users/students');
-      if (response.data.success) {
-        setStudents(response.data.students);
-      }
-    } catch (error) {
-      console.error('Error fetching students:', error);
+  // In NursingGamesHub.jsx, replace the fetchStudents function with this:
+
+const fetchStudents = async () => {
+  try {
+    console.log('Fetching students from /users/students...');
+    const response = await axios.get('/users/students');
+    console.log('Raw students response:', response.data);
+    
+    // Your backend returns an array directly, not a wrapped object
+    let studentsList = [];
+    
+    // Check if response.data is an array (your backend format)
+    if (Array.isArray(response.data)) {
+      studentsList = response.data;
+    } 
+    // Fallback for wrapped format
+    else if (response.data.success && Array.isArray(response.data.students)) {
+      studentsList = response.data.students;
     }
-  };
+    else if (Array.isArray(response.data.students)) {
+      studentsList = response.data.students;
+    }
+    
+    console.log(`Loaded ${studentsList.length} students for challenging`);
+    setStudents(studentsList);
+    
+    if (studentsList.length === 0) {
+      console.log('No other students found in your course');
+      // Optional: toast.info('No other students available to challenge in your course');
+    }
+  } catch (error) {
+    console.error('Error fetching students:', error.response?.data || error.message);
+    setStudents([]);
+    // Don't show error toast as it might be expected (no students yet)
+  }
+};
 
   const fetchDailyChallenges = async () => {
-    try {
-      const response = await axios.get('/nursing-games/daily-challenges');
-      if (response.data.success) {
-        setDailyChallenges(response.data.challenges);
-      }
-    } catch (error) {
-      console.error('Error fetching daily challenges:', error);
+  try {
+    const response = await axios.get('/nursing-games/daily-challenges');
+    console.log('Daily challenges response:', response.data);
+    
+    let challengesList = [];
+    if (Array.isArray(response.data)) {
+      challengesList = response.data;
+    } else if (response.data.success && Array.isArray(response.data.challenges)) {
+      challengesList = response.data.challenges;
+    } else if (Array.isArray(response.data.challenges)) {
+      challengesList = response.data.challenges;
     }
-  };
+    
+    setDailyChallenges(challengesList);
+  } catch (error) {
+    console.error('Error fetching daily challenges:', error);
+    setDailyChallenges([]);
+  }
+};
 
   const fetchUserProgress = async () => {
-    try {
-      const response = await axios.get('/users/progress');
-      if (response.data.success) {
-        setUserLevel(response.data.level);
-        setUserXP(response.data.xp);
-      }
-    } catch (error) {
-      console.error('Error fetching user progress:', error);
+  try {
+    const response = await axios.get('/users/progress');
+    console.log('Progress response:', response.data);
+    
+    // Handle both response formats
+    if (response.data.success) {
+      setUserLevel(response.data.level || 1);
+      setUserXP(response.data.xp || 0);
+    } else if (response.data.level !== undefined) {
+      setUserLevel(response.data.level);
+      setUserXP(response.data.xp || 0);
+    } else {
+      // Default values
+      setUserLevel(1);
+      setUserXP(0);
     }
-  };
+  } catch (error) {
+    console.error('Error fetching user progress:', error);
+    setUserLevel(1);
+    setUserXP(0);
+  }
+};
 
   const filterGames = () => {
     let filtered = [...games];
