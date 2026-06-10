@@ -99,6 +99,82 @@ router.get("/students/by-course/:courseId", protect, async (req, res) => {
   }
 });
 
+// routes/userRoutes.js - Add this new endpoint
+router.get("/students/by-program/:programId", protect, async (req, res) => {
+  try {
+    const { programId } = req.params;
+    
+    const filter = { 
+      role: "student",
+      programId: programId,
+      _id: { $ne: req.user._id }
+    };
+    
+    console.log("Fetching students by program:", programId);
+    
+    const students = await User.find(filter)
+      .select("name email programId courseId _id")
+      .populate("programId", "name")
+      .populate("courseId", "name");
+    
+    console.log(`Found ${students.length} students in program ${programId}`);
+    
+    res.json(students);
+  } catch (err) {
+    console.error("Error fetching students by program:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Also update the main /students endpoint to use program
+router.get("/students", protect, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.user._id);
+    
+    // If user has programId, filter by that program
+    if (currentUser.programId) {
+      const filter = { 
+        role: "student",
+        programId: currentUser.programId,
+        _id: { $ne: req.user._id }
+      };
+      
+      console.log("Fetching students by program:", currentUser.programId);
+      
+      const students = await User.find(filter)
+        .select("name email programId courseId _id")
+        .populate("programId", "name")
+        .populate("courseId", "name");
+      
+      console.log(`Found ${students.length} students in program`);
+      return res.json(students);
+    }
+    
+    // Fallback to course-based filtering
+    if (currentUser.courseId) {
+      const filter = { 
+        role: "student",
+        courseId: currentUser.courseId,
+        _id: { $ne: req.user._id }
+      };
+      
+      const students = await User.find(filter)
+        .select("name email courseId _id")
+        .populate("courseId", "name");
+      
+      return res.json(students);
+    }
+    
+    // No program or course assigned
+    console.log("User has no program or course assigned");
+    res.json([]);
+    
+  } catch (err) {
+    console.error("Error fetching students:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // Get all students with full details (ADMIN ONLY - keep this restricted)
 router.get("/students/full", protect, adminOnly, async (req, res) => {
   try {

@@ -124,48 +124,67 @@ const NursingGamesHub = () => {
     }
   };
 
-  const fetchStudents = async () => {
+  // In NursingGamesHub.jsx - Updated fetchStudents function
+const fetchStudents = async () => {
   try {
-    console.log('Fetching students from /users/students...');
-    let response = await axios.get('/users/students');
+    console.log('Fetching students...');
+    
+    // First get current user to know their program
+    const userResponse = await axios.get('/users/me');
+    const currentUser = userResponse.data;
+    console.log('Current user:', currentUser);
+    
     let studentsList = [];
     
-    // Check if we got valid data
-    if (Array.isArray(response.data) && response.data.length === 0) {
-      console.log('No students from primary endpoint, trying to get current user course...');
+    // Try to fetch by program first
+    if (currentUser.programId) {
+      const programId = currentUser.programId._id || currentUser.programId;
+      console.log(`Fetching students by program: ${programId}`);
       
-      // Get current user to find their course
-      const userResponse = await axios.get('/users/me');
-      const currentCourseId = userResponse.data.courseId?._id || userResponse.data.courseId;
-      
-      if (currentCourseId) {
-        console.log(`Fetching students by course: ${currentCourseId}`);
-        const courseResponse = await axios.get(`/users/students/by-course/${currentCourseId}`);
-        if (Array.isArray(courseResponse.data)) {
-          studentsList = courseResponse.data;
-        }
+      const response = await axios.get(`/users/students/by-program/${programId}`);
+      if (Array.isArray(response.data)) {
+        studentsList = response.data;
       }
-    } else if (Array.isArray(response.data)) {
-      studentsList = response.data;
-    } else if (response.data.success && Array.isArray(response.data.students)) {
-      studentsList = response.data.students;
-    } else if (Array.isArray(response.data.students)) {
-      studentsList = response.data.students;
+    } 
+    // Fallback to course-based
+    else if (currentUser.courseId) {
+      const courseId = currentUser.courseId._id || currentUser.courseId;
+      console.log(`Fetching students by course: ${courseId}`);
+      
+      const response = await axios.get(`/users/students/by-course/${courseId}`);
+      if (Array.isArray(response.data)) {
+        studentsList = response.data;
+      }
+    }
+    else {
+      // Try the main endpoint as fallback
+      const response = await axios.get('/users/students');
+      if (Array.isArray(response.data)) {
+        studentsList = response.data;
+      } else if (response.data.success && Array.isArray(response.data.students)) {
+        studentsList = response.data.students;
+      }
     }
     
-    // Filter out current user
-    if (currentUserId && studentsList.length > 0) {
-      studentsList = studentsList.filter(s => {
-        const studentId = s._id || s.id;
-        return studentId !== currentUserId;
-      });
-    }
+    // Filter out current user (double-check)
+    const currentUserId = currentUser._id;
+    studentsList = studentsList.filter(s => {
+      const studentId = s._id || s.id;
+      return studentId !== currentUserId;
+    });
     
-    console.log(`Final: ${studentsList.length} students available`);
+    console.log(`Found ${studentsList.length} students in your program/course`);
+    studentsList.forEach(s => {
+      console.log(`  - ${s.name} (${s._id})`);
+    });
+    
     setStudents(studentsList);
     
+    if (studentsList.length === 0) {
+      console.log('No other students found');
+    }
   } catch (error) {
-    console.error('Error fetching students:', error);
+    console.error('Error fetching students:', error.response?.data || error.message);
     setStudents([]);
   }
 };
@@ -846,43 +865,47 @@ const NursingGamesHub = () => {
                       <p className="text-xs text-gray-500">{selectedMatchGame.description}</p>
                     </div>
                     
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Select Opponent
-                      </label>
-                      <div className="max-h-60 overflow-y-auto space-y-2">
-                        {students.map((student) => (
-                          <button
-                            key={student._id}
-                            onClick={() => setSelectedOpponent(student)}
-                            className={`w-full text-left p-3 rounded-lg border transition-all ${
-                              selectedOpponent?._id === student._id
-                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                                {student.name?.charAt(0) || '?'}
-                              </div>
-                              <div>
-                                <p className="font-medium">{student.name || 'Student'}</p>
-                                <p className="text-xs text-gray-500">{student.email || ''}</p>
-                              </div>
-                              {selectedOpponent?._id === student._id && (
-                                <UserCheck className="h-5 w-5 text-blue-500 ml-auto" />
-                              )}
-                            </div>
-                          </button>
-                        ))}
-                        {students.length === 0 && (
-                          <div className="text-center py-8 text-gray-500">
-                            <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                            <p>No other students found in your course</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    {/* In the Challenge Modal - update the student display */}
+<div className="mb-4">
+  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+    Select Opponent ({students.length} available)
+  </label>
+  <div className="max-h-60 overflow-y-auto space-y-2">
+    {students.map((student) => (
+      <button
+        key={student._id}
+        onClick={() => setSelectedOpponent(student)}
+        className={`w-full text-left p-3 rounded-lg border transition-all ${
+          selectedOpponent?._id === student._id
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+            : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+            {student.name?.charAt(0) || '?'}
+          </div>
+          <div className="flex-1">
+            <p className="font-medium">{student.name || 'Student'}</p>
+            <p className="text-xs text-gray-500">
+              {student.programId?.name || student.courseId?.name || 'Student'}
+            </p>
+          </div>
+          {selectedOpponent?._id === student._id && (
+            <UserCheck className="h-5 w-5 text-blue-500" />
+          )}
+        </div>
+      </button>
+    ))}
+    {students.length === 0 && (
+      <div className="text-center py-8 text-gray-500">
+        <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+        <p>No other students found in your program</p>
+        <p className="text-xs mt-1">Make sure you and other students have a program assigned</p>
+      </div>
+    )}
+  </div>
+</div>
                     
                     <button
                       onClick={handleChallengeStudent}
