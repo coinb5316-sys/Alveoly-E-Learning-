@@ -1,4 +1,5 @@
-// models/StudentMatch.js - NEW MODEL for student matching
+// models/StudentMatch.js - UPDATE THE STATUS ENUM
+
 import mongoose from 'mongoose';
 
 const studentMatchSchema = new mongoose.Schema({
@@ -24,34 +25,33 @@ const studentMatchSchema = new mongoose.Schema({
   },
   
   // Players
- // In models/StudentMatch.js - ensure players have attemptId
-players: [{
-  studentId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  name: String,
-  email: String,
-  avatar: String,
-  score: { type: Number, default: 0 },
-  percentage: { type: Number, default: 0 },
-  answers: [{
-    questionIndex: Number,
-    selectedOption: Number,
-    isCorrect: Boolean,
-    timeSpent: Number,
-    pointsEarned: Number
+  players: [{
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    name: String,
+    email: String,
+    avatar: String,
+    score: { type: Number, default: 0 },
+    percentage: { type: Number, default: 0 },
+    answers: [{
+      questionIndex: Number,
+      selectedOption: Number,
+      isCorrect: Boolean,
+      timeSpent: Number,
+      pointsEarned: Number
+    }],
+    status: {
+      type: String,
+      enum: ['waiting', 'playing', 'completed', 'disconnected'],
+      default: 'waiting'
+    },
+    joinedAt: { type: Date, default: Date.now },
+    completedAt: Date,
+    attemptId: { type: mongoose.Schema.Types.ObjectId, ref: 'NursingGameAttempt' }
   }],
-  status: {
-    type: String,
-    enum: ['waiting', 'ready', 'playing', 'completed', 'disconnected'],
-    default: 'waiting'
-  },
-  joinedAt: { type: Date, default: Date.now },
-  completedAt: Date,
-  attemptId: { type: mongoose.Schema.Types.ObjectId, ref: 'NursingGameAttempt' }  // ADD THIS
-}],
   
   // Match Configuration
   createdBy: {
@@ -64,7 +64,7 @@ players: [{
     ref: 'User'
   },
   
-  // Match Status
+  // Match Status - REMOVED 'ready' from enum
   status: {
     type: String,
     enum: ['waiting', 'in-progress', 'completed', 'cancelled'],

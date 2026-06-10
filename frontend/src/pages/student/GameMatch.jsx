@@ -97,17 +97,18 @@ const GameMatch = () => {
         setHasJoined(joined);
         
         // Handle different match statuses
-        if (matchData.status === 'in-progress') {
-          if (currentPlayer?.attemptId) {
-            setAttemptId(currentPlayer.attemptId);
-            setIsReady(true);
-          }
-        } else if (matchData.status === 'ready') {
-          // Both players are ready, start countdown
-          if (!countdown && !isReady) {
-            startMatchCountdown();
-          }
-        } else if (matchData.status === 'waiting') {
+       // In fetchMatchDetails, update the status handling
+
+if (matchData.status === 'in-progress') {
+  const currentPlayer = matchData.players.find(p => {
+    const playerId = p.studentId?._id || p.studentId;
+    return String(playerId) === String(currentUserId);
+  });
+  if (currentPlayer?.attemptId) {
+    // Show countdown or start immediately
+    startMatchCountdown();
+  }
+} else if (matchData.status === 'waiting') {
           // Auto-join if not already joined
           if (!joined) {
             console.log('Auto-joining match...');
@@ -125,75 +126,24 @@ const GameMatch = () => {
     }
   };
 
-  const autoJoinMatch = async () => {
-    try {
-      console.log('Auto-joining match...');
-      const response = await axios.post(`/nursing-games/matches/${matchId}/join`);
-      if (response.data.success) {
-        console.log('Successfully joined match');
-        setHasJoined(true);
-        toast.success('You have joined the match! Waiting for opponent...');
-        // Refetch to update status
-        setTimeout(() => fetchMatchDetails(), 500);
-      }
-    } catch (error) {
-      console.error('Error joining match:', error);
-      setHasJoined(false);
-    }
-  };
+  // In GameMatch.jsx - Update the manualJoinMatch and autoJoinMatch functions
 
- // In GameMatch.jsx - Update the manualJoinMatch function
-
-const manualJoinMatch = async () => {
+const autoJoinMatch = async () => {
   try {
-    console.log('Manual join attempt for match:', matchId);
-    console.log('Current user ID:', currentUserId);
-    
+    console.log('Auto-joining match...');
     const response = await axios.post(`/nursing-games/matches/${matchId}/join`);
     console.log('Join response:', response.data);
     
     if (response.data.success) {
-      toast.success('Joined match! Waiting for opponent...');
       setHasJoined(true);
       
-      // If both players are now ready, the match will start automatically
-      if (response.data.allReady) {
-        console.log('Both players ready, match will start soon');
-        toast.info('Both players ready! Starting match...');
-      }
-      
-      // Refetch to update status
-      setTimeout(() => fetchMatchDetails(), 1000);
-    } else {
-      toast.error(response.data.message || 'Failed to join match');
-    }
-  } catch (error) {
-    console.error('Error joining match:', error);
-    console.error('Error response:', error.response?.data);
-    toast.error(error.response?.data?.message || 'Failed to join match');
-  }
-};
-
-  const startMatchCountdown = async () => {
-    try {
-      // Start the match
-      await axios.post(`/nursing-games/matches/${matchId}/start`);
-    } catch (err) {
-      console.error('Error starting match:', err);
-    }
-    
-    let count = 3;
-    setCountdown(count);
-    const countdownInterval = setInterval(async () => {
-      count--;
-      setCountdown(count);
-      if (count === 0) {
-        clearInterval(countdownInterval);
-        
+      if (response.data.matchStarted) {
+        // Match started immediately
+        toast.success('Match starting!');
         // Get the updated match to get attemptId
-        const response = await axios.get(`/nursing-games/matches/${matchId}`);
-        if (response.data.success) {
-          const currentPlayer = response.data.match.players.find(p => {
+        const matchRes = await axios.get(`/nursing-games/matches/${matchId}`);
+        if (matchRes.data.success) {
+          const currentPlayer = matchRes.data.match.players.find(p => {
             const playerId = p.studentId?._id || p.studentId;
             return String(playerId) === String(currentUserId);
           });
@@ -202,10 +152,79 @@ const manualJoinMatch = async () => {
             setIsReady(true);
           }
         }
-        setCountdown(null);
+      } else {
+        toast.success('You have joined the match! Waiting for opponent...');
+        // Refetch to update status
+        setTimeout(() => fetchMatchDetails(), 500);
       }
-    }, 1000);
-  };
+    }
+  } catch (error) {
+    console.error('Error joining match:', error);
+    setHasJoined(false);
+  }
+};
+
+const manualJoinMatch = async () => {
+  try {
+    console.log('Manual join attempt for match:', matchId);
+    const response = await axios.post(`/nursing-games/matches/${matchId}/join`);
+    console.log('Join response:', response.data);
+    
+    if (response.data.success) {
+      setHasJoined(true);
+      
+      if (response.data.matchStarted) {
+        toast.success('Match starting!');
+        // Get the updated match to get attemptId
+        const matchRes = await axios.get(`/nursing-games/matches/${matchId}`);
+        if (matchRes.data.success) {
+          const currentPlayer = matchRes.data.match.players.find(p => {
+            const playerId = p.studentId?._id || p.studentId;
+            return String(playerId) === String(currentUserId);
+          });
+          if (currentPlayer?.attemptId) {
+            setAttemptId(currentPlayer.attemptId);
+            setIsReady(true);
+          }
+        }
+      } else {
+        toast.success('Joined match! Waiting for opponent...');
+        setTimeout(() => fetchMatchDetails(), 1000);
+      }
+    } else {
+      toast.error(response.data.message || 'Failed to join match');
+    }
+  } catch (error) {
+    console.error('Error joining match:', error);
+    toast.error(error.response?.data?.message || 'Failed to join match');
+  }
+};
+
+  const startMatchCountdown = async () => {
+  let count = 3;
+  setCountdown(count);
+  const countdownInterval = setInterval(async () => {
+    count--;
+    setCountdown(count);
+    if (count === 0) {
+      clearInterval(countdownInterval);
+      
+      // Get the updated match to get attemptId
+      const response = await axios.get(`/nursing-games/matches/${matchId}`);
+      if (response.data.success) {
+        const currentPlayer = response.data.match.players.find(p => {
+          const playerId = p.studentId?._id || p.studentId;
+          return String(playerId) === String(currentUserId);
+        });
+        if (currentPlayer?.attemptId) {
+          setAttemptId(currentPlayer.attemptId);
+          setIsReady(true);
+        }
+      }
+      setCountdown(null);
+    }
+  }, 1000);
+};
 
   const copyInviteLink = () => {
     const link = window.location.href;

@@ -125,7 +125,8 @@ router.get('/matches/:matchId/status', protect, async (req, res) => {
 
 // In routes/nursingGameRoutes.js - Fix the JOIN MATCH route
 
-// JOIN MATCH - FIXED VERSION
+// In routes/nursingGameRoutes.js - Updated JOIN MATCH route
+
 router.post('/matches/:matchId/join', protect, async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -173,9 +174,9 @@ router.post('/matches/:matchId/join', protect, async (req, res) => {
     const allReady = match.players.every(p => p.status === 'playing');
     console.log('All players ready?', allReady, match.players.length);
     
-    // If both players are ready, create attempts and mark as ready to start
+    // If both players are ready, create attempts and automatically start the match
     if (allReady && match.players.length >= 2) {
-      console.log('Both players ready, creating attempts...');
+      console.log('Both players ready, creating attempts and starting match...');
       
       // Create game attempts for each player
       for (const player of match.players) {
@@ -190,16 +191,25 @@ router.post('/matches/:matchId/join', protect, async (req, res) => {
         console.log(`Created attempt ${attempt._id} for player ${player.studentId}`);
       }
       
-      match.status = 'ready';
+      // Start the match immediately
+      match.status = 'in-progress';
+      match.startedAt = new Date();
       await match.save();
-      console.log('Match status updated to ready');
+      console.log('Match started automatically');
+      
+      return res.json({ 
+        success: true, 
+        message: 'Joined match successfully! Match starting now...',
+        matchStatus: 'in-progress',
+        matchStarted: true
+      });
     }
     
     res.json({ 
       success: true, 
-      message: 'Joined match successfully',
+      message: 'Joined match successfully. Waiting for opponent...',
       matchStatus: match.status,
-      allReady: allReady && match.players.length >= 2
+      allReady: false
     });
   } catch (error) {
     console.error('Error joining match:', error);
