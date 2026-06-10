@@ -168,6 +168,122 @@ router.get('/program-students', protect, async (req, res) => {
   }
 });
 
+// Add this route after the other match routes
+// GET MATCH BY ID
+router.get('/matches/:matchId', protect, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    
+    const match = await StudentMatch.findById(matchId)
+      .populate('gameId', 'title description questions timeLimit passingScore category difficulty allowMatching')
+      .populate('players.studentId', 'name email avatar');
+    
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    
+    // Check if user is a participant
+    const isParticipant = match.players.some(p => 
+      p.studentId._id.toString() === req.user._id.toString()
+    );
+    
+    if (!isParticipant && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'You are not a participant in this match' });
+    }
+    
+    // Format the response
+    const formattedMatch = {
+      _id: match._id,
+      matchCode: match.matchCode,
+      status: match.status,
+      createdAt: match.createdAt,
+      startedAt: match.startedAt,
+      endedAt: match.endedAt,
+      winnerId: match.winnerId,
+      isTie: match.isTie,
+      game: match.gameId,
+      players: match.players.map(p => ({
+        studentId: p.studentId._id,
+        name: p.studentId.name,
+        email: p.studentId.email,
+        avatar: p.studentId.avatar,
+        score: p.score,
+        percentage: p.percentage,
+        status: p.status,
+        attemptId: p.attemptId
+      }))
+    };
+    
+    res.json({ success: true, match: formattedMatch });
+  } catch (error) {
+    console.error('Error fetching match:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// JOIN MATCH - Add this to routes/nursingGameRoutes.js
+router.post('/matches/:matchId/join', protect, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    
+    const match = await StudentMatch.findById(matchId);
+    
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    
+    if (match.status !== 'waiting') {
+      return res.status(400).json({ success: false, message: 'Match already started or completed' });
+    }
+    
+    // Check if user is already a player
+    const existingPlayer = match.players.find(p => 
+      p.studentId.toString() === req.user._id.toString()
+    );
+    
+    if (!existingPlayer) {
+      return res.status(403).json({ success: false, message: 'You are not invited to this match' });
+    }
+    
+    // Update player status to ready
+    const playerIndex = match.players.findIndex(p => 
+      p.studentId.toString() === req.user._id.toString()
+    );
+    
+    if (playerIndex !== -1) {
+      match.players[playerIndex].status = 'playing';
+      await match.save();
+    }
+    
+    // Check if all players are ready
+    const allReady = match.players.every(p => p.status === 'playing');
+    
+    if (allReady && match.players.length >= 2) {
+      // Create game attempts for each player
+      const game = await NursingGame.findById(match.gameId);
+      
+      for (const player of match.players) {
+        const attempt = await NursingGameAttempt.create({
+          gameId: match.gameId,
+          studentId: player.studentId,
+          attemptNumber: 1,
+          startTime: new Date(),
+          status: 'in-progress'
+        });
+        player.attemptId = attempt._id;
+      }
+      
+      match.status = 'ready';
+      await match.save();
+    }
+    
+    res.json({ success: true, message: 'Joined match successfully' });
+  } catch (error) {
+    console.error('Error joining match:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ================= STUDENT ROUTES =================
 router.get('/games', protect, nursingGameController.getStudentGames);
 router.post('/games/:id/start', protect, nursingGameController.startGame);
