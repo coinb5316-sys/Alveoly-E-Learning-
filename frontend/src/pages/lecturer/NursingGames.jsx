@@ -1,12 +1,12 @@
-// components/lecturer/NursingGames.jsx - UPDATED with filters
+// components/lecturer/NursingGames.jsx - CLEANED VERSION
 import React, { useState, useEffect } from 'react';
 import axios from '../../api/axios';
 import { toast } from 'react-toastify';
 import NursingGameForm from '../../components/lecturer/NursingGameForm';
 import {
-  Plus, Search, Filter, Eye, Edit2, Trash2, Copy, 
+  Plus, Search, Filter, Edit2, Trash2, Copy, 
   Globe, Globe2, TrendingUp, Users, Award, Clock,
-  CheckCircle, XCircle, AlertCircle, BarChart3, Download,
+  XCircle, BarChart3, Download,
   BookOpen, GraduationCap, Bookmark
 } from 'lucide-react';
 
@@ -22,7 +22,7 @@ const NursingGames = () => {
   const [showStats, setShowStats] = useState(false);
   const [gameAttempts, setGameAttempts] = useState([]);
   
-  // New filters
+  // Filters
   const [programs, setPrograms] = useState([]);
   const [courses, setCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -140,7 +140,7 @@ const NursingGames = () => {
     setFilteredGames(filtered);
   };
 
-  const handlePublishToggle = async (gameId, isPublished) => {
+  const handlePublishToggle = async (gameId) => {
     try {
       const response = await axios.patch(`/nursing-games/games/${gameId}/toggle-publish`);
       if (response.data.success) {
@@ -186,9 +186,8 @@ const NursingGames = () => {
   };
 
   const handleCreateMatch = async (game) => {
-    // Open match creation modal
     setSelectedGame(game);
-    // You would implement a modal to select students
+    // TODO: Implement match creation modal
   };
 
   const getDifficultyColor = (difficulty) => {
@@ -254,7 +253,7 @@ const NursingGames = () => {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
             >
               <option value="">All Programs</option>
-              {programs.map(program => (
+              {programs.map((program) => (
                 <option key={program._id} value={program._id}>{program.name}</option>
               ))}
             </select>
@@ -272,7 +271,7 @@ const NursingGames = () => {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm disabled:opacity-50"
             >
               <option value="">All Courses</option>
-              {courses.map(course => (
+              {courses.map((course) => (
                 <option key={course._id} value={course._id}>{course.name}</option>
               ))}
             </select>
@@ -290,7 +289,7 @@ const NursingGames = () => {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm disabled:opacity-50"
             >
               <option value="">All Subjects</option>
-              {subjects.map(subject => (
+              {subjects.map((subject) => (
                 <option key={subject._id} value={subject._id}>{subject.name}</option>
               ))}
             </select>
@@ -317,7 +316,7 @@ const NursingGames = () => {
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Published</p>
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {games.filter(g => g.isPublished).length}
+                {games.filter((g) => g.isPublished).length}
               </p>
             </div>
             <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
@@ -519,7 +518,7 @@ const NursingGames = () => {
             
             <div className="p-4 flex gap-2">
               <button
-                onClick={() => handlePublishToggle(game._id, game.isPublished)}
+                onClick={() => handlePublishToggle(game._id)}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm ${
                   game.isPublished
                     ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-900/30'
