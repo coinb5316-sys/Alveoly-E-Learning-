@@ -89,6 +89,8 @@ import AdminBlogEdit from "./pages/AdminBlogEdit";
 import AdminSubscribers from "./pages/AdminSubscribers";
 import AdminComments from "./pages/AdminComments";
 import AdminBlogQuizResults from "./pages/AdminBlogQuizResults";
+import NursingGames from "./pages/lecturer/NursingGames";
+import NursingGamesHub from "./pages/student/NursingGamesHub";
 
 function App() {
   useEffect(() => {
@@ -191,6 +193,7 @@ function App() {
             <Route path="live-classes" element={<StudentLiveClasses />} />
             <Route path="live-class/:classId" element={<LiveClassRoom />} />
             <Route path="ai" element={<AIChat />} />
+            <Route path="nursing-games" element={<NursingGamesHub />} />
           </Route>
 
           {/* ==================== ADMIN ROUTES ==================== */}
@@ -263,6 +266,8 @@ function App() {
             <Route path="help" element={<LecturerHelp />} />
             <Route path="live-classes" element={<LecturerLiveClasses />} />
             <Route path="live-class/:classId" element={<LiveClassRoom />} />
+            <Route path="nursing-games" element={<NursingGames />} />
+
           </Route>
 
           {/* ==================== 404 CATCH-ALL ROUTE ==================== */}

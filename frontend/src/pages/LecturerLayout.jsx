@@ -189,6 +189,7 @@ const LecturerLayout = () => {
   icon: Video,
   items: [
     { to: "/lecturer/live-classes", label: "Live Classes", icon: Video, badge: null },
+    { to: "/lecturer/nursing-games", label: "Nursing Games", icon: Award, badge: null }, // Add this
   ]
 },
 

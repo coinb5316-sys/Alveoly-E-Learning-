@@ -34,6 +34,8 @@ import aiPlanRoutes from "./routes/aiPlanRoutes.js";
 import aiSubscriptionRoutes from "./routes/aiSubscriptionRoutes.js";
 import programRoutes from "./routes/programRoutes.js";
 import blogRoutes from "./routes/blogRoutes.js";
+import nursingGameRoutes from "./routes/nursingGameRoutes.js";
+
 
 const app = express();
 
@@ -127,6 +129,7 @@ app.use("/api/ai-subscriptions", aiSubscriptionRoutes);
 app.use("/api/ai-plans", aiPlanRoutes);
 app.use("/api/programs", programRoutes);
 app.use("/api/blogs", blogRoutes);
+app.use("/api/nursing-games", nursingGameRoutes);
 
 // ================= HEALTH CHECK =================
 app.get("/", (req, res) => {

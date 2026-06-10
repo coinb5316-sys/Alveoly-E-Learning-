@@ -23,6 +23,7 @@ import {
   ChevronRight,
   DollarSign,
   Video,
+  Award,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import StudentNotificationPanel from "../components/StudentNotificationPanel";
@@ -79,6 +80,7 @@ const StudentLayout = () => {
   const menuItems = [
     { to: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard, color: "text-blue-500" },
     { to: "/student/courses", label: "My Courses", icon: BookOpen, color: "text-green-500" },
+     { to: "/student/nursing-games", label: "Nursing Games", icon: Award, color: "text-yellow-500" }, // Add this
     { to: "/student/subjects", label: "Subjects", icon: ClipboardList, color: "text-purple-500" },
     { to: "/student/progress", label: "Progress", icon: TrendingUp, color: "text-orange-500" },
     { to: "/student/plans", label: "Plans", icon: Tags, color: "text-pink-500" },
