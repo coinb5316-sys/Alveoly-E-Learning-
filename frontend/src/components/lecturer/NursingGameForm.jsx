@@ -1,16 +1,27 @@
-import React, { useState } from 'react';
+// components/lecturer/NursingGameForm.jsx - UPDATED with program/course/subject
+import React, { useState, useEffect } from 'react';
 import axios from '../../api/axios';
 import { toast } from 'react-toastify';
 import { 
   Plus, Trash2, Upload, Image, X, 
   ChevronDown, ChevronUp, Edit2, Save,
-  Zap, Clock, Target, Award, FileQuestion
+  Zap, Clock, Target, Award, FileQuestion,
+  GraduationCap, BookOpen, Bookmark
 } from 'lucide-react';
 
-const NursingGameForm = ({ game, onSave, onCancel }) => {
+const NursingGameForm = ({ game, programs: externalPrograms, onSave, onCancel }) => {
+  const [programs, setPrograms] = useState(externalPrograms || []);
+  const [courses, setCourses] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  
   const [formData, setFormData] = useState({
     title: game?.title || '',
     description: game?.description || '',
+    programId: game?.programId?._id || game?.programId || '',
+    courseId: game?.courseId?._id || game?.courseId || '',
+    subjectId: game?.subjectId?._id || game?.subjectId || '',
     category: game?.category || 'medication',
     difficulty: game?.difficulty || 'intermediate',
     timeLimit: game?.timeLimit || 300,
@@ -19,6 +30,8 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
     attemptsAllowed: game?.attemptsAllowed || 3,
     badgeReward: game?.badgeReward || '',
     tags: game?.tags || [],
+    gameType: game?.gameType || 'solo',
+    allowMatching: game?.allowMatching || false,
     questions: game?.questions || [
       {
         questionText: '',
@@ -61,9 +74,75 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
     { value: 'expert', label: '🏆 Expert', color: 'red' }
   ];
 
+  // Fetch programs if not provided
+  useEffect(() => {
+    if (!externalPrograms || externalPrograms.length === 0) {
+      fetchPrograms();
+    }
+  }, [externalPrograms]);
+
+  // Fetch courses when program changes
+  useEffect(() => {
+    if (formData.programId) {
+      fetchCoursesByProgram(formData.programId);
+    } else {
+      setCourses([]);
+      setFormData(prev => ({ ...prev, courseId: '', subjectId: '' }));
+    }
+  }, [formData.programId]);
+
+  // Fetch subjects when course changes
+  useEffect(() => {
+    if (formData.courseId) {
+      fetchSubjectsByCourse(formData.courseId);
+    } else {
+      setSubjects([]);
+      setFormData(prev => ({ ...prev, subjectId: '' }));
+    }
+  }, [formData.courseId]);
+
+  const fetchPrograms = async () => {
+    try {
+      const res = await axios.get('/programs');
+      setPrograms(res.data);
+    } catch (error) {
+      console.error('Error fetching programs:', error);
+      toast.error('Failed to load programs');
+    }
+  };
+
+  const fetchCoursesByProgram = async (programId) => {
+    setLoadingCourses(true);
+    try {
+      const res = await axios.get(`/courses/program/${programId}`);
+      setCourses(res.data);
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      toast.error('Failed to load courses');
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
+
+  const fetchSubjectsByCourse = async (courseId) => {
+    setLoadingSubjects(true);
+    try {
+      const res = await axios.get(`/subjects?course=${courseId}`);
+      setSubjects(res.data);
+    } catch (error) {
+      console.error('Error fetching subjects:', error);
+      toast.error('Failed to load subjects');
+    } finally {
+      setLoadingSubjects(false);
+    }
+  };
+
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
   const handleTagAdd = (e) => {
@@ -166,11 +245,11 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
     if (!file) return;
     
     setUploading(true);
-    const formDataUpload = new FormData();
-    formDataUpload.append('image', file);
+    const uploadFormData = new FormData();
+    uploadFormData.append('diagram', file);
     
     try {
-      const res = await axios.post('/nursing-games/upload-diagram', formDataUpload, {
+      const res = await axios.post('/nursing-games/upload-diagram', uploadFormData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
@@ -180,34 +259,50 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
       }
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error('Failed to upload diagram');
+      toast.error(error.response?.data?.message || 'Failed to upload diagram');
     } finally {
       setUploading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    
-    // Validate form
+  const validateForm = () => {
     if (!formData.title.trim()) {
       toast.error('Please enter a game title');
-      setSaving(false);
-      return;
+      return false;
     }
-    
+    if (!formData.description.trim()) {
+      toast.error('Please enter a game description');
+      return false;
+    }
+    if (!formData.programId) {
+      toast.error('Please select a program');
+      return false;
+    }
+    if (!formData.courseId) {
+      toast.error('Please select a course');
+      return false;
+    }
+    if (!formData.subjectId) {
+      toast.error('Please select a subject');
+      return false;
+    }
     if (formData.questions.some(q => !q.questionText.trim())) {
       toast.error('Please fill in all question texts');
-      setSaving(false);
-      return;
+      return false;
     }
-    
     if (formData.questions.some(q => !q.options.some(opt => opt.isCorrect))) {
       toast.error('Each question must have a correct answer selected');
-      setSaving(false);
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setSaving(true);
     
     try {
       const url = game ? `/nursing-games/games/${game._id}` : '/nursing-games/games';
@@ -247,6 +342,77 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
         </p>
       </div>
 
+      {/* Program/Course/Subject Selection - CRITICAL SECTION */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <GraduationCap className="h-5 w-5 text-green-500" />
+          Course & Subject Assignment
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          Select the program, course, and subject for this game. Only students enrolled in this subject will be able to access it.
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Program *
+            </label>
+            <select
+              name="programId"
+              value={formData.programId}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              required
+            >
+              <option value="">Select Program</option>
+              {programs.map(program => (
+                <option key={program._id} value={program._id}>{program.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Course *
+            </label>
+            <select
+              name="courseId"
+              value={formData.courseId}
+              onChange={handleChange}
+              disabled={!formData.programId || loadingCourses}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white disabled:opacity-50"
+              required
+            >
+              <option value="">Select Course</option>
+              {courses.map(course => (
+                <option key={course._id} value={course._id}>{course.name}</option>
+              ))}
+            </select>
+            {loadingCourses && <span className="text-xs text-gray-400">Loading courses...</span>}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Subject *
+            </label>
+            <select
+              name="subjectId"
+              value={formData.subjectId}
+              onChange={handleChange}
+              disabled={!formData.courseId || loadingSubjects}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white disabled:opacity-50"
+              required
+            >
+              <option value="">Select Subject</option>
+              {subjects.map(subject => (
+                <option key={subject._id} value={subject._id}>{subject.name}</option>
+              ))}
+            </select>
+            {loadingSubjects && <span className="text-xs text-gray-400">Loading subjects...</span>}
+          </div>
+        </div>
+      </div>
+
       {/* Basic Information */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -255,7 +421,7 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
+          <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Game Title *
             </label>
@@ -376,6 +542,19 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
               min="1"
               max="10"
             />
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="allowMatching"
+                checked={formData.allowMatching}
+                onChange={handleChange}
+                className="w-4 h-4 text-blue-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">Enable Student Matching (Duel Mode)</span>
+            </label>
           </div>
         </div>
         
@@ -524,7 +703,7 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Diagram/Image (Optional)
                     </label>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
                       {question.diagramUrl ? (
                         <div className="relative">
                           <img 
@@ -560,7 +739,7 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
                           type="text"
                           value={question.diagramCaption || ''}
                           onChange={(e) => handleQuestionChange(qIndex, 'diagramCaption', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                          className="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                           placeholder="Diagram caption (e.g., Figure 1: Cardiac Anatomy)"
                         />
                       )}
@@ -578,7 +757,7 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
                           <button
                             type="button"
                             onClick={() => handleSetCorrectOption(qIndex, optIndex)}
-                            className={`mt-2 px-2 py-1 text-xs rounded ${option.isCorrect 
+                            className={`mt-2 px-2 py-1 text-xs rounded whitespace-nowrap ${option.isCorrect 
                               ? 'bg-green-500 text-white' 
                               : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}
                           >
@@ -595,7 +774,7 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
                             {option.isCorrect && (
                               <input
                                 type="text"
-                                value={option.explanation}
+                                value={option.explanation || ''}
                                 onChange={(e) => handleOptionChange(qIndex, optIndex, 'explanation', e.target.value)}
                                 className="w-full mt-1 px-3 py-1 text-sm border border-green-200 dark:border-green-800 rounded-lg focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
                                 placeholder="Explanation for why this is correct (optional)"
@@ -632,7 +811,7 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
                       </label>
                       <input
                         type="text"
-                        value={question.nursingConcept}
+                        value={question.nursingConcept || ''}
                         onChange={(e) => handleQuestionChange(qIndex, 'nursingConcept', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                         placeholder="e.g., Cardiac Output, Fluid Balance"
@@ -658,7 +837,7 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
                       Detailed Explanation *
                     </label>
                     <textarea
-                      value={question.explanation}
+                      value={question.explanation || ''}
                       onChange={(e) => handleQuestionChange(qIndex, 'explanation', e.target.value)}
                       rows="2"
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -673,7 +852,7 @@ const NursingGameForm = ({ game, onSave, onCancel }) => {
       </div>
       
       {/* Form Actions */}
-      <div className="flex justify-end gap-3 pt-4">
+      <div className="flex justify-end gap-3 pt-4 pb-8">
         <button
           type="button"
           onClick={onCancel}

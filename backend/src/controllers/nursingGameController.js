@@ -69,6 +69,37 @@ export const getLecturerGames = async (req, res) => {
   }
 };
 
+// ================= DIAGRAM UPLOAD =================
+export const uploadDiagram = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+    
+    // Assuming you're using Cloudinary or similar
+    // If using Cloudinary, you would upload here
+    // For now, return a temporary URL or implement your upload logic
+    
+    // Example with Cloudinary (you need to set up cloudinary config)
+    // const result = await cloudinary.uploader.upload(req.file.path, {
+    //   folder: 'nursing-game-diagrams',
+    //   resource_type: 'image'
+    // });
+    
+    // Temporary response - replace with actual upload logic
+    const tempUrl = `/uploads/temp/${Date.now()}_${req.file.originalname}`;
+    
+    res.json({
+      success: true,
+      url: tempUrl,
+      message: 'Diagram uploaded successfully'
+    });
+  } catch (error) {
+    console.error('Upload diagram error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ================= LECTURER: CREATE GAME WITH PROGRAM/COURSE/SUBJECT =================
 export const createGame = async (req, res) => {
   try {
