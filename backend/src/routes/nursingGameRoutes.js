@@ -4,7 +4,7 @@ import NursingGame from '../models/NursingGame.js';
 import NursingGameAttempt from '../models/NursingGameAttempt.js';
 import NursingGameLeaderboard from '../models/NursingGameLeaderboard.js';
 import { protect, lecturerOnly, adminOrLecturer } from '../middleware/authMiddleware.js';
-import cloudinary from '../config/cloudinary.js';
+import cloudinary from '../../config/cloudinary.js';
 
 const router = express.Router();
 
