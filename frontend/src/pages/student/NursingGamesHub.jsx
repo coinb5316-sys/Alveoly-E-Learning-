@@ -125,38 +125,50 @@ const NursingGamesHub = () => {
   };
 
   const fetchStudents = async () => {
-    try {
-      console.log('Fetching students from /users/students...');
-      const response = await axios.get('/users/students');
-      console.log('Raw students response:', response.data);
+  try {
+    console.log('Fetching students from /users/students...');
+    let response = await axios.get('/users/students');
+    let studentsList = [];
+    
+    // Check if we got valid data
+    if (Array.isArray(response.data) && response.data.length === 0) {
+      console.log('No students from primary endpoint, trying to get current user course...');
       
-      let studentsList = [];
+      // Get current user to find their course
+      const userResponse = await axios.get('/users/me');
+      const currentCourseId = userResponse.data.courseId?._id || userResponse.data.courseId;
       
-      // Handle different response formats from your backend
-      if (Array.isArray(response.data)) {
-        studentsList = response.data;
-      } else if (response.data.success && Array.isArray(response.data.students)) {
-        studentsList = response.data.students;
-      } else if (Array.isArray(response.data.students)) {
-        studentsList = response.data.students;
+      if (currentCourseId) {
+        console.log(`Fetching students by course: ${currentCourseId}`);
+        const courseResponse = await axios.get(`/users/students/by-course/${currentCourseId}`);
+        if (Array.isArray(courseResponse.data)) {
+          studentsList = courseResponse.data;
+        }
       }
-      
-      // Filter out current user if we have their ID
-      if (currentUserId) {
-        studentsList = studentsList.filter(s => s._id !== currentUserId);
-      }
-      
-      console.log(`Loaded ${studentsList.length} students for challenging`);
-      setStudents(studentsList);
-      
-      if (studentsList.length === 0) {
-        console.log('No other students found in your course');
-      }
-    } catch (error) {
-      console.error('Error fetching students:', error.response?.data || error.message);
-      setStudents([]);
+    } else if (Array.isArray(response.data)) {
+      studentsList = response.data;
+    } else if (response.data.success && Array.isArray(response.data.students)) {
+      studentsList = response.data.students;
+    } else if (Array.isArray(response.data.students)) {
+      studentsList = response.data.students;
     }
-  };
+    
+    // Filter out current user
+    if (currentUserId && studentsList.length > 0) {
+      studentsList = studentsList.filter(s => {
+        const studentId = s._id || s.id;
+        return studentId !== currentUserId;
+      });
+    }
+    
+    console.log(`Final: ${studentsList.length} students available`);
+    setStudents(studentsList);
+    
+  } catch (error) {
+    console.error('Error fetching students:', error);
+    setStudents([]);
+  }
+};
 
   const fetchDailyChallenges = async () => {
     try {

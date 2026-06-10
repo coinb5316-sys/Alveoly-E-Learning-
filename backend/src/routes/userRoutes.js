@@ -21,6 +21,21 @@ router.delete("/:id", protect, adminOnly, deleteUser);
 router.put("/:id", protect, adminOnly, updateUser);
 
 // ================= STUDENTS ROUTE - ALLOW LECTURERS AND ADMINS =================
+
+// Add to userRoutes.js
+router.get("/me", protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select("-password")
+      .populate("programId", "name code")
+      .populate("courseId", "name");
+    
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
 // IMPORTANT: Remove adminOnly to allow lecturers
 router.get("/students", protect, async (req, res) => {
   try {
@@ -54,6 +69,32 @@ router.get("/students", protect, async (req, res) => {
     res.json(students);
   } catch (err) {
     console.error("Error fetching students:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Add this route after the existing /students route
+router.get("/students/by-course/:courseId", protect, async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    
+    const filter = { 
+      role: "student",
+      courseId: courseId,
+      _id: { $ne: req.user._id }
+    };
+    
+    console.log("Fetching students by course:", courseId);
+    
+    const students = await User.find(filter)
+      .select("name email courseId _id")
+      .populate("courseId", "name");
+    
+    console.log(`Found ${students.length} students in course ${courseId}`);
+    
+    res.json(students);
+  } catch (err) {
+    console.error("Error fetching students by course:", err);
     res.status(500).json({ message: err.message });
   }
 });
