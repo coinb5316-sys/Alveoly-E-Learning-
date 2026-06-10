@@ -38,7 +38,6 @@ const NursingGamesHub = () => {
   const [userXP, setUserXP] = useState(0);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [currentUserProgramId, setCurrentUserProgramId] = useState(null);
-  const [isLoadingStudents, setIsLoadingStudents] = useState(false);
 
   const categories = [
     { value: 'all', label: 'All', icon: BookOpen },
@@ -59,46 +58,77 @@ const NursingGamesHub = () => {
   ];
 
   // Get current user info on mount
-  useEffect(() => {
-    const getUserInfo = async () => {
+  // In NursingGamesHub.jsx - FIXED getUserInfo
+// REPLACE the entire getUserInfo useEffect with this:
+
+useEffect(() => {
+  const getUserInfo = async () => {
+    try {
+      // First try to get user from localStorage
+      const userStr = localStorage.getItem('user');
+      let userProgramId = null;
+      let userId = null;
+      
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        userId = user._id || user.id;
+        userProgramId = user.programId?._id || user.programId;
+        setCurrentUserId(userId);
+        console.log('User from localStorage:', { userId, userProgramId });
+      }
+      
+      // ALWAYS fetch fresh user data from /auth/me to ensure we have the latest program
       try {
-        // Get user from localStorage
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          setCurrentUserId(user._id || user.id);
+        console.log('Fetching fresh user data from /auth/me...');
+        const response = await axios.get('/auth/me');
+        console.log('Auth/me response:', response.data);
+        
+        if (response.data) {
+          const freshUser = response.data;
+          const freshProgramId = freshUser.programId?._id || freshUser.programId;
+          const freshCourseId = freshUser.courseId?._id || freshUser.courseId;
           
-          // Try multiple ways to get program ID
-          let programId = null;
+          console.log('Fresh user data:', {
+            programId: freshProgramId,
+            courseId: freshCourseId,
+            name: freshUser.name
+          });
           
-          // Check if programId is directly on user
-          if (user.programId) {
-            programId = user.programId;
-          }
-          // Check if programId is an object with _id
-          else if (user.programId?._id) {
-            programId = user.programId._id;
-          }
-          // Check if it's in a different location
-          else if (user.program) {
-            programId = user.program._id || user.program;
-          }
+          // Update localStorage with fresh data
+          localStorage.setItem('user', JSON.stringify(freshUser));
           
-          console.log("Program ID from localStorage:", programId);
-          
-          if (programId) {
-            setCurrentUserProgramId(programId);
+          // Set the program ID
+          if (freshProgramId) {
+            setCurrentUserProgramId(freshProgramId);
           } else {
-            console.log("No program ID found in localStorage, user data:", user);
+            console.warn('User has NO program assigned!');
+            toast.warning('You are not assigned to any program. Please contact your administrator.');
+          }
+          
+          // Also update userId if needed
+          if (freshUser._id || freshUser.id) {
+            setCurrentUserId(freshUser._id || freshUser.id);
           }
         }
-      } catch (e) {
-        console.error('Error getting current user:', e);
+      } catch (err) {
+        console.error('Error fetching /auth/me:', err.response?.status, err.response?.data);
+        
+        // Fallback to localStorage if /auth/me fails
+        if (userProgramId) {
+          console.log('Using program from localStorage:', userProgramId);
+          setCurrentUserProgramId(userProgramId);
+        } else {
+          console.warn('No program found in localStorage and /auth/me failed');
+          toast.warning('Could not verify your program assignment. Please refresh the page.');
+        }
       }
-    };
-    
-    getUserInfo();
-  }, []);
+    } catch (e) {
+      console.error('Error getting current user:', e);
+    }
+  };
+  
+  getUserInfo();
+}, []); // Empty dependency array - run once on mount
 
   useEffect(() => {
     fetchGames();
@@ -107,24 +137,10 @@ const NursingGamesHub = () => {
     fetchUserProgress();
   }, []);
 
-  // Fetch students when component mounts OR when we have program ID
+  // Fetch students separately when we have the program ID
   useEffect(() => {
     if (currentUserProgramId) {
       fetchStudents();
-    } else {
-      // Try to get program ID again after a short delay
-      const timer = setTimeout(() => {
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          const programId = user.programId?._id || user.programId;
-          if (programId && !currentUserProgramId) {
-            console.log("Retrieved program ID after delay:", programId);
-            setCurrentUserProgramId(programId);
-          }
-        }
-      }, 500);
-      return () => clearTimeout(timer);
     }
   }, [currentUserProgramId]);
 
@@ -175,43 +191,125 @@ const NursingGamesHub = () => {
     }
   };
 
-  const fetchStudents = async () => {
-    if (isLoadingStudents) return;
+  // In NursingGamesHub.jsx - UPDATED fetchStudents function
+// REPLACE the fetchStudents function with this:
+
+const fetchStudents = async () => {
+  try {
+    console.log('=== fetchStudents called ===');
     
-    setIsLoadingStudents(true);
+    // First, ensure we have the current program ID
+    let programId = currentUserProgramId;
+    
+    // If no program ID in state, try to get from localStorage
+    if (!programId) {
+      console.log('No programId in state, checking localStorage...');
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        programId = user.programId?._id || user.programId;
+        console.log('Found programId in localStorage:', programId);
+      }
+    }
+    
+    // If still no program ID, try to fetch from /auth/me
+    if (!programId) {
+      console.log('No programId in localStorage, fetching from /auth/me...');
+      try {
+        const userInfoRes = await axios.get('/auth/me');
+        if (userInfoRes.data) {
+          programId = userInfoRes.data.programId?._id || userInfoRes.data.programId;
+          console.log('Got programId from /auth/me:', programId);
+        }
+      } catch (err) {
+        console.error('Failed to fetch user info:', err);
+      }
+    }
+    
+    if (!programId) {
+      console.log('No program assigned to user');
+      setStudents([]);
+      toast.warning('You need to be assigned to a program before challenging other students');
+      return;
+    }
+    
+    console.log('Using programId:', programId);
+    
+    // Try multiple endpoints to find students
+    let studentsList = [];
+    let success = false;
+    
+    // Try /nursing-games/program-students first
     try {
-      console.log('Fetching students from /nursing-games/program-students...');
-      console.log('Current program ID:', currentUserProgramId);
-      
+      console.log('Trying /nursing-games/program-students...');
       const response = await axios.get('/nursing-games/program-students');
-      console.log('Program students response:', response.data);
-      
-      let studentsList = [];
+      console.log('Response from program-students:', response.data);
       
       if (response.data.success && Array.isArray(response.data.students)) {
         studentsList = response.data.students;
-        console.log(`Found ${studentsList.length} students in your program`);
+        success = true;
       } else if (Array.isArray(response.data)) {
         studentsList = response.data;
-        console.log(`Found ${studentsList.length} students (direct array)`);
+        success = true;
+      } else if (response.data.students && Array.isArray(response.data.students)) {
+        studentsList = response.data.students;
+        success = true;
       }
-      
-      studentsList.forEach(s => {
-        console.log(`  - ${s.name} (${s._id})`);
-      });
-      
-      setStudents(studentsList);
-      
-      if (studentsList.length === 0) {
-        console.log('No other students found in your program');
-      }
-    } catch (error) {
-      console.error('Error fetching students:', error.response?.data || error.message);
-      setStudents([]);
-    } finally {
-      setIsLoadingStudents(false);
+    } catch (err) {
+      console.log('Error with /nursing-games/program-students:', err.response?.status);
     }
-  };
+    
+    // If first endpoint failed, try /users/students
+    if (!success) {
+      try {
+        console.log('Trying /users/students...');
+        const response = await axios.get('/users/students');
+        console.log('Response from /users/students:', response.data);
+        
+        if (Array.isArray(response.data)) {
+          studentsList = response.data;
+          success = true;
+        }
+      } catch (err) {
+        console.log('Error with /users/students:', err.response?.status);
+      }
+    }
+    
+    // If still no students, try with program parameter
+    if (!success || studentsList.length === 0) {
+      try {
+        console.log(`Trying /users/students/by-program/${programId}...`);
+        const response = await axios.get(`/users/students/by-program/${programId}`);
+        
+        if (Array.isArray(response.data)) {
+          studentsList = response.data;
+          success = true;
+        }
+      } catch (err) {
+        console.log('Error with program-specific endpoint:', err.response?.status);
+      }
+    }
+    
+    // Filter out current user if present
+    studentsList = studentsList.filter(s => s._id !== currentUserId);
+    
+    console.log(`Final: Found ${studentsList.length} students`);
+    studentsList.forEach(s => {
+      console.log(`  - ${s.name} (${s._id})`);
+    });
+    
+    setStudents(studentsList);
+    
+    if (studentsList.length === 0) {
+      console.log('No other students found');
+      // Don't show error toast here - it might be normal
+    }
+  } catch (error) {
+    console.error('Error fetching students:', error.response?.data || error.message);
+    setStudents([]);
+    toast.error('Could not load students. Please refresh and try again.');
+  }
+};
 
   const fetchDailyChallenges = async () => {
     try {
@@ -234,27 +332,29 @@ const NursingGamesHub = () => {
     }
   };
 
-  const fetchUserProgress = async () => {
-    try {
-      const response = await axios.get('/nursing-games/progress');
-      console.log('Progress response:', response.data);
-      
-      if (response.data.success) {
-        setUserLevel(response.data.level || 1);
-        setUserXP(response.data.xp || 0);
-      } else if (response.data.level !== undefined) {
-        setUserLevel(response.data.level);
-        setUserXP(response.data.xp || 0);
-      } else {
-        setUserLevel(1);
-        setUserXP(0);
-      }
-    } catch (error) {
-      console.error('Error fetching user progress:', error);
+  // In NursingGamesHub.jsx - FIXED fetchUserProgress
+const fetchUserProgress = async () => {
+  try {
+    // Use the working endpoint - nursing-games/progress
+    const response = await axios.get('/nursing-games/progress');
+    console.log('Progress response:', response.data);
+    
+    if (response.data.success) {
+      setUserLevel(response.data.level || 1);
+      setUserXP(response.data.xp || 0);
+    } else if (response.data.level !== undefined) {
+      setUserLevel(response.data.level);
+      setUserXP(response.data.xp || 0);
+    } else {
       setUserLevel(1);
       setUserXP(0);
     }
-  };
+  } catch (error) {
+    console.error('Error fetching user progress:', error);
+    setUserLevel(1);
+    setUserXP(0);
+  }
+};
 
   const filterGames = () => {
     let filtered = [...games];
@@ -894,39 +994,38 @@ const NursingGamesHub = () => {
                         Select Opponent ({students.length} available)
                       </label>
                       <div className="max-h-60 overflow-y-auto space-y-2">
-                        {students.length === 0 ? (
+                        {students.map((student) => (
+                          <button
+                            key={student._id}
+                            onClick={() => setSelectedOpponent(student)}
+                            className={`w-full text-left p-3 rounded-lg border transition-all ${
+                              selectedOpponent?._id === student._id
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                                {student.name?.charAt(0) || '?'}
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-medium">{student.name || 'Student'}</p>
+                                <p className="text-xs text-gray-500">
+                                  {student.email || ''}
+                                </p>
+                              </div>
+                              {selectedOpponent?._id === student._id && (
+                                <UserCheck className="h-5 w-5 text-blue-500" />
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                        {students.length === 0 && (
                           <div className="text-center py-8 text-gray-500">
                             <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
                             <p>No other students found</p>
                             <p className="text-xs mt-1">Make sure you and other students have a program assigned</p>
                           </div>
-                        ) : (
-                          students.map((student) => (
-                            <button
-                              key={student._id}
-                              onClick={() => setSelectedOpponent(student)}
-                              className={`w-full text-left p-3 rounded-lg border transition-all ${
-                                selectedOpponent?._id === student._id
-                                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                  : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                                  {student.name?.charAt(0) || '?'}
-                                </div>
-                                <div className="flex-1">
-                                  <p className="font-medium">{student.name || 'Student'}</p>
-                                  <p className="text-xs text-gray-500">
-                                    {student.email || ''}
-                                  </p>
-                                </div>
-                                {selectedOpponent?._id === student._id && (
-                                  <UserCheck className="h-5 w-5 text-blue-500" />
-                                )}
-                              </div>
-                            </button>
-                          ))
                         )}
                       </div>
                     </div>
