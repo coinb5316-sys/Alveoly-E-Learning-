@@ -142,19 +142,37 @@ const GameMatch = () => {
     }
   };
 
-  const manualJoinMatch = async () => {
-    try {
-      const response = await axios.post(`/nursing-games/matches/${matchId}/join`);
-      if (response.data.success) {
-        toast.success('Joined match! Waiting for opponent...');
-        setHasJoined(true);
-        setTimeout(() => fetchMatchDetails(), 500);
+ // In GameMatch.jsx - Update the manualJoinMatch function
+
+const manualJoinMatch = async () => {
+  try {
+    console.log('Manual join attempt for match:', matchId);
+    console.log('Current user ID:', currentUserId);
+    
+    const response = await axios.post(`/nursing-games/matches/${matchId}/join`);
+    console.log('Join response:', response.data);
+    
+    if (response.data.success) {
+      toast.success('Joined match! Waiting for opponent...');
+      setHasJoined(true);
+      
+      // If both players are now ready, the match will start automatically
+      if (response.data.allReady) {
+        console.log('Both players ready, match will start soon');
+        toast.info('Both players ready! Starting match...');
       }
-    } catch (error) {
-      console.error('Error joining match:', error);
-      toast.error('Failed to join match');
+      
+      // Refetch to update status
+      setTimeout(() => fetchMatchDetails(), 1000);
+    } else {
+      toast.error(response.data.message || 'Failed to join match');
     }
-  };
+  } catch (error) {
+    console.error('Error joining match:', error);
+    console.error('Error response:', error.response?.data);
+    toast.error(error.response?.data?.message || 'Failed to join match');
+  }
+};
 
   const startMatchCountdown = async () => {
     try {

@@ -123,44 +123,60 @@ router.get('/matches/:matchId/status', protect, async (req, res) => {
   }
 });
 
-// JOIN MATCH - SPECIFIC route
+// In routes/nursingGameRoutes.js - Fix the JOIN MATCH route
+
+// JOIN MATCH - FIXED VERSION
 router.post('/matches/:matchId/join', protect, async (req, res) => {
   try {
     const { matchId } = req.params;
     
+    console.log(`Join match request for match ${matchId} from user ${req.user._id}`);
+    
     const match = await StudentMatch.findById(matchId);
     
     if (!match) {
+      console.log('Match not found:', matchId);
       return res.status(404).json({ success: false, message: 'Match not found' });
     }
     
+    console.log('Match found:', {
+      matchId: match._id,
+      status: match.status,
+      playersCount: match.players.length,
+      players: match.players.map(p => ({ id: p.studentId, status: p.status }))
+    });
+    
     if (match.status !== 'waiting') {
+      console.log('Match status not waiting:', match.status);
       return res.status(400).json({ success: false, message: 'Match already started or completed' });
     }
     
     // Check if user is already a player
-    const existingPlayer = match.players.find(p => 
+    const existingPlayerIndex = match.players.findIndex(p => 
       p.studentId.toString() === req.user._id.toString()
     );
     
-    if (!existingPlayer) {
+    console.log('Existing player index:', existingPlayerIndex);
+    
+    if (existingPlayerIndex === -1) {
+      console.log('User not found in match players');
       return res.status(403).json({ success: false, message: 'You are not invited to this match' });
     }
     
-    // Update player status to ready (playing)
-    const playerIndex = match.players.findIndex(p => 
-      p.studentId.toString() === req.user._id.toString()
-    );
+    // Update player status to playing (ready)
+    match.players[existingPlayerIndex].status = 'playing';
+    await match.save();
     
-    if (playerIndex !== -1) {
-      match.players[playerIndex].status = 'playing';
-      await match.save();
-    }
+    console.log('Player joined, new status:', match.players[existingPlayerIndex].status);
     
     // Check if all players are ready
     const allReady = match.players.every(p => p.status === 'playing');
+    console.log('All players ready?', allReady, match.players.length);
     
+    // If both players are ready, create attempts and mark as ready to start
     if (allReady && match.players.length >= 2) {
+      console.log('Both players ready, creating attempts...');
+      
       // Create game attempts for each player
       for (const player of match.players) {
         const attempt = await NursingGameAttempt.create({
@@ -171,13 +187,20 @@ router.post('/matches/:matchId/join', protect, async (req, res) => {
           status: 'in-progress'
         });
         player.attemptId = attempt._id;
+        console.log(`Created attempt ${attempt._id} for player ${player.studentId}`);
       }
       
       match.status = 'ready';
       await match.save();
+      console.log('Match status updated to ready');
     }
     
-    res.json({ success: true, message: 'Joined match successfully', matchStatus: match.status });
+    res.json({ 
+      success: true, 
+      message: 'Joined match successfully',
+      matchStatus: match.status,
+      allReady: allReady && match.players.length >= 2
+    });
   } catch (error) {
     console.error('Error joining match:', error);
     res.status(500).json({ success: false, message: error.message });

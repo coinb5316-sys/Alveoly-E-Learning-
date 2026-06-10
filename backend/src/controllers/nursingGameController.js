@@ -591,9 +591,13 @@ export const startGame = async (req, res) => {
 };
 
 // ================= STUDENT: CREATE MATCH REQUEST =================
+// In nursingGameController.js - Fix createMatchRequest
+
 export const createMatchRequest = async (req, res) => {
   try {
     const { gameId, opponentId } = req.body;
+    
+    console.log('Creating match request:', { gameId, opponentId, userId: req.user._id });
     
     const game = await NursingGame.findById(gameId);
     if (!game || !game.isPublished || !game.allowMatching) {
@@ -607,12 +611,12 @@ export const createMatchRequest = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Opponent not found' });
     }
     
-    // Check if opponent is in same course
-    if (opponent.courseId?.toString() !== user.courseId?.toString()) {
-      return res.status(400).json({ success: false, message: 'Opponent must be in the same course' });
+    // Check if opponent is in same program
+    if (opponent.programId?.toString() !== user.programId?.toString()) {
+      return res.status(400).json({ success: false, message: 'Opponent must be in the same program' });
     }
     
-    // Create match request
+    // Create match with BOTH players having status 'waiting'
     const match = await StudentMatch.create({
       gameId: game._id,
       programId: game.programId,
@@ -624,14 +628,14 @@ export const createMatchRequest = async (req, res) => {
           name: user.name,
           email: user.email,
           avatar: user.avatar,
-          status: 'waiting'
+          status: 'waiting'  // Sender starts as waiting
         },
         {
           studentId: opponent._id,
           name: opponent.name,
           email: opponent.email,
           avatar: opponent.avatar,
-          status: 'waiting'
+          status: 'waiting'  // Opponent starts as waiting
         }
       ],
       createdBy: 'student',
@@ -639,13 +643,15 @@ export const createMatchRequest = async (req, res) => {
       matchCode: Math.random().toString(36).substring(2, 8).toUpperCase()
     });
     
+    console.log('Match created:', match._id, 'Players:', match.players.length);
+    
     // Notify opponent
     await createNotification(
       opponent._id,
       'student',
       'info',
       `🎮 Quiz Challenge from ${user.name}!`,
-      `${user.name} has challenged you to a ${game.title} quiz duel. Join using code: ${match.matchCode}`,
+      `${user.name} has challenged you to a ${game.title} quiz duel. Click to join!`,
       `/student/game-match/${match._id}`,
       { matchId: match._id, matchCode: match.matchCode, gameId: game._id }
     );
@@ -669,7 +675,6 @@ export const createMatchRequest = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 // ================= STUDENT: JOIN MATCH BY CODE =================
 export const joinMatchByCode = async (req, res) => {
   try {
