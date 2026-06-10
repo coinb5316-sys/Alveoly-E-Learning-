@@ -91,6 +91,8 @@ import AdminComments from "./pages/AdminComments";
 import AdminBlogQuizResults from "./pages/AdminBlogQuizResults";
 import NursingGames from "./pages/lecturer/NursingGames";
 import NursingGamesHub from "./pages/student/NursingGamesHub";
+import GameMatch from "./pages/student/GameMatch";
+import GameMatchResults from "./pages/student/GameMatchResults";
 
 function App() {
   useEffect(() => {
@@ -194,6 +196,8 @@ function App() {
             <Route path="live-class/:classId" element={<LiveClassRoom />} />
             <Route path="ai" element={<AIChat />} />
             <Route path="nursing-games" element={<NursingGamesHub />} />
+            <Route path="game-match/:matchId" element={<GameMatch />} />
+<Route path="game-match/:matchId/results" element={<GameMatchResults />} />
           </Route>
 
           {/* ==================== ADMIN ROUTES ==================== */}
