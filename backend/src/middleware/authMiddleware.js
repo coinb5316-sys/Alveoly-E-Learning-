@@ -49,6 +49,14 @@ export const lecturerOnly = (req, res, next) => {
   next();
 };
 
+// Add this function after your other middleware functions
+export const adminOrLecturer = (req, res, next) => {
+  if (req.user.role !== "admin" && req.user.role !== "lecturer") {
+    return res.status(403).json({ message: "Access denied. Admin or Lecturer only." });
+  }
+  next();
+};
+
 // STUDENT ONLY - OPTIONAL
 export const studentOnly = (req, res, next) => {
   if (req.user.role !== "student") {
