@@ -1,4 +1,4 @@
-// components/student/NursingGamesHub.jsx - COMPLETE PROFESSIONAL VERSION
+// components/student/NursingGamesHub.jsx - COMPLETE PROFESSIONAL VERSION (FIXED)
 import React, { useState, useEffect } from 'react';
 import axios from '../../api/axios';
 import { toast } from 'react-toastify';
@@ -36,6 +36,7 @@ const NursingGamesHub = () => {
   const [dailyChallenges, setDailyChallenges] = useState([]);
   const [userLevel, setUserLevel] = useState(1);
   const [userXP, setUserXP] = useState(0);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   const categories = [
     { value: 'all', label: 'All', icon: BookOpen },
@@ -54,6 +55,19 @@ const NursingGamesHub = () => {
     { value: 'advanced', label: 'Advanced', color: 'orange' },
     { value: 'expert', label: 'Expert', color: 'red' }
   ];
+
+  // Get current user ID on mount
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUserId(user._id || user.id);
+      }
+    } catch (e) {
+      console.error('Error getting current user:', e);
+    }
+  }, []);
 
   useEffect(() => {
     fetchGames();
@@ -83,16 +97,24 @@ const NursingGamesHub = () => {
   };
 
   const fetchStudentStats = async () => {
-  try {
-    const response = await axios.get('/nursing-games/my-history');
-    console.log('Student stats response:', response.data);
-    
-    if (response.data.success) {
-      setStudentStats(response.data.stats);
-    } else if (response.data.stats) {
-      setStudentStats(response.data.stats);
-    } else {
-      // Set default stats if needed
+    try {
+      const response = await axios.get('/nursing-games/my-history');
+      console.log('Student stats response:', response.data);
+      
+      if (response.data.success) {
+        setStudentStats(response.data.stats);
+      } else if (response.data.stats) {
+        setStudentStats(response.data.stats);
+      } else {
+        setStudentStats({
+          totalGamesPlayed: 0,
+          totalGamesPassed: 0,
+          averageScore: 0,
+          badgesEarned: []
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching stats:', error);
       setStudentStats({
         totalGamesPlayed: 0,
         totalGamesPassed: 0,
@@ -100,99 +122,84 @@ const NursingGamesHub = () => {
         badgesEarned: []
       });
     }
-  } catch (error) {
-    console.error('Error fetching stats:', error);
-    // Set default stats to avoid errors
-    setStudentStats({
-      totalGamesPlayed: 0,
-      totalGamesPassed: 0,
-      averageScore: 0,
-      badgesEarned: []
-    });
-  }
-};
+  };
 
-  // In NursingGamesHub.jsx, replace the fetchStudents function with this:
-
-const fetchStudents = async () => {
-  try {
-    console.log('Fetching students from /users/students...');
-    const response = await axios.get('/users/students');
-    console.log('Raw students response:', response.data);
-    
-    // Your backend returns an array directly, not a wrapped object
-    let studentsList = [];
-    
-    // Check if response.data is an array (your backend format)
-    if (Array.isArray(response.data)) {
-      studentsList = response.data;
-    } 
-    // Fallback for wrapped format
-    else if (response.data.success && Array.isArray(response.data.students)) {
-      studentsList = response.data.students;
+  const fetchStudents = async () => {
+    try {
+      console.log('Fetching students from /users/students...');
+      const response = await axios.get('/users/students');
+      console.log('Raw students response:', response.data);
+      
+      let studentsList = [];
+      
+      // Handle different response formats from your backend
+      if (Array.isArray(response.data)) {
+        studentsList = response.data;
+      } else if (response.data.success && Array.isArray(response.data.students)) {
+        studentsList = response.data.students;
+      } else if (Array.isArray(response.data.students)) {
+        studentsList = response.data.students;
+      }
+      
+      // Filter out current user if we have their ID
+      if (currentUserId) {
+        studentsList = studentsList.filter(s => s._id !== currentUserId);
+      }
+      
+      console.log(`Loaded ${studentsList.length} students for challenging`);
+      setStudents(studentsList);
+      
+      if (studentsList.length === 0) {
+        console.log('No other students found in your course');
+      }
+    } catch (error) {
+      console.error('Error fetching students:', error.response?.data || error.message);
+      setStudents([]);
     }
-    else if (Array.isArray(response.data.students)) {
-      studentsList = response.data.students;
-    }
-    
-    console.log(`Loaded ${studentsList.length} students for challenging`);
-    setStudents(studentsList);
-    
-    if (studentsList.length === 0) {
-      console.log('No other students found in your course');
-      // Optional: toast.info('No other students available to challenge in your course');
-    }
-  } catch (error) {
-    console.error('Error fetching students:', error.response?.data || error.message);
-    setStudents([]);
-    // Don't show error toast as it might be expected (no students yet)
-  }
-};
+  };
 
   const fetchDailyChallenges = async () => {
-  try {
-    const response = await axios.get('/nursing-games/daily-challenges');
-    console.log('Daily challenges response:', response.data);
-    
-    let challengesList = [];
-    if (Array.isArray(response.data)) {
-      challengesList = response.data;
-    } else if (response.data.success && Array.isArray(response.data.challenges)) {
-      challengesList = response.data.challenges;
-    } else if (Array.isArray(response.data.challenges)) {
-      challengesList = response.data.challenges;
+    try {
+      const response = await axios.get('/nursing-games/daily-challenges');
+      console.log('Daily challenges response:', response.data);
+      
+      let challengesList = [];
+      if (Array.isArray(response.data)) {
+        challengesList = response.data;
+      } else if (response.data.success && Array.isArray(response.data.challenges)) {
+        challengesList = response.data.challenges;
+      } else if (Array.isArray(response.data.challenges)) {
+        challengesList = response.data.challenges;
+      }
+      
+      setDailyChallenges(challengesList);
+    } catch (error) {
+      console.error('Error fetching daily challenges:', error);
+      setDailyChallenges([]);
     }
-    
-    setDailyChallenges(challengesList);
-  } catch (error) {
-    console.error('Error fetching daily challenges:', error);
-    setDailyChallenges([]);
-  }
-};
+  };
 
   const fetchUserProgress = async () => {
-  try {
-    const response = await axios.get('/users/progress');
-    console.log('Progress response:', response.data);
-    
-    // Handle both response formats
-    if (response.data.success) {
-      setUserLevel(response.data.level || 1);
-      setUserXP(response.data.xp || 0);
-    } else if (response.data.level !== undefined) {
-      setUserLevel(response.data.level);
-      setUserXP(response.data.xp || 0);
-    } else {
-      // Default values
+    try {
+      const response = await axios.get('/users/progress');
+      console.log('Progress response:', response.data);
+      
+      if (response.data.success) {
+        setUserLevel(response.data.level || 1);
+        setUserXP(response.data.xp || 0);
+      } else if (response.data.level !== undefined) {
+        setUserLevel(response.data.level);
+        setUserXP(response.data.xp || 0);
+      } else {
+        setUserLevel(1);
+        setUserXP(0);
+      }
+    } catch (error) {
+      console.error('Error fetching user progress:', error);
       setUserLevel(1);
       setUserXP(0);
     }
-  } catch (error) {
-    console.error('Error fetching user progress:', error);
-    setUserLevel(1);
-    setUserXP(0);
-  }
-};
+  };
 
   const filterGames = () => {
     let filtered = [...games];
@@ -307,7 +314,6 @@ const fetchStudents = async () => {
         setIsSearching(true);
         toast.info('Searching for opponent...');
         
-        // Poll for match status
         const interval = setInterval(async () => {
           const statusRes = await axios.get(`/nursing-games/matches/${response.data.matchId}/status`);
           if (statusRes.data.status === 'ready') {
@@ -833,7 +839,7 @@ const fetchStudents = async () => {
                         Select Opponent
                       </label>
                       <div className="max-h-60 overflow-y-auto space-y-2">
-                        {students.filter(s => s._id !== JSON.parse(localStorage.getItem('user'))?._id).map((student) => (
+                        {students.map((student) => (
                           <button
                             key={student._id}
                             onClick={() => setSelectedOpponent(student)}
@@ -845,11 +851,11 @@ const fetchStudents = async () => {
                           >
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                                {student.name.charAt(0)}
+                                {student.name?.charAt(0) || '?'}
                               </div>
                               <div>
-                                <p className="font-medium">{student.name}</p>
-                                <p className="text-xs text-gray-500">{student.email}</p>
+                                <p className="font-medium">{student.name || 'Student'}</p>
+                                <p className="text-xs text-gray-500">{student.email || ''}</p>
                               </div>
                               {selectedOpponent?._id === student._id && (
                                 <UserCheck className="h-5 w-5 text-blue-500 ml-auto" />
@@ -857,12 +863,18 @@ const fetchStudents = async () => {
                             </div>
                           </button>
                         ))}
+                        {students.length === 0 && (
+                          <div className="text-center py-8 text-gray-500">
+                            <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                            <p>No other students found in your course</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                     
                     <button
                       onClick={handleChallengeStudent}
-                      disabled={!selectedOpponent}
+                      disabled={!selectedOpponent || students.length === 0}
                       className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Send Challenge
