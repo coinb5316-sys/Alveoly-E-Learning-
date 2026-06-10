@@ -1,11 +1,12 @@
-// routes/nursingGameRoutes.js
+// routes/nursingGameRoutes.js - COMPLETE FILE
 import express from 'express';
 import { protect, lecturerOnly, adminOnly } from '../middleware/authMiddleware.js';
 import * as nursingGameController from '../controllers/nursingGameController.js';
+import NursingGame from '../models/NursingGame.js';
+import User from '../models/User.js';
 import multer from 'multer';
 
 const router = express.Router();
-
 const upload = multer({ dest: 'uploads/' });
 
 // ================= LECTURER ROUTES =================
@@ -20,6 +21,51 @@ router.post('/upload-diagram', protect, lecturerOnly, upload.single('diagram'), 
 // Lecturer matching routes
 router.post('/matches', protect, lecturerOnly, nursingGameController.manuallyMatchStudents);
 router.get('/matches', protect, lecturerOnly, nursingGameController.getLecturerMatches);
+
+// ================= PUBLIC/ACCESSIBLE ROUTES =================
+// GET SINGLE GAME BY ID - Both lecturers and students can access (with restrictions)
+router.get('/games/:id', protect, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const game = await NursingGame.findById(id)
+      .populate('programId', 'name code')
+      .populate('courseId', 'name')
+      .populate('subjectId', 'name');
+    
+    if (!game) {
+      return res.status(404).json({ success: false, message: 'Game not found' });
+    }
+    
+    // Check access based on role
+    if (req.user.role === 'student') {
+      const user = await User.findById(req.user._id);
+      // Student can only access games from their course that are published
+      const gameCourseId = game.courseId?._id?.toString() || game.courseId?.toString();
+      const userCourseId = user.courseId?.toString();
+      
+      if (gameCourseId !== userCourseId) {
+        return res.status(403).json({ success: false, message: 'You do not have access to this game' });
+      }
+      if (!game.isPublished) {
+        return res.status(403).json({ success: false, message: 'This game is not yet available' });
+      }
+    } else if (req.user.role === 'lecturer') {
+      // Lecturer can only access their own games unless admin
+      if (game.lecturerId?.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Unauthorized' });
+      }
+    }
+    
+    res.json({
+      success: true,
+      game
+    });
+  } catch (error) {
+    console.error('Get single game error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 // ================= STUDENT ROUTES =================
 router.get('/games', protect, nursingGameController.getStudentGames);
