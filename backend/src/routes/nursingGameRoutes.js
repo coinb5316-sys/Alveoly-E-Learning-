@@ -4,7 +4,7 @@ import NursingGame from '../models/NursingGame.js';
 import NursingGameAttempt from '../models/NursingGameAttempt.js';
 import NursingGameLeaderboard from '../models/NursingGameLeaderboard.js';
 import { protect, lecturerOnly, adminOrLecturer } from '../middleware/authMiddleware.js';
-import { uploadToCloudinary } from '../utils/cloudinaryUpload.js';
+import cloudinary from '../config/cloudinary.js';
 
 const router = express.Router();
 
@@ -68,7 +68,15 @@ router.post('/upload-diagram', protect, lecturerOnly, async (req, res) => {
       return res.status(400).json({ success: false, message: 'No image provided' });
     }
     
-    const uploadResult = await uploadToCloudinary(image, 'nursing-games/diagrams');
+    const uploadResult = await cloudinary.uploader.upload(image, {
+      folder: 'nursing-games/diagrams',
+      resource_type: 'auto',
+      allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'webp'],
+      transformation: [
+        { quality: 'auto' },
+        { fetch_format: 'auto' }
+      ]
+    });
     
     res.json({
       success: true,
