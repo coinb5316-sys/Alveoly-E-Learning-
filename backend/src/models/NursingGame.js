@@ -1,3 +1,4 @@
+// models/NursingGame.js - UPDATED with program, course, subject support
 import mongoose from 'mongoose';
 
 const nursingGameSchema = new mongoose.Schema({
@@ -10,6 +11,29 @@ const nursingGameSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  
+  // ========== NEW: PROGRAM/COURSE/SUBJECT INTEGRATION ==========
+  programId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Program',
+    required: true
+  },
+  courseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course',
+    required: true
+  },
+  subjectId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Subject',
+    required: true
+  },
+  lecturerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  
   category: {
     type: String,
     enum: ['medication', 'assessment', 'emergency', 'procedures', 'diagnosis', 'communication', 'ethics', 'leadership'],
@@ -21,7 +45,7 @@ const nursingGameSchema = new mongoose.Schema({
     default: 'intermediate'
   },
   timeLimit: {
-    type: Number, // in seconds
+    type: Number,
     default: 300
   },
   points: {
@@ -88,7 +112,7 @@ const nursingGameSchema = new mongoose.Schema({
   tags: [String],
   estimatedDuration: {
     type: Number,
-    default: 15 // minutes
+    default: 15
   },
   badgeReward: {
     type: String,
@@ -96,14 +120,34 @@ const nursingGameSchema = new mongoose.Schema({
   },
   passingScore: {
     type: Number,
-    default: 70 // percentage
+    default: 70
   },
   attemptsAllowed: {
     type: Number,
     default: 3
+  },
+  
+  // ========== NEW: MATCHING/DUEL SUPPORT ==========
+  gameType: {
+    type: String,
+    enum: ['solo', 'duel', 'tournament'],
+    default: 'solo'
+  },
+  allowMatching: {
+    type: Boolean,
+    default: false
+  },
+  maxPlayers: {
+    type: Number,
+    default: 1
   }
 }, {
   timestamps: true
 });
+
+// Indexes for faster queries
+nursingGameSchema.index({ programId: 1, courseId: 1, subjectId: 1 });
+nursingGameSchema.index({ lecturerId: 1, isPublished: 1 });
+nursingGameSchema.index({ programId: 1, isPublished: 1 });
 
 export default mongoose.model('NursingGame', nursingGameSchema);

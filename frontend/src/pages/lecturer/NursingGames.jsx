@@ -1,11 +1,13 @@
+// components/lecturer/NursingGames.jsx - UPDATED with filters
 import React, { useState, useEffect } from 'react';
 import axios from '../../api/axios';
 import { toast } from 'react-toastify';
-import NursingGameForm from '../../components/lecturer/NursingGameForm';
+import NursingGameForm from './NursingGameForm';
 import {
   Plus, Search, Filter, Eye, Edit2, Trash2, Copy, 
   Globe, Globe2, TrendingUp, Users, Award, Clock,
-  CheckCircle, XCircle, AlertCircle, BarChart3, Download
+  CheckCircle, XCircle, AlertCircle, BarChart3, Download,
+  BookOpen, GraduationCap, Bookmark
 } from 'lucide-react';
 
 const NursingGames = () => {
@@ -19,18 +21,81 @@ const NursingGames = () => {
   const [selectedGame, setSelectedGame] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [gameAttempts, setGameAttempts] = useState([]);
+  
+  // New filters
+  const [programs, setPrograms] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [selectedProgramId, setSelectedProgramId] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [selectedSubjectId, setSelectedSubjectId] = useState('');
 
   useEffect(() => {
+    fetchPrograms();
     fetchGames();
   }, []);
 
   useEffect(() => {
     filterGames();
-  }, [games, searchTerm, filterStatus]);
+  }, [games, searchTerm, filterStatus, selectedProgramId, selectedCourseId, selectedSubjectId]);
+
+  useEffect(() => {
+    if (selectedProgramId) {
+      fetchCoursesByProgram(selectedProgramId);
+    } else {
+      setCourses([]);
+      setSelectedCourseId('');
+      setSubjects([]);
+      setSelectedSubjectId('');
+    }
+  }, [selectedProgramId]);
+
+  useEffect(() => {
+    if (selectedCourseId) {
+      fetchSubjectsByCourse(selectedCourseId);
+    } else {
+      setSubjects([]);
+      setSelectedSubjectId('');
+    }
+  }, [selectedCourseId]);
+
+  const fetchPrograms = async () => {
+    try {
+      const res = await axios.get('/programs');
+      setPrograms(res.data);
+    } catch (error) {
+      console.error('Error fetching programs:', error);
+    }
+  };
+
+  const fetchCoursesByProgram = async (programId) => {
+    try {
+      const res = await axios.get(`/courses/program/${programId}`);
+      setCourses(res.data);
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+    }
+  };
+
+  const fetchSubjectsByCourse = async (courseId) => {
+    try {
+      const res = await axios.get(`/subjects?course=${courseId}`);
+      setSubjects(res.data);
+    } catch (error) {
+      console.error('Error fetching subjects:', error);
+    }
+  };
 
   const fetchGames = async () => {
     try {
-      const response = await axios.get('/nursing-games/my-games');
+      let url = '/nursing-games/my-games';
+      const params = new URLSearchParams();
+      if (selectedProgramId) params.append('programId', selectedProgramId);
+      if (selectedCourseId) params.append('courseId', selectedCourseId);
+      if (selectedSubjectId) params.append('subjectId', selectedSubjectId);
+      if (params.toString()) url += `?${params.toString()}`;
+      
+      const response = await axios.get(url);
       if (response.data.success) {
         setGames(response.data.games);
         setFilteredGames(response.data.games);
@@ -50,7 +115,7 @@ const NursingGames = () => {
       filtered = filtered.filter(game => 
         game.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         game.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        game.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+        (game.tags && game.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())))
       );
     }
     
@@ -58,6 +123,18 @@ const NursingGames = () => {
       filtered = filtered.filter(game => game.isPublished);
     } else if (filterStatus === 'draft') {
       filtered = filtered.filter(game => !game.isPublished);
+    }
+    
+    if (selectedProgramId) {
+      filtered = filtered.filter(game => game.programId?._id === selectedProgramId || game.programId === selectedProgramId);
+    }
+    
+    if (selectedCourseId) {
+      filtered = filtered.filter(game => game.courseId?._id === selectedCourseId || game.courseId === selectedCourseId);
+    }
+    
+    if (selectedSubjectId) {
+      filtered = filtered.filter(game => game.subjectId?._id === selectedSubjectId || game.subjectId === selectedSubjectId);
     }
     
     setFilteredGames(filtered);
@@ -98,9 +175,9 @@ const NursingGames = () => {
     setShowStats(true);
     
     try {
-      const response = await axios.get(`/nursing-games/games/${game._id}/attempts`);
+      const response = await axios.get(`/nursing-games/games/${game._id}/stats`);
       if (response.data.success) {
-        setGameAttempts(response.data.attempts);
+        setGameAttempts(response.data.stats.recentAttempts);
       }
     } catch (error) {
       console.error('Error fetching attempts:', error);
@@ -108,56 +185,10 @@ const NursingGames = () => {
     }
   };
 
-  const handleDuplicate = async (game) => {
-    try {
-      const duplicateData = {
-        ...game,
-        title: `${game.title} (Copy)`,
-        isPublished: false,
-        publishedAt: null
-      };
-      delete duplicateData._id;
-      delete duplicateData.createdAt;
-      delete duplicateData.updatedAt;
-      delete duplicateData.__v;
-      
-      const response = await axios.post('/nursing-games/games', duplicateData);
-      if (response.data.success) {
-        toast.success('Game duplicated successfully');
-        fetchGames();
-      }
-    } catch (error) {
-      console.error('Error duplicating game:', error);
-      toast.error('Failed to duplicate game');
-    }
-  };
-
-  const exportGameData = (game) => {
-    const data = {
-      game: {
-        title: game.title,
-        description: game.description,
-        category: game.category,
-        difficulty: game.difficulty,
-        questions: game.questions.length,
-        totalPoints: game.points,
-        passingScore: game.passingScore
-      },
-      stats: game.stats,
-      exportedAt: new Date().toISOString()
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${game.title.replace(/\s+/g, '_')}_export.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast.success('Game data exported');
+  const handleCreateMatch = async (game) => {
+    // Open match creation modal
+    setSelectedGame(game);
+    // You would implement a modal to select students
   };
 
   const getDifficultyColor = (difficulty) => {
@@ -168,23 +199,6 @@ const NursingGames = () => {
       expert: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
     };
     return colors[difficulty] || colors.intermediate;
-  };
-
-  const getStatusBadge = (isPublished) => {
-    if (isPublished) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded-full text-xs">
-          <Globe className="h-3 w-3" />
-          Published
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full text-xs">
-        <Globe2 className="h-3 w-3" />
-        Draft
-      </span>
-    );
   };
 
   if (loading) {
@@ -207,7 +221,7 @@ const NursingGames = () => {
             Nursing Game Challenges
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Create engaging clinical challenges with diagrams and track student performance
+            Create engaging clinical challenges with diagrams, organize by program/course/subject, and manage student matches
           </p>
         </div>
         <button
@@ -220,6 +234,68 @@ const NursingGames = () => {
           <Plus className="h-5 w-5" />
           Create New Game
         </button>
+      </div>
+
+      {/* Program/Course/Subject Filters */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="h-4 w-4 text-gray-400" />
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by:</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+              <GraduationCap className="h-3 w-3" />
+              Program
+            </label>
+            <select
+              value={selectedProgramId}
+              onChange={(e) => setSelectedProgramId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+            >
+              <option value="">All Programs</option>
+              {programs.map(program => (
+                <option key={program._id} value={program._id}>{program.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+              <BookOpen className="h-3 w-3" />
+              Course
+            </label>
+            <select
+              value={selectedCourseId}
+              onChange={(e) => setSelectedCourseId(e.target.value)}
+              disabled={!selectedProgramId}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm disabled:opacity-50"
+            >
+              <option value="">All Courses</option>
+              {courses.map(course => (
+                <option key={course._id} value={course._id}>{course.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+              <Bookmark className="h-3 w-3" />
+              Subject
+            </label>
+            <select
+              value={selectedSubjectId}
+              onChange={(e) => setSelectedSubjectId(e.target.value)}
+              disabled={!selectedCourseId}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm disabled:opacity-50"
+            >
+              <option value="">All Subjects</option>
+              {subjects.map(subject => (
+                <option key={subject._id} value={subject._id}>{subject.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Stats Overview */}
@@ -279,7 +355,7 @@ const NursingGames = () => {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Search and Status Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -327,21 +403,38 @@ const NursingGames = () => {
       </div>
 
       {/* Games Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredGames.map((game) => (
           <div key={game._id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow">
-            {/* Game Header */}
             <div className="p-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex-1">
                   <h3 className="font-semibold text-lg text-gray-900 dark:text-white line-clamp-1">
                     {game.title}
                   </h3>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${getDifficultyColor(game.difficulty)}`}>
                       {game.difficulty}
                     </span>
-                    {getStatusBadge(game.isPublished)}
+                    <span className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                      {game.gameType === 'duel' ? '🎮 Duel Mode' : '🎯 Solo Mode'}
+                    </span>
+                    {game.allowMatching && (
+                      <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-full">
+                        🤝 Matching Enabled
+                      </span>
+                    )}
+                    {game.isPublished ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 rounded-full text-xs">
+                        <Globe className="h-3 w-3" />
+                        Published
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full text-xs">
+                        <Globe2 className="h-3 w-3" />
+                        Draft
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-1">
@@ -352,48 +445,60 @@ const NursingGames = () => {
                   >
                     <BarChart3 className="h-4 w-4" />
                   </button>
-                  <button
-                    onClick={() => exportGameData(game)}
-                    className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                    title="Export Data"
-                  >
-                    <Download className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDuplicate(game)}
-                    className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                    title="Duplicate"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </button>
+                  {game.allowMatching && (
+                    <button
+                      onClick={() => handleCreateMatch(game)}
+                      className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                      title="Create Match"
+                    >
+                      <Users className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+              
+              {/* Program/Course/Subject Info */}
+              <div className="flex flex-wrap gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                <span className="flex items-center gap-1">
+                  <GraduationCap className="h-3 w-3" />
+                  {game.programId?.name || 'No Program'}
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <BookOpen className="h-3 w-3" />
+                  {game.courseId?.name || 'No Course'}
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <Bookmark className="h-3 w-3" />
+                  {game.subjectId?.name || 'No Subject'}
+                </span>
+              </div>
+              
+              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mt-2">
                 {game.description}
               </p>
             </div>
             
-            {/* Game Stats */}
             <div className="p-4 bg-gray-50 dark:bg-gray-700/50">
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="text-center">
                   <div className="text-xs text-gray-500 dark:text-gray-400">Questions</div>
-                  <div className="font-semibold text-gray-900 dark:text-white">{game.questions.length}</div>
+                  <div className="font-semibold text-gray-900 dark:text-white">{game.questions?.length || 0}</div>
                 </div>
                 <div className="text-center">
                   <div className="text-xs text-gray-500 dark:text-gray-400">Total Points</div>
-                  <div className="font-semibold text-gray-900 dark:text-white">{game.points}</div>
+                  <div className="font-semibold text-gray-900 dark:text-white">{game.points || 0}</div>
                 </div>
                 <div className="text-center">
                   <div className="text-xs text-gray-500 dark:text-gray-400">Time Limit</div>
                   <div className="font-semibold text-gray-900 dark:text-white flex items-center justify-center gap-1">
                     <Clock className="h-3 w-3" />
-                    {Math.floor(game.timeLimit / 60)}:{(game.timeLimit % 60).toString().padStart(2, '0')}
+                    {Math.floor((game.timeLimit || 300) / 60)}:{(game.timeLimit % 60).toString().padStart(2, '0')}
                   </div>
                 </div>
               </div>
               
-              {/* Performance Stats */}
               {game.stats && game.stats.totalAttempts > 0 && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
@@ -408,22 +513,10 @@ const NursingGames = () => {
                       style={{ width: `${(game.stats.completedAttempts / game.stats.totalAttempts) * 100}%` }}
                     />
                   </div>
-                  
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-500 dark:text-gray-400">Average Score</span>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">{game.stats.averageScore}%</span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5">
-                    <div 
-                      className="bg-blue-500 h-1.5 rounded-full"
-                      style={{ width: `${game.stats.averageScore}%` }}
-                    />
-                  </div>
                 </div>
               )}
             </div>
             
-            {/* Actions */}
             <div className="p-4 flex gap-2">
               <button
                 onClick={() => handlePublishToggle(game._id, game.isPublished)}
@@ -475,7 +568,9 @@ const NursingGames = () => {
           </div>
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No games found</h3>
           <p className="text-gray-500 dark:text-gray-400">
-            {searchTerm ? 'Try adjusting your search terms' : 'Create your first nursing game challenge'}
+            {searchTerm || selectedProgramId || selectedCourseId || selectedSubjectId
+              ? 'Try adjusting your filters'
+              : 'Create your first nursing game challenge'}
           </p>
         </div>
       )}
@@ -503,6 +598,7 @@ const NursingGames = () => {
               <div className="p-6">
                 <NursingGameForm
                   game={editingGame}
+                  programs={programs}
                   onSave={(savedGame) => {
                     setShowCreateModal(false);
                     setEditingGame(null);
@@ -513,131 +609,6 @@ const NursingGames = () => {
                     setEditingGame(null);
                   }}
                 />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Statistics Modal */}
-      {showStats && selectedGame && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
-          <div className="flex items-center justify-center min-h-screen p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                    {selectedGame.title} - Statistics
-                  </h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Student performance and analytics
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowStats(false);
-                    setSelectedGame(null);
-                    setGameAttempts([]);
-                  }}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <XCircle className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <div className="p-6 space-y-6">
-                {/* Summary Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {gameAttempts.length}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Total Attempts</div>
-                  </div>
-                  <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {gameAttempts.filter(a => a.passed).length}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Passed</div>
-                  </div>
-                  <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl">
-                    <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                      {Math.round(gameAttempts.reduce((sum, a) => sum + a.percentageScore, 0) / (gameAttempts.length || 1))}%
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Average Score</div>
-                  </div>
-                  <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
-                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {Math.max(...gameAttempts.map(a => a.percentageScore), 0)}%
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Highest Score</div>
-                  </div>
-                </div>
-                
-                {/* Leaderboard */}
-                <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    Student Leaderboard
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50 dark:bg-gray-700/50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Rank</th>
-                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-500 dark:text-gray-400">Student</th>
-                          <th className="px-4 py-2 text-center text-sm font-medium text-gray-500 dark:text-gray-400">Score</th>
-                          <th className="px-4 py-2 text-center text-sm font-medium text-gray-500 dark:text-gray-400">Time</th>
-                          <th className="px-4 py-2 text-center text-sm font-medium text-gray-500 dark:text-gray-400">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {gameAttempts.sort((a, b) => b.percentageScore - a.percentageScore).map((attempt, idx) => (
-                          <tr key={attempt._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                              #{idx + 1}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div>
-                                <div className="font-medium text-gray-900 dark:text-white">
-                                  {attempt.studentId?.name || 'Unknown Student'}
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  {attempt.studentId?.email}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`font-semibold ${
-                                attempt.percentageScore >= selectedGame.passingScore
-                                  ? 'text-green-600 dark:text-green-400'
-                                  : 'text-red-600 dark:text-red-400'
-                              }`}>
-                                {attempt.percentageScore}%
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-center text-sm text-gray-600 dark:text-gray-400">
-                              {Math.floor(attempt.timeSpent / 60)}:{String(attempt.timeSpent % 60).padStart(2, '0')}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {attempt.passed ? (
-                                <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
-                                  <CheckCircle className="h-4 w-4" />
-                                  Passed
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
-                                  <XCircle className="h-4 w-4" />
-                                  Failed
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
