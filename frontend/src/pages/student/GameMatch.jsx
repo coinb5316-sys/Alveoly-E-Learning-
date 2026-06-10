@@ -1,4 +1,4 @@
-// pages/student/GameMatch.jsx - UPDATED
+// pages/student/GameMatch.jsx - COMPLETE FIXED VERSION
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -20,49 +20,80 @@ const GameMatch = () => {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [hasJoined, setHasJoined] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
+  // Get current user ID first - run this synchronously from localStorage
   useEffect(() => {
-    // Get current user ID
     const userStr = localStorage.getItem('user');
     if (userStr) {
       const user = JSON.parse(userStr);
-      setCurrentUserId(user._id || user.id);
+      const userId = user._id || user.id;
+      console.log('Setting currentUserId from localStorage:', userId);
+      setCurrentUserId(userId);
     }
-    
-    fetchMatchDetails();
-    
-    // Set up polling interval
-    const interval = setInterval(() => {
-      if (match?.status === 'waiting' || match?.status === 'ready') {
-        fetchMatchDetails();
-      }
-    }, 3000);
-    
-    return () => clearInterval(interval);
-  }, [matchId]);
+    setInitialCheckDone(true);
+  }, []);
+
+  // Fetch match details only after currentUserId is set
+  useEffect(() => {
+    if (initialCheckDone && currentUserId) {
+      console.log('Fetching match details for user:', currentUserId);
+      fetchMatchDetails();
+      
+      // Set up polling interval
+      const interval = setInterval(() => {
+        if (match?.status === 'waiting' || match?.status === 'ready') {
+          fetchMatchDetails();
+        }
+      }, 3000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [matchId, initialCheckDone, currentUserId]);
 
   const fetchMatchDetails = async () => {
+    if (!currentUserId) {
+      console.log('No currentUserId yet, skipping fetch');
+      return;
+    }
+    
     try {
+      console.log('Fetching match:', matchId);
       const response = await axios.get(`/nursing-games/matches/${matchId}`);
       
       if (response.data.success) {
         const matchData = response.data.match;
+        console.log('Match data:', matchData);
+        console.log('Players:', matchData.players);
+        console.log('CurrentUserId:', currentUserId);
+        
         setMatch(matchData);
         setGame(matchData.game);
         setPlayers(matchData.players);
         
-        // Check if current user is a participant
-        const isPlayer = matchData.players.some(p => p.studentId === currentUserId);
+        // Check if current user is a participant - compare as strings
+        const isPlayer = matchData.players.some(p => {
+          const playerId = p.studentId?._id || p.studentId;
+          return String(playerId) === String(currentUserId);
+        });
+        
+        console.log('Is player?', isPlayer);
         
         if (!isPlayer) {
+          console.error('User is not a participant!');
           toast.error('You are not a participant in this match');
           navigate('/student/nursing-games');
           return;
         }
         
         // Check if current user has joined
-        const currentPlayer = matchData.players.find(p => p.studentId === currentUserId);
+        const currentPlayer = matchData.players.find(p => {
+          const playerId = p.studentId?._id || p.studentId;
+          return String(playerId) === String(currentUserId);
+        });
+        
         const joined = currentPlayer?.status === 'playing';
+        console.log('Has joined?', joined, 'Status:', currentPlayer?.status);
         setHasJoined(joined);
         
         // Handle different match statuses
@@ -79,6 +110,7 @@ const GameMatch = () => {
         } else if (matchData.status === 'waiting') {
           // Auto-join if not already joined
           if (!joined) {
+            console.log('Auto-joining match...');
             await autoJoinMatch();
           }
         } else if (matchData.status === 'completed') {
@@ -87,6 +119,7 @@ const GameMatch = () => {
       }
     } catch (error) {
       console.error('Error fetching match:', error);
+      toast.error('Failed to load match details');
     } finally {
       setLoading(false);
     }
@@ -100,10 +133,11 @@ const GameMatch = () => {
         console.log('Successfully joined match');
         setHasJoined(true);
         toast.success('You have joined the match! Waiting for opponent...');
+        // Refetch to update status
+        setTimeout(() => fetchMatchDetails(), 500);
       }
     } catch (error) {
       console.error('Error joining match:', error);
-      // If auto-join fails, show join button
       setHasJoined(false);
     }
   };
@@ -114,6 +148,7 @@ const GameMatch = () => {
       if (response.data.success) {
         toast.success('Joined match! Waiting for opponent...');
         setHasJoined(true);
+        setTimeout(() => fetchMatchDetails(), 500);
       }
     } catch (error) {
       console.error('Error joining match:', error);
@@ -140,7 +175,10 @@ const GameMatch = () => {
         // Get the updated match to get attemptId
         const response = await axios.get(`/nursing-games/matches/${matchId}`);
         if (response.data.success) {
-          const currentPlayer = response.data.match.players.find(p => p.studentId === currentUserId);
+          const currentPlayer = response.data.match.players.find(p => {
+            const playerId = p.studentId?._id || p.studentId;
+            return String(playerId) === String(currentUserId);
+          });
           if (currentPlayer?.attemptId) {
             setAttemptId(currentPlayer.attemptId);
             setIsReady(true);
@@ -187,7 +225,7 @@ const GameMatch = () => {
                   </span>
                 </div>
                 <p className="text-white">{player.name}</p>
-                {player.studentId === currentUserId && (
+                {String(player.studentId?._id || player.studentId) === String(currentUserId) && (
                   <p className="text-xs text-green-300 mt-1">(You)</p>
                 )}
               </div>
@@ -214,10 +252,15 @@ const GameMatch = () => {
   }
 
   // Waiting room UI
-  const currentPlayer = players.find(p => p.studentId === currentUserId);
-  const opponent = players.find(p => p.studentId !== currentUserId);
+  const currentPlayer = players.find(p => {
+    const playerId = p.studentId?._id || p.studentId;
+    return String(playerId) === String(currentUserId);
+  });
+  const opponent = players.find(p => {
+    const playerId = p.studentId?._id || p.studentId;
+    return String(playerId) !== String(currentUserId);
+  });
   const allPlayersReady = players.length === 2 && players.every(p => p.status === 'playing');
-  const isSender = currentPlayer && !hasJoined;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center p-6">
