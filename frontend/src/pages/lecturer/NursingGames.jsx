@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../api/axios';
 import { toast } from 'react-toastify';
-import NursingGameForm from './NursingGameForm';
+import NursingGameForm from '../../components/lecturer/NursingGameForm';
 import {
   Plus, Search, Filter, Eye, Edit2, Trash2, Copy, 
   Globe, Globe2, TrendingUp, Users, Award, Clock,
