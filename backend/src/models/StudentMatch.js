@@ -24,40 +24,34 @@ const studentMatchSchema = new mongoose.Schema({
   },
   
   // Players
-  players: [{
-    studentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    name: String,
-    email: String,
-    avatar: String,
-    score: {
-      type: Number,
-      default: 0
-    },
-    percentage: {
-      type: Number,
-      default: 0
-    },
-    answers: [{
-      questionIndex: Number,
-      selectedOption: Number,
-      isCorrect: Boolean,
-      timeSpent: Number
-    }],
-    status: {
-      type: String,
-      enum: ['waiting', 'playing', 'completed', 'disconnected'],
-      default: 'waiting'
-    },
-    joinedAt: {
-      type: Date,
-      default: Date.now
-    },
-    completedAt: Date
+ // In models/StudentMatch.js - ensure players have attemptId
+players: [{
+  studentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  name: String,
+  email: String,
+  avatar: String,
+  score: { type: Number, default: 0 },
+  percentage: { type: Number, default: 0 },
+  answers: [{
+    questionIndex: Number,
+    selectedOption: Number,
+    isCorrect: Boolean,
+    timeSpent: Number,
+    pointsEarned: Number
   }],
+  status: {
+    type: String,
+    enum: ['waiting', 'ready', 'playing', 'completed', 'disconnected'],
+    default: 'waiting'
+  },
+  joinedAt: { type: Date, default: Date.now },
+  completedAt: Date,
+  attemptId: { type: mongoose.Schema.Types.ObjectId }  // ← ADD THIS FIELD
+}],
   
   // Match Configuration
   createdBy: {

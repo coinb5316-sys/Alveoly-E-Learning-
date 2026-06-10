@@ -168,15 +168,13 @@ router.get('/program-students', protect, async (req, res) => {
   }
 });
 
-// Add this route after the other match routes
-// GET MATCH BY ID
+// GET MATCH BY ID - Simplified version
 router.get('/matches/:matchId', protect, async (req, res) => {
   try {
     const { matchId } = req.params;
     
-    const match = await StudentMatch.findById(matchId)
-      .populate('gameId', 'title description questions timeLimit passingScore category difficulty allowMatching')
-      .populate('players.studentId', 'name email avatar');
+    // First, just get the match without complex population
+    const match = await StudentMatch.findById(matchId);
     
     if (!match) {
       return res.status(404).json({ success: false, message: 'Match not found' });
@@ -184,14 +182,36 @@ router.get('/matches/:matchId', protect, async (req, res) => {
     
     // Check if user is a participant
     const isParticipant = match.players.some(p => 
-      p.studentId._id.toString() === req.user._id.toString()
+      p.studentId.toString() === req.user._id.toString()
     );
     
     if (!isParticipant && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'You are not a participant in this match' });
     }
     
-    // Format the response
+    // Get game details separately
+    const game = await NursingGame.findById(match.gameId)
+      .select('title description questions timeLimit passingScore category difficulty allowMatching');
+    
+    // Get player details separately (to avoid population issues)
+    const playerIds = match.players.map(p => p.studentId);
+    const playerUsers = await User.find({ _id: { $in: playerIds } }).select('name email avatar');
+    
+    // Combine player data
+    const playersWithDetails = match.players.map(player => {
+      const userInfo = playerUsers.find(u => u._id.toString() === player.studentId.toString());
+      return {
+        studentId: player.studentId,
+        name: userInfo?.name || player.name,
+        email: userInfo?.email || player.email,
+        avatar: userInfo?.avatar || player.avatar,
+        score: player.score || 0,
+        percentage: player.percentage || 0,
+        status: player.status,
+        attemptId: player.attemptId || null
+      };
+    });
+    
     const formattedMatch = {
       _id: match._id,
       matchCode: match.matchCode,
@@ -201,17 +221,8 @@ router.get('/matches/:matchId', protect, async (req, res) => {
       endedAt: match.endedAt,
       winnerId: match.winnerId,
       isTie: match.isTie,
-      game: match.gameId,
-      players: match.players.map(p => ({
-        studentId: p.studentId._id,
-        name: p.studentId.name,
-        email: p.studentId.email,
-        avatar: p.studentId.avatar,
-        score: p.score,
-        percentage: p.percentage,
-        status: p.status,
-        attemptId: p.attemptId
-      }))
+      game: game,
+      players: playersWithDetails
     };
     
     res.json({ success: true, match: formattedMatch });
@@ -221,7 +232,7 @@ router.get('/matches/:matchId', protect, async (req, res) => {
   }
 });
 
-// JOIN MATCH - Add this to routes/nursingGameRoutes.js
+// JOIN MATCH - Simplified version
 router.post('/matches/:matchId/join', protect, async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -245,7 +256,7 @@ router.post('/matches/:matchId/join', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'You are not invited to this match' });
     }
     
-    // Update player status to ready
+    // Update player status to ready (playing)
     const playerIndex = match.players.findIndex(p => 
       p.studentId.toString() === req.user._id.toString()
     );
@@ -260,8 +271,6 @@ router.post('/matches/:matchId/join', protect, async (req, res) => {
     
     if (allReady && match.players.length >= 2) {
       // Create game attempts for each player
-      const game = await NursingGame.findById(match.gameId);
-      
       for (const player of match.players) {
         const attempt = await NursingGameAttempt.create({
           gameId: match.gameId,
@@ -280,6 +289,30 @@ router.post('/matches/:matchId/join', protect, async (req, res) => {
     res.json({ success: true, message: 'Joined match successfully' });
   } catch (error) {
     console.error('Error joining match:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Match status polling - Simplified
+router.get('/matches/:matchId/status', protect, async (req, res) => {
+  try {
+    const match = await StudentMatch.findById(req.params.matchId);
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    
+    // Find the player's attemptId
+    const player = match.players.find(p => 
+      p.studentId.toString() === req.user._id.toString()
+    );
+    
+    res.json({
+      success: true,
+      status: match.status,
+      attemptId: player?.attemptId || null
+    });
+  } catch (error) {
+    console.error('Error polling match status:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
