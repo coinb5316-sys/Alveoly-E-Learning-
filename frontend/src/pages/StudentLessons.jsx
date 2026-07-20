@@ -1,4 +1,4 @@
-// StudentLessons.jsx - Professional styling with dark mode
+// StudentLessons.jsx - Updated with topics display
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -23,7 +23,10 @@ import {
   Shield,
   Zap,
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  List,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 const StudentLessons = () => {
@@ -36,6 +39,8 @@ const StudentLessons = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [unlockedContents, setUnlockedContents] = useState([]);
   const [hoveredContent, setHoveredContent] = useState(null);
+  const [subject, setSubject] = useState(null);
+  const [expandedTopics, setExpandedTopics] = useState({});
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -44,6 +49,16 @@ const StudentLessons = () => {
     title: "",
     lessonId: null,
   });
+
+  // Fetch subject details
+  const fetchSubjectDetails = async () => {
+    try {
+      const res = await axios.get(`/subjects/${subjectId}`);
+      setSubject(res.data);
+    } catch (err) {
+      console.error("Error fetching subject:", err);
+    }
+  };
 
   // Fetch contents and check for quizzes
   const fetchContentsAndQuizzes = async () => {
@@ -105,6 +120,7 @@ const StudentLessons = () => {
 
   useEffect(() => {
     if (subjectId) {
+      fetchSubjectDetails();
       fetchContentsAndQuizzes();
     } else {
       setError("No subject selected");
@@ -112,24 +128,25 @@ const StudentLessons = () => {
     }
   }, [subjectId]);
 
-  // Add this useEffect to check for recent payment on mount
-useEffect(() => {
-  // Check if there was a recent payment
-  const checkRecentPayment = async () => {
-    const reference = localStorage.getItem('pending_payment_reference');
-    if (reference) {
-      // Don't auto-verify here, let the success page handle it
-      console.log("Recent payment detected, waiting for verification");
-    }
+  // Toggle topics expansion
+  const toggleTopics = () => {
+    setExpandedTopics(prev => ({
+      ...prev,
+      [subjectId]: !prev[subjectId]
+    }));
   };
-  
-  checkRecentPayment();
-}, []);
 
-// Also add a refresh function that can be called after payment
-const refreshContent = async () => {
-  await fetchContentsAndQuizzes();
-};
+  // Check for recent payment on mount
+  useEffect(() => {
+    const checkRecentPayment = async () => {
+      const reference = localStorage.getItem('pending_payment_reference');
+      if (reference) {
+        console.log("Recent payment detected, waiting for verification");
+      }
+    };
+    
+    checkRecentPayment();
+  }, []);
 
   // Check for payment callback on page load
   useEffect(() => {
@@ -230,34 +247,31 @@ const refreshContent = async () => {
     };
   }, [viewer.open]);
 
- const handleUnlock = async (c) => {
-  try {
-    // Store the subjectId and contentId before redirect
-    localStorage.setItem('current_subject_id', subjectId);
-    localStorage.setItem('current_content_id', c._id);
-    localStorage.setItem('current_content_title', c.title);
-    
-    const res = await axios.post("/content-payments/initiate", {
-      contentId: c._id,
-    });
-    
-    if (res.data.authorizationUrl) {
-      // Store the reference for later verification
-      if (res.data.reference) {
-        localStorage.setItem('pending_payment_reference', res.data.reference);
+  const handleUnlock = async (c) => {
+    try {
+      localStorage.setItem('current_subject_id', subjectId);
+      localStorage.setItem('current_content_id', c._id);
+      localStorage.setItem('current_content_title', c.title);
+      
+      const res = await axios.post("/content-payments/initiate", {
+        contentId: c._id,
+      });
+      
+      if (res.data.authorizationUrl) {
+        if (res.data.reference) {
+          localStorage.setItem('pending_payment_reference', res.data.reference);
+        }
+        window.location.href = res.data.authorizationUrl;
       }
-      // Redirect to Paystack
-      window.location.href = res.data.authorizationUrl;
+    } catch (err) {
+      console.error(err);
+      toast.error("Payment failed: " + (err.response?.data?.message || "Please try again"));
+      localStorage.removeItem('current_subject_id');
+      localStorage.removeItem('current_content_id');
+      localStorage.removeItem('current_content_title');
+      localStorage.removeItem('pending_payment_reference');
     }
-  } catch (err) {
-    console.error(err);
-    toast.error("Payment failed: " + (err.response?.data?.message || "Please try again"));
-    localStorage.removeItem('current_subject_id');
-    localStorage.removeItem('current_content_id');
-    localStorage.removeItem('current_content_title');
-    localStorage.removeItem('pending_payment_reference');
-  }
-};
+  };
 
   const openViewer = async (c) => {
     if (c.isPaid && !c.isUnlocked) {
@@ -317,6 +331,8 @@ const refreshContent = async () => {
   const unlockedCount = contents.filter(c => c.isUnlocked).length;
   const lockedCount = contents.filter(c => c.isPaid && !c.isUnlocked).length;
   const freeCount = contents.filter(c => !c.isPaid).length;
+  const topics = subject?.topics || [];
+  const totalTopics = topics.length;
 
   if (loading || processingPayment) {
     return (
@@ -377,10 +393,24 @@ const refreshContent = async () => {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-              Learning Materials
+              {subject?.name || "Learning Materials"}
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Access videos, documents, and quizzes for this subject
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
+              <span>Access videos, documents, and quizzes for this subject</span>
+              {totalTopics > 0 && (
+                <>
+                  <span className="text-gray-300 dark:text-gray-600">•</span>
+                  <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
+                    <List className="h-3 w-3" />
+                    {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'}
+                  </span>
+                </>
+              )}
+              <span className="text-gray-300 dark:text-gray-600">•</span>
+              <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                <GraduationCap className="h-3 w-3" />
+                {contents.length} items
+              </span>
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -392,6 +422,65 @@ const refreshContent = async () => {
             </div>
           </div>
         </div>
+
+        {/* Topics Section */}
+        {totalTopics > 0 && (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
+            <button
+              onClick={toggleTopics}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
+                  <List className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                    Topics in this Subject
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'} available
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                <span className="text-sm">{expandedTopics[subjectId] ? 'Hide' : 'Show'}</span>
+                {expandedTopics[subjectId] ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </div>
+            </button>
+            
+            {expandedTopics[subjectId] && (
+              <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-gray-800">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {topics.map((topic) => (
+                    <div 
+                      key={topic._id} 
+                      className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <div className="flex-shrink-0 mt-0.5">
+                        <div className="h-2 w-2 rounded-full bg-purple-500 mt-1.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 break-words">
+                          {topic.name}
+                        </p>
+                        {topic.description && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 break-words mt-0.5">
+                            {topic.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Stats Summary */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -544,13 +633,31 @@ const refreshContent = async () => {
                     {content.title}
                   </h3>
 
-                  {/* Add this after the h3 title in the content card */}
-<div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mt-1">
-  <GraduationCap className="h-3 w-3" />
-  <span>By: {content.lecturerName || "Admin"}</span>
-</div>
+                  <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <GraduationCap className="h-3 w-3" />
+                    <span>By: {content.lecturerName || "Admin"}</span>
+                  </div>
                   
-                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  {/* Topics Tag for content */}
+                  {subject?.topics && subject.topics.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {subject.topics.slice(0, 2).map((topic) => (
+                        <span 
+                          key={topic._id} 
+                          className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 text-[10px] rounded-full"
+                        >
+                          {topic.name}
+                        </span>
+                      ))}
+                      {subject.topics.length > 2 && (
+                        <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] rounded-full">
+                          +{subject.topics.length - 2} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-2">
                     <Clock className="h-3 w-3" />
                     <span>Self-paced</span>
                     {hasQuiz && content.type !== "quiz" && (
