@@ -1,4 +1,4 @@
-// AdminContent.jsx - FIXED with proper courseId extraction
+// AdminContent.jsx - UPDATED with topics display
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -27,10 +27,13 @@ import {
   Copy,
   Save,
   CircleHelp,
-  Building
+  Building,
+  List,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
-// Quiz Editor Component (same as before - keep it)
+// Quiz Editor Component (same as before)
 const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => {
   // ... (keep the existing QuizEditor code - it's working fine)
   const [questions, setQuestions] = useState([]);
@@ -412,7 +415,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
   );
 };
 
-// Main AdminContent Component - FIXED
+// Main AdminContent Component - UPDATED with topics display
 const AdminContent = () => {
   const [programs, setPrograms] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -425,6 +428,7 @@ const AdminContent = () => {
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [expandedSubjects, setExpandedSubjects] = useState({});
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -503,6 +507,20 @@ const AdminContent = () => {
     return value;
   };
 
+  // Toggle subject topics expansion
+  const toggleSubjectTopics = (subjectId) => {
+    setExpandedSubjects(prev => ({
+      ...prev,
+      [subjectId]: !prev[subjectId]
+    }));
+  };
+
+  // Get topics for a subject
+  const getSubjectTopics = (subjectId) => {
+    const subject = subjects.find(s => s._id === subjectId);
+    return subject?.topics || [];
+  };
+
   const handleUpload = async () => {
     if (!form.title) {
       toast.error("Please enter a title");
@@ -539,7 +557,6 @@ const AdminContent = () => {
       formData.append("subjectId", extractId(form.subjectId));
       const selectedSubject = subjects.find(s => s._id === form.subjectId);
       if (selectedSubject && selectedSubject.courseId) {
-        // Extract the actual ID string, not the object
         const courseIdValue = extractId(selectedSubject.courseId);
         formData.append("courseId", courseIdValue);
         console.log("Adding courseId:", courseIdValue);
@@ -549,7 +566,6 @@ const AdminContent = () => {
         return;
       }
     } else {
-      // Extract the actual ID string for course
       const courseIdValue = extractId(form.courseId);
       formData.append("courseId", courseIdValue);
       console.log("Adding courseId from course:", courseIdValue);
@@ -636,7 +652,6 @@ const AdminContent = () => {
       price: content.price,
       thumbnail: null,
     });
-    // Load filtered courses for the program
     if (content.courseId?.programId) {
       const programId = content.courseId.programId._id || content.courseId.programId;
       handleProgramChange(programId);
@@ -820,11 +835,63 @@ const AdminContent = () => {
                     <option value="">Select Subject</option>
                     {subjects
                       .filter(s => !form.courseId || s.courseId === form.courseId || s.courseId?._id === form.courseId)
-                      .map((s) => (
-                        <option key={s._id} value={s._id}>{s.name}</option>
-                      ))}
+                      .map((s) => {
+                        const topics = s.topics || [];
+                        return (
+                          <option key={s._id} value={s._id}>
+                            {s.name} {topics.length > 0 ? `(${topics.length} topics)` : ''}
+                          </option>
+                        );
+                      })}
                   </select>
                 </div>
+                
+                {/* Display topics for selected subject */}
+                {form.subjectId && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSubjectTopics(form.subjectId)}
+                      className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+                    >
+                      {expandedSubjects[form.subjectId] ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                      {expandedSubjects[form.subjectId] ? "Hide" : "View"} Topics
+                    </button>
+                    
+                    {expandedSubjects[form.subjectId] && (
+                      <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Topics in this subject:</p>
+                        {getSubjectTopics(form.subjectId).length > 0 ? (
+                          <div className="space-y-1.5">
+                            {getSubjectTopics(form.subjectId).map((topic, index) => (
+                              <div key={topic._id || index} className="flex items-start gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+                                <div className="flex-shrink-0 mt-0.5">
+                                  <div className="h-1.5 w-1.5 rounded-full bg-purple-500 mt-1.5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 break-words">
+                                    {topic.name}
+                                  </p>
+                                  {topic.description && (
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 break-words mt-0.5">
+                                      {topic.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400 dark:text-gray-500">No topics added to this subject yet.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : null}
 
@@ -967,100 +1034,127 @@ const AdminContent = () => {
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {contents.map((content) => (
-              <div
-                key={content._id}
-                onClick={() => openViewer(content)}
-                className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-              >
-                {/* Thumbnail */}
-                <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
-                  {content.type === "quiz" ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center">
-                      <HelpCircle className="text-white/80 text-5xl mb-2" />
-                      <span className="text-white font-medium text-sm">Quiz Content</span>
-                    </div>
-                  ) : (
-                    <>
-                      <img
-                        src={content.thumbnailUrl || "/api/placeholder/400/200"}
-                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                        alt={content.title}
-                        onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
-                      />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Eye className="h-12 w-12 text-white" />
+            {contents.map((content) => {
+              const subject = subjects.find(s => s._id === content.subjectId?._id || s._id === content.subjectId);
+              const topics = subject?.topics || [];
+              
+              return (
+                <div
+                  key={content._id}
+                  onClick={() => openViewer(content)}
+                  className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+                >
+                  {/* Thumbnail */}
+                  <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
+                    {content.type === "quiz" ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center">
+                        <HelpCircle className="text-white/80 text-5xl mb-2" />
+                        <span className="text-white font-medium text-sm">Quiz Content</span>
                       </div>
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        <img
+                          src={content.thumbnailUrl || "/api/placeholder/400/200"}
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                          alt={content.title}
+                          onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
+                        />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Eye className="h-12 w-12 text-white" />
+                        </div>
+                      </>
+                    )}
 
-                  {/* Type Badge */}
-                  <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
-                    {getTypeIcon(content.type)}
-                    <span className="capitalize">{content.type}</span>
-                  </div>
-
-                  {/* Price Badge */}
-                  {content.isPaid && (
-                    <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      ₵{content.price}
+                    {/* Type Badge */}
+                    <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
+                      {getTypeIcon(content.type)}
+                      <span className="capitalize">{content.type}</span>
                     </div>
-                  )}
-                </div>
 
-                {/* Content Info */}
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                    {content.title}
-                  </h3>
-                  
-                  {/* Meta Info */}
-                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3">
-                    <span className="capitalize">{content.type}</span>
-                    <span>•</span>
-                    <span>{content.subjectId?.name || content.courseId?.name || "Unlinked"}</span>
+                    {/* Price Badge */}
+                    {content.isPaid && (
+                      <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        ₵{content.price}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(content);
-                      }}
-                      className="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                      Edit
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(content._id);
-                      }}
-                      className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </button>
-                    {content.type !== "quiz" && (
+                  {/* Content Info */}
+                  <div className="p-4">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      {content.title}
+                    </h3>
+                    
+                    {/* Meta Info */}
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      <span className="capitalize">{content.type}</span>
+                      <span>•</span>
+                      <span>{content.subjectId?.name || content.courseId?.name || "Unlinked"}</span>
+                    </div>
+
+                    {/* Topics Info */}
+                    {subject && topics.length > 0 && (
+                      <div className="mb-3">
+                        <div className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
+                          <List className="h-3 w-3" />
+                          <span>{topics.length} {topics.length === 1 ? 'topic' : 'topics'}</span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {topics.slice(0, 3).map((topic, index) => (
+                            <span key={topic._id || index} className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 text-[10px] rounded-full">
+                              {topic.name}
+                            </span>
+                          ))}
+                          {topics.length > 3 && (
+                            <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] rounded-full">
+                              +{topics.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedLesson(content);
-                          setShowQuizEditor(true);
+                          handleEdit(content);
                         }}
-                        className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+                        className="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
                       >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add Quiz
+                        <Edit className="h-3.5 w-3.5" />
+                        Edit
                       </button>
-                    )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(content._id);
+                        }}
+                        className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </button>
+                      {content.type !== "quiz" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedLesson(content);
+                            setShowQuizEditor(true);
+                          }}
+                          className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Quiz
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

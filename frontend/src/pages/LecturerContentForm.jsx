@@ -1,4 +1,4 @@
-// LecturerContentForm.jsx - COMPLETELY FIXED VERSION
+// LecturerContentForm.jsx - UPDATED with topics display
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -25,11 +25,15 @@ import {
   Unlock,
   AlertCircle,
   ArrowLeft,
-  Building
+  Building,
+  List,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
-// Quiz Editor Component (keep as is)
+// Quiz Editor Component (keep as is - same as above)
 const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
+  // ... (keep the existing QuizEditor code - it's working fine)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -409,7 +413,7 @@ const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
   );
 };
 
-// Main LecturerContentForm Component - FIXED
+// Main LecturerContentForm Component - UPDATED with topics display
 const LecturerContentForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -426,6 +430,7 @@ const LecturerContentForm = () => {
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [user, setUser] = useState(null);
   const [contentData, setContentData] = useState(null);
+  const [expandedSubjects, setExpandedSubjects] = useState({});
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -446,65 +451,61 @@ const LecturerContentForm = () => {
     thumbnail: null,
   });
 
-  // Get current user and fetch assigned subjects - COMPLETE FIX
-useEffect(() => {
-  const fetchUserAndSubjects = async () => {
-    try {
-      // Fetch current user
-      const userRes = await axios.get("/auth/me");
-      const userData = userRes.data;
-      setUser(userData);
-      localStorage.setItem("user", JSON.stringify(userData));
-      
-      console.log("User data from /auth/me:", userData);
-      console.log("Assigned subjects from user:", userData.lecturerInfo?.assignedSubjects);
-      
-      // If user has assigned subjects, fetch them properly
-      if (userData.lecturerInfo?.assignedSubjects?.length > 0) {
-        // The assigned subjects might already be populated in the user object
-        const populatedSubjects = userData.lecturerInfo.assignedSubjects.filter(s => s && s._id);
+  // Get current user and fetch assigned subjects
+  useEffect(() => {
+    const fetchUserAndSubjects = async () => {
+      try {
+        const userRes = await axios.get("/auth/me");
+        const userData = userRes.data;
+        setUser(userData);
+        localStorage.setItem("user", JSON.stringify(userData));
         
-        if (populatedSubjects.length > 0) {
-          setAssignedSubjects(populatedSubjects);
-          console.log("Using populated subjects from user:", populatedSubjects);
-        } else {
-          // If not populated, fetch subjects directly
-          const subjectIds = userData.lecturerInfo.assignedSubjects;
-          console.log("Fetching subjects by IDs:", subjectIds);
+        console.log("User data from /auth/me:", userData);
+        console.log("Assigned subjects from user:", userData.lecturerInfo?.assignedSubjects);
+        
+        if (userData.lecturerInfo?.assignedSubjects?.length > 0) {
+          const populatedSubjects = userData.lecturerInfo.assignedSubjects.filter(s => s && s._id);
           
-          const subjectsRes = await axios.get("/subjects");
-          const allSubjects = subjectsRes.data || [];
-          
-          const filtered = allSubjects.filter(subject => 
-            subjectIds.includes(subject._id)
-          );
-          
-          setAssignedSubjects(filtered);
-          console.log("Filtered assigned subjects:", filtered);
-        }
-      } else {
-        console.log("No assigned subjects found");
-        setAssignedSubjects([]);
-      }
-      
-    } catch (err) {
-      console.error("Error fetching user or subjects:", err);
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        try {
-          const userData = JSON.parse(storedUser);
-          setUser(userData);
-          if (userData.lecturerInfo?.assignedSubjects?.length > 0) {
-            setAssignedSubjects(userData.lecturerInfo.assignedSubjects);
+          if (populatedSubjects.length > 0) {
+            setAssignedSubjects(populatedSubjects);
+            console.log("Using populated subjects from user:", populatedSubjects);
+          } else {
+            const subjectIds = userData.lecturerInfo.assignedSubjects;
+            console.log("Fetching subjects by IDs:", subjectIds);
+            
+            const subjectsRes = await axios.get("/subjects");
+            const allSubjects = subjectsRes.data || [];
+            
+            const filtered = allSubjects.filter(subject => 
+              subjectIds.includes(subject._id)
+            );
+            
+            setAssignedSubjects(filtered);
+            console.log("Filtered assigned subjects:", filtered);
           }
-        } catch (e) {
-          console.error("Error parsing stored user:", e);
+        } else {
+          console.log("No assigned subjects found");
+          setAssignedSubjects([]);
+        }
+        
+      } catch (err) {
+        console.error("Error fetching user or subjects:", err);
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            setUser(userData);
+            if (userData.lecturerInfo?.assignedSubjects?.length > 0) {
+              setAssignedSubjects(userData.lecturerInfo.assignedSubjects);
+            }
+          } catch (e) {
+            console.error("Error parsing stored user:", e);
+          }
         }
       }
-    }
-  };
-  fetchUserAndSubjects();
-}, []);
+    };
+    fetchUserAndSubjects();
+  }, []);
 
   // Fetch courses and programs
   useEffect(() => {
@@ -528,7 +529,6 @@ useEffect(() => {
   const getAvailableSubjects = () => {
     let available = [...assignedSubjects];
     
-    // Filter by selected course if any
     if (form.courseId) {
       available = available.filter(s => 
         s.courseId === form.courseId || s.courseId?._id === form.courseId
@@ -537,6 +537,20 @@ useEffect(() => {
     
     console.log("Available subjects:", available);
     return available;
+  };
+
+  // Toggle subject topics expansion
+  const toggleSubjectTopics = (subjectId) => {
+    setExpandedSubjects(prev => ({
+      ...prev,
+      [subjectId]: !prev[subjectId]
+    }));
+  };
+
+  // Get topics for a subject
+  const getSubjectTopics = (subjectId) => {
+    const subject = assignedSubjects.find(s => s._id === subjectId);
+    return subject?.topics || [];
   };
 
   // Fetch content for editing
@@ -565,7 +579,6 @@ useEffect(() => {
         thumbnail: null,
       });
       
-      // Load filtered courses for the program
       if (content.courseId?.programId) {
         const programId = content.courseId.programId._id || content.courseId.programId;
         await handleProgramChange(programId);
@@ -851,7 +864,7 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Subject Selection */}
+          {/* Subject Selection with Topics Display */}
           {form.linkType === "subject" ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -865,11 +878,64 @@ useEffect(() => {
                   className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="">Select Subject</option>
-                  {availableSubjects.map((s) => (
-                    <option key={s._id} value={s._id}>{s.name}</option>
-                  ))}
+                  {availableSubjects.map((s) => {
+                    const topics = s.topics || [];
+                    return (
+                      <option key={s._id} value={s._id}>
+                        {s.name} {topics.length > 0 ? `(${topics.length} topics)` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
+              
+              {/* Display topics for selected subject */}
+              {form.subjectId && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleSubjectTopics(form.subjectId)}
+                    className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+                  >
+                    {expandedSubjects[form.subjectId] ? (
+                      <ChevronUp className="h-3 w-3" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3" />
+                    )}
+                    {expandedSubjects[form.subjectId] ? "Hide" : "View"} Topics
+                  </button>
+                  
+                  {expandedSubjects[form.subjectId] && (
+                    <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Topics in this subject:</p>
+                      {getSubjectTopics(form.subjectId).length > 0 ? (
+                        <div className="space-y-1.5">
+                          {getSubjectTopics(form.subjectId).map((topic, index) => (
+                            <div key={topic._id || index} className="flex items-start gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+                              <div className="flex-shrink-0 mt-0.5">
+                                <div className="h-1.5 w-1.5 rounded-full bg-purple-500 mt-1.5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 break-words">
+                                  {topic.name}
+                                </p>
+                                {topic.description && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 break-words mt-0.5">
+                                    {topic.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 dark:text-gray-500">No topics added to this subject yet.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              
               {assignedSubjects.length === 0 && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                   No subjects assigned. Please contact admin to assign subjects to you.
