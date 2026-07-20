@@ -1,4 +1,4 @@
-// StudentSubjects.jsx - Fixed to work with sidebar navigation
+// StudentSubjects.jsx - Updated with topics support
 import { useEffect, useState } from "react"; 
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -21,7 +21,10 @@ import {
   Loader2,
   CreditCard,
   Shield,
-  Building
+  Building,
+  List,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 const StudentSubjects = () => {
@@ -40,6 +43,7 @@ const StudentSubjects = () => {
   const [socket, setSocket] = useState(null);
   const [userCourses, setUserCourses] = useState([]);
   const [showCourseSelector, setShowCourseSelector] = useState(false);
+  const [expandedTopics, setExpandedTopics] = useState({});
 
   const [payments, setPayments] = useState([]);
   const [now, setNow] = useState(new Date());
@@ -66,10 +70,9 @@ const StudentSubjects = () => {
     fetchManualAccess();
   }, []);
 
-  // ================= FETCH USER'S COURSES (for sidebar navigation) =================
+  // ================= FETCH USER'S COURSES =================
   const fetchUserCourses = async () => {
     try {
-      // First get user's program
       const userRes = await axios.get("/auth/me");
       const userData = userRes.data;
       
@@ -77,13 +80,11 @@ const StudentSubjects = () => {
         setProgramId(userData.programId?._id || userData.programId);
         setProgramName(userData.programId?.name || "");
         
-        // Fetch courses under this program
         const programIdValue = userData.programId?._id || userData.programId;
         if (programIdValue) {
           const coursesRes = await axios.get(`/courses/program/${programIdValue}`);
           setUserCourses(coursesRes.data || []);
           
-          // If user has a course assigned, use it
           if (userData.courseId) {
             const userCourseId = userData.courseId?._id || userData.courseId;
             const userCourseName = userData.courseId?.name || "";
@@ -106,7 +107,6 @@ const StudentSubjects = () => {
       const courseFromUrl = new URLSearchParams(search).get("course");
 
       if (courseFromUrl) {
-        // Course provided in URL
         setCourseId(courseFromUrl);
         try {
           const res = await axios.get(`/courses/${courseFromUrl}`);
@@ -117,10 +117,8 @@ const StudentSubjects = () => {
         }
         setShowCourseSelector(false);
       } else {
-        // No course in URL - try to get from user
         const hasCourse = await fetchUserCourses();
         if (!hasCourse) {
-          // No course assigned - show selector or message
           setShowCourseSelector(true);
           setFetching(false);
         }
@@ -179,14 +177,13 @@ const StudentSubjects = () => {
     return !!subjectPayment || !!manual;
   };
 
-  // ================= FETCH SUBJECTS WITH SOCKET =================
+  // ================= FETCH SUBJECTS =================
   useEffect(() => {
     if (!courseId) {
       setFetching(false);
       return;
     }
 
-    // Initialize socket
     const newSocket = initializeSocket();
     setSocket(newSocket);
 
@@ -205,7 +202,6 @@ const StudentSubjects = () => {
 
     fetchSubjects();
 
-    // Socket event listeners
     if (newSocket) {
       newSocket.on("subject:created", (subj) => {
         if (subj.courseId?.toString() === courseId) {
@@ -243,6 +239,14 @@ const StudentSubjects = () => {
     };
   }, [courseId]);
 
+  // ================= TOGGLE TOPICS =================
+  const toggleTopics = (subjectId) => {
+    setExpandedTopics(prev => ({
+      ...prev,
+      [subjectId]: !prev[subjectId]
+    }));
+  };
+
   // ================= PAYMENT =================
   const handleUnlock = async (subject) => {
     try {
@@ -266,7 +270,6 @@ const StudentSubjects = () => {
     setCourseId(course._id);
     setCourseName(course.name);
     setShowCourseSelector(false);
-    // Update URL without reload
     navigate(`/student/subjects?course=${course._id}`, { replace: true });
   };
 
@@ -274,6 +277,7 @@ const StudentSubjects = () => {
   const unlockedCount = subjects.filter(s => isSubjectUnlocked(s)).length;
   const lockedCount = subjects.filter(s => !isSubjectUnlocked(s) && s.isPaid).length;
   const freeCount = subjects.filter(s => !s.isPaid).length;
+  const totalTopics = subjects.reduce((acc, s) => acc + (s.topics?.length || 0), 0);
 
   // Helper function to truncate text
   const truncateText = (text, maxLength = 50) => {
@@ -298,7 +302,6 @@ const StudentSubjects = () => {
           </div>
         </div>
 
-        {/* No Course Message */}
         {userCourses.length === 0 ? (
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
             <div className="flex flex-col items-center">
@@ -378,17 +381,23 @@ const StudentSubjects = () => {
             </span>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-            Subjects & Modules
+            Subjects & Topics
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Select a subject to start learning, practice, or take exams
+            Select a subject to view topics, start learning, practice, or take exams
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
             <BookOpen className="h-4 w-4 text-gray-400" />
             <span className="text-sm text-gray-600 dark:text-gray-400">
               {subjects.length} Subjects
+            </span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+            <List className="h-4 w-4 text-gray-400" />
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              {totalTopics} Topics
             </span>
           </div>
           {userCourses.length > 1 && (
@@ -502,6 +511,8 @@ const StudentSubjects = () => {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {subjects.map((subject) => {
             const unlocked = isSubjectUnlocked(subject);
+            const isExpanded = expandedTopics[subject._id];
+            const topicCount = subject.topics?.length || 0;
             
             return (
               <div
@@ -536,6 +547,13 @@ const StudentSubjects = () => {
                       Free
                     </span>
                   )}
+
+                  {topicCount > 0 && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-purple-500 text-white rounded-full shadow-lg whitespace-nowrap">
+                      <List className="h-3 w-3" />
+                      {topicCount} {topicCount === 1 ? 'Topic' : 'Topics'}
+                    </span>
+                  )}
                 </div>
 
                 <div className="p-5 relative z-10 flex-1 flex flex-col">
@@ -561,13 +579,68 @@ const StudentSubjects = () => {
                           <span>₵{subject.price}</span>
                         </p>
                       )}
+                      {topicCount > 0 && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                          {topicCount} {topicCount === 1 ? 'topic' : 'topics'} available
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Description */}
-                  <p className={`text-sm mb-4 line-clamp-2 ${unlocked ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                    Master {truncateText(subject.name, 30)} with comprehensive study materials, practice questions, and mock exams.
-                  </p>
+                  {/* Topics Section */}
+                  {topicCount > 0 && (
+                    <div className="mb-4">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (unlocked) toggleTopics(subject._id);
+                        }}
+                        className={`flex items-center gap-1 text-xs font-medium transition-colors ${
+                          unlocked 
+                            ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300' 
+                            : 'text-gray-400 cursor-not-allowed'
+                        }`}
+                        disabled={!unlocked}
+                      >
+                        {isExpanded ? (
+                          <>
+                            <ChevronUp className="h-3 w-3" />
+                            Hide topics
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-3 w-3" />
+                            View topics
+                          </>
+                        )}
+                      </button>
+                      
+                      {isExpanded && unlocked && (
+                        <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto">
+                          {subject.topics?.map((topic, index) => (
+                            <div 
+                              key={topic._id || index}
+                              className="flex items-start gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                            >
+                              <div className="flex-shrink-0 mt-0.5">
+                                <div className="h-1.5 w-1.5 rounded-full bg-blue-500 mt-1.5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 break-words">
+                                  {topic.name}
+                                </p>
+                                {topic.description && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 break-words mt-0.5">
+                                    {topic.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Action Buttons */}
                   <div className="mt-auto">

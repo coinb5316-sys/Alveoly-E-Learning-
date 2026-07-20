@@ -7,6 +7,9 @@ import {
   deleteSubject,
   getSubjectById,
   getSubjectsPublic,
+  addTopic,
+  removeTopic,
+  updateTopic,
 } from "../controllers/subjectController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import { requireSubjectAccess } from "../middleware/accessMiddleware.js";
@@ -26,5 +29,12 @@ router.get("/:subjectId", protect, requireSubjectAccess, getSubjectById);
 router.post("/", protect, adminOnly, createSubject);
 router.put("/:id", protect, adminOnly, updateSubject);
 router.delete("/:id", protect, adminOnly, deleteSubject);
+
+/**
+ * ================= TOPIC MANAGEMENT (Admin Only) =================
+ */
+router.post("/:subjectId/topics", protect, adminOnly, addTopic);
+router.delete("/:subjectId/topics/:topicId", protect, adminOnly, removeTopic);
+router.put("/:subjectId/topics/:topicId", protect, adminOnly, updateTopic);
 
 export default router;

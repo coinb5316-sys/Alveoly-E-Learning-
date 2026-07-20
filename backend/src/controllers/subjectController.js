@@ -1,4 +1,4 @@
-// controllers/subjectController.js - UPDATED with programId support
+// controllers/subjectController.js - UPDATED with topic support
 import Subject from "../models/Subject.js";
 import Course from "../models/Course.js";
 import Program from "../models/Program.js";
@@ -20,17 +20,21 @@ export const getSubjects = async (req, res) => {
     if (course && course !== "undefined" && course !== "null") {
       subjects = await Subject.find({ courseId: course })
         .populate("programId", "name code")
-        .populate("courseId", "name");
+        .populate("courseId", "name")
+        .select("+topics"); // Include topics
     } else if (program && program !== "undefined" && program !== "null") {
       subjects = await Subject.find({ programId: program })
         .populate("programId", "name code")
-        .populate("courseId", "name");
+        .populate("courseId", "name")
+        .select("+topics");
     } else {
       subjects = await Subject.find()
         .populate("programId", "name code")
-        .populate("courseId", "name");
+        .populate("courseId", "name")
+        .select("+topics");
     }
 
+    // ... rest of the function remains the same
     let activePlanSubjects = [];
     let purchasedSubjects = [];
     let manualSubjects = [];
@@ -86,9 +90,16 @@ export const getSubjects = async (req, res) => {
         isUnlocked = hasPlan || hasPurchase || hasManual;
       }
 
+      // Sort topics by order
+      const sortedTopics = subj.topics ? 
+        [...subj.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
+        [];
+
       return {
         ...subj._doc,
         isUnlocked,
+        topics: sortedTopics,
+        topicCount: sortedTopics.length,
       };
     });
 
@@ -99,10 +110,10 @@ export const getSubjects = async (req, res) => {
   }
 };
 
-// ================= CREATE SUBJECT (FIXED - with programId) =================
+// ================= CREATE SUBJECT =================
 export const createSubject = async (req, res) => {
   try {
-    const { name, programId, courseId, isPaid, price } = req.body;
+    const { name, programId, courseId, isPaid, price, topics } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: "Subject name is required" });
@@ -135,17 +146,30 @@ export const createSubject = async (req, res) => {
       });
     }
 
+    // Process topics if provided
+    let processedTopics = [];
+    if (topics && Array.isArray(topics)) {
+      processedTopics = topics.map((topic, index) => ({
+        name: topic.name,
+        description: topic.description || "",
+        order: topic.order !== undefined ? topic.order : index,
+        isActive: topic.isActive !== undefined ? topic.isActive : true,
+      }));
+    }
+
     const subject = await Subject.create({
       name,
       programId,
       courseId,
       isPaid: isPaid || false,
       price: isPaid && price ? Number(price) : 0,
+      topics: processedTopics,
     });
 
     const populatedSubject = await Subject.findById(subject._id)
       .populate("programId", "name code")
-      .populate("courseId", "name");
+      .populate("courseId", "name")
+      .select("+topics");
 
     io.emit("subject:created", populatedSubject);
 
@@ -156,7 +180,7 @@ export const createSubject = async (req, res) => {
   }
 };
 
-// ================= UPDATE SUBJECT (FIXED) =================
+// ================= UPDATE SUBJECT =================
 export const updateSubject = async (req, res) => {
   try {
     const subject = await Subject.findById(req.params.id);
@@ -164,7 +188,7 @@ export const updateSubject = async (req, res) => {
       return res.status(404).json({ message: "Subject not found" });
     }
 
-    const { name, programId, courseId, isPaid, price } = req.body;
+    const { name, programId, courseId, isPaid, price, topics } = req.body;
 
     if (name) subject.name = name;
     
@@ -196,11 +220,23 @@ export const updateSubject = async (req, res) => {
     if (price !== undefined && isPaid) subject.price = Number(price);
     if (price !== undefined && !isPaid) subject.price = 0;
 
+    // Update topics if provided
+    if (topics && Array.isArray(topics)) {
+      subject.topics = topics.map((topic, index) => ({
+        name: topic.name,
+        description: topic.description || "",
+        order: topic.order !== undefined ? topic.order : index,
+        isActive: topic.isActive !== undefined ? topic.isActive : true,
+        _id: topic._id || new mongoose.Types.ObjectId(), // Preserve existing IDs if provided
+      }));
+    }
+
     const updated = await subject.save();
 
     const populatedUpdated = await Subject.findById(updated._id)
       .populate("programId", "name code")
-      .populate("courseId", "name");
+      .populate("courseId", "name")
+      .select("+topics");
 
     io.emit("subject:updated", populatedUpdated);
 
@@ -217,13 +253,25 @@ export const getSubjectById = async (req, res) => {
     const subjectId = req.params.subjectId;
     const subject = await Subject.findById(subjectId)
       .populate("programId", "name code")
-      .populate("courseId", "name");
+      .populate("courseId", "name")
+      .select("+topics");
 
     if (!subject) {
       return res.status(404).json({ message: "Subject not found" });
     }
 
-    res.json(subject);
+    // Sort topics by order
+    const sortedTopics = subject.topics ? 
+      [...subject.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
+      [];
+
+    const response = {
+      ...subject._doc,
+      topics: sortedTopics,
+      topicCount: sortedTopics.length,
+    };
+
+    res.json(response);
   } catch (err) {
     console.error("Get Subject By ID Error:", err);
     res.status(500).json({ message: "Server error" });
@@ -257,13 +305,16 @@ export const getSubjectsPublic = async (req, res) => {
     if (course && course !== "undefined" && course !== "null") {
       subjects = await Subject.find({ courseId: course })
         .populate("programId", "name code")
-        .populate("courseId", "name");
+        .populate("courseId", "name")
+        .select("+topics");
     } else {
       subjects = await Subject.find()
         .populate("programId", "name code")
-        .populate("courseId", "name");
+        .populate("courseId", "name")
+        .select("+topics");
     }
 
+    // ... rest of the function remains the same
     let activePlanSubjects = [];
     let purchasedSubjects = [];
     let manualSubjects = [];
@@ -317,15 +368,127 @@ export const getSubjectsPublic = async (req, res) => {
         isUnlocked = hasPlan || hasPurchase || hasManual;
       }
 
+      // Sort topics by order
+      const sortedTopics = subj.topics ? 
+        [...subj.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
+        [];
+
       return {
         ...subj._doc,
         isUnlocked,
+        topics: sortedTopics,
+        topicCount: sortedTopics.length,
       };
     });
 
     res.json(formatted);
   } catch (error) {
     console.error("Get Subjects Public Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= TOPIC MANAGEMENT FUNCTIONS =================
+
+// Add a topic to a subject
+export const addTopic = async (req, res) => {
+  try {
+    const { subjectId } = req.params;
+    const { name, description, order } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ message: "Topic name is required" });
+    }
+
+    const subject = await Subject.findById(subjectId);
+    if (!subject) {
+      return res.status(404).json({ message: "Subject not found" });
+    }
+
+    const newTopic = {
+      name,
+      description: description || "",
+      order: order !== undefined ? order : subject.topics.length,
+      isActive: true,
+    };
+
+    subject.topics.push(newTopic);
+    await subject.save();
+
+    const updatedSubject = await Subject.findById(subjectId)
+      .populate("programId", "name code")
+      .populate("courseId", "name")
+      .select("+topics");
+
+    io.emit("subject:updated", updatedSubject);
+    res.status(201).json(updatedSubject);
+  } catch (error) {
+    console.error("Add Topic Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// Remove a topic from a subject
+export const removeTopic = async (req, res) => {
+  try {
+    const { subjectId, topicId } = req.params;
+
+    const subject = await Subject.findById(subjectId);
+    if (!subject) {
+      return res.status(404).json({ message: "Subject not found" });
+    }
+
+    subject.topics = subject.topics.filter(
+      topic => topic._id.toString() !== topicId
+    );
+
+    await subject.save();
+
+    const updatedSubject = await Subject.findById(subjectId)
+      .populate("programId", "name code")
+      .populate("courseId", "name")
+      .select("+topics");
+
+    io.emit("subject:updated", updatedSubject);
+    res.json(updatedSubject);
+  } catch (error) {
+    console.error("Remove Topic Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// Update a topic
+export const updateTopic = async (req, res) => {
+  try {
+    const { subjectId, topicId } = req.params;
+    const { name, description, order, isActive } = req.body;
+
+    const subject = await Subject.findById(subjectId);
+    if (!subject) {
+      return res.status(404).json({ message: "Subject not found" });
+    }
+
+    const topic = subject.topics.id(topicId);
+    if (!topic) {
+      return res.status(404).json({ message: "Topic not found" });
+    }
+
+    if (name !== undefined) topic.name = name;
+    if (description !== undefined) topic.description = description;
+    if (order !== undefined) topic.order = order;
+    if (isActive !== undefined) topic.isActive = isActive;
+
+    await subject.save();
+
+    const updatedSubject = await Subject.findById(subjectId)
+      .populate("programId", "name code")
+      .populate("courseId", "name")
+      .select("+topics");
+
+    io.emit("subject:updated", updatedSubject);
+    res.json(updatedSubject);
+  } catch (error) {
+    console.error("Update Topic Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };

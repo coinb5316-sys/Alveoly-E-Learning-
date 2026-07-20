@@ -1,4 +1,4 @@
-// AdminSubjects.jsx - ORIGINAL WORKING CODE with PROGRAM SUPPORT ADDED
+// AdminSubjects.jsx - Updated with topics management
 import { useState, useEffect } from "react";
 import { 
   FaPlus, 
@@ -15,7 +15,12 @@ import {
   FaSpinner,
   FaCheckCircle,
   FaExclamationCircle,
-  FaBuilding
+  FaBuilding,
+  FaList,
+  FaChevronDown,
+  FaChevronUp,
+  FaSave,
+  FaTimesCircle
 } from "react-icons/fa";
 import axios from "../api/axios";
 import initializeSocket, { getSocket } from "../config/socket";
@@ -36,6 +41,11 @@ const AdminSubjects = () => {
   const [duration, setDuration] = useState(30);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("subjects");
+  const [expandedSubjects, setExpandedSubjects] = useState({});
+  const [editingTopic, setEditingTopic] = useState(null);
+  const [newTopicName, setNewTopicName] = useState("");
+  const [newTopicDescription, setNewTopicDescription] = useState("");
+  const [topicFormSubject, setTopicFormSubject] = useState(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -118,7 +128,70 @@ const AdminSubjects = () => {
     setForm({ ...form, [name]: type === "checkbox" ? checked : value });
   };
 
-  // ================= ADD =================
+  // ================= TOPIC MANAGEMENT =================
+  const toggleTopics = (subjectId) => {
+    setExpandedSubjects(prev => ({
+      ...prev,
+      [subjectId]: !prev[subjectId]
+    }));
+  };
+
+  const handleAddTopic = async (subjectId) => {
+    if (!newTopicName.trim()) {
+      alert("Topic name is required");
+      return;
+    }
+
+    try {
+      await axios.post(`/subjects/${subjectId}/topics`, {
+        name: newTopicName,
+        description: newTopicDescription || "",
+      });
+      setNewTopicName("");
+      setNewTopicDescription("");
+      setTopicFormSubject(null);
+      await fetchData();
+      alert("Topic added successfully!");
+    } catch (err) {
+      console.error("Error adding topic:", err);
+      alert(err.response?.data?.message || "Failed to add topic");
+    }
+  };
+
+  const handleDeleteTopic = async (subjectId, topicId) => {
+    if (!window.confirm("Delete this topic?")) return;
+    try {
+      await axios.delete(`/subjects/${subjectId}/topics/${topicId}`);
+      await fetchData();
+    } catch (err) {
+      console.error("Error deleting topic:", err);
+      alert(err.response?.data?.message || "Failed to delete topic");
+    }
+  };
+
+  const handleUpdateTopic = async (subjectId, topicId, updates) => {
+    try {
+      await axios.put(`/subjects/${subjectId}/topics/${topicId}`, updates);
+      setEditingTopic(null);
+      await fetchData();
+    } catch (err) {
+      console.error("Error updating topic:", err);
+      alert(err.response?.data?.message || "Failed to update topic");
+    }
+  };
+
+  const startEditTopic = (subjectId, topic) => {
+    setEditingTopic({
+      subjectId,
+      topicId: topic._id,
+      name: topic.name,
+      description: topic.description || "",
+      order: topic.order || 0,
+      isActive: topic.isActive !== false,
+    });
+  };
+
+  // ================= SUBJECT CRUD =================
   const handleAdd = async () => {
     if (!form.name) {
       alert("Subject name is required");
@@ -181,7 +254,6 @@ const AdminSubjects = () => {
     }
   };
 
-  // ================= DELETE =================
   const handleDelete = async (_id) => {
     if (!window.confirm("Delete subject?")) return;
     try {
@@ -225,7 +297,6 @@ const AdminSubjects = () => {
     }
   };
 
-  // ================= EDIT =================
   const handleEdit = (subject) => {
     setEditing(subject);
     setForm({
@@ -244,7 +315,6 @@ const AdminSubjects = () => {
     }
   };
 
-  // ================= UPDATE =================
   const handleUpdate = async () => {
     if (!form.name) {
       alert("Subject name is required");
@@ -291,6 +361,11 @@ const AdminSubjects = () => {
     return program?.name || "N/A";
   };
 
+  const getUserName = (id) => {
+    const user = users.find((u) => u._id === id);
+    return user?.name || "Unknown User";
+  };
+
   const filteredSubjects = subjects.filter(subject =>
     subject.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -299,6 +374,7 @@ const AdminSubjects = () => {
   const paidSubjects = subjects.filter(s => s.isPaid).length;
   const freeSubjects = subjects.filter(s => !s.isPaid).length;
   const activeAccess = manualAccessList.filter(m => m.isActive).length;
+  const totalTopics = subjects.reduce((acc, s) => acc + (s.topics?.length || 0), 0);
 
   return (
     <div className="w-full px-3 sm:px-4 md:px-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
@@ -306,17 +382,23 @@ const AdminSubjects = () => {
       <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0 flex-1">
           <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 break-words">
-            Subject Management
+            Subject & Topic Management
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 break-words">
-            Create, manage and control subject access for students
+            Create, manage subjects and their topics, and control student access
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
             <FaBook className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
             <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
-              Total: {subjects.length} subjects
+              {subjects.length} Subjects
+            </span>
+          </div>
+          <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+            <FaList className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+            <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+              {totalTopics} Topics
             </span>
           </div>
         </div>
@@ -391,7 +473,7 @@ const AdminSubjects = () => {
               : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
           }`}
         >
-          Subjects
+          Subjects & Topics
           {activeTab === "subjects" && (
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400" />
           )}
@@ -537,64 +619,247 @@ const AdminSubjects = () => {
                   </p>
                 </div>
               ) : (
-                filteredSubjects.map((subject) => (
-                  <div key={subject._id} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200">
-                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                      <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        subject.isPaid 
-                          ? 'bg-yellow-50 dark:bg-yellow-950/30' 
-                          : 'bg-green-50 dark:bg-green-950/30'
-                      }`}>
-                        <FaChalkboardTeacher className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
-                          subject.isPaid 
-                            ? 'text-yellow-600 dark:text-yellow-400' 
-                            : 'text-green-600 dark:text-green-400'
-                        }`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 break-words">
-                          {subject.name}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                            <FaBuilding className="w-3 h-3" />
-                            {getProgramName(subject.programId?._id || subject.programId)}
-                          </span>
-                          <span className="text-xs text-gray-400">→</span>
-                          <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                            <FaBook className="w-3 h-3" />
-                            {getCourseName(subject.courseId?._id || subject.courseId)}
-                          </span>
+                filteredSubjects.map((subject) => {
+                  const isExpanded = expandedSubjects[subject._id];
+                  const topicCount = subject.topics?.length || 0;
+                  
+                  return (
+                    <div key={subject._id} className="group">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200">
+                        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                          <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            subject.isPaid 
+                              ? 'bg-yellow-50 dark:bg-yellow-950/30' 
+                              : 'bg-green-50 dark:bg-green-950/30'
+                          }`}>
+                            <FaChalkboardTeacher className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
+                              subject.isPaid 
+                                ? 'text-yellow-600 dark:text-yellow-400' 
+                                : 'text-green-600 dark:text-green-400'
+                            }`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 break-words">
+                                {subject.name}
+                              </p>
+                              {topicCount > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 rounded-full">
+                                  <FaList className="h-2.5 w-2.5" />
+                                  {topicCount}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                                <FaBuilding className="w-3 h-3" />
+                                {getProgramName(subject.programId?._id || subject.programId)}
+                              </span>
+                              <span className="text-xs text-gray-400">→</span>
+                              <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                                <FaBook className="w-3 h-3" />
+                                {getCourseName(subject.courseId?._id || subject.courseId)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`text-xs px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full font-medium whitespace-nowrap ${
+                              subject.isPaid
+                                ? "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400"
+                                : "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400"
+                            }`}>
+                              {subject.isPaid ? `₵${subject.price}` : "Free"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                          <button
+                            onClick={() => toggleTopics(subject._id)}
+                            className="p-1.5 sm:p-2 rounded-lg text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-colors"
+                            title={isExpanded ? "Hide Topics" : "Show Topics"}
+                          >
+                            {isExpanded ? (
+                              <FaChevronUp size={14} className="sm:w-4 sm:h-4" />
+                            ) : (
+                              <FaChevronDown size={14} className="sm:w-4 sm:h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setTopicFormSubject(subject._id);
+                              setNewTopicName("");
+                              setNewTopicDescription("");
+                            }}
+                            className="p-1.5 sm:p-2 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors"
+                            title="Add Topic"
+                          >
+                            <FaPlus size={14} className="sm:w-4 sm:h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(subject)}
+                            className="p-1.5 sm:p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                            title="Edit Subject"
+                          >
+                            <FaEdit size={14} className="sm:w-4 sm:h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(subject._id)}
+                            className="p-1.5 sm:p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                            title="Delete Subject"
+                          >
+                            <FaTrash size={14} className="sm:w-4 sm:h-4" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full font-medium whitespace-nowrap ${
-                          subject.isPaid
-                            ? "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400"
-                            : "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400"
-                        }`}>
-                          {subject.isPaid ? `₵${subject.price}` : "Free"}
-                        </span>
-                      </div>
+
+                      {/* Topics Section */}
+                      {isExpanded && (
+                        <div className="px-3 sm:px-4 pb-3 sm:pb-4 bg-gray-50 dark:bg-gray-800/30">
+                          <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+                            {/* Add Topic Form */}
+                            {topicFormSubject === subject._id && (
+                              <div className="mb-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <input
+                                    type="text"
+                                    value={newTopicName}
+                                    onChange={(e) => setNewTopicName(e.target.value)}
+                                    placeholder="Topic name"
+                                    className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={newTopicDescription}
+                                    onChange={(e) => setNewTopicDescription(e.target.value)}
+                                    placeholder="Description (optional)"
+                                    className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                  />
+                                  <button
+                                    onClick={() => handleAddTopic(subject._id)}
+                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                  >
+                                    Add
+                                  </button>
+                                  <button
+                                    onClick={() => setTopicFormSubject(null)}
+                                    className="px-3 py-1.5 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Topics List */}
+                            {topicCount === 0 ? (
+                              <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
+                                No topics added yet. Click the + button to add topics.
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                {subject.topics?.map((topic) => {
+                                  const isEditing = editingTopic && 
+                                    editingTopic.subjectId === subject._id && 
+                                    editingTopic.topicId === topic._id;
+
+                                  return (
+                                    <div key={topic._id} className="flex items-start gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                      {isEditing ? (
+                                        // Edit Topic Form
+                                        <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                                          <input
+                                            type="text"
+                                            value={editingTopic.name}
+                                            onChange={(e) => setEditingTopic({...editingTopic, name: e.target.value})}
+                                            className="flex-1 px-2 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded"
+                                          />
+                                          <input
+                                            type="text"
+                                            value={editingTopic.description || ""}
+                                            onChange={(e) => setEditingTopic({...editingTopic, description: e.target.value})}
+                                            placeholder="Description"
+                                            className="flex-1 px-2 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded"
+                                          />
+                                          <div className="flex items-center gap-1">
+                                            <label className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                                              <input
+                                                type="checkbox"
+                                                checked={editingTopic.isActive}
+                                                onChange={(e) => setEditingTopic({...editingTopic, isActive: e.target.checked})}
+                                                className="rounded"
+                                              />
+                                              Active
+                                            </label>
+                                          </div>
+                                          <button
+                                            onClick={() => handleUpdateTopic(
+                                              editingTopic.subjectId,
+                                              editingTopic.topicId,
+                                              {
+                                                name: editingTopic.name,
+                                                description: editingTopic.description,
+                                                order: editingTopic.order,
+                                                isActive: editingTopic.isActive
+                                              }
+                                            )}
+                                            className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
+                                          >
+                                            <FaSave className="h-3 w-3" />
+                                          </button>
+                                          <button
+                                            onClick={() => setEditingTopic(null)}
+                                            className="px-2 py-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded text-xs font-medium transition-colors"
+                                          >
+                                            <FaTimesCircle className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                              <div className="h-1.5 w-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                                              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 break-words">
+                                                {topic.name}
+                                              </p>
+                                              {!topic.isActive && (
+                                                <span className="text-xs px-1.5 py-0.5 bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 rounded">
+                                                  Inactive
+                                                </span>
+                                              )}
+                                            </div>
+                                            {topic.description && (
+                                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 break-words ml-4">
+                                                {topic.description}
+                                              </p>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-1 flex-shrink-0">
+                                            <button
+                                              onClick={() => startEditTopic(subject._id, topic)}
+                                              className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded transition-colors"
+                                            >
+                                              <FaEdit className="h-3 w-3" />
+                                            </button>
+                                            <button
+                                              onClick={() => handleDeleteTopic(subject._id, topic._id)}
+                                              className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
+                                            >
+                                              <FaTrash className="h-3 w-3" />
+                                            </button>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
-                      <button
-                        onClick={() => handleEdit(subject)}
-                        className="p-1.5 sm:p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-                        title="Edit Subject"
-                      >
-                        <FaEdit size={14} className="sm:w-4 sm:h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(subject._id)}
-                        className="p-1.5 sm:p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                        title="Delete Subject"
-                      >
-                        <FaTrash size={14} className="sm:w-4 sm:h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -645,7 +910,7 @@ const AdminSubjects = () => {
                   <option value="">Select subject</option>
                   {subjects.map((s) => (
                     <option key={s._id} value={s._id}>
-                      {s.name}
+                      {s.name} ({s.topics?.length || 0} topics)
                     </option>
                   ))}
                 </select>
@@ -729,6 +994,9 @@ const AdminSubjects = () => {
                           <span className="text-blue-600 dark:text-blue-400 font-medium text-xs sm:text-sm break-words max-w-[120px] sm:max-w-none block">
                             {m.subjectId?.name}
                           </span>
+                          <span className="text-xs text-gray-400">
+                            {m.subjectId?.topics?.length || 0} topics
+                          </span>
                         </td>
                         <td className="px-3 sm:px-4 py-2 sm:py-3 text-gray-600 dark:text-gray-300 text-xs sm:text-sm hidden sm:table-cell whitespace-nowrap">
                           {new Date(m.expiresAt).toLocaleDateString()}
@@ -783,7 +1051,7 @@ const AdminSubjects = () => {
         </>
       )}
 
-      {/* Edit Modal */}
+      {/* Edit Modal - Updated with topic count display */}
       {editing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-[calc(100%-1.5rem)] sm:max-w-md relative shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
@@ -792,9 +1060,16 @@ const AdminSubjects = () => {
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                   <FaEdit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
                 </div>
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 truncate">
-                  Edit Subject
-                </h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 truncate">
+                    Edit Subject
+                  </h3>
+                  {editing.topics && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {editing.topics.length} topics currently
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => setEditing(null)}
