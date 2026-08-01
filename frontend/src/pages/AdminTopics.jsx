@@ -1,4 +1,4 @@
-// pages/AdminTopics.jsx - COMPLETE FIXED VERSION
+// pages/AdminTopics.jsx - COMPLETE FIXED WITH ADD TOPIC FUNCTIONALITY
 import React, { useState, useEffect } from "react";
 import {
   Plus,
@@ -56,7 +56,6 @@ const AdminTopics = () => {
     
     fetchPrograms();
 
-    // Socket.IO listeners for real-time updates
     if (newSocket) {
       newSocket.on("program:created", () => fetchPrograms());
       newSocket.on("program:updated", () => fetchPrograms());
@@ -80,6 +79,13 @@ const AdminTopics = () => {
       });
       newSocket.on("subject:deleted", () => {
         if (selectedCourse) fetchSubjects(selectedCourse);
+      });
+      
+      // Listen for topic updates
+      newSocket.on("subject:updated", (updatedSubject) => {
+        if (selectedSubject && updatedSubject._id === selectedSubject) {
+          fetchTopics(selectedSubject);
+        }
       });
     }
 
@@ -228,6 +234,11 @@ const AdminTopics = () => {
       return;
     }
 
+    if (!selectedSubject) {
+      toast.error("Please select a subject first");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       if (editingTopic) {
@@ -294,6 +305,7 @@ const AdminTopics = () => {
       ]);
       
       fetchTopics(selectedSubject);
+      toast.success("Topics reordered successfully!");
     } catch (error) {
       console.error("Error reordering topics:", error);
       toast.error("Failed to reorder topics");
@@ -347,6 +359,7 @@ const AdminTopics = () => {
               if (selectedSubject) fetchTopics(selectedSubject);
             }}
             className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            title="Refresh"
           >
             <RefreshCw className="h-5 w-5" />
           </button>
@@ -496,7 +509,7 @@ const AdminTopics = () => {
             <FolderTree className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">No Topics Yet</h3>
             <p className="text-gray-500 dark:text-gray-400 mt-1">
-              Click 'Add Topic' to create the first topic for this subject
+              Click the <span className="font-semibold text-blue-600">"Add Topic"</span> button above to create the first topic for this subject
             </p>
           </div>
         ) : (
@@ -620,7 +633,7 @@ const AdminTopics = () => {
                       {editingTopic ? "Edit Topic" : "New Topic"}
                     </h3>
                     <p className="text-white/70 text-sm">
-                      {editingTopic ? "Modify topic details" : "Add a new topic to the subject"}
+                      {editingTopic ? "Modify topic details" : `Add to: ${selectedSubjectName}`}
                     </p>
                   </div>
                 </div>
