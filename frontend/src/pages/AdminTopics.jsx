@@ -18,17 +18,17 @@ import {
   ArrowUp,
   ArrowDown
 } from "lucide-react";
-import { toast } from "react-toastify";
-import axios from "axios";
-import { useAuth } from "../context/AuthContext";
+import { toast } from "react-hot-toast";
+import API from "../api/axios";
+import initializeSocket from "../config/socket";
 
 const AdminTopics = () => {
-  const { token } = useAuth();
+  const [socket, setSocket] = useState(null);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState("list");
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Hierarchy state - ALWAYS initialize as empty arrays
+  // Hierarchy state
   const [programs, setPrograms] = useState([]);
   const [courses, setCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -49,12 +49,56 @@ const AdminTopics = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-  // Fetch programs on mount
+  // ================= SOCKET.IO SETUP =================
   useEffect(() => {
+    const newSocket = initializeSocket();
+    setSocket(newSocket);
+    
     fetchPrograms();
+
+    // Socket.IO listeners for real-time updates
+    if (newSocket) {
+      newSocket.on("program:created", () => fetchPrograms());
+      newSocket.on("program:updated", () => fetchPrograms());
+      newSocket.on("program:deleted", () => fetchPrograms());
+      
+      newSocket.on("course:created", () => {
+        if (selectedProgram) fetchCourses(selectedProgram);
+      });
+      newSocket.on("course:updated", () => {
+        if (selectedProgram) fetchCourses(selectedProgram);
+      });
+      newSocket.on("course:deleted", () => {
+        if (selectedProgram) fetchCourses(selectedProgram);
+      });
+      
+      newSocket.on("subject:created", () => {
+        if (selectedCourse) fetchSubjects(selectedCourse);
+      });
+      newSocket.on("subject:updated", () => {
+        if (selectedCourse) fetchSubjects(selectedCourse);
+      });
+      newSocket.on("subject:deleted", () => {
+        if (selectedCourse) fetchSubjects(selectedCourse);
+      });
+    }
+
+    return () => {
+      if (newSocket) {
+        newSocket.off("program:created");
+        newSocket.off("program:updated");
+        newSocket.off("program:deleted");
+        newSocket.off("course:created");
+        newSocket.off("course:updated");
+        newSocket.off("course:deleted");
+        newSocket.off("subject:created");
+        newSocket.off("subject:updated");
+        newSocket.off("subject:deleted");
+      }
+    };
   }, []);
 
-  // Fetch courses when program changes
+  // Re-fetch when selection changes
   useEffect(() => {
     if (selectedProgram) {
       fetchCourses(selectedProgram);
@@ -69,7 +113,6 @@ const AdminTopics = () => {
     }
   }, [selectedProgram]);
 
-  // Fetch subjects when course changes
   useEffect(() => {
     if (selectedCourse) {
       fetchSubjects(selectedCourse);
@@ -82,7 +125,6 @@ const AdminTopics = () => {
     }
   }, [selectedCourse]);
 
-  // Fetch topics when subject changes
   useEffect(() => {
     if (selectedSubject) {
       fetchTopics(selectedSubject);
@@ -91,31 +133,13 @@ const AdminTopics = () => {
     }
   }, [selectedSubject]);
 
-  // ==================== API CALLS WITH SAFETY CHECKS ====================
+  // ================= API CALLS =================
 
   const fetchPrograms = async () => {
     try {
-      const res = await axios.get("/api/programs", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // SAFETY: Ensure we always set an array
-      const data = res.data;
-      if (Array.isArray(data)) {
-        setPrograms(data);
-      } else if (data && typeof data === 'object') {
-        // If it's an object with a data property (common pattern)
-        if (Array.isArray(data.data)) {
-          setPrograms(data.data);
-        } else if (Array.isArray(data.programs)) {
-          setPrograms(data.programs);
-        } else {
-          // If it's something else, log it and set empty array
-          console.warn("Unexpected programs response format:", data);
-          setPrograms([]);
-        }
-      } else {
-        setPrograms([]);
-      }
+      const res = await API.get("/programs");
+      const data = res.data || [];
+      setPrograms(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching programs:", error);
       setPrograms([]);
@@ -125,25 +149,9 @@ const AdminTopics = () => {
 
   const fetchCourses = async (programId) => {
     try {
-      const res = await axios.get(`/api/courses/program/${programId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // SAFETY: Ensure we always set an array
-      const data = res.data;
-      if (Array.isArray(data)) {
-        setCourses(data);
-      } else if (data && typeof data === 'object') {
-        if (Array.isArray(data.data)) {
-          setCourses(data.data);
-        } else if (Array.isArray(data.courses)) {
-          setCourses(data.courses);
-        } else {
-          console.warn("Unexpected courses response format:", data);
-          setCourses([]);
-        }
-      } else {
-        setCourses([]);
-      }
+      const res = await API.get(`/courses/program/${programId}`);
+      const data = res.data || [];
+      setCourses(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching courses:", error);
       setCourses([]);
@@ -153,25 +161,9 @@ const AdminTopics = () => {
 
   const fetchSubjects = async (courseId) => {
     try {
-      const res = await axios.get(`/api/subjects?course=${courseId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // SAFETY: Ensure we always set an array
-      const data = res.data;
-      if (Array.isArray(data)) {
-        setSubjects(data);
-      } else if (data && typeof data === 'object') {
-        if (Array.isArray(data.data)) {
-          setSubjects(data.data);
-        } else if (Array.isArray(data.subjects)) {
-          setSubjects(data.subjects);
-        } else {
-          console.warn("Unexpected subjects response format:", data);
-          setSubjects([]);
-        }
-      } else {
-        setSubjects([]);
-      }
+      const res = await API.get(`/subjects?course=${courseId}`);
+      const data = res.data || [];
+      setSubjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching subjects:", error);
       setSubjects([]);
@@ -182,24 +174,10 @@ const AdminTopics = () => {
   const fetchTopics = async (subjectId) => {
     setLoading(true);
     try {
-      const res = await axios.get(`/api/subjects/${subjectId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // SAFETY: Get topics from response with fallback
-      const data = res.data;
-      let topicsData = [];
-      
-      if (data && typeof data === 'object') {
-        if (Array.isArray(data.topics)) {
-          topicsData = data.topics;
-        } else if (Array.isArray(data.data)) {
-          topicsData = data.data;
-        } else if (Array.isArray(data)) {
-          topicsData = data;
-        }
-      }
-      
-      setTopics(topicsData);
+      const res = await API.get(`/subjects/${subjectId}`);
+      const data = res.data || {};
+      const topicsData = data.topics || [];
+      setTopics(Array.isArray(topicsData) ? topicsData : []);
     } catch (error) {
       console.error("Error fetching topics:", error);
       setTopics([]);
@@ -209,7 +187,7 @@ const AdminTopics = () => {
     }
   };
 
-  // ==================== HANDLER FUNCTIONS ====================
+  // ================= HANDLER FUNCTIONS =================
 
   const handleOpenModal = (topic = null) => {
     if (topic) {
@@ -254,18 +232,16 @@ const AdminTopics = () => {
     try {
       if (editingTopic) {
         // Update existing topic
-        await axios.put(
-          `/api/subjects/${selectedSubject}/topics/${editingTopic._id}`,
-          formData,
-          { headers: { Authorization: `Bearer ${token}` } }
+        await API.put(
+          `/subjects/${selectedSubject}/topics/${editingTopic._id}`,
+          formData
         );
         toast.success("Topic updated successfully!");
       } else {
         // Create new topic
-        await axios.post(
-          `/api/subjects/${selectedSubject}/topics`,
-          formData,
-          { headers: { Authorization: `Bearer ${token}` } }
+        await API.post(
+          `/subjects/${selectedSubject}/topics`,
+          formData
         );
         toast.success("Topic created successfully!");
       }
@@ -281,9 +257,8 @@ const AdminTopics = () => {
 
   const handleDeleteTopic = async (topicId) => {
     try {
-      await axios.delete(
-        `/api/subjects/${selectedSubject}/topics/${topicId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      await API.delete(
+        `/subjects/${selectedSubject}/topics/${topicId}`
       );
       toast.success("Topic deleted successfully!");
       setDeleteConfirm(null);
@@ -295,7 +270,6 @@ const AdminTopics = () => {
   };
 
   const handleReorder = async (topicId, direction) => {
-    // SAFETY: Ensure topics is an array
     if (!Array.isArray(topics) || topics.length === 0) return;
     
     const currentIndex = topics.findIndex(t => t._id === topicId);
@@ -304,22 +278,18 @@ const AdminTopics = () => {
     const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
     if (newIndex < 0 || newIndex >= topics.length) return;
 
-    // Swap orders
     const topic1 = topics[currentIndex];
     const topic2 = topics[newIndex];
     
     try {
-      // Update both topics' orders
       await Promise.all([
-        axios.put(
-          `/api/subjects/${selectedSubject}/topics/${topic1._id}`,
-          { ...topic1, order: topic2.order },
-          { headers: { Authorization: `Bearer ${token}` } }
+        API.put(
+          `/subjects/${selectedSubject}/topics/${topic1._id}`,
+          { ...topic1, order: topic2.order }
         ),
-        axios.put(
-          `/api/subjects/${selectedSubject}/topics/${topic2._id}`,
-          { ...topic2, order: topic1.order },
-          { headers: { Authorization: `Bearer ${token}` } }
+        API.put(
+          `/subjects/${selectedSubject}/topics/${topic2._id}`,
+          { ...topic2, order: topic1.order }
         )
       ]);
       
@@ -330,26 +300,23 @@ const AdminTopics = () => {
     }
   };
 
-  // ==================== SAFE DATA ACCESS ====================
+  // ================= SAFE DATA ACCESS =================
 
-  // SAFETY: Use safe array methods with fallbacks
   const safePrograms = Array.isArray(programs) ? programs : [];
   const safeCourses = Array.isArray(courses) ? courses : [];
   const safeSubjects = Array.isArray(subjects) ? subjects : [];
   const safeTopics = Array.isArray(topics) ? topics : [];
 
-  // SAFETY: Find with fallback
   const selectedProgramName = safePrograms.find(p => p._id === selectedProgram)?.name || "";
   const selectedCourseName = safeCourses.find(c => c._id === selectedCourse)?.name || "";
   const selectedSubjectName = safeSubjects.find(s => s._id === selectedSubject)?.name || "";
 
-  // SAFETY: Filter with fallback
   const filteredTopics = safeTopics.filter(topic =>
     topic.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (topic.description && topic.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // ==================== RENDER ====================
+  // ================= RENDER =================
 
   return (
     <div className="space-y-6">
@@ -367,7 +334,7 @@ const AdminTopics = () => {
           {selectedSubject && (
             <button
               onClick={() => handleOpenModal()}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors shadow-lg shadow-blue-500/25"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all shadow-lg shadow-blue-500/25"
             >
               <Plus className="h-4 w-4" />
               Add Topic
@@ -403,7 +370,7 @@ const AdminTopics = () => {
               className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             >
               <option value="">Select Program</option>
-              {safePrograms.map(program => (
+              {safePrograms.filter(p => p.isActive !== false).map(program => (
                 <option key={program._id} value={program._id}>
                   {program.name} {program.code ? `(${program.code})` : ""}
                 </option>
@@ -516,14 +483,20 @@ const AdminTopics = () => {
       {selectedSubject ? (
         loading ? (
           <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-slate-200 dark:border-slate-700 border-t-blue-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <FolderTree className="w-6 h-6 text-blue-500 animate-pulse" />
+              </div>
+            </div>
+            <p className="mt-4 text-gray-500 dark:text-gray-400 font-medium">Loading topics...</p>
           </div>
         ) : safeTopics.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
             <FolderTree className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">No Topics Yet</h3>
             <p className="text-gray-500 dark:text-gray-400 mt-1">
-              {selectedSubject ? "Click 'Add Topic' to create the first topic for this subject" : "Select a subject to view its topics"}
+              Click 'Add Topic' to create the first topic for this subject
             </p>
           </div>
         ) : (
@@ -562,6 +535,7 @@ const AdminTopics = () => {
                       onClick={() => handleReorder(topic._id, "up")}
                       disabled={index === 0}
                       className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move Up"
                     >
                       <ArrowUp className="h-4 w-4" />
                     </button>
@@ -569,18 +543,21 @@ const AdminTopics = () => {
                       onClick={() => handleReorder(topic._id, "down")}
                       disabled={index === safeTopics.length - 1}
                       className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move Down"
                     >
                       <ArrowDown className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleOpenModal(topic)}
                       className="p-1.5 text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                      title="Edit Topic"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => setDeleteConfirm(topic._id)}
                       className="p-1.5 text-red-400 hover:text-red-600 dark:hover:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                      title="Delete Topic"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -631,23 +608,35 @@ const AdminTopics = () => {
       {/* Modal for Create/Edit Topic */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                {editingTopic ? "Edit Topic" : "Create New Topic"}
-              </h2>
-              <button
-                onClick={handleCloseModal}
-                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full shadow-2xl animate-in fade-in zoom-in duration-300">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                    {editingTopic ? <Edit className="text-white text-lg" /> : <Plus className="text-white text-lg" />}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">
+                      {editingTopic ? "Edit Topic" : "New Topic"}
+                    </h3>
+                    <p className="text-white/70 text-sm">
+                      {editingTopic ? "Modify topic details" : "Add a new topic to the subject"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCloseModal}
+                  className="text-white/70 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Topic Name *
+                  Topic Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -655,7 +644,7 @@ const AdminTopics = () => {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   placeholder="Enter topic name"
-                  required
+                  autoFocus
                 />
               </div>
 
@@ -701,11 +690,11 @@ const AdminTopics = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
                     <>
@@ -722,7 +711,7 @@ const AdminTopics = () => {
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+                  className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all"
                 >
                   Cancel
                 </button>
