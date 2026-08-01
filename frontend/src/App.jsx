@@ -93,6 +93,7 @@ import NursingGames from "./pages/lecturer/NursingGames";
 import NursingGamesHub from "./pages/student/NursingGamesHub";
 import GameMatch from "./pages/student/GameMatch";
 import GameMatchResults from "./pages/student/GameMatchResults";
+import AdminTopics from "./pages/AdminTopics";
 
 function App() {
   useEffect(() => {
@@ -214,6 +215,7 @@ function App() {
             <Route path="programs" element={<AdminPrograms />} />
             <Route path="courses" element={<AdminCourses />} />
             <Route path="subjects" element={<AdminSubjects />} />
+             <Route path="topics" element={<AdminTopics />} />
             <Route path="questions" element={<AdminQuestions />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="plans" element={<AdminPlans />} />

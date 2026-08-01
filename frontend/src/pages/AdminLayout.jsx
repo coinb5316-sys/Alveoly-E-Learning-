@@ -32,7 +32,8 @@ import {
   Video,
   Newspaper,
   Edit,
-  PlusCircle
+  PlusCircle,
+  FolderTree
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationPanel from "../components/NotificationPanel";
@@ -117,6 +118,7 @@ const AdminLayout = () => {
       { to: "/admin/programs", label: "Programs", icon: BookOpen, color: "text-teal-500" },
       { to: "/admin/courses", label: "Courses", icon: Layers, color: "text-light-blue-500" },
       { to: "/admin/subjects", label: "Subjects", icon: BookOpen, color: "text-orange-500" },
+      { to: "/admin/topics", label: "Topics", icon: FolderTree, color: "text-indigo-500" }, 
       { to: "/admin/users", label: "Users", icon: Users, color: "text-cyan-500" },
       { to: "/admin/payments", label: "Revenue", icon: DollarSign, color: "text-yellow-500" },
       { to: "/admin/ai", label: "AI Manager", icon: FaRobot, color: "text-purple-500" },
