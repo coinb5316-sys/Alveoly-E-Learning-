@@ -1,19 +1,27 @@
+// middleware/accessMiddleware.js
 import Payment from "../models/Payment.js";
 import Plan from "../models/Plan.js";
 
 /**
  * ================= REQUIRE SUBJECT ACCESS =================
  * Allows access if:
+ * - User is ADMIN (bypass all checks)
  * - User has active plan that includes the subject
  * - OR user purchased the subject (and not expired)
  */
 export const requireSubjectAccess = async (req, res, next) => {
   try {
     const userId = req.user._id;
+    const userRole = req.user.role;
     const subjectId = req.params.subjectId || req.query.subjectId;
 
     if (!subjectId) {
       return res.status(400).json({ message: "Subject ID is required" });
+    }
+
+    // ✅ ADMIN BYPASS - Allow admins to access any subject
+    if (userRole === 'admin') {
+      return next();
     }
 
     const now = new Date();

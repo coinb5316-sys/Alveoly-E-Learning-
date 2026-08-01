@@ -10,6 +10,7 @@ import {
   addTopic,
   removeTopic,
   updateTopic,
+  getAdminSubjectTopics, // New function
 } from "../controllers/subjectController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import { requireSubjectAccess } from "../middleware/accessMiddleware.js";
@@ -31,8 +32,9 @@ router.put("/:id", protect, adminOnly, updateSubject);
 router.delete("/:id", protect, adminOnly, deleteSubject);
 
 /**
- * ================= TOPIC MANAGEMENT (Admin Only) =================
+ * ================= ADMIN TOPIC MANAGEMENT (Bypasses access check) =================
  */
+router.get("/admin/:subjectId/topics", protect, adminOnly, getAdminSubjectTopics);
 router.post("/:subjectId/topics", protect, adminOnly, addTopic);
 router.delete("/:subjectId/topics/:topicId", protect, adminOnly, removeTopic);
 router.put("/:subjectId/topics/:topicId", protect, adminOnly, updateTopic);

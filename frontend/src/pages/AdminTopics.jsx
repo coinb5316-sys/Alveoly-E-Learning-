@@ -189,32 +189,40 @@ const AdminTopics = () => {
     }
   };
 
-  const fetchTopics = async (subjectId) => {
-    setLoading(true);
-    try {
-      console.log("Fetching topics for subject:", subjectId);
-      const res = await API.get(`/subjects/${subjectId}`);
-      console.log("Topics response:", res.data);
-      const data = res.data || {};
-      const topicsData = data.topics || [];
-      setTopics(Array.isArray(topicsData) ? topicsData : []);
-    } catch (error) {
-      console.error("Error fetching topics:", error);
-      console.error("Error details:", error.response?.data);
-      console.error("Error status:", error.response?.status);
-      
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        toast.error("Authentication failed. Please refresh the page and try again.");
-      } else if (error.response?.status === 404) {
-        toast.error("Subject not found");
-      } else {
-        toast.error("Failed to load topics");
-      }
+  // pages/AdminTopics.jsx - Update the fetchTopics function
+
+const fetchTopics = async (subjectId) => {
+  setLoading(true);
+  try {
+    console.log("Fetching topics for subject:", subjectId);
+    // Use the admin endpoint that bypasses access checks
+    const res = await API.get(`/subjects/admin/${subjectId}/topics`);
+    console.log("Topics response:", res.data);
+    const data = res.data || {};
+    const topicsData = data.topics || [];
+    setTopics(Array.isArray(topicsData) ? topicsData : []);
+  } catch (error) {
+    console.error("Error fetching topics:", error);
+    console.error("Error details:", error.response?.data);
+    console.error("Error status:", error.response?.status);
+    
+    // Fallback: try to get topics from cached subjects
+    const subject = subjects.find(s => s._id === subjectId);
+    if (subject && subject.topics) {
+      setTopics(Array.isArray(subject.topics) ? subject.topics : []);
+      toast.success("Topics loaded from cached data");
+    } else {
       setTopics([]);
-    } finally {
-      setLoading(false);
+      if (error.response?.status === 403) {
+        toast.error("You don't have permission to view this subject's topics. Please contact an administrator.");
+      } else {
+        toast.error("Failed to load topics. Please try again.");
+      }
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ================= HANDLER FUNCTIONS =================
 

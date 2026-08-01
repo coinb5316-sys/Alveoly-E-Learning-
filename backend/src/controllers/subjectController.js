@@ -492,3 +492,37 @@ export const updateTopic = async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 };
+
+// controllers/subjectController.js - Add this new function
+
+/**
+ * ================= GET SUBJECT TOPICS FOR ADMIN (Bypasses access check) =================
+ */
+export const getAdminSubjectTopics = async (req, res) => {
+  try {
+    const { subjectId } = req.params;
+    
+    const subject = await Subject.findById(subjectId)
+      .populate("programId", "name code")
+      .populate("courseId", "name")
+      .select("+topics");
+
+    if (!subject) {
+      return res.status(404).json({ message: "Subject not found" });
+    }
+
+    // Sort topics by order
+    const sortedTopics = subject.topics ? 
+      [...subject.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
+      [];
+
+    res.json({
+      ...subject._doc,
+      topics: sortedTopics,
+      topicCount: sortedTopics.length,
+    });
+  } catch (error) {
+    console.error("Get Admin Subject Topics Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
