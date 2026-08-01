@@ -1,4 +1,4 @@
-// pages/AdminTopics.jsx - COMPLETE FIXED WITH ADD TOPIC FUNCTIONALITY
+// pages/AdminTopics.jsx - COMPLETE FIXED WITH AUTH HANDLING
 import React, { useState, useEffect } from "react";
 import {
   Plus,
@@ -148,8 +148,12 @@ const AdminTopics = () => {
       setPrograms(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching programs:", error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        toast.error("Session expired. Please login again.");
+      } else {
+        toast.error("Failed to load programs");
+      }
       setPrograms([]);
-      toast.error("Failed to load programs");
     }
   };
 
@@ -160,8 +164,12 @@ const AdminTopics = () => {
       setCourses(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching courses:", error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        toast.error("Session expired. Please login again.");
+      } else {
+        toast.error("Failed to load courses");
+      }
       setCourses([]);
-      toast.error("Failed to load courses");
     }
   };
 
@@ -172,22 +180,37 @@ const AdminTopics = () => {
       setSubjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error fetching subjects:", error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        toast.error("Session expired. Please login again.");
+      } else {
+        toast.error("Failed to load subjects");
+      }
       setSubjects([]);
-      toast.error("Failed to load subjects");
     }
   };
 
   const fetchTopics = async (subjectId) => {
     setLoading(true);
     try {
+      console.log("Fetching topics for subject:", subjectId);
       const res = await API.get(`/subjects/${subjectId}`);
+      console.log("Topics response:", res.data);
       const data = res.data || {};
       const topicsData = data.topics || [];
       setTopics(Array.isArray(topicsData) ? topicsData : []);
     } catch (error) {
       console.error("Error fetching topics:", error);
+      console.error("Error details:", error.response?.data);
+      console.error("Error status:", error.response?.status);
+      
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        toast.error("Authentication failed. Please refresh the page and try again.");
+      } else if (error.response?.status === 404) {
+        toast.error("Subject not found");
+      } else {
+        toast.error("Failed to load topics");
+      }
       setTopics([]);
-      toast.error("Failed to load topics");
     } finally {
       setLoading(false);
     }
@@ -241,6 +264,12 @@ const AdminTopics = () => {
 
     setIsSubmitting(true);
     try {
+      console.log("Saving topic:", {
+        subjectId: selectedSubject,
+        data: formData,
+        isEditing: !!editingTopic
+      });
+
       if (editingTopic) {
         // Update existing topic
         await API.put(
@@ -260,7 +289,15 @@ const AdminTopics = () => {
       fetchTopics(selectedSubject);
     } catch (error) {
       console.error("Error saving topic:", error);
-      toast.error(error.response?.data?.message || "Failed to save topic");
+      console.error("Error details:", error.response?.data);
+      
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        toast.error("Authentication failed. Please refresh and try again.");
+      } else if (error.response?.status === 404) {
+        toast.error("Subject not found. Please select a valid subject.");
+      } else {
+        toast.error(error.response?.data?.message || "Failed to save topic");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -276,7 +313,11 @@ const AdminTopics = () => {
       fetchTopics(selectedSubject);
     } catch (error) {
       console.error("Error deleting topic:", error);
-      toast.error(error.response?.data?.message || "Failed to delete topic");
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        toast.error("Authentication failed. Please refresh and try again.");
+      } else {
+        toast.error(error.response?.data?.message || "Failed to delete topic");
+      }
     }
   };
 
