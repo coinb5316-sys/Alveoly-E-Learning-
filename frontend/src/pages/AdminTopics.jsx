@@ -1,17 +1,14 @@
-// pages/AdminTopics.jsx
+// pages/AdminTopics.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from "react";
 import {
   Plus,
   Edit,
   Trash2,
   Search,
-  Filter,
   ChevronDown,
-  ChevronUp,
   Save,
   X,
   AlertCircle,
-  CheckCircle,
   BookOpen,
   Layers,
   FolderTree,
@@ -19,8 +16,7 @@ import {
   Grid,
   RefreshCw,
   ArrowUp,
-  ArrowDown,
-  GripVertical
+  ArrowDown
 } from "lucide-react";
 import { toast } from "react-toastify";
 import axios from "axios";
@@ -29,10 +25,10 @@ import { useAuth } from "../context/AuthContext";
 const AdminTopics = () => {
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState("list"); // list | grid
+  const [viewMode, setViewMode] = useState("list");
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Hierarchy state
+  // Hierarchy state - ALWAYS initialize as empty arrays
   const [programs, setPrograms] = useState([]);
   const [courses, setCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -95,14 +91,34 @@ const AdminTopics = () => {
     }
   }, [selectedSubject]);
 
+  // ==================== API CALLS WITH SAFETY CHECKS ====================
+
   const fetchPrograms = async () => {
     try {
       const res = await axios.get("/api/programs", {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setPrograms(res.data);
+      // SAFETY: Ensure we always set an array
+      const data = res.data;
+      if (Array.isArray(data)) {
+        setPrograms(data);
+      } else if (data && typeof data === 'object') {
+        // If it's an object with a data property (common pattern)
+        if (Array.isArray(data.data)) {
+          setPrograms(data.data);
+        } else if (Array.isArray(data.programs)) {
+          setPrograms(data.programs);
+        } else {
+          // If it's something else, log it and set empty array
+          console.warn("Unexpected programs response format:", data);
+          setPrograms([]);
+        }
+      } else {
+        setPrograms([]);
+      }
     } catch (error) {
       console.error("Error fetching programs:", error);
+      setPrograms([]);
       toast.error("Failed to load programs");
     }
   };
@@ -112,9 +128,25 @@ const AdminTopics = () => {
       const res = await axios.get(`/api/courses/program/${programId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setCourses(res.data);
+      // SAFETY: Ensure we always set an array
+      const data = res.data;
+      if (Array.isArray(data)) {
+        setCourses(data);
+      } else if (data && typeof data === 'object') {
+        if (Array.isArray(data.data)) {
+          setCourses(data.data);
+        } else if (Array.isArray(data.courses)) {
+          setCourses(data.courses);
+        } else {
+          console.warn("Unexpected courses response format:", data);
+          setCourses([]);
+        }
+      } else {
+        setCourses([]);
+      }
     } catch (error) {
       console.error("Error fetching courses:", error);
+      setCourses([]);
       toast.error("Failed to load courses");
     }
   };
@@ -124,9 +156,25 @@ const AdminTopics = () => {
       const res = await axios.get(`/api/subjects?course=${courseId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setSubjects(res.data);
+      // SAFETY: Ensure we always set an array
+      const data = res.data;
+      if (Array.isArray(data)) {
+        setSubjects(data);
+      } else if (data && typeof data === 'object') {
+        if (Array.isArray(data.data)) {
+          setSubjects(data.data);
+        } else if (Array.isArray(data.subjects)) {
+          setSubjects(data.subjects);
+        } else {
+          console.warn("Unexpected subjects response format:", data);
+          setSubjects([]);
+        }
+      } else {
+        setSubjects([]);
+      }
     } catch (error) {
       console.error("Error fetching subjects:", error);
+      setSubjects([]);
       toast.error("Failed to load subjects");
     }
   };
@@ -137,20 +185,37 @@ const AdminTopics = () => {
       const res = await axios.get(`/api/subjects/${subjectId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setTopics(res.data.topics || []);
+      // SAFETY: Get topics from response with fallback
+      const data = res.data;
+      let topicsData = [];
+      
+      if (data && typeof data === 'object') {
+        if (Array.isArray(data.topics)) {
+          topicsData = data.topics;
+        } else if (Array.isArray(data.data)) {
+          topicsData = data.data;
+        } else if (Array.isArray(data)) {
+          topicsData = data;
+        }
+      }
+      
+      setTopics(topicsData);
     } catch (error) {
       console.error("Error fetching topics:", error);
+      setTopics([]);
       toast.error("Failed to load topics");
     } finally {
       setLoading(false);
     }
   };
 
+  // ==================== HANDLER FUNCTIONS ====================
+
   const handleOpenModal = (topic = null) => {
     if (topic) {
       setEditingTopic(topic);
       setFormData({
-        name: topic.name,
+        name: topic.name || "",
         description: topic.description || "",
         order: topic.order || 0,
         isActive: topic.isActive !== undefined ? topic.isActive : true
@@ -160,7 +225,7 @@ const AdminTopics = () => {
       setFormData({
         name: "",
         description: "",
-        order: topics.length,
+        order: Array.isArray(topics) ? topics.length : 0,
         isActive: true
       });
     }
@@ -230,9 +295,13 @@ const AdminTopics = () => {
   };
 
   const handleReorder = async (topicId, direction) => {
-    const currentIndex = topics.findIndex(t => t._id === topicId);
-    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    // SAFETY: Ensure topics is an array
+    if (!Array.isArray(topics) || topics.length === 0) return;
     
+    const currentIndex = topics.findIndex(t => t._id === topicId);
+    if (currentIndex === -1) return;
+    
+    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
     if (newIndex < 0 || newIndex >= topics.length) return;
 
     // Swap orders
@@ -261,15 +330,26 @@ const AdminTopics = () => {
     }
   };
 
-  const filteredTopics = topics.filter(topic =>
-    topic.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  // ==================== SAFE DATA ACCESS ====================
+
+  // SAFETY: Use safe array methods with fallbacks
+  const safePrograms = Array.isArray(programs) ? programs : [];
+  const safeCourses = Array.isArray(courses) ? courses : [];
+  const safeSubjects = Array.isArray(subjects) ? subjects : [];
+  const safeTopics = Array.isArray(topics) ? topics : [];
+
+  // SAFETY: Find with fallback
+  const selectedProgramName = safePrograms.find(p => p._id === selectedProgram)?.name || "";
+  const selectedCourseName = safeCourses.find(c => c._id === selectedCourse)?.name || "";
+  const selectedSubjectName = safeSubjects.find(s => s._id === selectedSubject)?.name || "";
+
+  // SAFETY: Filter with fallback
+  const filteredTopics = safeTopics.filter(topic =>
+    topic.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (topic.description && topic.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Get current selected names for display
-  const selectedProgramName = programs.find(p => p._id === selectedProgram)?.name || "";
-  const selectedCourseName = courses.find(c => c._id === selectedCourse)?.name || "";
-  const selectedSubjectName = subjects.find(s => s._id === selectedSubject)?.name || "";
+  // ==================== RENDER ====================
 
   return (
     <div className="space-y-6">
@@ -323,7 +403,7 @@ const AdminTopics = () => {
               className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             >
               <option value="">Select Program</option>
-              {programs.map(program => (
+              {safePrograms.map(program => (
                 <option key={program._id} value={program._id}>
                   {program.name} {program.code ? `(${program.code})` : ""}
                 </option>
@@ -346,7 +426,7 @@ const AdminTopics = () => {
               className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="">Select Course</option>
-              {courses.map(course => (
+              {safeCourses.map(course => (
                 <option key={course._id} value={course._id}>
                   {course.name}
                 </option>
@@ -369,7 +449,7 @@ const AdminTopics = () => {
               className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="">Select Subject</option>
-              {subjects.map(subject => (
+              {safeSubjects.map(subject => (
                 <option key={subject._id} value={subject._id}>
                   {subject.name} {subject.isPaid ? "💰" : ""}
                 </option>
@@ -388,7 +468,7 @@ const AdminTopics = () => {
               <span className="text-blue-600 dark:text-blue-400">{selectedCourseName}</span>
               <ChevronDown className="h-4 w-4 text-gray-400" />
               <span className="font-semibold text-blue-700 dark:text-blue-300">{selectedSubjectName}</span>
-              <span className="ml-2 text-gray-400">({topics.length} topics)</span>
+              <span className="ml-2 text-gray-400">({safeTopics.length} topics)</span>
             </div>
           </div>
         )}
@@ -438,7 +518,7 @@ const AdminTopics = () => {
           <div className="flex justify-center items-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           </div>
-        ) : topics.length === 0 ? (
+        ) : safeTopics.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
             <FolderTree className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">No Topics Yet</h3>
@@ -487,7 +567,7 @@ const AdminTopics = () => {
                     </button>
                     <button
                       onClick={() => handleReorder(topic._id, "down")}
-                      disabled={index === topics.length - 1}
+                      disabled={index === safeTopics.length - 1}
                       className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <ArrowDown className="h-4 w-4" />
