@@ -361,10 +361,6 @@ const AboutPage = () => {
             <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
               <FaStar className="text-white text-sm md:text-base" />
             </div>
-            <div className="text-left">
-              <h4 className="text-white font-semibold text-sm md:text-base">— Prof. Emmanuel Adusei</h4>
-              <p className="text-gray-300 text-xs md:text-sm">Vice Chancellor</p>
-            </div>
           </div>
         </div>
       </section>

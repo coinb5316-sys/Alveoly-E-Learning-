@@ -315,20 +315,6 @@ const HomePage = () => {
         </motion.div>
       </header>
 
-      {/* Trusted By Section */}
-      <section className="py-8 md:py-12 bg-gray-50 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 md:px-6">
-          <p className="text-center text-gray-500 text-xs md:text-sm uppercase tracking-wide mb-6 md:mb-8">
-            Trusted by leading institutions worldwide
-          </p>
-          <div className="flex flex-wrap justify-center items-center gap-4 md:gap-8 lg:gap-16 opacity-50">
-            {["WHO", "UNESCO", "Ministry of Health", "Nursing Council", "Medical Association"].map((org, i) => (
-              <span key={i} className="text-gray-600 font-semibold text-sm md:text-lg">{org}</span>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Features Section */}
       <motion.section 
         className="py-12 md:py-20 px-4 md:px-6 bg-white"
