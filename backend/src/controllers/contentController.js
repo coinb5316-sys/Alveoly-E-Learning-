@@ -1,4 +1,4 @@
-// controllers/contentController.js - COMPLETE FIXED VERSION with file size validation & Lecturer fields
+// controllers/contentController.js
 import Content from "../models/Content.js";
 import cloudinary from "../../config/cloudinary.js";
 import streamifier from "streamifier";
@@ -13,27 +13,43 @@ export const uploadContent = async (req, res) => {
       type, 
       courseId, 
       subjectId, 
+      topicId,  // IMPORTANT: Added topicId
       isPaid, 
       price, 
       quizTimerMinutes, 
       quizPassMark 
     } = req.body;
 
-    console.log("📝 Received upload request:", { title, type, subjectId, courseId });
+    console.log("📝 Received upload request:", { 
+      title, 
+      type, 
+      subjectId, 
+      topicId,  // Log topicId
+      courseId 
+    });
 
     // VALIDATION
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
     }
 
+    // Helper to extract ID from object or string
+    const extractId = (value) => {
+      if (!value) return null;
+      if (typeof value === 'string') return value;
+      if (typeof value === 'object' && value._id) return value._id;
+      return value;
+    };
+
     // For quiz type, skip Cloudinary entirely - just save to database
     if (type === "quiz") {
       console.log("📝 Creating quiz content (no file upload)");
       
-      // If subjectId is provided but courseId isn't, get courseId from subject
       let finalCourseId = courseId;
       let finalSubjectId = subjectId;
+      let finalTopicId = topicId;  // Keep topicId
       
+      // If subjectId is provided but courseId isn't, get courseId from subject
       if (subjectId && !courseId) {
         const Subject = mongoose.model("Subject");
         const subject = await Subject.findById(subjectId);
@@ -43,17 +59,22 @@ export const uploadContent = async (req, res) => {
         }
       }
 
+      // Extract IDs
+      const extractedSubjectId = extractId(finalSubjectId);
+      const extractedCourseId = extractId(finalCourseId);
+      const extractedTopicId = extractId(finalTopicId);
+
       // Save quiz to DB without any file uploads
       const contentData = {
         title,
         type: "quiz",
-        courseId: finalCourseId,
-        subjectId: finalSubjectId,
+        courseId: extractedCourseId,
+        subjectId: extractedSubjectId,
+        topicId: extractedTopicId,  // IMPORTANT: Save topicId
         isPaid: isPaid === "true" || isPaid === true,
         price: Number(price) || 0,
         quizTimerMinutes: Number(quizTimerMinutes) || 0,
         quizPassMark: Number(quizPassMark) || 70,
-        // ================= LECTURER FIELDS =================
         lecturerId: req.user?._id || null,
         lecturerName: req.user?.name || "Admin",
       };
@@ -61,8 +82,14 @@ export const uploadContent = async (req, res) => {
       console.log("💾 Saving quiz to database:", contentData);
       
       const content = await Content.create(contentData);
-      io.emit("content:created", content);
-      return res.status(201).json(content);
+      
+      // Populate the response
+      const populatedContent = await Content.findById(content._id)
+        .populate("subjectId", "name")
+        .populate("courseId", "name");
+
+      io.emit("content:created", populatedContent);
+      return res.status(201).json(populatedContent);
     }
 
     // For non-quiz types, check if Cloudinary is configured
@@ -83,22 +110,12 @@ export const uploadContent = async (req, res) => {
     }
 
     // ================= FILE SIZE VALIDATION =================
-    const maxFileSize = 100 * 1024 * 1024; // 100MB max
+    const maxFileSize = 100 * 1024 * 1024;
     if (mainFile.size > maxFileSize) {
       const fileSizeMB = (mainFile.size / (1024 * 1024)).toFixed(2);
       return res.status(400).json({ 
-        message: `File too large! Maximum size is 100MB. Your file is ${fileSizeMB}MB.`,
-        details: `Please compress your ${type} file or use a smaller file.`
+        message: `File too large! Maximum size is 100MB. Your file is ${fileSizeMB}MB.`
       });
-    }
-
-    // Type-specific recommendations
-    if (type === "video" && mainFile.size > 50 * 1024 * 1024) {
-      console.warn(`⚠️ Large video file: ${(mainFile.size / (1024 * 1024)).toFixed(2)}MB - Consider optimizing for faster upload`);
-    }
-    
-    if (type === "pdf" && mainFile.size > 20 * 1024 * 1024) {
-      console.warn(`⚠️ Large PDF file: ${(mainFile.size / (1024 * 1024)).toFixed(2)}MB - Consider splitting or compressing`);
     }
 
     console.log(`📁 Uploading ${type} file: ${mainFile.originalname} (${(mainFile.size / (1024 * 1024)).toFixed(2)}MB)`);
@@ -109,7 +126,7 @@ export const uploadContent = async (req, res) => {
           {
             resource_type: fileType === "pdf" ? "raw" : "auto",
             folder,
-            timeout: 120000, // 2 minute timeout for large files
+            timeout: 120000,
           },
           (err, result) => {
             if (err) {
@@ -127,7 +144,6 @@ export const uploadContent = async (req, res) => {
     let thumbUpload = null;
 
     try {
-      // Upload main content
       mainUpload = await uploadToCloudinary(mainFile, type);
       console.log("✅ Main file uploaded:", mainUpload.secure_url);
     } catch (uploadError) {
@@ -141,7 +157,6 @@ export const uploadContent = async (req, res) => {
     // Generate or upload thumbnail
     try {
       if (thumbFile) {
-        // Validate thumbnail size (max 5MB)
         if (thumbFile.size > 5 * 1024 * 1024) {
           console.warn(`⚠️ Thumbnail large: ${(thumbFile.size / (1024 * 1024)).toFixed(2)}MB`);
         }
@@ -176,12 +191,12 @@ export const uploadContent = async (req, res) => {
       }
     } catch (thumbError) {
       console.warn("Thumbnail generation warning:", thumbError.message);
-      // Continue without thumbnail
     }
 
-    // If subjectId is provided but courseId isn't, get courseId from subject
+    // Get course from subject if not provided
     let finalCourseId = courseId;
     let finalSubjectId = subjectId;
+    let finalTopicId = topicId;
     
     if (subjectId && !courseId) {
       try {
@@ -195,19 +210,24 @@ export const uploadContent = async (req, res) => {
       }
     }
 
-    // Save to DB with Lecturer fields
+    // Extract IDs
+    const extractedSubjectId = extractId(finalSubjectId);
+    const extractedCourseId = extractId(finalCourseId);
+    const extractedTopicId = extractId(finalTopicId);
+
+    // Save to DB
     const contentData = {
       title,
       type,
-      courseId: finalCourseId,
-      subjectId: finalSubjectId,
+      courseId: extractedCourseId,
+      subjectId: extractedSubjectId,
+      topicId: extractedTopicId,  // IMPORTANT: Save topicId
       isPaid: isPaid === "true" || isPaid === true,
       price: Number(price) || 0,
       fileUrl: mainUpload?.secure_url,
       publicId: mainUpload?.public_id,
       thumbnailUrl: thumbUpload?.secure_url || "",
       thumbnailPublicId: thumbUpload?.public_id || "",
-      // ================= LECTURER FIELDS =================
       lecturerId: req.user?._id || null,
       lecturerName: req.user?.name || "Admin",
     };
@@ -216,8 +236,13 @@ export const uploadContent = async (req, res) => {
     
     const content = await Content.create(contentData);
 
-    io.emit("content:created", content);
-    res.status(201).json(content);
+    // Populate the response
+    const populatedContent = await Content.findById(content._id)
+      .populate("subjectId", "name")
+      .populate("courseId", "name");
+
+    io.emit("content:created", populatedContent);
+    res.status(201).json(populatedContent);
   } catch (err) {
     console.error("🔥 Upload failed:", err);
     res.status(500).json({ 
@@ -227,15 +252,16 @@ export const uploadContent = async (req, res) => {
   }
 };
 
-// ================= GET CONTENTS (with optional lecturer filter) =================
+// ================= GET CONTENTS =================
 export const getContents = async (req, res) => {
   try {
-    const { subjectId, courseId, lecturerId } = req.query;
+    const { subjectId, courseId, lecturerId, topicId } = req.query;
 
     const filter = {};
     if (subjectId) filter.subjectId = subjectId;
     if (courseId) filter.courseId = courseId;
     if (lecturerId) filter.lecturerId = lecturerId;
+    if (topicId) filter.topicId = topicId;  // Add topicId filter
 
     const contents = await Content.find(filter)
       .populate("subjectId", "name")
@@ -253,12 +279,10 @@ export const getContents = async (req, res) => {
 // ================= GET LECTURER'S OWN CONTENTS =================
 export const getLecturerContents = async (req, res) => {
   try {
-    // Only lecturers can access this
     if (req.user.role !== "lecturer" && req.user.role !== "admin") {
       return res.status(403).json({ message: "Access denied. Lecturer only." });
     }
     
-    // Get contents where the lecturerId matches the logged-in user
     const contents = await Content.find({ lecturerId: req.user._id })
       .populate("subjectId", "name")
       .populate("courseId", "name")
@@ -280,12 +304,10 @@ export const deleteContent = async (req, res) => {
       return res.status(404).json({ message: "Content not found" });
     }
 
-    // Check if user is admin or the content owner (lecturer)
     if (req.user.role !== "admin" && content.lecturerId?.toString() !== req.user._id?.toString()) {
       return res.status(403).json({ message: "You can only delete your own content" });
     }
 
-    // DELETE MAIN FILE (only if not a quiz and has publicId)
     if (content.publicId && content.type !== "quiz") {
       try {
         await cloudinary.uploader.destroy(content.publicId, {
@@ -297,7 +319,6 @@ export const deleteContent = async (req, res) => {
       }
     }
 
-    // DELETE THUMBNAIL
     if (content.thumbnailPublicId) {
       try {
         await cloudinary.uploader.destroy(content.thumbnailPublicId, {
@@ -322,17 +343,15 @@ export const deleteContent = async (req, res) => {
 };
 
 // ================= UPDATE CONTENT =================
-// ================= UPDATE CONTENT =================
 export const updateContent = async (req, res) => {
   try {
-    const { title, isPaid, price, quizTimerMinutes, quizPassMark } = req.body;
+    const { title, isPaid, price, quizTimerMinutes, quizPassMark, topicId } = req.body;
 
     const content = await Content.findById(req.params.id);
     if (!content) {
       return res.status(404).json({ message: "Content not found" });
     }
 
-    // Check if user is admin or the content owner (lecturer)
     if (req.user.role !== "admin" && content.lecturerId?.toString() !== req.user._id?.toString()) {
       return res.status(403).json({ message: "You can only edit your own content" });
     }
@@ -344,61 +363,55 @@ export const updateContent = async (req, res) => {
       if (price !== undefined) content.price = Number(price) || 0;
       if (quizTimerMinutes !== undefined) content.quizTimerMinutes = Number(quizTimerMinutes) || 0;
       if (quizPassMark !== undefined) content.quizPassMark = Number(quizPassMark) || 70;
+      if (topicId !== undefined) content.topicId = topicId || null;  // Update topicId
 
       const updated = await content.save();
-      io.emit("content:updated", updated);
-      return res.json(updated);
+      const populatedContent = await Content.findById(updated._id)
+        .populate("subjectId", "name")
+        .populate("courseId", "name");
+      
+      io.emit("content:updated", populatedContent);
+      return res.json(populatedContent);
     }
 
-    // Helper function to get correct Cloudinary resource type
-    const getCloudinaryResourceType = (fileType) => {
-      if (fileType === "video") return "video";
-      if (fileType === "pdf") return "raw";
-      if (fileType === "image") return "image";
-      return "raw";
-    };
-
-    // Upload to Cloudinary with correct resource type
+    // Helper function for Cloudinary upload
     const uploadToCloudinary = (file, fileType, folder = "alveoly-content") =>
-  new Promise((resolve, reject) => {
-    const resourceType = getCloudinaryResourceType(fileType);
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        resource_type: resourceType,
-        folder,
-        timeout: 120000,
-      },
-      (err, result) => {
-        if (err) {
-          console.error("Cloudinary upload error:", err);
-          reject(err);
-        } else {
-          resolve(result);
-        }
-      }
-    );
-    streamifier.createReadStream(file.buffer).pipe(stream);
-  });
+      new Promise((resolve, reject) => {
+        const resourceType = fileType === "pdf" ? "raw" : "auto";
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: resourceType,
+            folder,
+            timeout: 120000,
+          },
+          (err, result) => {
+            if (err) {
+              console.error("Cloudinary upload error:", err);
+              reject(err);
+            } else {
+              resolve(result);
+            }
+          }
+        );
+        streamifier.createReadStream(file.buffer).pipe(stream);
+      });
+      
     const newFile = req.files?.file?.[0] || null;
     const newThumb = req.files?.thumbnail?.[0] || null;
 
-    // UPDATE MAIN FILE with size validation
+    // UPDATE MAIN FILE
     if (newFile) {
-      // Validate file size (max 100MB)
       if (newFile.size > 100 * 1024 * 1024) {
         return res.status(400).json({ 
-          message: `File too large! Maximum size is 100MB. Your file is ${(newFile.size / (1024 * 1024)).toFixed(2)}MB` 
+          message: `File too large! Maximum size is 100MB.` 
         });
       }
       
-      // Delete old file if exists
       if (content.publicId) {
         try {
-          const oldResourceType = getCloudinaryResourceType(content.type);
           await cloudinary.uploader.destroy(content.publicId, {
-            resource_type: oldResourceType,
+            resource_type: content.type === "video" ? "video" : "auto",
           });
-          console.log(`✅ Deleted old file: ${content.publicId}`);
         } catch (err) {
           console.error("Failed to delete old file:", err);
         }
@@ -409,11 +422,11 @@ export const updateContent = async (req, res) => {
       content.publicId = uploaded.public_id;
     }
 
-    // UPDATE THUMBNAIL with size validation
+    // UPDATE THUMBNAIL
     if (newThumb) {
       if (newThumb.size > 5 * 1024 * 1024) {
         return res.status(400).json({ 
-          message: `Thumbnail too large! Maximum size is 5MB. Your file is ${(newThumb.size / (1024 * 1024)).toFixed(2)}MB` 
+          message: `Thumbnail too large! Maximum size is 5MB.` 
         });
       }
       
@@ -422,7 +435,6 @@ export const updateContent = async (req, res) => {
           await cloudinary.uploader.destroy(content.thumbnailPublicId, {
             resource_type: "image",
           });
-          console.log(`✅ Deleted old thumbnail: ${content.thumbnailPublicId}`);
         } catch (err) {
           console.error("Failed to delete old thumbnail:", err);
         }
@@ -437,20 +449,23 @@ export const updateContent = async (req, res) => {
     if (title !== undefined) content.title = title;
     if (isPaid !== undefined) content.isPaid = isPaid === "true" || isPaid === true;
     if (price !== undefined) content.price = Number(price) || 0;
+    if (topicId !== undefined) content.topicId = topicId || null;  // Update topicId
 
     const updated = await content.save();
+    const populatedContent = await Content.findById(updated._id)
+      .populate("subjectId", "name")
+      .populate("courseId", "name");
 
-    io.emit("content:updated", updated);
+    io.emit("content:updated", populatedContent);
 
-    res.json(updated);
+    res.json(populatedContent);
   } catch (err) {
     console.error("UPDATE ERROR:", err.message);
-    console.error(err);
     res.status(500).json({ message: err.message });
   }
 };
 
-// Add this to controllers/contentController.js
+// ================= GET CONTENT BY ID =================
 export const getContentById = async (req, res) => {
   try {
     const content = await Content.findById(req.params.id)
@@ -462,7 +477,6 @@ export const getContentById = async (req, res) => {
       return res.status(404).json({ message: "Content not found" });
     }
     
-    // Check if user is admin or content owner
     if (req.user.role !== "admin" && content.lecturerId?._id?.toString() !== req.user._id?.toString()) {
       return res.status(403).json({ message: "Access denied" });
     }

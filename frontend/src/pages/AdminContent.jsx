@@ -421,6 +421,121 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
   );
 };
 
+// ================= CONTENT CARD COMPONENT (moved outside) =================
+const ContentCard = ({ 
+  content, 
+  onView, 
+  onEdit, 
+  onDelete, 
+  getTypeIcon, 
+  getTypeColor, 
+  getTopicName,
+  onAddQuiz 
+}) => {
+  const subjectId = content.subjectId?._id || content.subjectId;
+  
+  return (
+    <div
+      onClick={() => onView(content)}
+      className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+    >
+      {/* Thumbnail */}
+      <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
+        {content.type === "quiz" ? (
+          <div className="w-full h-full flex flex-col items-center justify-center">
+            <HelpCircle className="text-white/80 text-5xl mb-2" />
+            <span className="text-white font-medium text-sm">Quiz Content</span>
+          </div>
+        ) : (
+          <>
+            <img
+              src={content.thumbnailUrl || "/api/placeholder/400/200"}
+              className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+              alt={content.title}
+              onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
+            />
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Eye className="h-12 w-12 text-white" />
+            </div>
+          </>
+        )}
+
+        {/* Type Badge */}
+        <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
+          {getTypeIcon(content.type)}
+          <span className="capitalize">{content.type}</span>
+        </div>
+
+        {/* Price Badge */}
+        {content.isPaid && (
+          <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
+            <DollarSign className="h-3 w-3" />
+            ₵{content.price}
+          </div>
+        )}
+      </div>
+
+      {/* Content Info */}
+      <div className="p-4">
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          {content.title}
+        </h3>
+        
+        {/* Meta Info */}
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3 flex-wrap">
+          <span className="capitalize">{content.type}</span>
+          <span>•</span>
+          <span>{content.subjectId?.name || "Unlinked"}</span>
+          {content.topicId && (
+            <>
+              <span>•</span>
+              <span className="text-purple-600 dark:text-purple-400">
+                {getTopicName(subjectId, content.topicId)}
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(content);
+            }}
+            className="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+          >
+            <Edit className="h-3.5 w-3.5" />
+            Edit
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(content._id);
+            }}
+            className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
+          {content.type !== "quiz" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddQuiz(content);
+              }}
+              className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Quiz
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ================= MAIN ADMIN CONTENT COMPONENT =================
 const AdminContent = () => {
   // Data state
@@ -496,6 +611,7 @@ const AdminContent = () => {
   const fetchContents = async () => {
     try {
       const res = await axios.get("/content");
+      console.log("📚 Fetched contents:", res.data);
       setContents(res.data || []);
     } catch (err) {
       console.error("Error fetching contents:", err);
@@ -544,13 +660,6 @@ const AdminContent = () => {
     });
   };
 
-  const getContentsForCourse = (courseId) => {
-    return contents.filter(c => {
-      const contentCourseId = c.courseId?._id || c.courseId;
-      return contentCourseId === courseId;
-    });
-  };
-
   // ================= NAVIGATION ACTIONS =================
   const navigateToSubjects = () => {
     setNavigation({
@@ -580,18 +689,6 @@ const AdminContent = () => {
       subjectId: subjectId,
       topicId: topicId,
     });
-  };
-
-  const navigateBack = () => {
-    if (navigation.view === 'content') {
-      if (navigation.topicId) {
-        navigateToTopics(navigation.subjectId);
-      } else {
-        navigateToTopics(navigation.subjectId);
-      }
-    } else if (navigation.view === 'topics') {
-      navigateToSubjects();
-    }
   };
 
   // ================= FORM HANDLING =================
@@ -663,6 +760,7 @@ const AdminContent = () => {
     formData.append("subjectId", extractId(form.subjectId));
     if (form.topicId) {
       formData.append("topicId", extractId(form.topicId));
+      console.log("📌 Adding topicId to upload:", form.topicId);
     }
 
     // Get course from subject
@@ -696,6 +794,7 @@ const AdminContent = () => {
         res = await axios.post("/content/upload", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
+        console.log("✅ Upload response:", res.data);
         setContents((prev) => [res.data, ...prev]);
         toast.success("Uploaded successfully");
       }
@@ -982,6 +1081,8 @@ const AdminContent = () => {
                           onDelete={handleDelete}
                           getTypeIcon={getTypeIcon}
                           getTypeColor={getTypeColor}
+                          getTopicName={getTopicName}
+                          onAddQuiz={setSelectedLesson}
                         />
                       ))}
                     </div>
@@ -1034,6 +1135,8 @@ const AdminContent = () => {
                   onDelete={handleDelete}
                   getTypeIcon={getTypeIcon}
                   getTypeColor={getTypeColor}
+                  getTopicName={getTopicName}
+                  onAddQuiz={setSelectedLesson}
                 />
               ))}
             </div>
@@ -1162,115 +1265,12 @@ const AdminContent = () => {
                 onDelete={handleDelete}
                 getTypeIcon={getTypeIcon}
                 getTypeColor={getTypeColor}
+                getTopicName={getTopicName}
+                onAddQuiz={setSelectedLesson}
               />
             ))}
           </div>
         )}
-      </div>
-    );
-  };
-
-  // ================= CONTENT CARD COMPONENT =================
-  const ContentCard = ({ content, onView, onEdit, onDelete, getTypeIcon, getTypeColor }) => {
-    return (
-      <div
-        onClick={() => onView(content)}
-        className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-      >
-        {/* Thumbnail */}
-        <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
-          {content.type === "quiz" ? (
-            <div className="w-full h-full flex flex-col items-center justify-center">
-              <HelpCircle className="text-white/80 text-5xl mb-2" />
-              <span className="text-white font-medium text-sm">Quiz Content</span>
-            </div>
-          ) : (
-            <>
-              <img
-                src={content.thumbnailUrl || "/api/placeholder/400/200"}
-                className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                alt={content.title}
-                onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
-              />
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Eye className="h-12 w-12 text-white" />
-              </div>
-            </>
-          )}
-
-          {/* Type Badge */}
-          <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
-            {getTypeIcon(content.type)}
-            <span className="capitalize">{content.type}</span>
-          </div>
-
-          {/* Price Badge */}
-          {content.isPaid && (
-            <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
-              <DollarSign className="h-3 w-3" />
-              ₵{content.price}
-            </div>
-          )}
-        </div>
-
-        {/* Content Info */}
-        <div className="p-4">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-            {content.title}
-          </h3>
-          
-          {/* Meta Info */}
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3">
-            <span className="capitalize">{content.type}</span>
-            <span>•</span>
-            <span>{content.subjectId?.name || "Unlinked"}</span>
-            {content.topicId && (
-              <>
-                <span>•</span>
-                <span className="text-purple-600 dark:text-purple-400">
-                  {getTopicName(content.subjectId?._id || content.subjectId, content.topicId)}
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(content);
-              }}
-              className="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
-            >
-              <Edit className="h-3.5 w-3.5" />
-              Edit
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(content._id);
-              }}
-              className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </button>
-            {content.type !== "quiz" && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedLesson(content);
-                  setShowQuizEditor(true);
-                }}
-                className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Quiz
-              </button>
-            )}
-          </div>
-        </div>
       </div>
     );
   };

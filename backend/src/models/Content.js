@@ -1,4 +1,4 @@
-// models/Content.js - UPDATED with quiz type
+// models/Content.js
 import mongoose from "mongoose";
 
 const contentSchema = new mongoose.Schema(
@@ -9,7 +9,7 @@ const contentSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["video", "image", "pdf", "quiz"], // Added "quiz" type
+      enum: ["video", "image", "pdf", "quiz"],
       required: true,
     },
     fileUrl: {
@@ -28,17 +28,16 @@ const contentSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    // Add to your Content schema
-lecturerId: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "User",
-  required: false,
-  index: true
-},
-lecturerName: {
-  type: String,
-  default: "Admin"
-},
+    lecturerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+      index: true
+    },
+    lecturerName: {
+      type: String,
+      default: "Admin"
+    },
     courseId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Course",
@@ -49,16 +48,21 @@ lecturerName: {
       ref: "Subject",
       required: true,
     },
-    topicId: { type: mongoose.Schema.Types.ObjectId }, // NEW: Reference to topic
-    isPaid: { 
-      type: Boolean, 
-      default: false 
+    // ========== TOPIC ID FIELD ==========
+    topicId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Subject.topics",
+      default: null,
+      index: true
     },
-    price: { 
-      type: Number, 
-      default: 0 
+    isPaid: {
+      type: Boolean,
+      default: false
     },
-    // Quiz-specific fields
+    price: {
+      type: Number,
+      default: 0
+    },
     quizTimerMinutes: {
       type: Number,
       default: 0,
@@ -68,11 +72,15 @@ lecturerName: {
       default: 70,
     },
     unlockedBy: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-  }],
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    }],
   },
   { timestamps: true }
 );
+
+// Add indexes for better query performance
+contentSchema.index({ subjectId: 1, topicId: 1 });
+contentSchema.index({ courseId: 1 });
 
 export default mongoose.model("Content", contentSchema);
