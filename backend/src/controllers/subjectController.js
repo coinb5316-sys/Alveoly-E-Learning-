@@ -526,3 +526,34 @@ export const getAdminSubjectTopics = async (req, res) => {
     res.status(500).json({ message: "Server Error" });
   }
 };
+
+// ================= GET ALL SUBJECTS FOR ADMIN =================
+export const getAdminSubjects = async (req, res) => {
+  try {
+    const { course } = req.query;
+    
+    let query = {};
+    if (course && course !== "undefined" && course !== "null") {
+      query.courseId = course;
+    }
+    
+    const subjects = await Subject.find(query)
+      .populate("programId", "name code")
+      .populate("courseId", "name")
+      .select("+topics");
+    
+    // Sort topics by order
+    const formattedSubjects = subjects.map(subj => ({
+      ...subj._doc,
+      topics: subj.topics ? 
+        [...subj.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
+        [],
+      topicCount: subj.topics ? subj.topics.length : 0,
+    }));
+    
+    res.json(formattedSubjects);
+  } catch (error) {
+    console.error("Get Admin Subjects Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
