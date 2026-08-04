@@ -1,4 +1,4 @@
-// AdminContent.jsx - UPDATED with topics display
+// AdminContent.jsx - Complete updated with topic-based organization
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -30,12 +30,18 @@ import {
   Building,
   List,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  FolderOpen,
+  FolderTree,
+  Layers,
+  Hash,
+  Tag,
+  ArrowLeft,
+  Home
 } from "lucide-react";
 
-// Quiz Editor Component (same as before)
+// ================= QUIZ EDITOR COMPONENT =================
 const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => {
-  // ... (keep the existing QuizEditor code - it's working fine)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -415,21 +421,50 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
   );
 };
 
-// Main AdminContent Component - UPDATED with topics display
+// ================= MAIN ADMIN CONTENT COMPONENT =================
 const AdminContent = () => {
+  // Data state
   const [programs, setPrograms] = useState([]);
   const [courses, setCourses] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
   const [subjects, setSubjects] = useState([]);
-  const [file, setFile] = useState(null);
   const [contents, setContents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  
+  // UI state
+  const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showQuizEditor, setShowQuizEditor] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [file, setFile] = useState(null);
+  
+  // Navigation state - hierarchical browsing
+  const [navigation, setNavigation] = useState({
+    view: 'subjects', // 'subjects' | 'topics' | 'content'
+    programId: null,
+    courseId: null,
+    subjectId: null,
+    topicId: null,
+  });
+  
+  // Expanded state for UI
   const [expandedSubjects, setExpandedSubjects] = useState({});
+  const [expandedTopics, setExpandedTopics] = useState({});
 
+  // Form state
+  const [form, setForm] = useState({
+    title: "",
+    type: "video",
+    programId: "",
+    courseId: "",
+    subjectId: "",
+    topicId: "",
+    isPaid: false,
+    price: "",
+    thumbnail: null,
+  });
+
+  // Viewer state
   const [viewer, setViewer] = useState({
     open: false,
     type: "",
@@ -437,19 +472,7 @@ const AdminContent = () => {
     title: "",
   });
 
-  const [form, setForm] = useState({
-    title: "",
-    type: "video",
-    linkType: "subject",
-    programId: "",
-    courseId: "",
-    subjectId: "",
-    isPaid: false,
-    price: "",
-    thumbnail: null,
-  });
-
-  // Fetch programs, courses, and subjects
+  // ================= FETCH DATA =================
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -458,34 +481,122 @@ const AdminContent = () => {
           axios.get("/courses"),
           axios.get("/subjects"),
         ]);
-        setPrograms(programsRes.data);
-        setCourses(coursesRes.data);
-        setSubjects(subjectsRes.data);
+        setPrograms(programsRes.data || []);
+        setCourses(coursesRes.data || []);
+        setSubjects(subjectsRes.data || []);
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Failed to fetch courses and subjects");
       }
     };
     fetchData();
+    fetchContents();
   }, []);
 
   const fetchContents = async () => {
     try {
       const res = await axios.get("/content");
-      setContents(res.data);
+      setContents(res.data || []);
     } catch (err) {
       console.error("Error fetching contents:", err);
       toast.error("Failed to fetch contents");
     }
   };
 
-  useEffect(() => {
-    fetchContents();
-  }, []);
+  // ================= NAVIGATION HELPERS =================
+  const getProgramName = (id) => {
+    const program = programs.find(p => p._id === id);
+    return program?.name || "Unknown Program";
+  };
 
-  // Handle program change - fetch courses for selected program
+  const getCourseName = (id) => {
+    const course = courses.find(c => c._id === id);
+    return course?.name || "Unknown Course";
+  };
+
+  const getSubjectName = (id) => {
+    const subject = subjects.find(s => s._id === id);
+    return subject?.name || "Unknown Subject";
+  };
+
+  const getTopicName = (subjectId, topicId) => {
+    const subject = subjects.find(s => s._id === subjectId);
+    const topic = subject?.topics?.find(t => t._id === topicId);
+    return topic?.name || "Unknown Topic";
+  };
+
+  const getSubjectTopics = (subjectId) => {
+    const subject = subjects.find(s => s._id === subjectId);
+    return subject?.topics || [];
+  };
+
+  const getContentsForTopic = (subjectId, topicId) => {
+    return contents.filter(c => {
+      const contentSubjectId = c.subjectId?._id || c.subjectId;
+      return contentSubjectId === subjectId && c.topicId === topicId;
+    });
+  };
+
+  const getContentsForSubject = (subjectId) => {
+    return contents.filter(c => {
+      const contentSubjectId = c.subjectId?._id || c.subjectId;
+      return contentSubjectId === subjectId;
+    });
+  };
+
+  const getContentsForCourse = (courseId) => {
+    return contents.filter(c => {
+      const contentCourseId = c.courseId?._id || c.courseId;
+      return contentCourseId === courseId;
+    });
+  };
+
+  // ================= NAVIGATION ACTIONS =================
+  const navigateToSubjects = () => {
+    setNavigation({
+      view: 'subjects',
+      programId: null,
+      courseId: null,
+      subjectId: null,
+      topicId: null,
+    });
+  };
+
+  const navigateToTopics = (subjectId) => {
+    setNavigation({
+      view: 'topics',
+      programId: navigation.programId,
+      courseId: navigation.courseId,
+      subjectId: subjectId,
+      topicId: null,
+    });
+  };
+
+  const navigateToContent = (subjectId, topicId = null) => {
+    setNavigation({
+      view: 'content',
+      programId: navigation.programId,
+      courseId: navigation.courseId,
+      subjectId: subjectId,
+      topicId: topicId,
+    });
+  };
+
+  const navigateBack = () => {
+    if (navigation.view === 'content') {
+      if (navigation.topicId) {
+        navigateToTopics(navigation.subjectId);
+      } else {
+        navigateToTopics(navigation.subjectId);
+      }
+    } else if (navigation.view === 'topics') {
+      navigateToSubjects();
+    }
+  };
+
+  // ================= FORM HANDLING =================
   const handleProgramChange = async (programId) => {
-    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "" }));
+    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "", topicId: "" }));
     if (programId) {
       try {
         const res = await axios.get(`/courses/program/${programId}`);
@@ -499,7 +610,6 @@ const AdminContent = () => {
     }
   };
 
-  // Helper function to extract ID from object or string
   const extractId = (value) => {
     if (!value) return null;
     if (typeof value === 'string') return value;
@@ -507,33 +617,29 @@ const AdminContent = () => {
     return value;
   };
 
-  // Toggle subject topics expansion
-  const toggleSubjectTopics = (subjectId) => {
+  const toggleSubjectExpanded = (subjectId) => {
     setExpandedSubjects(prev => ({
       ...prev,
       [subjectId]: !prev[subjectId]
     }));
   };
 
-  // Get topics for a subject
-  const getSubjectTopics = (subjectId) => {
-    const subject = subjects.find(s => s._id === subjectId);
-    return subject?.topics || [];
+  const toggleTopicExpanded = (topicId) => {
+    setExpandedTopics(prev => ({
+      ...prev,
+      [topicId]: !prev[topicId]
+    }));
   };
 
+  // ================= CONTENT CRUD =================
   const handleUpload = async () => {
     if (!form.title) {
       toast.error("Please enter a title");
       return;
     }
 
-    if (form.linkType === "subject" && !form.subjectId) {
+    if (!form.subjectId) {
       toast.error("Please select a subject");
-      return;
-    }
-    
-    if (form.linkType === "course" && !form.courseId) {
-      toast.error("Please select a course");
       return;
     }
 
@@ -553,22 +659,21 @@ const AdminContent = () => {
     
     if (form.thumbnail) formData.append("thumbnail", form.thumbnail);
 
-    if (form.linkType === "subject") {
-      formData.append("subjectId", extractId(form.subjectId));
-      const selectedSubject = subjects.find(s => s._id === form.subjectId);
-      if (selectedSubject && selectedSubject.courseId) {
-        const courseIdValue = extractId(selectedSubject.courseId);
-        formData.append("courseId", courseIdValue);
-        console.log("Adding courseId:", courseIdValue);
-      } else {
-        toast.error("Selected subject is not associated with a course");
-        setLoading(false);
-        return;
-      }
-    } else {
-      const courseIdValue = extractId(form.courseId);
+    // Add subject and topic
+    formData.append("subjectId", extractId(form.subjectId));
+    if (form.topicId) {
+      formData.append("topicId", extractId(form.topicId));
+    }
+
+    // Get course from subject
+    const selectedSubject = subjects.find(s => s._id === form.subjectId);
+    if (selectedSubject && selectedSubject.courseId) {
+      const courseIdValue = extractId(selectedSubject.courseId);
       formData.append("courseId", courseIdValue);
-      console.log("Adding courseId from course:", courseIdValue);
+    } else {
+      toast.error("Selected subject is not associated with a course");
+      setLoading(false);
+      return;
     }
 
     formData.append("isPaid", form.isPaid);
@@ -600,6 +705,7 @@ const AdminContent = () => {
         setShowQuizEditor(true);
       } else {
         resetForm();
+        fetchContents();
       }
     } catch (err) {
       console.error("Upload error:", err);
@@ -613,10 +719,10 @@ const AdminContent = () => {
     setForm({
       title: "",
       type: "video",
-      linkType: "subject",
       programId: "",
       courseId: "",
       subjectId: "",
+      topicId: "",
       isPaid: false,
       price: "",
       thumbnail: null,
@@ -633,6 +739,7 @@ const AdminContent = () => {
       await axios.delete(`/content/${id}`);
       setContents((prev) => prev.filter((c) => c._id !== id));
       toast.success("Content deleted successfully");
+      fetchContents();
     } catch (err) {
       console.error(err);
       toast.error("Delete failed");
@@ -641,21 +748,26 @@ const AdminContent = () => {
 
   const handleEdit = (content) => {
     setEditingId(content._id);
+    const subjectId = content.subjectId?._id || content.subjectId;
+    const subject = subjects.find(s => s._id === subjectId);
+    
     setForm({
       title: content.title,
       type: content.type,
-      linkType: content.subjectId ? "subject" : "course",
-      programId: content.courseId?.programId?._id || content.courseId?.programId || "",
+      programId: subject?.programId?._id || subject?.programId || "",
       courseId: content.courseId?._id || content.courseId || "",
-      subjectId: content.subjectId?._id || content.subjectId || "",
+      subjectId: subjectId || "",
+      topicId: content.topicId || "",
       isPaid: content.isPaid,
       price: content.price,
       thumbnail: null,
     });
-    if (content.courseId?.programId) {
-      const programId = content.courseId.programId._id || content.courseId.programId;
+    
+    if (subject?.programId) {
+      const programId = subject.programId._id || subject.programId;
       handleProgramChange(programId);
     }
+    
     setFile(null);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -679,6 +791,7 @@ const AdminContent = () => {
     setViewer({ open: false, type: "", url: "", title: "" });
   };
 
+  // ================= UI HELPERS =================
   const getTypeIcon = (type) => {
     switch(type) {
       case "video": return <Video className="h-4 w-4" />;
@@ -699,6 +812,470 @@ const AdminContent = () => {
     }
   };
 
+  // ================= RENDER FUNCTIONS =================
+  
+  // Render subjects view
+  const renderSubjectsView = () => {
+    // Get unique subjects that have content
+    const subjectsWithContent = subjects.filter(s => {
+      return contents.some(c => {
+        const contentSubjectId = c.subjectId?._id || c.subjectId;
+        return contentSubjectId === s._id;
+      });
+    });
+
+    if (subjectsWithContent.length === 0) {
+      return (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
+          <div className="flex flex-col items-center">
+            <FolderOpen className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              No Content Yet
+            </h3>
+            <p className="text-gray-500 dark:text-gray-400 max-w-md">
+              Upload your first learning material to get started. Content will be organized by subject and topic.
+            </p>
+            <button
+              onClick={() => setShowForm(true)}
+              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
+            >
+              Upload Content
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {subjectsWithContent.map((subject) => {
+          const subjectContents = getContentsForSubject(subject._id);
+          const topics = subject.topics || [];
+          const topicCount = topics.length;
+          const contentCount = subjectContents.length;
+
+          return (
+            <div
+              key={subject._id}
+              onClick={() => navigateToTopics(subject._id)}
+              className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 dark:hover:border-blue-700"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BookOpen className="h-5 w-5 text-blue-500" />
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-1">
+                      {subject.name}
+                    </h3>
+                  </div>
+                  <div className="space-y-1 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-3.5 w-3.5" />
+                      <span>{contentCount} content items</span>
+                    </div>
+                    {topicCount > 0 && (
+                      <div className="flex items-center gap-2">
+                        <List className="h-3.5 w-3.5" />
+                        <span>{topicCount} topics</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Render topics view
+  const renderTopicsView = () => {
+    const subject = subjects.find(s => s._id === navigation.subjectId);
+    if (!subject) {
+      return (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
+          <p className="text-gray-500 dark:text-gray-400">Subject not found</p>
+        </div>
+      );
+    }
+
+    const topics = subject.topics || [];
+    const uncategorizedContent = getContentsForSubject(subject._id).filter(c => !c.topicId);
+
+    return (
+      <div className="space-y-4">
+        {/* Subject header */}
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                {subject.name}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {topics.length} topics • {getContentsForSubject(subject._id).length} content items
+              </p>
+            </div>
+            <button
+              onClick={() => navigateToContent(subject._id)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              View All Content
+            </button>
+          </div>
+        </div>
+
+        {/* Topics grid */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {topics.map((topic) => {
+            const topicContents = getContentsForTopic(subject._id, topic._id);
+            const isExpanded = expandedTopics[topic._id];
+
+            return (
+              <div
+                key={topic._id}
+                className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-md transition-all"
+              >
+                <div 
+                  className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                  onClick={() => toggleTopicExpanded(topic._id)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Hash className="h-4 w-4 text-purple-500" />
+                        <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                          {topic.name}
+                        </h3>
+                      </div>
+                      {topic.description && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                          {topic.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        <span>{topicContents.length} content items</span>
+                      </div>
+                    </div>
+                    <button className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Topic content list */}
+                {isExpanded && topicContents.length > 0 && (
+                  <div className="border-t border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-800/30">
+                    <div className="space-y-2">
+                      {topicContents.map((content) => (
+                        <ContentCard
+                          key={content._id}
+                          content={content}
+                          onView={openViewer}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                          getTypeIcon={getTypeIcon}
+                          getTypeColor={getTypeColor}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {isExpanded && topicContents.length === 0 && (
+                  <div className="border-t border-gray-200 dark:border-gray-800 p-4 bg-gray-50 dark:bg-gray-800/30">
+                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center">
+                      No content in this topic yet
+                    </p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setForm({
+                          ...form,
+                          subjectId: subject._id,
+                          topicId: topic._id,
+                          programId: subject.programId?._id || subject.programId || "",
+                          courseId: subject.courseId?._id || subject.courseId || "",
+                        });
+                        setShowForm(true);
+                      }}
+                      className="mt-2 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Content to this Topic
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Uncategorized content */}
+        {uncategorizedContent.length > 0 && (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <FolderOpen className="h-4 w-4 text-yellow-500" />
+              Uncategorized Content
+            </h3>
+            <div className="space-y-2">
+              {uncategorizedContent.map((content) => (
+                <ContentCard
+                  key={content._id}
+                  content={content}
+                  onView={openViewer}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  getTypeIcon={getTypeIcon}
+                  getTypeColor={getTypeColor}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {topics.length === 0 && (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
+            <div className="flex flex-col items-center">
+              <List className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                No Topics Yet
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                This subject doesn't have any topics. Add topics in the Subject Management section.
+              </p>
+              <button
+                onClick={() => window.location.href = "/admin/subjects"}
+                className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all"
+              >
+                Manage Subjects
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render content list view
+  const renderContentView = () => {
+    const subject = subjects.find(s => s._id === navigation.subjectId);
+    const topicName = navigation.topicId ? getTopicName(navigation.subjectId, navigation.topicId) : null;
+    
+    let filteredContents = getContentsForSubject(navigation.subjectId);
+    if (navigation.topicId) {
+      filteredContents = filteredContents.filter(c => c.topicId === navigation.topicId);
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                {subject?.name || "Unknown Subject"}
+              </h2>
+              {topicName && (
+                <p className="text-sm text-purple-600 dark:text-purple-400 mt-1 flex items-center gap-2">
+                  <Tag className="h-4 w-4" />
+                  Topic: {topicName}
+                </p>
+              )}
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {filteredContents.length} content items
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigateToTopics(navigation.subjectId)}
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Topics
+              </button>
+              <button
+                onClick={() => {
+                  setForm({
+                    ...form,
+                    subjectId: navigation.subjectId,
+                    topicId: navigation.topicId || "",
+                    programId: subject?.programId?._id || subject?.programId || "",
+                    courseId: subject?.courseId?._id || subject?.courseId || "",
+                  });
+                  setShowForm(true);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Add Content
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Content grid */}
+        {filteredContents.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
+            <div className="flex flex-col items-center">
+              <File className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-3" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                No Content Here
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                {topicName 
+                  ? `No content in "${topicName}" yet. Upload your first learning material.`
+                  : "No content in this subject yet. Upload your first learning material."}
+              </p>
+              <button
+                onClick={() => {
+                  setForm({
+                    ...form,
+                    subjectId: navigation.subjectId,
+                    topicId: navigation.topicId || "",
+                    programId: subject?.programId?._id || subject?.programId || "",
+                    courseId: subject?.courseId?._id || subject?.courseId || "",
+                  });
+                  setShowForm(true);
+                }}
+                className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Upload Content
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredContents.map((content) => (
+              <ContentCard
+                key={content._id}
+                content={content}
+                onView={openViewer}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                getTypeIcon={getTypeIcon}
+                getTypeColor={getTypeColor}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ================= CONTENT CARD COMPONENT =================
+  const ContentCard = ({ content, onView, onEdit, onDelete, getTypeIcon, getTypeColor }) => {
+    return (
+      <div
+        onClick={() => onView(content)}
+        className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+      >
+        {/* Thumbnail */}
+        <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
+          {content.type === "quiz" ? (
+            <div className="w-full h-full flex flex-col items-center justify-center">
+              <HelpCircle className="text-white/80 text-5xl mb-2" />
+              <span className="text-white font-medium text-sm">Quiz Content</span>
+            </div>
+          ) : (
+            <>
+              <img
+                src={content.thumbnailUrl || "/api/placeholder/400/200"}
+                className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                alt={content.title}
+                onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
+              />
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Eye className="h-12 w-12 text-white" />
+              </div>
+            </>
+          )}
+
+          {/* Type Badge */}
+          <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
+            {getTypeIcon(content.type)}
+            <span className="capitalize">{content.type}</span>
+          </div>
+
+          {/* Price Badge */}
+          {content.isPaid && (
+            <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
+              <DollarSign className="h-3 w-3" />
+              ₵{content.price}
+            </div>
+          )}
+        </div>
+
+        {/* Content Info */}
+        <div className="p-4">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+            {content.title}
+          </h3>
+          
+          {/* Meta Info */}
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3">
+            <span className="capitalize">{content.type}</span>
+            <span>•</span>
+            <span>{content.subjectId?.name || "Unlinked"}</span>
+            {content.topicId && (
+              <>
+                <span>•</span>
+                <span className="text-purple-600 dark:text-purple-400">
+                  {getTopicName(content.subjectId?._id || content.subjectId, content.topicId)}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(content);
+              }}
+              className="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+            >
+              <Edit className="h-3.5 w-3.5" />
+              Edit
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(content._id);
+              }}
+              className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+            {content.type !== "quiz" && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedLesson(content);
+                  setShowQuizEditor(true);
+                }}
+                className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Quiz
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ================= MAIN RENDER =================
   return (
     <div className="space-y-6">
       <Toaster position="top-right" />
@@ -710,16 +1287,57 @@ const AdminContent = () => {
             Content Management
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Upload and manage learning materials, videos, PDFs, and quizzes
+            Organize learning materials by subject and topic for easy access
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25"
-        >
-          <Plus className="h-4 w-4" />
-          {showForm ? "Cancel" : "Upload Content"}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={navigateToSubjects}
+            className="px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+          >
+            <Home className="h-4 w-4" />
+            All Subjects
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25"
+          >
+            <Plus className="h-4 w-4" />
+            {showForm ? "Cancel" : "Upload Content"}
+          </button>
+        </div>
+      </div>
+
+      {/* Breadcrumb Navigation */}
+      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <button onClick={navigateToSubjects} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          Subjects
         </button>
+        {navigation.subjectId && (
+          <>
+            <ChevronRight className="h-3 w-3" />
+            <button 
+              onClick={() => navigateToTopics(navigation.subjectId)} 
+              className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            >
+              {getSubjectName(navigation.subjectId)}
+            </button>
+          </>
+        )}
+        {navigation.topicId && (
+          <>
+            <ChevronRight className="h-3 w-3" />
+            <span className="text-purple-600 dark:text-purple-400">
+              {getTopicName(navigation.subjectId, navigation.topicId)}
+            </span>
+          </>
+        )}
+        {navigation.view === 'content' && !navigation.topicId && navigation.subjectId && (
+          <>
+            <ChevronRight className="h-3 w-3" />
+            <span>All Content</span>
+          </>
+        )}
       </div>
 
       {/* Upload Form */}
@@ -742,7 +1360,7 @@ const AdminContent = () => {
           <div className="grid gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Title
+                Title <span className="text-red-500">*</span>
               </label>
               <input
                 placeholder="Enter content title"
@@ -753,147 +1371,89 @@ const AdminContent = () => {
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <select
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              >
-                <option value="video">🎥 Video</option>
-                <option value="image">🖼 Image</option>
-                <option value="pdf">📄 PDF</option>
-                <option value="quiz">📝 Quiz</option>
-              </select>
-
-              <select
-                value={form.linkType}
-                onChange={(e) => setForm({ ...form, linkType: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              >
-                <option value="subject">Attach to Subject</option>
-                <option value="course">Attach to Course</option>
-              </select>
-            </div>
-
-            {/* Program Selection */}
-            <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Program
+                  Content Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="video">🎥 Video</option>
+                  <option value="image">🖼 Image</option>
+                  <option value="pdf">📄 PDF</option>
+                  <option value="quiz">📝 Quiz</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Subject Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Subject <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select
+                  value={form.subjectId}
+                  onChange={(e) => {
+                    const subjectId = e.target.value;
+                    const subject = subjects.find(s => s._id === subjectId);
+                    setForm({
+                      ...form,
+                      subjectId,
+                      topicId: "",
+                      programId: subject?.programId?._id || subject?.programId || "",
+                      courseId: subject?.courseId?._id || subject?.courseId || "",
+                    });
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="">Select Subject</option>
+                  {subjects.map((s) => {
+                    const topicCount = s.topics?.length || 0;
+                    return (
+                      <option key={s._id} value={s._id}>
+                        {s.name} {topicCount > 0 ? `(${topicCount} topics)` : '(No topics)'}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              {form.subjectId && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Course: {getCourseName(form.courseId)} • Program: {getProgramName(form.programId)}
+                </p>
+              )}
+            </div>
+
+            {/* Topic Selection */}
+            {form.subjectId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Topic (Optional)
                 </label>
                 <div className="relative">
-                  <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <select
-                    value={form.programId}
-                    onChange={(e) => handleProgramChange(e.target.value)}
+                    value={form.topicId}
+                    onChange={(e) => setForm({ ...form, topicId: e.target.value })}
                     className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   >
-                    <option value="">Select Program</option>
-                    {programs.filter(p => p.isActive !== false).map((p) => (
-                      <option key={p._id} value={p._id}>
-                        {p.name} {p.code ? `(${p.code})` : ""}
+                    <option value="">No specific topic (uncategorized)</option>
+                    {getSubjectTopics(form.subjectId).map((topic) => (
+                      <option key={topic._id} value={topic._id}>
+                        {topic.name} {topic.description ? `- ${topic.description}` : ''}
                       </option>
                     ))}
                   </select>
                 </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Tip: Assigning content to a topic makes it easier for students to find
+                </p>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Course
-                </label>
-                <div className="relative">
-                  <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <select
-                    value={form.courseId}
-                    onChange={(e) => setForm({ ...form, courseId: e.target.value })}
-                    disabled={!form.programId}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Select Course</option>
-                    {filteredCourses.map((c) => (
-                      <option key={c._id} value={c._id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {form.linkType === "subject" ? (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Subject
-                </label>
-                <div className="relative">
-                  <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <select
-                    value={form.subjectId}
-                    onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  >
-                    <option value="">Select Subject</option>
-                    {subjects
-                      .filter(s => !form.courseId || s.courseId === form.courseId || s.courseId?._id === form.courseId)
-                      .map((s) => {
-                        const topics = s.topics || [];
-                        return (
-                          <option key={s._id} value={s._id}>
-                            {s.name} {topics.length > 0 ? `(${topics.length} topics)` : ''}
-                          </option>
-                        );
-                      })}
-                  </select>
-                </div>
-                
-                {/* Display topics for selected subject */}
-                {form.subjectId && (
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleSubjectTopics(form.subjectId)}
-                      className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
-                    >
-                      {expandedSubjects[form.subjectId] ? (
-                        <ChevronUp className="h-3 w-3" />
-                      ) : (
-                        <ChevronDown className="h-3 w-3" />
-                      )}
-                      {expandedSubjects[form.subjectId] ? "Hide" : "View"} Topics
-                    </button>
-                    
-                    {expandedSubjects[form.subjectId] && (
-                      <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Topics in this subject:</p>
-                        {getSubjectTopics(form.subjectId).length > 0 ? (
-                          <div className="space-y-1.5">
-                            {getSubjectTopics(form.subjectId).map((topic, index) => (
-                              <div key={topic._id || index} className="flex items-start gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
-                                <div className="flex-shrink-0 mt-0.5">
-                                  <div className="h-1.5 w-1.5 rounded-full bg-purple-500 mt-1.5" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 break-words">
-                                    {topic.name}
-                                  </p>
-                                  {topic.description && (
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 break-words mt-0.5">
-                                      {topic.description}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-gray-400 dark:text-gray-500">No topics added to this subject yet.</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : null}
+            )}
 
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -923,7 +1483,7 @@ const AdminContent = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Content File
+                    Content File <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="file"
@@ -1005,159 +1565,10 @@ const AdminContent = () => {
         </div>
       )}
 
-      {/* Content Grid */}
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Content Library</h2>
-          <span className="text-sm text-gray-500 dark:text-gray-400">{contents.length} items</span>
-        </div>
-
-        {contents.length === 0 ? (
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
-            <div className="flex flex-col items-center">
-              <div className="h-20 w-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-                <File className="h-10 w-10 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                No Content Yet
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 max-w-md">
-                Upload your first learning material to get started
-              </p>
-              <button
-                onClick={() => setShowForm(true)}
-                className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
-              >
-                Upload Content
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {contents.map((content) => {
-              const subject = subjects.find(s => s._id === content.subjectId?._id || s._id === content.subjectId);
-              const topics = subject?.topics || [];
-              
-              return (
-                <div
-                  key={content._id}
-                  onClick={() => openViewer(content)}
-                  className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-                >
-                  {/* Thumbnail */}
-                  <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
-                    {content.type === "quiz" ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center">
-                        <HelpCircle className="text-white/80 text-5xl mb-2" />
-                        <span className="text-white font-medium text-sm">Quiz Content</span>
-                      </div>
-                    ) : (
-                      <>
-                        <img
-                          src={content.thumbnailUrl || "/api/placeholder/400/200"}
-                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                          alt={content.title}
-                          onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
-                        />
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Eye className="h-12 w-12 text-white" />
-                        </div>
-                      </>
-                    )}
-
-                    {/* Type Badge */}
-                    <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
-                      {getTypeIcon(content.type)}
-                      <span className="capitalize">{content.type}</span>
-                    </div>
-
-                    {/* Price Badge */}
-                    {content.isPaid && (
-                      <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
-                        <DollarSign className="h-3 w-3" />
-                        ₵{content.price}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Content Info */}
-                  <div className="p-4">
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                      {content.title}
-                    </h3>
-                    
-                    {/* Meta Info */}
-                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-2">
-                      <span className="capitalize">{content.type}</span>
-                      <span>•</span>
-                      <span>{content.subjectId?.name || content.courseId?.name || "Unlinked"}</span>
-                    </div>
-
-                    {/* Topics Info */}
-                    {subject && topics.length > 0 && (
-                      <div className="mb-3">
-                        <div className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
-                          <List className="h-3 w-3" />
-                          <span>{topics.length} {topics.length === 1 ? 'topic' : 'topics'}</span>
-                        </div>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {topics.slice(0, 3).map((topic, index) => (
-                            <span key={topic._id || index} className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 text-[10px] rounded-full">
-                              {topic.name}
-                            </span>
-                          ))}
-                          {topics.length > 3 && (
-                            <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] rounded-full">
-                              +{topics.length - 3} more
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(content);
-                        }}
-                        className="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(content._id);
-                        }}
-                        className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete
-                      </button>
-                      {content.type !== "quiz" && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedLesson(content);
-                            setShowQuizEditor(true);
-                          }}
-                          className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          Add Quiz
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* Content Display based on navigation */}
+      {navigation.view === 'subjects' && renderSubjectsView()}
+      {navigation.view === 'topics' && renderTopicsView()}
+      {navigation.view === 'content' && renderContentView()}
 
       {/* Media Viewer */}
       {viewer.open && viewer.type !== "quiz" && (

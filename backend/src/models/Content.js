@@ -49,6 +49,7 @@ lecturerName: {
       ref: "Subject",
       required: true,
     },
+    topicId: { type: mongoose.Schema.Types.ObjectId }, // NEW: Reference to topic
     isPaid: { 
       type: Boolean, 
       default: false 
