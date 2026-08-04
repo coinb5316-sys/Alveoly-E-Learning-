@@ -98,18 +98,19 @@ const AdminQuestions = () => {
     }
   };
 
- const fetchSubjects = async (courseId = "") => {
-  try {
-    // Use the regular subjects endpoint instead of admin/all
-    let url = "/subjects";
-    if (courseId) url = `/subjects?course=${courseId}`;
-    const res = await axios.get(url);
-    setSubjects(res.data);
-  } catch (err) {
-    console.error("Error fetching subjects:", err);
-    setSubjects([]);
-  }
-};
+  // FIX: Fetch subjects the same way as AdminSubjects
+  const fetchSubjects = async (courseId = "") => {
+    try {
+      let url = "/subjects";
+      if (courseId) url = `/subjects?course=${courseId}`;
+      const res = await axios.get(url);
+      console.log("Subjects fetched:", res.data?.length || 0);
+      setSubjects(res.data || []);
+    } catch (err) {
+      console.error("Error fetching subjects:", err);
+      setSubjects([]);
+    }
+  };
 
   const fetchQuestions = async () => {
     try {
@@ -120,8 +121,16 @@ const AdminQuestions = () => {
     }
   };
 
-  const filteredSubjects = (courseId) =>
-    subjects.filter((s) => s.courseId?.toString() === courseId);
+  // FIX: Handle populated courseId like AdminSubjects does
+  const filteredSubjects = (courseId) => {
+    if (!courseId || !subjects.length) return [];
+    
+    return subjects.filter((s) => {
+      // Get the course ID from the subject - handle both populated and non-populated
+      const subjectCourseId = s.courseId?._id?.toString() || s.courseId?.toString() || s.courseId;
+      return subjectCourseId === courseId;
+    });
+  };
 
   const handleConfigChange = (field, value) => {
     setConfig({ ...config, [field]: value });
