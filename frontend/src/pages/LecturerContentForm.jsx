@@ -1,4 +1,4 @@
-// LecturerContentForm.jsx - UPDATED with topics display
+// LecturerContentForm.jsx - Complete updated with professional UI and topic organization
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -28,12 +28,17 @@ import {
   Building,
   List,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Hash,
+  Tag,
+  FolderOpen,
+  CheckCircle,
+  Globe,
+  Lock as LockIcon
 } from "lucide-react";
 
-// Quiz Editor Component (keep as is - same as above)
+// ================= QUIZ EDITOR COMPONENT =================
 const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
-  // ... (keep the existing QuizEditor code - it's working fine)
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
@@ -413,7 +418,7 @@ const QuizEditor = ({ content, onClose, onSave, refreshContents }) => {
   );
 };
 
-// Main LecturerContentForm Component - UPDATED with topics display
+// ================= MAIN LECTURER CONTENT FORM =================
 const LecturerContentForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -446,9 +451,11 @@ const LecturerContentForm = () => {
     programId: "",
     courseId: "",
     subjectId: "",
+    topicId: "",
     isPaid: false,
     price: "",
     thumbnail: null,
+    isPublished: false,
   });
 
   // Get current user and fetch assigned subjects
@@ -460,19 +467,13 @@ const LecturerContentForm = () => {
         setUser(userData);
         localStorage.setItem("user", JSON.stringify(userData));
         
-        console.log("User data from /auth/me:", userData);
-        console.log("Assigned subjects from user:", userData.lecturerInfo?.assignedSubjects);
-        
         if (userData.lecturerInfo?.assignedSubjects?.length > 0) {
           const populatedSubjects = userData.lecturerInfo.assignedSubjects.filter(s => s && s._id);
           
           if (populatedSubjects.length > 0) {
             setAssignedSubjects(populatedSubjects);
-            console.log("Using populated subjects from user:", populatedSubjects);
           } else {
             const subjectIds = userData.lecturerInfo.assignedSubjects;
-            console.log("Fetching subjects by IDs:", subjectIds);
-            
             const subjectsRes = await axios.get("/subjects");
             const allSubjects = subjectsRes.data || [];
             
@@ -481,10 +482,8 @@ const LecturerContentForm = () => {
             );
             
             setAssignedSubjects(filtered);
-            console.log("Filtered assigned subjects:", filtered);
           }
         } else {
-          console.log("No assigned subjects found");
           setAssignedSubjects([]);
         }
         
@@ -535,8 +534,13 @@ const LecturerContentForm = () => {
       );
     }
     
-    console.log("Available subjects:", available);
     return available;
+  };
+
+  // Get topics for a subject
+  const getSubjectTopics = (subjectId) => {
+    const subject = assignedSubjects.find(s => s._id === subjectId);
+    return subject?.topics || [];
   };
 
   // Toggle subject topics expansion
@@ -545,12 +549,6 @@ const LecturerContentForm = () => {
       ...prev,
       [subjectId]: !prev[subjectId]
     }));
-  };
-
-  // Get topics for a subject
-  const getSubjectTopics = (subjectId) => {
-    const subject = assignedSubjects.find(s => s._id === subjectId);
-    return subject?.topics || [];
   };
 
   // Fetch content for editing
@@ -574,9 +572,11 @@ const LecturerContentForm = () => {
         programId: content.courseId?.programId?._id || content.courseId?.programId || "",
         courseId: content.courseId?._id || content.courseId || "",
         subjectId: content.subjectId?._id || content.subjectId || "",
+        topicId: content.topicId || "",
         isPaid: content.isPaid,
         price: content.price || "",
         thumbnail: null,
+        isPublished: content.isPublished !== false,
       });
       
       if (content.courseId?.programId) {
@@ -599,7 +599,7 @@ const LecturerContentForm = () => {
 
   // Handle program change - fetch courses for selected program
   const handleProgramChange = async (programId) => {
-    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "" }));
+    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "", topicId: "" }));
     if (programId) {
       try {
         const res = await axios.get(`/courses/program/${programId}`);
@@ -615,7 +615,7 @@ const LecturerContentForm = () => {
 
   // Handle course change - reset subject selection
   const handleCourseChange = (courseId) => {
-    setForm(prev => ({ ...prev, courseId, subjectId: "" }));
+    setForm(prev => ({ ...prev, courseId, subjectId: "", topicId: "" }));
   };
 
   const handleUpload = async () => {
@@ -652,6 +652,9 @@ const LecturerContentForm = () => {
 
     if (form.linkType === "subject") {
       formData.append("subjectId", form.subjectId);
+      if (form.topicId) {
+        formData.append("topicId", form.topicId);
+      }
       const selectedSubject = assignedSubjects.find(s => s._id === form.subjectId);
       if (selectedSubject && selectedSubject.courseId) {
         const courseIdValue = selectedSubject.courseId._id || selectedSubject.courseId;
@@ -668,6 +671,7 @@ const LecturerContentForm = () => {
 
     formData.append("isPaid", form.isPaid);
     formData.append("price", form.price);
+    formData.append("isPublished", form.isPublished);
 
     if (form.type === "quiz") {
       formData.append("quizTimerMinutes", "0");
@@ -715,9 +719,11 @@ const LecturerContentForm = () => {
         programId: "",
         courseId: "",
         subjectId: "",
+        topicId: "",
         isPaid: false,
         price: "",
         thumbnail: null,
+        isPublished: false,
       });
       setFile(null);
       setFilteredCourses([]);
@@ -730,10 +736,6 @@ const LecturerContentForm = () => {
 
   // Get available subjects for dropdown
   const availableSubjects = getAvailableSubjects();
-
-  // Debug logging
-  console.log("Assigned Subjects:", assignedSubjects);
-  console.log("Available Subjects after filtering:", availableSubjects);
 
   if (fetching) {
     return (
@@ -782,9 +784,10 @@ const LecturerContentForm = () => {
         </div>
 
         <div className="grid gap-5">
+          {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Title
+              Title <span className="text-red-500">*</span>
             </label>
             <input
               placeholder="Enter content title"
@@ -794,34 +797,45 @@ const LecturerContentForm = () => {
             />
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <select
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-              className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-              disabled={isEditing}
-            >
-              <option value="video">🎥 Video</option>
-              <option value="image">🖼 Image</option>
-              <option value="pdf">📄 PDF</option>
-              <option value="quiz">📝 Quiz</option>
-            </select>
-
-            <select
-              value={form.linkType}
-              onChange={(e) => setForm({ ...form, linkType: e.target.value })}
-              className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            >
-              <option value="subject">Attach to Subject</option>
-              <option value="course">Attach to Course</option>
-            </select>
-          </div>
-
-          {/* Program Selection */}
+          {/* Type and Link Type */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Program
+                Content Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value })}
+                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                disabled={isEditing}
+              >
+                <option value="video">🎥 Video</option>
+                <option value="image">🖼 Image</option>
+                <option value="pdf">📄 PDF</option>
+                <option value="quiz">📝 Quiz</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Link Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={form.linkType}
+                onChange={(e) => setForm({ ...form, linkType: e.target.value, subjectId: "", topicId: "" })}
+                className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              >
+                <option value="subject">Attach to Subject</option>
+                <option value="course">Attach to Course</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Program and Course */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Program <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -840,10 +854,9 @@ const LecturerContentForm = () => {
               </div>
             </div>
 
-            {/* Course Selection - Filtered by Program */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Course
+                Course <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -864,17 +877,20 @@ const LecturerContentForm = () => {
             </div>
           </div>
 
-          {/* Subject Selection with Topics Display */}
+          {/* Subject Selection with Topics */}
           {form.linkType === "subject" ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Subject
+                Subject <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <select
                   value={form.subjectId}
-                  onChange={(e) => setForm({ ...form, subjectId: e.target.value })}
+                  onChange={(e) => {
+                    const subjectId = e.target.value;
+                    setForm({ ...form, subjectId, topicId: "" });
+                  }}
                   className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="">Select Subject</option>
@@ -889,13 +905,42 @@ const LecturerContentForm = () => {
                 </select>
               </div>
               
-              {/* Display topics for selected subject */}
+              {assignedSubjects.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  No subjects assigned. Please contact admin to assign subjects to you.
+                </p>
+              )}
+              
+              {/* Topic Selection */}
               {form.subjectId && (
-                <div className="mt-2">
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Topic <span className="text-xs text-gray-400">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <select
+                      value={form.topicId}
+                      onChange={(e) => setForm({ ...form, topicId: e.target.value })}
+                      className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    >
+                      <option value="">No specific topic</option>
+                      {getSubjectTopics(form.subjectId).map((topic) => (
+                        <option key={topic._id} value={topic._id}>
+                          {topic.name} {topic.description ? `- ${topic.description}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    Assigning content to a topic helps students find it more easily
+                  </p>
+
+                  {/* Display topics for selected subject */}
                   <button
                     type="button"
                     onClick={() => toggleSubjectTopics(form.subjectId)}
-                    className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+                    className="mt-2 flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
                   >
                     {expandedSubjects[form.subjectId] ? (
                       <ChevronUp className="h-3 w-3" />
@@ -935,21 +980,11 @@ const LecturerContentForm = () => {
                   )}
                 </div>
               )}
-              
-              {assignedSubjects.length === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  No subjects assigned. Please contact admin to assign subjects to you.
-                </p>
-              )}
-              {assignedSubjects.length > 0 && availableSubjects.length === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  No subjects available for the selected course. Please select a different course or contact admin.
-                </p>
-              )}
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-4">
+          {/* Paid Content and Publish Settings */}
+          <div className="flex flex-wrap items-center gap-6">
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
               <input
                 type="checkbox"
@@ -971,13 +1006,25 @@ const LecturerContentForm = () => {
                 />
               </div>
             )}
+            
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={form.isPublished}
+                onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}
+                className="rounded border-gray-300 dark:border-gray-600"
+              />
+              <Globe className="h-4 w-4 text-green-500" />
+              Publish Immediately
+            </label>
           </div>
 
+          {/* File Upload */}
           {form.type !== "quiz" && (
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Content File {!isEditing && "*"}
+                  Content File {!isEditing && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="file"
@@ -1024,6 +1071,7 @@ const LecturerContentForm = () => {
             </div>
           )}
 
+          {/* Quiz Info */}
           {form.type === "quiz" && (
             <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 rounded-xl p-4">
               <div className="flex items-center gap-3">
@@ -1042,6 +1090,7 @@ const LecturerContentForm = () => {
             </div>
           )}
 
+          {/* Action Buttons */}
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleUpload}

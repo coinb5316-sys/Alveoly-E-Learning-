@@ -1,4 +1,4 @@
-// StudentLessons.jsx - Updated with topics display
+// StudentLessons.jsx - Complete updated with professional UI and topic organization
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -26,7 +26,15 @@ import {
   GraduationCap,
   List,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Hash,
+  Tag,
+  FolderOpen,
+  AlertCircle,
+  Calendar,
+  User,
+  ChevronRight,
+  Home
 } from "lucide-react";
 
 const StudentLessons = () => {
@@ -41,6 +49,8 @@ const StudentLessons = () => {
   const [hoveredContent, setHoveredContent] = useState(null);
   const [subject, setSubject] = useState(null);
   const [expandedTopics, setExpandedTopics] = useState({});
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [viewMode, setViewMode] = useState('all'); // 'all' | 'topic'
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -135,6 +145,22 @@ const StudentLessons = () => {
       [subjectId]: !prev[subjectId]
     }));
   };
+
+  // Filter contents by topic
+  const filterByTopic = (topicId) => {
+    setSelectedTopic(topicId === selectedTopic ? null : topicId);
+    setViewMode(topicId === selectedTopic ? 'all' : 'topic');
+  };
+
+  // Get filtered contents based on selected topic
+  const getFilteredContents = () => {
+    if (selectedTopic && viewMode === 'topic') {
+      return contents.filter(c => c.topicId === selectedTopic);
+    }
+    return contents;
+  };
+
+  const filteredContents = getFilteredContents();
 
   // Check for recent payment on mount
   useEffect(() => {
@@ -373,22 +399,25 @@ const StudentLessons = () => {
     );
   }
 
-  if (contents.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <div className="h-20 w-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-          <BookOpen className="h-10 w-10 text-gray-400" />
-        </div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">No Lessons Available</h2>
-        <p className="text-gray-500 dark:text-gray-400 mt-2">Check back later for new content!</p>
-      </div>
-    );
-  }
-
   return (
     <>
       <Toaster position="top-right" />
       <div className="space-y-6">
+        {/* Breadcrumb Navigation */}
+        <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <button 
+            onClick={() => navigate('/student/subjects')} 
+            className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1"
+          >
+            <Home className="h-3.5 w-3.5" />
+            Subjects
+          </button>
+          <ChevronRight className="h-3 w-3" />
+          <span className="text-gray-700 dark:text-gray-300 font-medium truncate max-w-[200px]">
+            {subject?.name || "Lessons"}
+          </span>
+        </nav>
+
         {/* Page Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -413,78 +442,28 @@ const StudentLessons = () => {
               </span>
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
               <BookOpen className="h-4 w-4 text-gray-400" />
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {contents.length} Items
+                {unlockedCount}/{contents.length} Unlocked
               </span>
             </div>
+            {selectedTopic && (
+              <button
+                onClick={() => filterByTopic(selectedTopic)}
+                className="px-3 py-2 bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-950/50 transition-colors flex items-center gap-1"
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear Filter
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Topics Section */}
-        {totalTopics > 0 && (
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-            <button
-              onClick={toggleTopics}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
-                  <List className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                    Topics in this Subject
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'} available
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                <span className="text-sm">{expandedTopics[subjectId] ? 'Hide' : 'Show'}</span>
-                {expandedTopics[subjectId] ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-              </div>
-            </button>
-            
-            {expandedTopics[subjectId] && (
-              <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-gray-800">
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {topics.map((topic) => (
-                    <div 
-                      key={topic._id} 
-                      className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-800/30 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
-                    >
-                      <div className="flex-shrink-0 mt-0.5">
-                        <div className="h-2 w-2 rounded-full bg-purple-500 mt-1.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 break-words">
-                          {topic.name}
-                        </p>
-                        {topic.description && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 break-words mt-0.5">
-                            {topic.description}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Stats Summary */}
+        {/* Stats Summary - Professional Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Total Items</p>
@@ -498,7 +477,7 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Unlocked</p>
@@ -512,7 +491,7 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Locked</p>
@@ -526,7 +505,7 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Free Access</p>
@@ -541,143 +520,248 @@ const StudentLessons = () => {
           </div>
         </div>
 
-        {/* Content Grid */}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {contents.map((content) => {
-            const isHovered = hoveredContent === content._id;
-            const hasQuiz = lessonQuizzes[content._id];
-            const isUnlocked = content.isUnlocked;
-            const isPaid = content.isPaid;
-            
-            return (
-              <div
-                key={content._id}
-                onMouseEnter={() => setHoveredContent(content._id)}
-                onMouseLeave={() => setHoveredContent(null)}
-                onClick={() => openViewer(content)}
-                className={`group cursor-pointer rounded-xl border transition-all duration-300 overflow-hidden ${
-                  isUnlocked
-                    ? "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:shadow-xl hover:-translate-y-1"
-                    : "border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30"
-                }`}
-              >
-                {/* Thumbnail */}
-                <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
-                  {content.type === "quiz" ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center">
-                      <HelpCircle className="text-white/80 text-5xl mb-2" />
-                      <span className="text-white font-medium text-sm">Interactive Quiz</span>
-                    </div>
-                  ) : (
-                    <>
-                      <img
-                        src={content.thumbnailUrl || "/api/placeholder/400/200"}
-                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                        alt={content.title}
-                        onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
-                      />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Eye className="h-12 w-12 text-white" />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Type Badge */}
-                  <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
-                    {getTypeIcon(content.type)}
-                    <span className="capitalize">{content.type}</span>
-                  </div>
-
-                  {/* Quiz Badge */}
-                  {hasQuiz && content.type !== "quiz" && (
-                    <div className="absolute top-3 right-3 px-2 py-1 bg-green-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
-                      <FileQuestion className="h-3 w-3" />
-                      Quiz Available
-                    </div>
-                  )}
-
-                  {/* Price Badge */}
-                  {isPaid && (
-                    <div className="absolute bottom-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      ₵{content.price}
-                    </div>
-                  )}
-
-                  {/* Lock Overlay */}
-                  {isPaid && !isUnlocked && (
-                    <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm">
-                      <Lock className="h-10 w-10 text-white mb-2" />
-                      <p className="text-white text-sm font-medium mb-1">Premium Content</p>
-                      <p className="text-white/80 text-xs mb-3">₵{content.price} to unlock</p>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUnlock(content);
-                        }}
-                        className="px-4 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg text-sm font-medium transition-all shadow-lg"
-                      >
-                        Unlock Now
-                      </button>
-                    </div>
-                  )}
+        {/* Topics Section - Professional Design */}
+        {totalTopics > 0 && (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
+            <button
+              onClick={toggleTopics}
+              className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
+                  <FolderOpen className="h-4.5 w-4.5 text-purple-600 dark:text-purple-400" />
                 </div>
-
-                {/* Content Info */}
-                <div className="p-4">
-                  <h3 className={`font-semibold text-base line-clamp-2 mb-2 transition-colors ${
-                    isUnlocked 
-                      ? "text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400" 
-                      : "text-gray-500 dark:text-gray-400"
-                  }`}>
-                    {content.title}
+                <div className="text-left">
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                    Topics in this Subject
                   </h3>
-
-                  <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    <GraduationCap className="h-3 w-3" />
-                    <span>By: {content.lecturerName || "Admin"}</span>
-                  </div>
-                  
-                  {/* Topics Tag for content */}
-                  {subject?.topics && subject.topics.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {subject.topics.slice(0, 2).map((topic) => (
-                        <span 
-                          key={topic._id} 
-                          className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 text-[10px] rounded-full"
-                        >
-                          {topic.name}
-                        </span>
-                      ))}
-                      {subject.topics.length > 2 && (
-                        <span className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] rounded-full">
-                          +{subject.topics.length - 2} more
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    <Clock className="h-3 w-3" />
-                    <span>Self-paced</span>
-                    {hasQuiz && content.type !== "quiz" && (
-                      <>
-                        <span>•</span>
-                        <span className="text-green-600 dark:text-green-400">Includes assessment</span>
-                      </>
-                    )}
-                    {isUnlocked && isPaid && (
-                      <>
-                        <span>•</span>
-                        <span className="text-green-600 dark:text-green-400">Unlocked</span>
-                      </>
-                    )}
-                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'} • Click to explore
+                  </p>
                 </div>
               </div>
-            );
-          })}
-        </div>
+              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                <span className="text-sm">{expandedTopics[subjectId] ? 'Hide' : 'Show'}</span>
+                {expandedTopics[subjectId] ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </div>
+            </button>
+            
+            {expandedTopics[subjectId] && (
+              <div className="px-5 pb-5 pt-3 border-t border-gray-100 dark:border-gray-800">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {topics.map((topic) => {
+                    const topicContentCount = contents.filter(c => c.topicId === topic._id).length;
+                    const isActive = selectedTopic === topic._id;
+                    
+                    return (
+                      <div 
+                        key={topic._id} 
+                        onClick={() => filterByTopic(topic._id)}
+                        className={`flex items-start gap-3 p-3 rounded-lg transition-all duration-200 cursor-pointer ${
+                          isActive
+                            ? 'bg-purple-50 dark:bg-purple-950/30 border-2 border-purple-300 dark:border-purple-700'
+                            : 'bg-gray-50 dark:bg-gray-800/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 border-2 border-transparent'
+                        }`}
+                      >
+                        <div className="flex-shrink-0 mt-0.5">
+                          <div className={`h-2.5 w-2.5 rounded-full ${isActive ? 'bg-purple-600' : 'bg-purple-400'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium break-words ${
+                            isActive ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-300'
+                          }`}>
+                            {topic.name}
+                          </p>
+                          {topic.description && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 break-words mt-0.5">
+                              {topic.description}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              isActive 
+                                ? 'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                            }`}>
+                              {topicContentCount} item{topicContentCount !== 1 ? 's' : ''}
+                            </span>
+                            {isActive && (
+                              <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
+                                Active Filter
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {isActive && (
+                          <CheckCircle className="h-4 w-4 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Content Grid */}
+        {filteredContents.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
+            <div className="flex flex-col items-center">
+              <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                <BookOpen className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {selectedTopic ? 'No Content in this Topic' : 'No Lessons Available'}
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                {selectedTopic 
+                  ? `There are no learning materials in "${topics.find(t => t._id === selectedTopic)?.name || 'this topic'}" yet.`
+                  : 'Check back later for new content!'}
+              </p>
+              {selectedTopic && (
+                <button
+                  onClick={() => filterByTopic(selectedTopic)}
+                  className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all flex items-center gap-2"
+                >
+                  <X className="h-4 w-4" />
+                  Clear Filter
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredContents.map((content) => {
+              const isHovered = hoveredContent === content._id;
+              const hasQuiz = lessonQuizzes[content._id];
+              const isUnlocked = content.isUnlocked;
+              const isPaid = content.isPaid;
+              const topicName = topics.find(t => t._id === content.topicId)?.name;
+              
+              return (
+                <div
+                  key={content._id}
+                  onMouseEnter={() => setHoveredContent(content._id)}
+                  onMouseLeave={() => setHoveredContent(null)}
+                  onClick={() => openViewer(content)}
+                  className={`group cursor-pointer rounded-xl border transition-all duration-300 overflow-hidden ${
+                    isUnlocked
+                      ? "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:shadow-xl hover:-translate-y-1"
+                      : "border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30"
+                  }`}
+                >
+                  {/* Thumbnail */}
+                  <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
+                    {content.type === "quiz" ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center">
+                        <HelpCircle className="text-white/80 text-5xl mb-2" />
+                        <span className="text-white font-medium text-sm">Interactive Quiz</span>
+                      </div>
+                    ) : (
+                      <>
+                        <img
+                          src={content.thumbnailUrl || "/api/placeholder/400/200"}
+                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                          alt={content.title}
+                          onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
+                        />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Eye className="h-12 w-12 text-white" />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Type Badge */}
+                    <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
+                      {getTypeIcon(content.type)}
+                      <span className="capitalize">{content.type}</span>
+                    </div>
+
+                    {/* Quiz Badge */}
+                    {hasQuiz && content.type !== "quiz" && (
+                      <div className="absolute top-3 right-3 px-2 py-1 bg-green-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
+                        <FileQuestion className="h-3 w-3" />
+                        Quiz
+                      </div>
+                    )}
+
+                    {/* Topic Badge */}
+                    {topicName && (
+                      <div className="absolute bottom-3 left-3 px-2 py-1 bg-purple-600/80 backdrop-blur-sm rounded-lg text-white text-xs font-medium flex items-center gap-1">
+                        <Hash className="h-3 w-3" />
+                        {topicName}
+                      </div>
+                    )}
+
+                    {/* Price Badge */}
+                    {isPaid && (
+                      <div className="absolute bottom-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        ₵{content.price}
+                      </div>
+                    )}
+
+                    {/* Lock Overlay */}
+                    {isPaid && !isUnlocked && (
+                      <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm">
+                        <Lock className="h-10 w-10 text-white mb-2" />
+                        <p className="text-white text-sm font-medium mb-1">Premium Content</p>
+                        <p className="text-white/80 text-xs mb-3">₵{content.price} to unlock</p>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUnlock(content);
+                          }}
+                          className="px-4 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg text-sm font-medium transition-all shadow-lg"
+                        >
+                          Unlock Now
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Content Info */}
+                  <div className="p-4">
+                    <h3 className={`font-semibold text-base line-clamp-2 mb-2 transition-colors ${
+                      isUnlocked 
+                        ? "text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400" 
+                        : "text-gray-500 dark:text-gray-400"
+                    }`}>
+                      {content.title}
+                    </h3>
+
+                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                      <User className="h-3 w-3" />
+                      <span>By: {content.lecturerName || "Admin"}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      <Clock className="h-3 w-3" />
+                      <span>Self-paced</span>
+                      {hasQuiz && content.type !== "quiz" && (
+                        <>
+                          <span>•</span>
+                          <span className="text-green-600 dark:text-green-400">Includes assessment</span>
+                        </>
+                      )}
+                      {isUnlocked && isPaid && (
+                        <>
+                          <span>•</span>
+                          <span className="text-green-600 dark:text-green-400">Unlocked</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Secure Viewer Modal */}
@@ -688,15 +772,15 @@ const StudentLessons = () => {
           onContextMenu={(e) => e.preventDefault()}
         >
           <div className="flex justify-between items-center p-4 text-white bg-black/50 flex-shrink-0 border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                 {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
               </div>
-              <h3 className="font-semibold text-lg truncate max-w-md">
+              <h3 className="font-semibold text-lg truncate">
                 {viewer.title}
               </h3>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-shrink-0 ml-4">
               {lessonQuizzes[viewer.lessonId] && viewer.type !== "quiz" && (
                 <button
                   onClick={handleTakeQuiz}
