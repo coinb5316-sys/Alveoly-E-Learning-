@@ -100,8 +100,9 @@ const AdminQuestions = () => {
 
  const fetchSubjects = async (courseId = "") => {
   try {
-    let url = "/subjects/admin/all";
-    if (courseId) url = `/subjects/admin/all?course=${courseId}`;
+    // Use the regular subjects endpoint instead of admin/all
+    let url = "/subjects";
+    if (courseId) url = `/subjects?course=${courseId}`;
     const res = await axios.get(url);
     setSubjects(res.data);
   } catch (err) {
