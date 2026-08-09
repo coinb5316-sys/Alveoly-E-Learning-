@@ -1,4 +1,4 @@
-// StudentLessons.jsx - Complete updated with professional UI and mobile-optimized PDF viewing
+// StudentLessons.jsx - Complete updated with floating PDF controls
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -62,7 +62,9 @@ const StudentLessons = () => {
   const [pdfScale, setPdfScale] = useState(1);
   const [isPdfLoading, setIsPdfLoading] = useState(true);
   const [pdfError, setPdfError] = useState(false);
+  const [showPdfControls, setShowPdfControls] = useState(true);
   const pdfContainerRef = useRef(null);
+  const controlsTimeoutRef = useRef(null);
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -317,6 +319,7 @@ const StudentLessons = () => {
     setPdfScale(1);
     setIsPdfLoading(true);
     setPdfError(false);
+    setShowPdfControls(true);
     
     setViewer({
       open: true,
@@ -336,6 +339,9 @@ const StudentLessons = () => {
       title: "",
       lessonId: null,
     });
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
   };
 
   const handleTakeQuiz = () => {
@@ -357,14 +363,42 @@ const StudentLessons = () => {
 
   const zoomIn = () => {
     setPdfScale(prev => Math.min(prev + 0.2, 3));
+    // Show controls when interacting
+    setShowPdfControls(true);
+    // Auto-hide after 3 seconds of inactivity
+    clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowPdfControls(false);
+    }, 3000);
   };
 
   const zoomOut = () => {
     setPdfScale(prev => Math.max(prev - 0.2, 0.5));
+    setShowPdfControls(true);
+    clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowPdfControls(false);
+    }, 3000);
   };
 
   const resetZoom = () => {
     setPdfScale(1);
+    setShowPdfControls(true);
+    clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowPdfControls(false);
+    }, 3000);
+  };
+
+  // Toggle controls visibility on tap/click
+  const toggleControls = () => {
+    setShowPdfControls(prev => !prev);
+    if (showPdfControls) {
+      clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowPdfControls(false);
+      }, 3000);
+    }
   };
 
   const getTypeIcon = (type) => {
@@ -397,6 +431,10 @@ const StudentLessons = () => {
   const handlePdfLoad = () => {
     setIsPdfLoading(false);
     setPdfError(false);
+    // Auto-hide controls after 3 seconds
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowPdfControls(false);
+    }, 3000);
   };
 
   // Handle PDF load error
@@ -809,15 +847,16 @@ const StudentLessons = () => {
         )}
       </div>
 
-      {/* Secure Viewer Modal - Enhanced for Mobile PDF Viewing */}
+      {/* Secure Viewer Modal - Enhanced with Floating PDF Controls */}
       {viewer.open && (
         <div 
           id="secure-viewer" 
           className="fixed inset-0 bg-black/98 z-50 flex flex-col"
           onContextMenu={(e) => e.preventDefault()}
+          onClick={viewer.type === "pdf" ? toggleControls : undefined}
         >
-          {/* Header */}
-          <div className="flex flex-wrap items-center gap-2 p-3 text-white bg-black/50 flex-shrink-0 border-b border-white/10">
+          {/* Top Header - Always visible */}
+          <div className="flex flex-wrap items-center gap-2 p-3 text-white bg-black/70 flex-shrink-0 border-b border-white/10 z-10">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                 {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
@@ -827,46 +866,7 @@ const StudentLessons = () => {
               </h3>
             </div>
             
-            {/* PDF Controls - Show only for PDFs */}
-            {viewer.type === "pdf" && (
-              <div className="flex items-center gap-1 bg-white/10 rounded-lg px-2 py-1">
-                <button
-                  onClick={zoomOut}
-                  className="p-1.5 hover:bg-white/20 rounded transition-colors"
-                  title="Zoom Out"
-                >
-                  <ZoomOut className="h-4 w-4" />
-                </button>
-                <span className="text-xs font-mono min-w-[40px] text-center">
-                  {Math.round(pdfScale * 100)}%
-                </span>
-                <button
-                  onClick={zoomIn}
-                  className="p-1.5 hover:bg-white/20 rounded transition-colors"
-                  title="Zoom In"
-                >
-                  <ZoomIn className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={resetZoom}
-                  className="p-1.5 hover:bg-white/20 rounded transition-colors text-xs"
-                  title="Reset Zoom"
-                >
-                  <Move className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-
             <div className="flex gap-1 flex-shrink-0">
-              {viewer.type === "pdf" && (
-                <button
-                  onClick={toggleFullscreen}
-                  className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-                  title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-                >
-                  {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </button>
-              )}
               {lessonQuizzes[viewer.lessonId] && viewer.type !== "quiz" && (
                 <button
                   onClick={handleTakeQuiz}
@@ -886,10 +886,10 @@ const StudentLessons = () => {
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 min-h-0 relative">
+          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 min-h-0 relative overflow-hidden">
             {/* Loading State */}
             {isPdfLoading && viewer.type === "pdf" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black">
+              <div className="absolute inset-0 flex items-center justify-center bg-black z-20">
                 <div className="flex flex-col items-center gap-3">
                   <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
                   <p className="text-white/60 text-sm">Loading document...</p>
@@ -899,7 +899,7 @@ const StudentLessons = () => {
 
             {/* PDF Error State */}
             {pdfError && viewer.type === "pdf" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black">
+              <div className="absolute inset-0 flex items-center justify-center bg-black z-20">
                 <div className="flex flex-col items-center gap-3 max-w-md text-center px-4">
                   <AlertCircle className="h-12 w-12 text-red-500" />
                   <h3 className="text-white font-semibold text-lg">Unable to Load PDF</h3>
@@ -910,7 +910,6 @@ const StudentLessons = () => {
                     onClick={() => {
                       setIsPdfLoading(true);
                       setPdfError(false);
-                      // Force reload by resetting the iframe src
                       const iframe = document.querySelector('#pdf-viewer');
                       if (iframe) {
                         iframe.src = iframe.src;
@@ -981,12 +980,63 @@ const StudentLessons = () => {
             )}
           </div>
 
-          {/* Mobile Instructions for PDF */}
+          {/* FLOATING PDF CONTROLS - Always visible and on top */}
           {viewer.type === "pdf" && (
-            <div className="flex-shrink-0 p-2 text-center text-white/40 text-xs border-t border-white/10 bg-black/30">
+            <div 
+              className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 transition-all duration-300 ${
+                showPdfControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+              }`}
+            >
+              <div className="flex items-center gap-2 bg-black/80 backdrop-blur-lg rounded-full px-3 py-2 border border-white/20 shadow-2xl">
+                <button
+                  onClick={(e) => { e.stopPropagation(); zoomOut(); }}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="h-5 w-5" />
+                </button>
+                
+                <span className="text-white text-sm font-mono min-w-[50px] text-center font-medium">
+                  {Math.round(pdfScale * 100)}%
+                </span>
+                
+                <button
+                  onClick={(e) => { e.stopPropagation(); zoomIn(); }}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="h-5 w-5" />
+                </button>
+                
+                <div className="w-px h-6 bg-white/20" />
+                
+                <button
+                  onClick={(e) => { e.stopPropagation(); resetZoom(); }}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
+                  title="Reset Zoom"
+                >
+                  <Move className="h-5 w-5" />
+                </button>
+                
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
+                  title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                >
+                  {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Instructions - With controls visibility indicator */}
+          {viewer.type === "pdf" && (
+            <div className={`flex-shrink-0 p-2 text-center text-white/40 text-xs border-t border-white/10 bg-black/30 z-10 transition-opacity duration-300 ${
+              showPdfControls ? 'opacity-100' : 'opacity-0'
+            }`}>
               <span className="flex items-center justify-center gap-2">
                 <ZoomIn className="h-3 w-3" />
-                Pinch to zoom on mobile
+                Tap screen to show/hide controls • Pinch to zoom
                 <ZoomOut className="h-3 w-3" />
               </span>
             </div>
