@@ -1,4 +1,4 @@
-// StudentLessons.jsx - Complete updated with floating PDF controls
+// StudentLessons.jsx - Complete updated with beautiful gradient background and enhanced UI
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -363,9 +363,7 @@ const StudentLessons = () => {
 
   const zoomIn = () => {
     setPdfScale(prev => Math.min(prev + 0.2, 3));
-    // Show controls when interacting
     setShowPdfControls(true);
-    // Auto-hide after 3 seconds of inactivity
     clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => {
       setShowPdfControls(false);
@@ -390,7 +388,6 @@ const StudentLessons = () => {
     }, 3000);
   };
 
-  // Toggle controls visibility on tap/click
   const toggleControls = () => {
     setShowPdfControls(prev => !prev);
     if (showPdfControls) {
@@ -427,17 +424,14 @@ const StudentLessons = () => {
   const topics = subject?.topics || [];
   const totalTopics = topics.length;
 
-  // Handle PDF load success
   const handlePdfLoad = () => {
     setIsPdfLoading(false);
     setPdfError(false);
-    // Auto-hide controls after 3 seconds
     controlsTimeoutRef.current = setTimeout(() => {
       setShowPdfControls(false);
     }, 3000);
   };
 
-  // Handle PDF load error
   const handlePdfError = () => {
     setIsPdfLoading(false);
     setPdfError(true);
@@ -445,19 +439,21 @@ const StudentLessons = () => {
 
   if (loading || processingPayment) {
     return (
-      <div className="space-y-6">
-        <div className="animate-pulse">
-          <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded mb-8" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-                <div className="h-44 bg-gray-200 dark:bg-gray-800" />
-                <div className="p-4 space-y-3">
-                  <div className="h-5 bg-gray-200 dark:bg-gray-800 rounded w-3/4" />
-                  <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2" />
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-950">
+        <div className="container mx-auto px-4 py-8">
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded mb-8" />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm overflow-hidden">
+                  <div className="h-44 bg-gray-200 dark:bg-gray-800" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-5 bg-gray-200 dark:bg-gray-800 rounded w-3/4" />
+                    <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -466,18 +462,20 @@ const StudentLessons = () => {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <div className="h-20 w-20 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center mb-4">
-          <AlertCircle className="h-10 w-10 text-red-600 dark:text-red-400" />
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-950 flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="h-20 w-20 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center mb-4">
+            <AlertCircle className="h-10 w-10 text-red-600 dark:text-red-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Error</h2>
+          <p className="text-gray-500 dark:text-gray-400 mt-2">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg transition-all shadow-lg shadow-blue-500/25"
+          >
+            Try Again
+          </button>
         </div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Error</h2>
-        <p className="text-gray-500 dark:text-gray-400 mt-2">{error}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all"
-        >
-          Try Again
-        </button>
       </div>
     );
   }
@@ -485,366 +483,377 @@ const StudentLessons = () => {
   return (
     <>
       <Toaster position="top-right" />
-      <div className="space-y-6 pb-20">
-        {/* Breadcrumb Navigation */}
-        <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <button 
-            onClick={() => navigate('/student/subjects')} 
-            className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1"
-          >
-            <Home className="h-3.5 w-3.5" />
-            Subjects
-          </button>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-gray-700 dark:text-gray-300 font-medium truncate max-w-[200px]">
-            {subject?.name || "Lessons"}
-          </span>
-        </nav>
-
-        {/* Page Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-              {subject?.name || "Learning Materials"}
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
-              <span>Access videos, documents, and quizzes for this subject</span>
-              {totalTopics > 0 && (
-                <>
-                  <span className="text-gray-300 dark:text-gray-600">•</span>
-                  <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
-                    <List className="h-3 w-3" />
-                    {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'}
-                  </span>
-                </>
-              )}
-              <span className="text-gray-300 dark:text-gray-600">•</span>
-              <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-                <GraduationCap className="h-3 w-3" />
-                {contents.length} items
-              </span>
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <BookOpen className="h-4 w-4 text-gray-400" />
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                {unlockedCount}/{contents.length} Unlocked
-              </span>
-            </div>
-            {selectedTopic && (
-              <button
-                onClick={() => filterByTopic(selectedTopic)}
-                className="px-3 py-2 bg-purple-100 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-950/50 transition-colors flex items-center gap-1"
-              >
-                <X className="h-3.5 w-3.5" />
-                Clear Filter
-              </button>
-            )}
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-950">
+        {/* Decorative Background Elements */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-300/20 dark:bg-purple-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-300/20 dark:bg-blue-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-300/10 dark:bg-indigo-500/5 rounded-full blur-3xl"></div>
         </div>
 
-        {/* Stats Summary - Professional Cards */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Items</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                  {contents.length}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
-                <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Unlocked</p>
-                <p className="text-2xl font-semibold text-green-600 dark:text-green-400 mt-1">
-                  {unlockedCount}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center">
-                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Locked</p>
-                <p className="text-2xl font-semibold text-red-600 dark:text-red-400 mt-1">
-                  {lockedCount}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-red-50 dark:bg-red-950/30 flex items-center justify-center">
-                <Lock className="h-5 w-5 text-red-600 dark:text-red-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Free Access</p>
-                <p className="text-2xl font-semibold text-purple-600 dark:text-purple-400 mt-1">
-                  {freeCount}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
-                <Zap className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Topics Section - Professional Design */}
-        {totalTopics > 0 && (
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
-            <button
-              onClick={toggleTopics}
-              className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+        <div className="relative container mx-auto px-4 py-8">
+          {/* Breadcrumb Navigation */}
+          <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-6">
+            <button 
+              onClick={() => navigate('/student/subjects')} 
+              className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm"
             >
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
-                  <FolderOpen className="h-4.5 w-4.5 text-purple-600 dark:text-purple-400" />
-                </div>
-                <div className="text-left">
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100">
-                    Topics in this Subject
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'} • Click to explore
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                <span className="text-sm">{expandedTopics[subjectId] ? 'Hide' : 'Show'}</span>
-                {expandedTopics[subjectId] ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-              </div>
+              <Home className="h-3.5 w-3.5" />
+              Subjects
             </button>
-            
-            {expandedTopics[subjectId] && (
-              <div className="px-5 pb-5 pt-3 border-t border-gray-100 dark:border-gray-800">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {topics.map((topic) => {
-                    const topicContentCount = contents.filter(c => c.topicId === topic._id).length;
-                    const isActive = selectedTopic === topic._id;
-                    
-                    return (
-                      <div 
-                        key={topic._id} 
-                        onClick={() => filterByTopic(topic._id)}
-                        className={`flex items-start gap-3 p-3 rounded-lg transition-all duration-200 cursor-pointer ${
-                          isActive
-                            ? 'bg-purple-50 dark:bg-purple-950/30 border-2 border-purple-300 dark:border-purple-700'
-                            : 'bg-gray-50 dark:bg-gray-800/30 hover:bg-gray-100 dark:hover:bg-gray-700/50 border-2 border-transparent'
-                        }`}
-                      >
-                        <div className="flex-shrink-0 mt-0.5">
-                          <div className={`h-2.5 w-2.5 rounded-full ${isActive ? 'bg-purple-600' : 'bg-purple-400'}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium break-words ${
-                            isActive ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-300'
-                          }`}>
-                            {topic.name}
-                          </p>
-                          {topic.description && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 break-words mt-0.5">
-                              {topic.description}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              isActive 
-                                ? 'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400'
-                                : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                            }`}>
-                              {topicContentCount} item{topicContentCount !== 1 ? 's' : ''}
-                            </span>
-                            {isActive && (
-                              <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">
-                                Active Filter
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {isActive && (
-                          <CheckCircle className="h-4 w-4 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+            <ChevronRight className="h-3 w-3 text-gray-400" />
+            <span className="text-gray-700 dark:text-gray-300 font-medium truncate max-w-[200px] bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm">
+              {subject?.name || "Lessons"}
+            </span>
+          </nav>
 
-        {/* Content Grid */}
-        {filteredContents.length === 0 ? (
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
-            <div className="flex flex-col items-center">
-              <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-                <BookOpen className="h-8 w-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                {selectedTopic ? 'No Content in this Topic' : 'No Lessons Available'}
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 max-w-md">
-                {selectedTopic 
-                  ? `There are no learning materials in "${topics.find(t => t._id === selectedTopic)?.name || 'this topic'}" yet.`
-                  : 'Check back later for new content!'}
+          {/* Page Header */}
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-3">
+                {subject?.name || "Learning Materials"}
+                <Sparkles className="h-6 w-6 text-yellow-500" />
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
+                <span>Access videos, documents, and quizzes for this subject</span>
+                {totalTopics > 0 && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
+                      <List className="h-3 w-3" />
+                      {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'}
+                    </span>
+                  </>
+                )}
+                <span className="text-gray-300 dark:text-gray-600">•</span>
+                <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                  <GraduationCap className="h-3 w-3" />
+                  {contents.length} items
+                </span>
               </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-4 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-sm border border-gray-200/50 dark:border-gray-700/50">
+                <BookOpen className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {unlockedCount}/{contents.length} Unlocked
+                </span>
+              </div>
               {selectedTopic && (
                 <button
                   onClick={() => filterByTopic(selectedTopic)}
-                  className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all flex items-center gap-2"
+                  className="px-3 py-2 bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 rounded-xl text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-950/70 transition-all flex items-center gap-1 shadow-sm"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                   Clear Filter
                 </button>
               )}
             </div>
           </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredContents.map((content) => {
-              const isHovered = hoveredContent === content._id;
-              const hasQuiz = lessonQuizzes[content._id];
-              const isUnlocked = content.isUnlocked;
-              const isPaid = content.isPaid;
-              const topicName = topics.find(t => t._id === content.topicId)?.name;
-              
-              return (
-                <div
-                  key={content._id}
-                  onMouseEnter={() => setHoveredContent(content._id)}
-                  onMouseLeave={() => setHoveredContent(null)}
-                  onClick={() => openViewer(content)}
-                  className={`group cursor-pointer rounded-xl border transition-all duration-300 overflow-hidden ${
-                    isUnlocked
-                      ? "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:shadow-xl hover:-translate-y-1"
-                      : "border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30"
-                  }`}
-                >
-                  {/* Thumbnail */}
-                  <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
-                    {content.type === "quiz" ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center">
-                        <HelpCircle className="text-white/80 text-5xl mb-2" />
-                        <span className="text-white font-medium text-sm">Interactive Quiz</span>
-                      </div>
-                    ) : (
-                      <>
-                        <img
-                          src={content.thumbnailUrl || "/api/placeholder/400/200"}
-                          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                          alt={content.title}
-                          onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
-                        />
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Eye className="h-12 w-12 text-white" />
-                        </div>
-                      </>
-                    )}
 
-                    {/* Type Badge */}
-                    <div className="absolute top-3 left-3 px-2 py-1 bg-black/70 rounded-lg text-white text-xs flex items-center gap-1">
-                      {getTypeIcon(content.type)}
-                      <span className="capitalize">{content.type}</span>
-                    </div>
+          {/* Stats Summary - Enhanced Cards */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+            <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Items</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
+                    {contents.length}
+                  </p>
+                </div>
+                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                  <BookOpen className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </div>
 
-                    {/* Quiz Badge */}
-                    {hasQuiz && content.type !== "quiz" && (
-                      <div className="absolute top-3 right-3 px-2 py-1 bg-green-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
-                        <FileQuestion className="h-3 w-3" />
-                        Quiz
-                      </div>
-                    )}
+            <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Unlocked</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+                    {unlockedCount}
+                  </p>
+                </div>
+                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg shadow-green-500/25">
+                  <CheckCircle className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </div>
 
-                    {/* Topic Badge */}
-                    {topicName && (
-                      <div className="absolute bottom-3 left-3 px-2 py-1 bg-purple-600/80 backdrop-blur-sm rounded-lg text-white text-xs font-medium flex items-center gap-1">
-                        <Hash className="h-3 w-3" />
-                        {topicName}
-                      </div>
-                    )}
+            <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Locked</p>
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
+                    {lockedCount}
+                  </p>
+                </div>
+                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/25">
+                  <Lock className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </div>
 
-                    {/* Price Badge */}
-                    {isPaid && (
-                      <div className="absolute bottom-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
-                        <DollarSign className="h-3 w-3" />
-                        ₵{content.price}
-                      </div>
-                    )}
+            <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Free Access</p>
+                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">
+                    {freeCount}
+                  </p>
+                </div>
+                <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
+                  <Zap className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </div>
+          </div>
 
-                    {/* Lock Overlay */}
-                    {isPaid && !isUnlocked && (
-                      <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center backdrop-blur-sm">
-                        <Lock className="h-10 w-10 text-white mb-2" />
-                        <p className="text-white text-sm font-medium mb-1">Premium Content</p>
-                        <p className="text-white/80 text-xs mb-3">₵{content.price} to unlock</p>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleUnlock(content);
-                          }}
-                          className="px-4 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg text-sm font-medium transition-all shadow-lg"
-                        >
-                          Unlock Now
-                        </button>
-                      </div>
-                    )}
+          {/* Topics Section - Enhanced Design */}
+          {totalTopics > 0 && (
+            <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm overflow-hidden shadow-sm mb-8">
+              <button
+                onClick={toggleTopics}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-all duration-200"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
+                    <FolderOpen className="h-5 w-5 text-white" />
                   </div>
-
-                  {/* Content Info */}
-                  <div className="p-4">
-                    <h3 className={`font-semibold text-base line-clamp-2 mb-2 transition-colors ${
-                      isUnlocked 
-                        ? "text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400" 
-                        : "text-gray-500 dark:text-gray-400"
-                    }`}>
-                      {content.title}
+                  <div className="text-left">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                      Topics in this Subject
                     </h3>
-
-                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                      <User className="h-3 w-3" />
-                      <span>By: {content.lecturerName || "Admin"}</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      <Clock className="h-3 w-3" />
-                      <span>Self-paced</span>
-                      {hasQuiz && content.type !== "quiz" && (
-                        <>
-                          <span>•</span>
-                          <span className="text-green-600 dark:text-green-400">Includes assessment</span>
-                        </>
-                      )}
-                      {isUnlocked && isPaid && (
-                        <>
-                          <span>•</span>
-                          <span className="text-green-600 dark:text-green-400">Unlocked</span>
-                        </>
-                      )}
-                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'} • Click to explore
+                    </p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                  <span className="text-sm">{expandedTopics[subjectId] ? 'Hide' : 'Show'}</span>
+                  {expandedTopics[subjectId] ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </div>
+              </button>
+              
+              {expandedTopics[subjectId] && (
+                <div className="px-6 pb-6 pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {topics.map((topic) => {
+                      const topicContentCount = contents.filter(c => c.topicId === topic._id).length;
+                      const isActive = selectedTopic === topic._id;
+                      
+                      return (
+                        <div 
+                          key={topic._id} 
+                          onClick={() => filterByTopic(topic._id)}
+                          className={`flex items-start gap-3 p-4 rounded-xl transition-all duration-200 cursor-pointer ${
+                            isActive
+                              ? 'bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/30 border-2 border-purple-400 dark:border-purple-600 shadow-lg shadow-purple-500/10'
+                              : 'bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                          }`}
+                        >
+                          <div className="flex-shrink-0 mt-1">
+                            <div className={`h-3 w-3 rounded-full ${isActive ? 'bg-purple-600 shadow-lg shadow-purple-500/50' : 'bg-purple-400'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-semibold break-words ${
+                              isActive ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-300'
+                            }`}>
+                              {topic.name}
+                            </p>
+                            {topic.description && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 break-words mt-0.5">
+                                {topic.description}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className={`text-xs px-3 py-1 rounded-full font-medium ${
+                                isActive 
+                                  ? 'bg-purple-200 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400'
+                                  : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                              }`}>
+                                {topicContentCount} item{topicContentCount !== 1 ? 's' : ''}
+                              </span>
+                              {isActive && (
+                                <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold flex items-center gap-1">
+                                  <CheckCircle className="h-3 w-3" />
+                                  Active Filter
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {isActive && (
+                            <CheckCircle className="h-5 w-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Content Grid */}
+          {filteredContents.length === 0 ? (
+            <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-16 text-center">
+              <div className="flex flex-col items-center">
+                <div className="h-20 w-20 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 flex items-center justify-center mb-4">
+                  <BookOpen className="h-10 w-10 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  {selectedTopic ? 'No Content in this Topic' : 'No Lessons Available'}
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                  {selectedTopic 
+                    ? `There are no learning materials in "${topics.find(t => t._id === selectedTopic)?.name || 'this topic'}" yet.`
+                    : 'Check back later for new content!'}
+                </p>
+                {selectedTopic && (
+                  <button
+                    onClick={() => filterByTopic(selectedTopic)}
+                    className="mt-6 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-xl transition-all shadow-lg shadow-purple-500/25 flex items-center gap-2"
+                  >
+                    <X className="h-4 w-4" />
+                    Clear Filter
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredContents.map((content) => {
+                const isHovered = hoveredContent === content._id;
+                const hasQuiz = lessonQuizzes[content._id];
+                const isUnlocked = content.isUnlocked;
+                const isPaid = content.isPaid;
+                const topicName = topics.find(t => t._id === content.topicId)?.name;
+                
+                return (
+                  <div
+                    key={content._id}
+                    onMouseEnter={() => setHoveredContent(content._id)}
+                    onMouseLeave={() => setHoveredContent(null)}
+                    onClick={() => openViewer(content)}
+                    className={`group cursor-pointer rounded-2xl border transition-all duration-300 overflow-hidden backdrop-blur-sm ${
+                      isUnlocked
+                        ? "border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 hover:shadow-2xl hover:-translate-y-2"
+                        : "border-gray-200/50 dark:border-gray-700/50 bg-gray-50/60 dark:bg-gray-800/60"
+                    }`}
+                  >
+                    {/* Thumbnail */}
+                    <div className={`relative h-48 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
+                      {content.type === "quiz" ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center">
+                          <HelpCircle className="text-white/80 text-6xl mb-3" />
+                          <span className="text-white font-semibold text-sm">Interactive Quiz</span>
+                        </div>
+                      ) : (
+                        <>
+                          <img
+                            src={content.thumbnailUrl || "/api/placeholder/400/200"}
+                            className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-500"
+                            alt={content.title}
+                            onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Eye className="h-14 w-14 text-white drop-shadow-2xl" />
+                          </div>
+                        </>
+                      )}
+
+                      {/* Type Badge */}
+                      <div className="absolute top-3 left-3 px-3 py-1.5 bg-black/70 backdrop-blur-sm rounded-xl text-white text-xs font-medium flex items-center gap-1.5">
+                        {getTypeIcon(content.type)}
+                        <span className="capitalize">{content.type}</span>
+                      </div>
+
+                      {/* Quiz Badge */}
+                      {hasQuiz && content.type !== "quiz" && (
+                        <div className="absolute top-3 right-3 px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl text-white text-xs font-medium flex items-center gap-1.5 shadow-lg shadow-green-500/25">
+                          <FileQuestion className="h-3 w-3" />
+                          Quiz
+                        </div>
+                      )}
+
+                      {/* Topic Badge */}
+                      {topicName && (
+                        <div className="absolute bottom-3 left-3 px-3 py-1.5 bg-purple-600/80 backdrop-blur-sm rounded-xl text-white text-xs font-medium flex items-center gap-1.5 shadow-lg shadow-purple-500/25">
+                          <Hash className="h-3 w-3" />
+                          {topicName}
+                        </div>
+                      )}
+
+                      {/* Price Badge */}
+                      {isPaid && (
+                        <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 rounded-xl text-white text-xs font-medium flex items-center gap-1.5 shadow-lg shadow-yellow-500/25">
+                          <DollarSign className="h-3 w-3" />
+                          ₵{content.price}
+                        </div>
+                      )}
+
+                      {/* Lock Overlay */}
+                      {isPaid && !isUnlocked && (
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center">
+                          <Lock className="h-12 w-12 text-white mb-3 drop-shadow-2xl" />
+                          <p className="text-white text-sm font-semibold mb-1">Premium Content</p>
+                          <p className="text-white/80 text-xs mb-4">₵{content.price} to unlock</p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUnlock(content);
+                            }}
+                            className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl text-sm font-semibold transition-all shadow-xl shadow-purple-500/25 hover:shadow-2xl"
+                          >
+                            Unlock Now
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content Info */}
+                    <div className="p-5">
+                      <h3 className={`font-semibold text-base line-clamp-2 mb-2 transition-colors ${
+                        isUnlocked 
+                          ? "text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400" 
+                          : "text-gray-500 dark:text-gray-400"
+                      }`}>
+                        {content.title}
+                      </h3>
+
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                        <User className="h-3.5 w-3.5" />
+                        <span>By: {content.lecturerName || "Admin"}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>Self-paced</span>
+                        {hasQuiz && content.type !== "quiz" && (
+                          <>
+                            <span className="text-gray-300 dark:text-gray-600">•</span>
+                            <span className="text-green-600 dark:text-green-400 font-medium">Includes assessment</span>
+                          </>
+                        )}
+                        {isUnlocked && isPaid && (
+                          <>
+                            <span className="text-gray-300 dark:text-gray-600">•</span>
+                            <span className="text-green-600 dark:text-green-400 font-medium">Unlocked</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Secure Viewer Modal - Enhanced with Floating PDF Controls */}
@@ -856,9 +865,9 @@ const StudentLessons = () => {
           onClick={viewer.type === "pdf" ? toggleControls : undefined}
         >
           {/* Top Header - Always visible */}
-          <div className="flex flex-wrap items-center gap-2 p-3 text-white bg-black/70 flex-shrink-0 border-b border-white/10 z-10">
+          <div className="flex flex-wrap items-center gap-2 p-3 text-white bg-black/70 backdrop-blur-lg flex-shrink-0 border-b border-white/10 z-10">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/25">
                 {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
               </div>
               <h3 className="font-semibold text-sm sm:text-base truncate">
