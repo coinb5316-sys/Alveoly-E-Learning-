@@ -1,4 +1,4 @@
-// StudentLessons.jsx - Complete updated with beautiful gradient background and enhanced UI
+// StudentLessons.jsx - Complete with beautiful content viewer backgrounds
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -41,7 +41,10 @@ import {
   ZoomOut,
   Move,
   Download,
-  Share2
+  Share2,
+  Layers,
+  Palette,
+  Grid3x3
 } from "lucide-react";
 
 const StudentLessons = () => {
@@ -73,6 +76,61 @@ const StudentLessons = () => {
     title: "",
     lessonId: null,
   });
+
+  // Beautiful gradient backgrounds for content viewer
+  const viewerGradients = [
+    "from-indigo-900 via-purple-900 to-pink-900",
+    "from-blue-900 via-cyan-900 to-teal-900",
+    "from-purple-900 via-pink-900 to-rose-900",
+    "from-green-900 via-emerald-900 to-teal-900",
+    "from-orange-900 via-amber-900 to-yellow-900",
+    "from-red-900 via-rose-900 to-pink-900",
+    "from-blue-950 via-indigo-950 to-purple-950",
+    "from-cyan-950 via-blue-950 to-indigo-950",
+    "from-emerald-950 via-green-950 to-lime-950",
+    "from-fuchsia-950 via-purple-950 to-violet-950",
+    "from-amber-950 via-orange-950 to-red-950",
+    "from-teal-950 via-cyan-950 to-blue-950",
+  ];
+
+  // Decorative pattern overlays for viewer
+  const viewerPatterns = [
+    "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
+    "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.03' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")",
+    "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.03' fill-rule='evenodd'%3E%3Ccircle cx='20' cy='20' r='3'/%3E%3Ccircle cx='0' cy='0' r='3'/%3E%3Ccircle cx='40' cy='0' r='3'/%3E%3Ccircle cx='0' cy='40' r='3'/%3E%3Ccircle cx='40' cy='40' r='3'/%3E%3C/g%3E%3C/svg%3E\")",
+    "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
+  ];
+
+  // Animated gradient backgrounds for viewer
+  const animatedGradients = [
+    "bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900",
+    "bg-gradient-to-br from-blue-900 via-cyan-900 to-teal-900",
+    "bg-gradient-to-br from-purple-900 via-pink-900 to-rose-900",
+    "bg-gradient-to-br from-green-900 via-emerald-900 to-teal-900",
+  ];
+
+  const [viewerGradientIndex, setViewerGradientIndex] = useState(0);
+
+  // Rotate viewer background gradient every few seconds
+  useEffect(() => {
+    if (viewer.open) {
+      const interval = setInterval(() => {
+        setViewerGradientIndex((prev) => (prev + 1) % viewerGradients.length);
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [viewer.open]);
+
+  const [viewerPatternIndex, setViewerPatternIndex] = useState(0);
+
+  useEffect(() => {
+    if (viewer.open) {
+      const interval = setInterval(() => {
+        setViewerPatternIndex((prev) => (prev + 1) % viewerPatterns.length);
+      }, 8000);
+      return () => clearInterval(interval);
+    }
+  }, [viewer.open]);
 
   // Fetch subject details
   const fetchSubjectDetails = async () => {
@@ -856,21 +914,45 @@ const StudentLessons = () => {
         </div>
       </div>
 
-      {/* Secure Viewer Modal - Enhanced with Floating PDF Controls */}
+      {/* Secure Viewer Modal - Enhanced with Beautiful Animated Gradient Background */}
       {viewer.open && (
         <div 
           id="secure-viewer" 
-          className="fixed inset-0 bg-black/98 z-50 flex flex-col"
+          className="fixed inset-0 z-50 flex flex-col"
           onContextMenu={(e) => e.preventDefault()}
           onClick={viewer.type === "pdf" ? toggleControls : undefined}
         >
+          {/* Animated Gradient Background */}
+          <div className={`absolute inset-0 ${viewerGradients[viewerGradientIndex]} transition-all duration-1000 ease-in-out`}>
+            {/* Pattern Overlay */}
+            <div 
+              className="absolute inset-0 opacity-30 transition-all duration-1000"
+              style={{ backgroundImage: viewerPatterns[viewerPatternIndex] }}
+            ></div>
+            
+            {/* Animated Gradient Orbs */}
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute -top-40 -right-40 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
+              <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl animate-pulse delay-2000"></div>
+              
+              {/* Floating Particles */}
+              <div className="absolute inset-0">
+                <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-white/20 rounded-full animate-float"></div>
+                <div className="absolute top-3/4 left-1/3 w-3 h-3 bg-white/15 rounded-full animate-float-delay"></div>
+                <div className="absolute top-1/2 right-1/4 w-2 h-2 bg-white/25 rounded-full animate-float-delay-2"></div>
+                <div className="absolute bottom-1/4 right-1/3 w-4 h-4 bg-white/10 rounded-full animate-float-delay-3"></div>
+              </div>
+            </div>
+          </div>
+
           {/* Top Header - Always visible */}
-          <div className="flex flex-wrap items-center gap-2 p-3 text-white bg-black/70 backdrop-blur-lg flex-shrink-0 border-b border-white/10 z-10">
+          <div className="relative z-10 flex flex-wrap items-center gap-2 p-3 text-white bg-black/50 backdrop-blur-lg flex-shrink-0 border-b border-white/10">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/25">
                 {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
               </div>
-              <h3 className="font-semibold text-sm sm:text-base truncate">
+              <h3 className="font-semibold text-sm sm:text-base truncate text-white drop-shadow-lg">
                 {viewer.title}
               </h3>
             </div>
@@ -887,7 +969,7 @@ const StudentLessons = () => {
               )}
               <button 
                 onClick={closeViewer} 
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                className="p-2 rounded-lg hover:bg-white/20 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -895,24 +977,30 @@ const StudentLessons = () => {
           </div>
 
           {/* Content Area */}
-          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 min-h-0 relative overflow-hidden">
+          <div className="relative z-10 flex-1 flex items-center justify-center p-2 sm:p-4 min-h-0 overflow-hidden">
             {/* Loading State */}
             {isPdfLoading && viewer.type === "pdf" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black z-20">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-20">
                 <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-                  <p className="text-white/60 text-sm">Loading document...</p>
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-blue-500/30 blur-2xl rounded-full animate-pulse"></div>
+                    <Loader2 className="h-12 w-12 text-blue-400 animate-spin relative z-10" />
+                  </div>
+                  <p className="text-white/80 text-sm font-medium drop-shadow-lg">Loading document...</p>
                 </div>
               </div>
             )}
 
             {/* PDF Error State */}
             {pdfError && viewer.type === "pdf" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black z-20">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-20">
                 <div className="flex flex-col items-center gap-3 max-w-md text-center px-4">
-                  <AlertCircle className="h-12 w-12 text-red-500" />
-                  <h3 className="text-white font-semibold text-lg">Unable to Load PDF</h3>
-                  <p className="text-white/60 text-sm">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-red-500/30 blur-2xl rounded-full animate-pulse"></div>
+                    <AlertCircle className="h-16 w-16 text-red-400 relative z-10" />
+                  </div>
+                  <h3 className="text-white font-semibold text-lg drop-shadow-lg">Unable to Load PDF</h3>
+                  <p className="text-white/70 text-sm drop-shadow">
                     The document couldn't be loaded. Please try again or contact support.
                   </p>
                   <button
@@ -924,7 +1012,7 @@ const StudentLessons = () => {
                         iframe.src = iframe.src;
                       }
                     }}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl transition-all shadow-xl shadow-purple-500/25"
                   >
                     Retry
                   </button>
@@ -941,7 +1029,7 @@ const StudentLessons = () => {
                 autoPlay
                 onContextMenu={(e) => e.preventDefault()}
                 onDragStart={(e) => e.preventDefault()}
-                className="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
+                className="max-w-full max-h-full rounded-2xl shadow-2xl object-contain border-2 border-white/10 backdrop-blur-sm"
               />
             )}
 
@@ -952,7 +1040,7 @@ const StudentLessons = () => {
                 draggable={false}
                 onContextMenu={(e) => e.preventDefault()}
                 onDragStart={(e) => e.preventDefault()}
-                className="max-w-full max-h-full rounded-lg select-none shadow-2xl object-contain"
+                className="max-w-full max-h-full rounded-2xl select-none shadow-2xl object-contain border-2 border-white/10 backdrop-blur-sm"
               />
             )}
 
@@ -972,7 +1060,7 @@ const StudentLessons = () => {
                   id="pdf-viewer"
                   src={`https://docs.google.com/gview?url=${encodeURIComponent(viewer.url)}&embedded=true`}
                   title={viewer.title}
-                  className="w-full h-full min-h-[400px] sm:min-h-[500px] rounded-lg shadow-2xl bg-white"
+                  className="w-full h-full min-h-[400px] sm:min-h-[500px] rounded-2xl shadow-2xl bg-white border-2 border-white/10 backdrop-blur-sm"
                   onContextMenu={(e) => e.preventDefault()}
                   sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                   onLoad={handlePdfLoad}
@@ -992,11 +1080,11 @@ const StudentLessons = () => {
           {/* FLOATING PDF CONTROLS - Always visible and on top */}
           {viewer.type === "pdf" && (
             <div 
-              className={`absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 transition-all duration-300 ${
+              className={`relative z-30 transition-all duration-300 ${
                 showPdfControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
               }`}
             >
-              <div className="flex items-center gap-2 bg-black/80 backdrop-blur-lg rounded-full px-3 py-2 border border-white/20 shadow-2xl">
+              <div className="flex items-center gap-2 bg-black/80 backdrop-blur-lg rounded-full px-4 py-2.5 border border-white/20 shadow-2xl mx-auto mb-4 w-fit">
                 <button
                   onClick={(e) => { e.stopPropagation(); zoomOut(); }}
                   className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
@@ -1040,10 +1128,10 @@ const StudentLessons = () => {
 
           {/* Mobile Instructions - With controls visibility indicator */}
           {viewer.type === "pdf" && (
-            <div className={`flex-shrink-0 p-2 text-center text-white/40 text-xs border-t border-white/10 bg-black/30 z-10 transition-opacity duration-300 ${
+            <div className={`relative z-10 flex-shrink-0 p-2 text-center text-white/60 text-xs border-t border-white/10 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
               showPdfControls ? 'opacity-100' : 'opacity-0'
             }`}>
-              <span className="flex items-center justify-center gap-2">
+              <span className="flex items-center justify-center gap-2 drop-shadow-lg">
                 <ZoomIn className="h-3 w-3" />
                 Tap screen to show/hide controls • Pinch to zoom
                 <ZoomOut className="h-3 w-3" />
@@ -1051,12 +1139,12 @@ const StudentLessons = () => {
             </div>
           )}
 
-          {/* Watermark */}
-          <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+          {/* Watermark - Now with gradient text */}
+          <div className="absolute inset-0 pointer-events-none select-none overflow-hidden z-0">
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-8 rotate-[-30deg] opacity-5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-8 rotate-[-30deg]">
                 {[...Array(9)].map((_, i) => (
-                  <p key={i} className="text-white text-base sm:text-lg font-bold whitespace-nowrap">
+                  <p key={i} className="text-white/10 text-base sm:text-lg font-bold whitespace-nowrap drop-shadow-2xl" style={{ textShadow: '0 0 20px rgba(255,255,255,0.1)' }}>
                     PROTECTED • ALVEOLY
                   </p>
                 ))}
