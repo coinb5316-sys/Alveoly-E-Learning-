@@ -1,5 +1,5 @@
-// StudentLessons.jsx - Complete updated with professional UI and topic organization
-import { useEffect, useState } from "react";
+// StudentLessons.jsx - Complete updated with professional UI and mobile-optimized PDF viewing
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -34,7 +34,14 @@ import {
   Calendar,
   User,
   ChevronRight,
-  Home
+  Home,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+  Move,
+  Download,
+  Share2
 } from "lucide-react";
 
 const StudentLessons = () => {
@@ -50,7 +57,12 @@ const StudentLessons = () => {
   const [subject, setSubject] = useState(null);
   const [expandedTopics, setExpandedTopics] = useState({});
   const [selectedTopic, setSelectedTopic] = useState(null);
-  const [viewMode, setViewMode] = useState('all'); // 'all' | 'topic'
+  const [viewMode, setViewMode] = useState('all');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pdfScale, setPdfScale] = useState(1);
+  const [isPdfLoading, setIsPdfLoading] = useState(true);
+  const [pdfError, setPdfError] = useState(false);
+  const pdfContainerRef = useRef(null);
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -79,7 +91,6 @@ const StudentLessons = () => {
       const res = await axios.get(`/content?subjectId=${subjectId}`);
       const contentsData = res.data;
       
-      // Check which contents are unlocked
       const unlockedIds = [];
       for (const content of contentsData) {
         if (content.isPaid) {
@@ -95,7 +106,6 @@ const StudentLessons = () => {
       }
       setUnlockedContents(unlockedIds);
       
-      // Add unlocked status to content objects
       const contentsWithUnlockStatus = contentsData.map(content => ({
         ...content,
         isUnlocked: !content.isPaid || unlockedIds.includes(content._id)
@@ -103,7 +113,6 @@ const StudentLessons = () => {
       
       setContents(contentsWithUnlockStatus);
       
-      // Check which lessons have quizzes
       const quizStatus = {};
       for (const lesson of contentsWithUnlockStatus) {
         if (lesson.type === "quiz") {
@@ -138,7 +147,6 @@ const StudentLessons = () => {
     }
   }, [subjectId]);
 
-  // Toggle topics expansion
   const toggleTopics = () => {
     setExpandedTopics(prev => ({
       ...prev,
@@ -146,13 +154,11 @@ const StudentLessons = () => {
     }));
   };
 
-  // Filter contents by topic
   const filterByTopic = (topicId) => {
     setSelectedTopic(topicId === selectedTopic ? null : topicId);
     setViewMode(topicId === selectedTopic ? 'all' : 'topic');
   };
 
-  // Get filtered contents based on selected topic
   const getFilteredContents = () => {
     if (selectedTopic && viewMode === 'topic') {
       return contents.filter(c => c.topicId === selectedTopic);
@@ -162,7 +168,6 @@ const StudentLessons = () => {
 
   const filteredContents = getFilteredContents();
 
-  // Check for recent payment on mount
   useEffect(() => {
     const checkRecentPayment = async () => {
       const reference = localStorage.getItem('pending_payment_reference');
@@ -174,7 +179,6 @@ const StudentLessons = () => {
     checkRecentPayment();
   }, []);
 
-  // Check for payment callback on page load
   useEffect(() => {
     const checkPaymentCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -310,6 +314,10 @@ const StudentLessons = () => {
       return;
     }
     
+    setPdfScale(1);
+    setIsPdfLoading(true);
+    setPdfError(false);
+    
     setViewer({
       open: true,
       type: c.type,
@@ -320,6 +328,7 @@ const StudentLessons = () => {
   };
 
   const closeViewer = () => {
+    setIsFullscreen(false);
     setViewer({
       open: false,
       type: "",
@@ -332,6 +341,30 @@ const StudentLessons = () => {
   const handleTakeQuiz = () => {
     closeViewer();
     navigate(`/student/lessons/${viewer.lessonId}/quiz`);
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    }
+  };
+
+  const zoomIn = () => {
+    setPdfScale(prev => Math.min(prev + 0.2, 3));
+  };
+
+  const zoomOut = () => {
+    setPdfScale(prev => Math.max(prev - 0.2, 0.5));
+  };
+
+  const resetZoom = () => {
+    setPdfScale(1);
   };
 
   const getTypeIcon = (type) => {
@@ -360,12 +393,24 @@ const StudentLessons = () => {
   const topics = subject?.topics || [];
   const totalTopics = topics.length;
 
+  // Handle PDF load success
+  const handlePdfLoad = () => {
+    setIsPdfLoading(false);
+    setPdfError(false);
+  };
+
+  // Handle PDF load error
+  const handlePdfError = () => {
+    setIsPdfLoading(false);
+    setPdfError(true);
+  };
+
   if (loading || processingPayment) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse">
           <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded mb-8" />
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
                 <div className="h-44 bg-gray-200 dark:bg-gray-800" />
@@ -402,7 +447,7 @@ const StudentLessons = () => {
   return (
     <>
       <Toaster position="top-right" />
-      <div className="space-y-6">
+      <div className="space-y-6 pb-20">
         {/* Breadcrumb Navigation */}
         <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <button 
@@ -462,7 +507,7 @@ const StudentLessons = () => {
         </div>
 
         {/* Stats Summary - Professional Cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
@@ -635,7 +680,7 @@ const StudentLessons = () => {
             </div>
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredContents.map((content) => {
               const isHovered = hoveredContent === content._id;
               const hasQuiz = lessonQuizzes[content._id];
@@ -764,30 +809,71 @@ const StudentLessons = () => {
         )}
       </div>
 
-      {/* Secure Viewer Modal */}
+      {/* Secure Viewer Modal - Enhanced for Mobile PDF Viewing */}
       {viewer.open && (
         <div 
           id="secure-viewer" 
           className="fixed inset-0 bg-black/98 z-50 flex flex-col"
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="flex justify-between items-center p-4 text-white bg-black/50 flex-shrink-0 border-b border-white/10">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+          {/* Header */}
+          <div className="flex flex-wrap items-center gap-2 p-3 text-white bg-black/50 flex-shrink-0 border-b border-white/10">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                 {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
               </div>
-              <h3 className="font-semibold text-lg truncate">
+              <h3 className="font-semibold text-sm sm:text-base truncate">
                 {viewer.title}
               </h3>
             </div>
-            <div className="flex gap-3 flex-shrink-0 ml-4">
+            
+            {/* PDF Controls - Show only for PDFs */}
+            {viewer.type === "pdf" && (
+              <div className="flex items-center gap-1 bg-white/10 rounded-lg px-2 py-1">
+                <button
+                  onClick={zoomOut}
+                  className="p-1.5 hover:bg-white/20 rounded transition-colors"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <span className="text-xs font-mono min-w-[40px] text-center">
+                  {Math.round(pdfScale * 100)}%
+                </span>
+                <button
+                  onClick={zoomIn}
+                  className="p-1.5 hover:bg-white/20 rounded transition-colors"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={resetZoom}
+                  className="p-1.5 hover:bg-white/20 rounded transition-colors text-xs"
+                  title="Reset Zoom"
+                >
+                  <Move className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-1 flex-shrink-0">
+              {viewer.type === "pdf" && (
+                <button
+                  onClick={toggleFullscreen}
+                  className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                  title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                >
+                  {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </button>
+              )}
               {lessonQuizzes[viewer.lessonId] && viewer.type !== "quiz" && (
                 <button
                   onClick={handleTakeQuiz}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 rounded-lg text-sm font-medium transition-all shadow-lg shadow-green-500/25"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 rounded-lg text-xs sm:text-sm font-medium transition-all shadow-lg shadow-green-500/25"
                 >
                   <FileQuestion className="h-4 w-4" />
-                  Take Quiz
+                  <span className="hidden sm:inline">Take Quiz</span>
                 </button>
               )}
               <button 
@@ -799,7 +885,45 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          <div className="flex-1 flex items-center justify-center p-4 min-h-0">
+          {/* Content Area */}
+          <div className="flex-1 flex items-center justify-center p-2 sm:p-4 min-h-0 relative">
+            {/* Loading State */}
+            {isPdfLoading && viewer.type === "pdf" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black">
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+                  <p className="text-white/60 text-sm">Loading document...</p>
+                </div>
+              </div>
+            )}
+
+            {/* PDF Error State */}
+            {pdfError && viewer.type === "pdf" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black">
+                <div className="flex flex-col items-center gap-3 max-w-md text-center px-4">
+                  <AlertCircle className="h-12 w-12 text-red-500" />
+                  <h3 className="text-white font-semibold text-lg">Unable to Load PDF</h3>
+                  <p className="text-white/60 text-sm">
+                    The document couldn't be loaded. Please try again or contact support.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setIsPdfLoading(true);
+                      setPdfError(false);
+                      // Force reload by resetting the iframe src
+                      const iframe = document.querySelector('#pdf-viewer');
+                      if (iframe) {
+                        iframe.src = iframe.src;
+                      }
+                    }}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            )}
+
             {viewer.type === "video" && (
               <video
                 src={viewer.url}
@@ -825,22 +949,55 @@ const StudentLessons = () => {
             )}
 
             {viewer.type === "pdf" && (
-              <iframe
-                src={`https://docs.google.com/gview?url=${encodeURIComponent(viewer.url)}&embedded=true`}
-                title={viewer.title}
-                className="w-full h-full rounded-lg shadow-2xl"
-                onContextMenu={(e) => e.preventDefault()}
-                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-              />
+              <div 
+                ref={pdfContainerRef}
+                className="w-full h-full flex items-center justify-center"
+                style={{
+                  transform: `scale(${pdfScale})`,
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.2s ease',
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                }}
+              >
+                <iframe
+                  id="pdf-viewer"
+                  src={`https://docs.google.com/gview?url=${encodeURIComponent(viewer.url)}&embedded=true`}
+                  title={viewer.title}
+                  className="w-full h-full min-h-[400px] sm:min-h-[500px] rounded-lg shadow-2xl bg-white"
+                  onContextMenu={(e) => e.preventDefault()}
+                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                  onLoad={handlePdfLoad}
+                  onError={handlePdfError}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    minHeight: '500px',
+                    border: 'none',
+                    touchAction: 'pinch-zoom'
+                  }}
+                />
+              </div>
             )}
           </div>
+
+          {/* Mobile Instructions for PDF */}
+          {viewer.type === "pdf" && (
+            <div className="flex-shrink-0 p-2 text-center text-white/40 text-xs border-t border-white/10 bg-black/30">
+              <span className="flex items-center justify-center gap-2">
+                <ZoomIn className="h-3 w-3" />
+                Pinch to zoom on mobile
+                <ZoomOut className="h-3 w-3" />
+              </span>
+            </div>
+          )}
 
           {/* Watermark */}
           <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="grid grid-cols-3 gap-8 rotate-[-30deg] opacity-5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-8 rotate-[-30deg] opacity-5">
                 {[...Array(9)].map((_, i) => (
-                  <p key={i} className="text-white text-lg font-bold whitespace-nowrap">
+                  <p key={i} className="text-white text-base sm:text-lg font-bold whitespace-nowrap">
                     PROTECTED • ALVEOLY
                   </p>
                 ))}
