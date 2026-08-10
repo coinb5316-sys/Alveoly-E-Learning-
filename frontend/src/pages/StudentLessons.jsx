@@ -1,4 +1,4 @@
-// StudentLessons.jsx - Complete with full lesson title display (FIXED)
+// StudentLessons.jsx - Complete with FULL title display (FIXED)
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -906,7 +906,7 @@ const StudentLessons = () => {
         </div>
       </div>
 
-      {/* Secure Viewer Modal - Enhanced with Beautiful Animated Gradient Background */}
+      {/* Secure Viewer Modal - FIXED: Full title display */}
       {viewer.open && (
         <div 
           id="secure-viewer" 
@@ -938,23 +938,23 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          {/* Top Header - FIXED: Full title display without truncation */}
-          <div className="relative z-10 flex flex-wrap gap-2 p-3 text-white bg-black/50 backdrop-blur-lg flex-shrink-0 border-b border-white/10">
-            {/* Title section - takes available space */}
-            <div className="flex items-start gap-2 flex-1 min-w-0">
+          {/* Top Header - FIXED: Title now displays fully */}
+          <div className="relative z-10 flex flex-col gap-2 p-3 text-white bg-black/50 backdrop-blur-lg flex-shrink-0 border-b border-white/10">
+            {/* Title row - takes full width */}
+            <div className="flex items-start gap-2 w-full">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-purple-500/25">
                 {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
               </div>
-              {/* Title - Full width with proper wrapping, NO truncation */}
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm sm:text-base md:text-lg text-white drop-shadow-lg break-words leading-tight whitespace-normal">
+              {/* Title - FULL WIDTH with proper wrapping, NO truncation */}
+              <div className="flex-1">
+                <h3 className="font-semibold text-sm sm:text-base md:text-lg text-white drop-shadow-lg break-words leading-tight whitespace-normal w-full">
                   {viewer.title}
                 </h3>
               </div>
             </div>
             
-            {/* Buttons - fixed width, no shrink */}
-            <div className="flex gap-1 flex-shrink-0 ml-auto">
+            {/* Buttons row */}
+            <div className="flex gap-1 justify-end w-full">
               {lessonQuizzes[viewer.lessonId] && viewer.type !== "quiz" && (
                 <button
                   onClick={handleTakeQuiz}
