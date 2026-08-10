@@ -938,23 +938,27 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          {/* Top Header - Always visible with FULL title display */}
-          <div className="relative z-10 flex flex-wrap items-start gap-2 p-3 text-white bg-black/50 backdrop-blur-lg flex-shrink-0 border-b border-white/10">
-            <div className="flex items-start gap-2 min-w-0 flex-1">
+          {/* Top Header - Always visible with FULL title display - FIXED */}
+          <div className="relative z-10 flex flex-wrap gap-2 p-3 text-white bg-black/50 backdrop-blur-lg flex-shrink-0 border-b border-white/10">
+            {/* Title section - takes available space */}
+            <div className="flex items-start gap-2 flex-1 min-w-0">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-purple-500/25">
                 {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
               </div>
-              {/* Title - Fully displayed with word wrapping, no truncation */}
-              <h3 className="font-semibold text-sm sm:text-base md:text-lg text-white drop-shadow-lg break-words leading-tight">
-                {viewer.title}
-              </h3>
+              {/* Title - Full width with proper wrapping, NO truncation */}
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm sm:text-base md:text-lg text-white drop-shadow-lg break-words leading-tight whitespace-normal">
+                  {viewer.title}
+                </h3>
+              </div>
             </div>
             
+            {/* Buttons - fixed width, no shrink */}
             <div className="flex gap-1 flex-shrink-0 ml-auto">
               {lessonQuizzes[viewer.lessonId] && viewer.type !== "quiz" && (
                 <button
                   onClick={handleTakeQuiz}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 rounded-lg text-xs sm:text-sm font-medium transition-all shadow-lg shadow-green-500/25"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 rounded-lg text-xs sm:text-sm font-medium transition-all shadow-lg shadow-green-500/25 whitespace-nowrap"
                 >
                   <FileQuestion className="h-4 w-4" />
                   <span className="hidden sm:inline">Take Quiz</span>
@@ -962,7 +966,7 @@ const StudentLessons = () => {
               )}
               <button 
                 onClick={closeViewer} 
-                className="p-2 rounded-lg hover:bg-white/20 transition-colors"
+                className="p-2 rounded-lg hover:bg-white/20 transition-colors flex-shrink-0"
               >
                 <X className="h-5 w-5" />
               </button>
