@@ -1,4 +1,4 @@
-// StudentLessons.jsx - Complete with beautiful content viewer backgrounds
+// StudentLessons.jsx - Complete with full lesson title display
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -99,14 +99,6 @@ const StudentLessons = () => {
     "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.03' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")",
     "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.03' fill-rule='evenodd'%3E%3Ccircle cx='20' cy='20' r='3'/%3E%3Ccircle cx='0' cy='0' r='3'/%3E%3Ccircle cx='40' cy='0' r='3'/%3E%3Ccircle cx='0' cy='40' r='3'/%3E%3Ccircle cx='40' cy='40' r='3'/%3E%3C/g%3E%3C/svg%3E\")",
     "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
-  ];
-
-  // Animated gradient backgrounds for viewer
-  const animatedGradients = [
-    "bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900",
-    "bg-gradient-to-br from-blue-900 via-cyan-900 to-teal-900",
-    "bg-gradient-to-br from-purple-900 via-pink-900 to-rose-900",
-    "bg-gradient-to-br from-green-900 via-emerald-900 to-teal-900",
   ];
 
   const [viewerGradientIndex, setViewerGradientIndex] = useState(0);
@@ -946,18 +938,19 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          {/* Top Header - Always visible */}
-          <div className="relative z-10 flex flex-wrap items-center gap-2 p-3 text-white bg-black/50 backdrop-blur-lg flex-shrink-0 border-b border-white/10">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/25">
+          {/* Top Header - Always visible with FULL title display */}
+          <div className="relative z-10 flex flex-wrap items-start gap-2 p-3 text-white bg-black/50 backdrop-blur-lg flex-shrink-0 border-b border-white/10">
+            <div className="flex items-start gap-2 min-w-0 flex-1">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-purple-500/25">
                 {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
               </div>
-              <h3 className="font-semibold text-sm sm:text-base truncate text-white drop-shadow-lg">
+              {/* Title - Fully displayed with word wrapping, no truncation */}
+              <h3 className="font-semibold text-sm sm:text-base md:text-lg text-white drop-shadow-lg break-words leading-tight">
                 {viewer.title}
               </h3>
             </div>
             
-            <div className="flex gap-1 flex-shrink-0">
+            <div className="flex gap-1 flex-shrink-0 ml-auto">
               {lessonQuizzes[viewer.lessonId] && viewer.type !== "quiz" && (
                 <button
                   onClick={handleTakeQuiz}
