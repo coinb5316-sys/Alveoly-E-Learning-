@@ -1,6 +1,6 @@
-// StudentLayout.jsx - Updated with notification panel
-import { useState, useEffect } from "react";
-import { Outlet, NavLink, useLocation } from "react-router-dom";
+// StudentLayout.jsx - Updated with exam navigation blocking
+import { useState, useEffect, useRef } from "react";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   BookOpen,
@@ -24,6 +24,7 @@ import {
   DollarSign,
   Video,
   Award,
+  Lock,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import StudentNotificationPanel from "../components/StudentNotificationPanel";
@@ -35,8 +36,54 @@ const StudentLayout = () => {
   const [scrolled, setScrolled] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationBadge, setNotificationBadge] = useState(3);
+  const [isExamMode, setIsExamMode] = useState(false);
   const { logout, user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const examCheckInterval = useRef(null);
+
+  // Check if currently on exam page
+  useEffect(() => {
+    const checkExamMode = () => {
+      const isExam = location.pathname.includes('/exam/') || 
+                     location.pathname.includes('/student/exam');
+      setIsExamMode(isExam);
+      
+      // If on exam page, prevent navigation
+      if (isExam) {
+        // The exam page itself handles blocking
+        // But we also prevent any click on layout elements
+        document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
+          if (!el.closest('#exam-container')) {
+            el.style.pointerEvents = 'none';
+            el.style.opacity = '0.5';
+          }
+        });
+      } else {
+        // Restore navigation
+        document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
+          el.style.pointerEvents = '';
+          el.style.opacity = '';
+        });
+      }
+    };
+
+    checkExamMode();
+    
+    // Check periodically
+    examCheckInterval.current = setInterval(checkExamMode, 1000);
+
+    return () => {
+      if (examCheckInterval.current) {
+        clearInterval(examCheckInterval.current);
+      }
+      // Restore all elements
+      document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
+        el.style.pointerEvents = '';
+        el.style.opacity = '';
+      });
+    };
+  }, [location]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -77,10 +124,25 @@ const StudentLayout = () => {
     setNotificationBadge(prev => Math.max(0, prev - 1));
   };
 
+  const handleNavigation = (to) => {
+    // Prevent navigation during exam
+    if (isExamMode) {
+      // Check if we're on exam page
+      const isOnExam = location.pathname.includes('/exam/') || 
+                       location.pathname.includes('/student/exam');
+      if (isOnExam) {
+        // Show warning and stay on page
+        alert("⚠️ You cannot navigate away from the exam page. Please complete your exam first.");
+        return;
+      }
+    }
+    navigate(to);
+  };
+
   const menuItems = [
     { to: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard, color: "text-blue-500" },
     { to: "/student/courses", label: "My Courses", icon: BookOpen, color: "text-green-500" },
-     { to: "/student/nursing-games", label: "Nursing Games", icon: Award, color: "text-yellow-500" }, // Add this
+    { to: "/student/nursing-games", label: "Nursing Games", icon: Award, color: "text-yellow-500" },
     { to: "/student/subjects", label: "Subjects", icon: ClipboardList, color: "text-purple-500" },
     { to: "/student/progress", label: "Progress", icon: TrendingUp, color: "text-orange-500" },
     { to: "/student/plans", label: "Plans", icon: Tags, color: "text-pink-500" },
@@ -116,6 +178,11 @@ const StudentLayout = () => {
             <span className="text-xl font-semibold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400 bg-clip-text text-transparent">
               Alveoly
             </span>
+            {isExamMode && (
+              <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">
+                🔒 Exam
+              </span>
+            )}
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -135,23 +202,23 @@ const StudentLayout = () => {
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.to;
+                const isDisabled = isExamMode && location.pathname.includes('/exam/');
                 return (
-                  <NavLink
+                  <button
                     key={item.to}
-                    to={item.to}
-                    onClick={() => setSidebarOpen(false)}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
-                        isActive
-                          ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400"
-                          : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200"
-                      }`
-                    }
+                    onClick={() => handleNavigation(item.to)}
+                    disabled={isDisabled}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                      isActive
+                        ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400"
+                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200"
+                    } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <Icon className={`h-4 w-4 ${isActive ? item.color : ""}`} />
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1 text-left">{item.label}</span>
                     {isActive && <ChevronRight className="h-3 w-3" />}
-                  </NavLink>
+                    {isDisabled && <Lock className="h-3 w-3 text-red-500" />}
+                  </button>
                 );
               })}
             </div>
@@ -174,7 +241,12 @@ const StudentLayout = () => {
             </div>
             <button
               onClick={logout}
-              className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              disabled={isExamMode}
+              className={`p-1.5 rounded-lg transition-colors ${
+                isExamMode 
+                  ? 'opacity-50 cursor-not-allowed' 
+                  : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
             >
               <LogOut className="h-4 w-4 text-gray-500 dark:text-gray-400" />
             </button>
@@ -182,7 +254,7 @@ const StudentLayout = () => {
         </div>
       </aside>
 
-      {/* Main content - No padding on mobile, proper margin on desktop */}
+      {/* Main content */}
       <div className="flex-1 flex flex-col min-h-screen w-full overflow-x-hidden">
         {/* Header */}
         <header
@@ -197,6 +269,7 @@ const StudentLayout = () => {
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                disabled={isExamMode}
               >
                 <Menu className="h-5 w-5" />
               </button>
@@ -217,6 +290,7 @@ const StudentLayout = () => {
                 onClick={toggleDarkMode}
                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 aria-label="Toggle dark mode"
+                disabled={isExamMode}
               >
                 {darkMode ? (
                   <Sun className="h-4 w-4 text-yellow-500" />
@@ -228,12 +302,20 @@ const StudentLayout = () => {
               <button 
                 onClick={() => setNotificationsOpen(true)}
                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
+                disabled={isExamMode}
               >
                 <Bell className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 {notificationBadge > 0 && (
                   <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900 animate-pulse" />
                 )}
               </button>
+
+              {isExamMode && (
+                <span className="flex items-center gap-1 px-2 py-1 bg-red-500 text-white text-xs rounded-lg animate-pulse">
+                  <Lock className="h-3 w-3" />
+                  Exam Mode
+                </span>
+              )}
             </div>
           </div>
         </header>
