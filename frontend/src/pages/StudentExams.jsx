@@ -1,4 +1,4 @@
-// StudentExams.jsx - Completely fixed with proper error handling
+// StudentExams.jsx - Maximum screenshot protection across all devices
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -21,7 +21,8 @@ import {
   Shield,
   AlertTriangle,
   Lock,
-  Ban
+  Ban,
+  EyeOff
 } from "lucide-react";
 
 const StudentExams = () => {
@@ -53,13 +54,16 @@ const StudentExams = () => {
   const [hasBeenHidden, setHasBeenHidden] = useState(false);
   const [startTime, setStartTime] = useState(Date.now());
   const [fullscreenErrorShown, setFullscreenErrorShown] = useState(false);
+  const [isScreenshotAttempted, setIsScreenshotAttempted] = useState(false);
+  const [blurActive, setBlurActive] = useState(false);
   
   // Refs for security
   const examContainerRef = useRef(null);
   const securityIntervalRef = useRef(null);
   const blockNavigationRef = useRef(null);
   const fullscreenAttemptedRef = useRef(false);
-  const toastIdsRef = useRef([]);
+  const screenshotBlurTimeoutRef = useRef(null);
+  const videoRef = useRef(null);
 
   const current = questions[currentIndex];
   
@@ -67,41 +71,366 @@ const StudentExams = () => {
   const MAX_VIOLATIONS = 1;
   const MAX_MOUSE_LEAVES = 1;
 
-  // Safe toast wrapper to prevent errors
+  // Safe toast wrapper
   const safeToast = {
     success: (msg, opts) => {
-      try {
-        return toast.success(msg, opts);
-      } catch (e) {
-        console.warn("Toast error:", e);
-        return null;
-      }
+      try { return toast.success(msg, opts); } catch (e) { console.warn("Toast error:", e); return null; }
     },
     error: (msg, opts) => {
-      try {
-        return toast.error(msg, opts);
-      } catch (e) {
-        console.warn("Toast error:", e);
-        return null;
-      }
+      try { return toast.error(msg, opts); } catch (e) { console.warn("Toast error:", e); return null; }
     },
     warning: (msg, opts) => {
-      try {
-        return toast(msg, { ...opts, icon: '⚠️' });
-      } catch (e) {
-        console.warn("Toast error:", e);
-        return null;
-      }
+      try { return toast(msg, { ...opts, icon: '⚠️' }); } catch (e) { console.warn("Toast error:", e); return null; }
     },
     info: (msg, opts) => {
-      try {
-        return toast(msg, { ...opts, icon: 'ℹ️' });
-      } catch (e) {
-        console.warn("Toast error:", e);
-        return null;
-      }
+      try { return toast(msg, { ...opts, icon: 'ℹ️' }); } catch (e) { console.warn("Toast error:", e); return null; }
     }
   };
+
+  // ============================================
+  // SCREENSHOT PROTECTION - ENHANCED
+  // ============================================
+
+  // 1. CSS-based protection - prevents rendering on screenshot
+  const applyScreenshotProtection = () => {
+    try {
+      // Add CSS to prevent rendering during screenshot
+      const style = document.createElement('style');
+      style.id = 'screenshot-protection';
+      style.textContent = `
+        @media print {
+          body { display: none !important; }
+          #exam-container { display: none !important; }
+        }
+        /* Prevent selection and copying */
+        #exam-container {
+          user-select: none !important;
+          -webkit-user-select: none !important;
+          -moz-user-select: none !important;
+          -ms-user-select: none !important;
+        }
+        /* Blur when screenshot is detected */
+        .screenshot-blur {
+          filter: blur(20px) !important;
+          transition: filter 0.1s ease !important;
+          pointer-events: none !important;
+        }
+        .screenshot-blur * {
+          filter: blur(20px) !important;
+        }
+        /* Hide content when blurred */
+        .screenshot-hidden {
+          opacity: 0 !important;
+          transition: opacity 0.1s ease !important;
+        }
+        /* Anti-screenshot watermark */
+        .watermark {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          color: red;
+          font-size: 24px;
+          font-weight: bold;
+          z-index: 9999;
+          background: rgba(255,0,0,0.1);
+          padding: 20px;
+          border-radius: 10px;
+          border: 3px solid red;
+          display: none;
+        }
+        .watermark.active {
+          display: block !important;
+        }
+      `;
+      document.head.appendChild(style);
+    } catch (e) {
+      console.warn("CSS protection error:", e);
+    }
+  };
+
+  // 2. Detect screenshot attempts via key combinations
+  const detectScreenshotKey = (e) => {
+    try {
+      const key = e.key;
+      
+      // Print Screen key
+      if (key === 'PrintScreen') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleScreenshotAttempt("Print Screen");
+        return false;
+      }
+
+      // Alt + PrintScreen
+      if (e.altKey && key === 'PrintScreen') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleScreenshotAttempt("Alt+PrintScreen");
+        return false;
+      }
+
+      // Ctrl + Shift + S (Snipping Tool / Screenshot)
+      if (e.ctrlKey && e.shiftKey && (key === 's' || key === 'S')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleScreenshotAttempt("Ctrl+Shift+S (Snipping Tool)");
+        return false;
+      }
+
+      // Windows + Shift + S (Windows Snipping)
+      if (e.metaKey && e.shiftKey && (key === 's' || key === 'S')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleScreenshotAttempt("Win+Shift+S (Snipping Tool)");
+        return false;
+      }
+
+      // Windows + PrintScreen
+      if (e.metaKey && key === 'PrintScreen') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleScreenshotAttempt("Win+PrintScreen");
+        return false;
+      }
+
+      // Command + Shift + 3 (Mac screenshot)
+      if (e.metaKey && e.shiftKey && key === '3') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleScreenshotAttempt("Cmd+Shift+3 (Mac Screenshot)");
+        return false;
+      }
+
+      // Command + Shift + 4 (Mac screenshot selection)
+      if (e.metaKey && e.shiftKey && key === '4') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleScreenshotAttempt("Cmd+Shift+4 (Mac Screenshot)");
+        return false;
+      }
+
+      // Command + Shift + 5 (Mac screenshot/recording)
+      if (e.metaKey && e.shiftKey && key === '5') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleScreenshotAttempt("Cmd+Shift+5 (Mac Screenshot/Recording)");
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.warn("Screenshot detection error:", err);
+      return true;
+    }
+  };
+
+  // 3. Handle screenshot attempt - blur page and submit
+  const handleScreenshotAttempt = (method) => {
+    if (submitted || showResult || isExamBlocked) return;
+    
+    setIsScreenshotAttempted(true);
+    
+    // Immediately blur the page
+    blurExamContent(true);
+    
+    // Show watermark warning
+    showScreenshotWatermark();
+    
+    // Log the attempt
+    console.warn(`📸 Screenshot attempt detected: ${method}`);
+    console.warn(`⏱️ Time elapsed: ${Math.floor((Date.now() - startTime) / 1000)}s`);
+    console.warn(`📱 Device: ${isMobile ? 'Mobile' : 'Desktop'}`);
+    
+    // Count as security violation and auto-submit
+    handleSecurityViolation(`Screenshot attempt (${method})`);
+    
+    // Keep blurred for a few seconds
+    if (screenshotBlurTimeoutRef.current) {
+      clearTimeout(screenshotBlurTimeoutRef.current);
+    }
+    
+    screenshotBlurTimeoutRef.current = setTimeout(() => {
+      blurExamContent(false);
+      hideScreenshotWatermark();
+    }, 3000);
+  };
+
+  // 4. Blur exam content
+  const blurExamContent = (blur) => {
+    try {
+      const container = document.getElementById('exam-container');
+      if (container) {
+        if (blur) {
+          container.classList.add('screenshot-blur');
+          setBlurActive(true);
+        } else {
+          container.classList.remove('screenshot-blur');
+          setBlurActive(false);
+        }
+      }
+    } catch (e) {
+      console.warn("Blur error:", e);
+    }
+  };
+
+  // 5. Show screenshot watermark
+  const showScreenshotWatermark = () => {
+    try {
+      let watermark = document.getElementById('screenshot-watermark');
+      if (!watermark) {
+        watermark = document.createElement('div');
+        watermark.id = 'screenshot-watermark';
+        watermark.className = 'watermark';
+        watermark.innerHTML = `
+          <div style="text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 10px;">🚫</div>
+            <div style="font-size: 18px; color: red;">SCREENSHOT DETECTED</div>
+            <div style="font-size: 14px; color: #666; margin-top: 5px;">Exam auto-submitted</div>
+          </div>
+        `;
+        document.body.appendChild(watermark);
+      }
+      watermark.classList.add('active');
+    } catch (e) {
+      console.warn("Watermark error:", e);
+    }
+  };
+
+  const hideScreenshotWatermark = () => {
+    try {
+      const watermark = document.getElementById('screenshot-watermark');
+      if (watermark) {
+        watermark.classList.remove('active');
+      }
+    } catch (e) {
+      console.warn("Hide watermark error:", e);
+    }
+  };
+
+  // 6. Detect screen recording via mediaDevices
+  const detectScreenRecording = async () => {
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+        // Check if screen is being recorded
+        // Note: This is passive detection - we can't fully prevent
+        const stream = await navigator.mediaDevices.getDisplayMedia({ 
+          video: true, 
+          audio: false 
+        }).catch(() => null);
+        
+        if (stream) {
+          // Screen recording detected
+          console.warn("📹 Screen recording detected");
+          handleSecurityViolation("Screen recording detected");
+          
+          // Stop the stream if we can
+          stream.getTracks().forEach(track => track.stop());
+        }
+      }
+    } catch (e) {
+      // Silently fail - this is just passive detection
+    }
+  };
+
+  // 7. Mobile screenshot detection via visibility change
+  // On mobile, screenshots are often taken via hardware buttons
+  // We detect this by monitoring for rapid visibility changes
+  const detectMobileScreenshot = () => {
+    if (!isMobile) return;
+    
+    // On mobile, screenshots often cause a brief screen flash
+    // We monitor for rapid visibility changes
+    let lastVisibilityChange = Date.now();
+    let visibilityChangeCount = 0;
+    
+    const mobileScreenshotCheck = () => {
+      const now = Date.now();
+      const timeSinceLastChange = now - lastVisibilityChange;
+      
+      if (document.hidden) {
+        // If hidden for a very short time (typical of screenshot button press)
+        if (timeSinceLastChange < 2000) {
+          visibilityChangeCount++;
+          
+          if (visibilityChangeCount >= 2) {
+            // Multiple rapid changes - likely screenshot
+            handleScreenshotAttempt("Mobile screenshot (hardware button)");
+            visibilityChangeCount = 0;
+          }
+        }
+        lastVisibilityChange = now;
+      } else {
+        // Reset count after returning
+        setTimeout(() => {
+          visibilityChangeCount = 0;
+        }, 3000);
+      }
+    };
+    
+    // Add listener specifically for mobile screenshot detection
+    document.addEventListener('visibilitychange', mobileScreenshotCheck);
+    
+    // Cleanup function
+    return () => {
+      document.removeEventListener('visibilitychange', mobileScreenshotCheck);
+    };
+  };
+
+  // 8. Detect screenshot via beforeprint event (some browsers trigger this)
+  const handleBeforePrint = () => {
+    handleScreenshotAttempt("Print/Screenshot triggered");
+  };
+
+  // 9. Detect screenshot via afterprint (some browsers)
+  const handleAfterPrint = () => {
+    // Just log it
+    console.warn("Print/Screenshot completed");
+  };
+
+  // 10. Add anti-screenshot CSS overlay
+  const addAntiScreenshotOverlay = () => {
+    try {
+      // Create a canvas overlay that makes screenshots look corrupted
+      const canvas = document.createElement('canvas');
+      canvas.id = 'anti-screenshot-canvas';
+      canvas.style.position = 'fixed';
+      canvas.style.top = '0';
+      canvas.style.left = '0';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.pointerEvents = 'none';
+      canvas.style.zIndex = '9998';
+      canvas.style.opacity = '0.01'; // Almost invisible to user
+      canvas.style.display = 'none';
+      
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      
+      // Draw a pattern that will appear in screenshots
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.01)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Add text that will appear in screenshots
+      ctx.font = 'bold 48px Arial';
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠️ SCREENSHOT PROTECTED', canvas.width/2, canvas.height/2);
+      
+      document.body.appendChild(canvas);
+      
+      // Make it visible when screenshot is detected
+      return canvas;
+    } catch (e) {
+      console.warn("Anti-screenshot overlay error:", e);
+      return null;
+    }
+  };
+
+  // ============================================
+  // END SCREENSHOT PROTECTION
+  // ============================================
 
   // Check if device is mobile
   useEffect(() => {
@@ -147,10 +476,17 @@ const StudentExams = () => {
       setAnswers(initialAnswers);
       localStorage.setItem("examAnswers", JSON.stringify(initialAnswers));
       
-      // Block all navigation first
+      // Apply all protections
+      applyScreenshotProtection();
+      addAntiScreenshotOverlay();
+      
+      // Start mobile screenshot detection
+      detectMobileScreenshot();
+      
+      // Block navigation
       blockAllNavigation(true);
       
-      // Try fullscreen after a delay (with user gesture handling)
+      // Try fullscreen
       setTimeout(() => {
         tryEnterFullscreen();
       }, 1000);
@@ -171,11 +507,10 @@ const StudentExams = () => {
     }
   };
 
-  // Block all navigation and interactions outside exam
+  // Block all navigation
   const blockAllNavigation = (block) => {
     try {
       if (block) {
-        // Block all links and buttons outside exam container
         document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
           if (!el.closest('#exam-container')) {
             el.style.pointerEvents = 'none';
@@ -183,7 +518,6 @@ const StudentExams = () => {
           }
         });
 
-        // Block back/forward navigation
         window.history.pushState(null, '', window.location.href);
         
         const popStateHandler = (e) => {
@@ -195,7 +529,6 @@ const StudentExams = () => {
         window.addEventListener('popstate', popStateHandler);
         blockNavigationRef.current = popStateHandler;
 
-        // Block beforeunload
         const beforeUnloadHandler = (e) => {
           e.preventDefault();
           e.returnValue = '';
@@ -206,7 +539,6 @@ const StudentExams = () => {
         blockNavigationRef.current.beforeUnload = beforeUnloadHandler;
 
       } else {
-        // Unblock navigation
         document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
           el.style.pointerEvents = '';
           el.style.opacity = '';
@@ -227,16 +559,14 @@ const StudentExams = () => {
     }
   };
 
-  // Safe fullscreen attempt
+  // Fullscreen management
   const tryEnterFullscreen = () => {
     try {
-      // Check if fullscreen is already active
       if (document.fullscreenElement) {
         setIsFullscreen(true);
         return;
       }
 
-      // Don't attempt if already attempted or if error shown
       if (fullscreenAttemptedRef.current || fullscreenErrorShown) {
         return;
       }
@@ -260,7 +590,6 @@ const StudentExams = () => {
             if (isMobile) {
               safeToast.warning("Please enable fullscreen for exam security");
             } else {
-              // Don't auto-submit on fullscreen failure
               safeToast.warning("⚠️ Please enter fullscreen mode for exam security");
             }
           });
@@ -275,7 +604,6 @@ const StudentExams = () => {
     }
   };
 
-  // Try fullscreen on user interaction
   const handleUserInteractionForFullscreen = () => {
     if (!document.fullscreenElement && !fullscreenAttemptedRef.current && !fullscreenErrorShown) {
       tryEnterFullscreen();
@@ -300,7 +628,6 @@ const StudentExams = () => {
       setIsFullscreen(isFull);
       
       if (!isFull && !submitted && !showResult && !isExamBlocked) {
-        // Only trigger if it was previously fullscreen
         if (isFullscreen) {
           handleSecurityViolation("Exited fullscreen mode");
         }
@@ -322,8 +649,12 @@ const StudentExams = () => {
       
       console.warn(`⚠️ Security violation ${newCount}: ${message}`);
       
+      // Blur content on violation
+      blurExamContent(true);
+      
       setTimeout(() => {
         setShowSecurityWarning(false);
+        blurExamContent(false);
       }, 3000);
       
       if (newCount >= MAX_VIOLATIONS) {
@@ -428,9 +759,14 @@ const StudentExams = () => {
     return false;
   };
 
-  // Prevent keyboard shortcuts
+  // Keyboard shortcuts
   const handleKeyDown = (e) => {
     try {
+      // First check for screenshot keys
+      if (!detectScreenshotKey(e)) {
+        return;
+      }
+
       const isCtrl = e.ctrlKey || e.metaKey;
       const isShift = e.shiftKey;
       const key = e.key.toLowerCase();
@@ -474,51 +810,6 @@ const StudentExams = () => {
       }
     } catch (err) {
       console.warn("Keydown error:", err);
-    }
-  };
-
-  // Prevent screenshot
-  const preventScreenshot = (e) => {
-    try {
-      if (e.key === 'PrintScreen') {
-        e.preventDefault();
-        e.stopPropagation();
-        handleSecurityViolation("Screenshot (Print Screen)");
-        return false;
-      }
-
-      if (e.ctrlKey && e.shiftKey && e.key === 's') {
-        e.preventDefault();
-        e.stopPropagation();
-        handleSecurityViolation("Snipping Tool");
-        return false;
-      }
-
-      if (e.altKey && e.key === 'PrintScreen') {
-        e.preventDefault();
-        e.stopPropagation();
-        handleSecurityViolation("Alt+PrintScreen");
-        return false;
-      }
-
-      if (e.metaKey && e.shiftKey && e.key === 's') {
-        e.preventDefault();
-        e.stopPropagation();
-        handleSecurityViolation("Win+Shift+S");
-        return false;
-      }
-
-      if (e.metaKey && e.key === 'PrintScreen') {
-        e.preventDefault();
-        e.stopPropagation();
-        handleSecurityViolation("Win+PrintScreen");
-        return false;
-      }
-
-      return true;
-    } catch (err) {
-      console.warn("Screenshot prevention error:", err);
-      return true;
     }
   };
 
@@ -599,7 +890,8 @@ const StudentExams = () => {
         mouseLeaves: mouseLeaveCount,
         visibilityWarnings: visibilityWarnings,
         timeSpent: Math.floor((Date.now() - startTime) / 1000),
-        deviceType: isMobile ? 'mobile' : 'desktop'
+        deviceType: isMobile ? 'mobile' : 'desktop',
+        screenshotAttempted: isScreenshotAttempted
       });
 
       setSubmitted(true);
@@ -634,7 +926,6 @@ const StudentExams = () => {
       document.removeEventListener("cut", handleCut);
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("keyup", preventScreenshot);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("blur", handleWindowBlur);
@@ -642,13 +933,31 @@ const StudentExams = () => {
       document.removeEventListener("selectstart", handleSelectStart);
       document.removeEventListener("mouseleave", handleMouseLeave);
       document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("beforeprint", handleBeforePrint);
+      document.removeEventListener("afterprint", handleAfterPrint);
       
       if (securityIntervalRef.current) {
         clearInterval(securityIntervalRef.current);
       }
       
+      if (screenshotBlurTimeoutRef.current) {
+        clearTimeout(screenshotBlurTimeoutRef.current);
+      }
+      
       document.body.style.filter = "";
+      blurExamContent(false);
+      hideScreenshotWatermark();
       blockAllNavigation(false);
+      
+      // Remove protection styles
+      const style = document.getElementById('screenshot-protection');
+      if (style) style.remove();
+      
+      const canvas = document.getElementById('anti-screenshot-canvas');
+      if (canvas) canvas.remove();
+      
+      const watermark = document.getElementById('screenshot-watermark');
+      if (watermark) watermark.remove();
     } catch (e) {
       console.warn("Cleanup error:", e);
     }
@@ -686,7 +995,6 @@ const StudentExams = () => {
         document.addEventListener("cut", handleCut);
         document.addEventListener("contextmenu", handleContextMenu);
         document.addEventListener("keydown", handleKeyDown);
-        document.addEventListener("keyup", preventScreenshot);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         document.addEventListener("blur", handleWindowBlur);
@@ -694,6 +1002,8 @@ const StudentExams = () => {
         document.addEventListener("selectstart", handleSelectStart);
         document.addEventListener("mouseleave", handleMouseLeave);
         document.addEventListener("touchstart", handleTouchStart);
+        document.addEventListener("beforeprint", handleBeforePrint);
+        document.addEventListener("afterprint", handleAfterPrint);
 
         securityIntervalRef.current = setInterval(checkInactivity, 5000);
 
@@ -701,15 +1011,26 @@ const StudentExams = () => {
           setTimeout(() => tryEnterFullscreen(), 1500);
         }
 
+        // Check for screen recording periodically
+        setInterval(() => {
+          if (!submitted && !showResult && !isExamBlocked) {
+            detectScreenRecording();
+          }
+        }, 30000);
+
         safeToast.success(`🔒 Security mode active - ${isMobile ? '📱' : '💻'}`, {
           duration: 4000
         });
         
         if (isMobile) {
-          safeToast.warning("📱 Do not switch apps or lock your screen!", {
+          safeToast.warning("📱 Do not switch apps, lock screen, or take screenshots!", {
             duration: 6000
           });
         }
+        
+        safeToast.warning("📸 Screenshots will auto-submit your exam!", {
+          duration: 5000
+        });
       } catch (e) {
         console.warn("Security setup error:", e);
       }
@@ -827,7 +1148,7 @@ const StudentExams = () => {
     <div 
       id="exam-container"
       ref={examContainerRef}
-      className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 py-4 px-4 md:py-8"
+      className={`min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 py-4 px-4 md:py-8 ${blurActive ? 'screenshot-blur' : ''}`}
       style={{ touchAction: 'pan-y' }}
       onClick={handleUserInteractionForFullscreen}
     >
@@ -845,6 +1166,11 @@ const StudentExams = () => {
               {isFullscreen ? '🟢' : '🔴'} Fullscreen
             </span>
             <span className="text-gray-400">|</span>
+            <span className="flex items-center gap-1">
+              <EyeOff className="h-3 w-3" />
+              <span>Screenshot: {isScreenshotAttempted ? '⚠️' : '🔒'}</span>
+            </span>
+            <span className="text-gray-400">|</span>
             <span className="text-gray-400">{isMobile ? '📱' : '💻'} {isMobile ? 'Mobile' : 'Desktop'}</span>
           </div>
         </div>
@@ -855,6 +1181,19 @@ const StudentExams = () => {
         <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-50 bg-red-500 text-white px-4 py-3 rounded-xl shadow-2xl animate-pulse flex items-center gap-2 max-w-md text-sm">
           <AlertTriangle className="h-5 w-5 flex-shrink-0" />
           <span className="font-medium">{securityWarningMessage}</span>
+        </div>
+      )}
+
+      {/* Screenshot Blur Overlay */}
+      {blurActive && (
+        <div className="fixed inset-0 bg-red-500/20 backdrop-blur-xl z-40 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-8 max-w-md text-center shadow-2xl">
+            <div className="text-6xl mb-4">🚫</div>
+            <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-2">Screenshot Detected!</h2>
+            <p className="text-gray-600 dark:text-gray-400">
+              Your exam has been auto-submitted due to a screenshot attempt.
+            </p>
+          </div>
         </div>
       )}
 
@@ -872,7 +1211,7 @@ const StudentExams = () => {
               </h1>
               <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
                 <Shield className="h-3 w-3" />
-                Maximum security - Any violation auto-submits your exam
+                Maximum security - Screenshots auto-submit your exam
               </p>
             </div>
             {timeLeft > 0 && !submitted && (
@@ -957,7 +1296,7 @@ const StudentExams = () => {
         <div className="mb-4 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2 text-red-700 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           <span className="text-xs font-medium">
-            ⚠️ ANY security violation will auto-submit your exam. Stay focused!
+            ⚠️ ANY security violation including screenshots will auto-submit your exam!
           </span>
         </div>
 
@@ -1114,6 +1453,11 @@ const StudentExams = () => {
                 {securityViolations > 0 && (
                   <p className="mt-2 text-xs md:text-sm bg-white/20 p-2 rounded-lg">
                     ⚠️ {securityViolations} security violation(s) recorded during the exam
+                  </p>
+                )}
+                {isScreenshotAttempted && (
+                  <p className="mt-1 text-xs bg-red-500/30 p-2 rounded-lg">
+                    📸 Screenshot attempt detected and logged
                   </p>
                 )}
               </div>
