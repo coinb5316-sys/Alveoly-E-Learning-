@@ -1,8 +1,7 @@
-// StudentExams.jsx - Maximum protection across all devices (FIXED)
+// StudentExams.jsx - Completely fixed with proper error handling
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
-import { getSocket } from "../config/socket";
 import { useAuth } from "../context/AuthContext";
 import toast, { Toaster } from "react-hot-toast";
 import {
@@ -20,7 +19,6 @@ import {
   Flag,
   Timer,
   Shield,
-  EyeOff,
   AlertTriangle,
   Lock,
   Ban
@@ -45,7 +43,7 @@ const StudentExams = () => {
   // Security state
   const [securityViolations, setSecurityViolations] = useState(0);
   const [showSecurityWarning, setShowSecurityWarning] = useState(false);
-  const [securityWarningMessage, setSecurityWarningMessage] = useState(""); // FIXED: This was setSecurityViolationMessage
+  const [securityWarningMessage, setSecurityWarningMessage] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isExamBlocked, setIsExamBlocked] = useState(false);
   const [mouseLeaveCount, setMouseLeaveCount] = useState(0);
@@ -54,20 +52,56 @@ const StudentExams = () => {
   const [visibilityWarnings, setVisibilityWarnings] = useState(0);
   const [hasBeenHidden, setHasBeenHidden] = useState(false);
   const [startTime, setStartTime] = useState(Date.now());
+  const [fullscreenErrorShown, setFullscreenErrorShown] = useState(false);
   
   // Refs for security
   const examContainerRef = useRef(null);
   const securityIntervalRef = useRef(null);
-  const mouseCheckIntervalRef = useRef(null);
   const blockNavigationRef = useRef(null);
   const fullscreenAttemptedRef = useRef(false);
+  const toastIdsRef = useRef([]);
 
   const current = questions[currentIndex];
   
-  // MAXIMUM ALLOWED SECURITY VIOLATIONS - Set to 1 for strict enforcement
+  // MAXIMUM ALLOWED SECURITY VIOLATIONS
   const MAX_VIOLATIONS = 1;
   const MAX_MOUSE_LEAVES = 1;
-  const MAX_VISIBILITY_WARNINGS = 1;
+
+  // Safe toast wrapper to prevent errors
+  const safeToast = {
+    success: (msg, opts) => {
+      try {
+        return toast.success(msg, opts);
+      } catch (e) {
+        console.warn("Toast error:", e);
+        return null;
+      }
+    },
+    error: (msg, opts) => {
+      try {
+        return toast.error(msg, opts);
+      } catch (e) {
+        console.warn("Toast error:", e);
+        return null;
+      }
+    },
+    warning: (msg, opts) => {
+      try {
+        return toast(msg, { ...opts, icon: '⚠️' });
+      } catch (e) {
+        console.warn("Toast error:", e);
+        return null;
+      }
+    },
+    info: (msg, opts) => {
+      try {
+        return toast(msg, { ...opts, icon: 'ℹ️' });
+      } catch (e) {
+        console.warn("Toast error:", e);
+        return null;
+      }
+    }
+  };
 
   // Check if device is mobile
   useEffect(() => {
@@ -76,7 +110,6 @@ const StudentExams = () => {
       const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|windows phone/i.test(userAgent);
       setIsMobile(isMobileDevice);
       
-      // Also check screen size
       if (window.innerWidth < 768) {
         setIsMobile(true);
       }
@@ -95,7 +128,7 @@ const StudentExams = () => {
       const { attemptId: newAttemptId, questions: examQuestions, duration } = res.data;
 
       if (!examQuestions || examQuestions.length === 0) {
-        toast.error("No exam questions found for this subject.");
+        safeToast.error("No exam questions found for this subject.");
         setLoading(false);
         return;
       }
@@ -105,32 +138,33 @@ const StudentExams = () => {
       setTimeLeft(duration);
       setStartTime(Date.now());
 
-      const storedAnswers = JSON.parse(localStorage.getItem("examAnswers")) || {};
+      const storedAnswers = JSON.parse(localStorage.getItem("examAnswers")) || "{}";
+      const parsedAnswers = typeof storedAnswers === 'object' ? storedAnswers : {};
       const initialAnswers = examQuestions.reduce((acc, q) => {
-        acc[q._id] = storedAnswers[q._id] || "";
+        acc[q._id] = parsedAnswers[q._id] || "";
         return acc;
       }, {});
       setAnswers(initialAnswers);
       localStorage.setItem("examAnswers", JSON.stringify(initialAnswers));
       
-      // Enter fullscreen automatically when exam starts (with user gesture)
-      // We'll use a setTimeout to ensure the DOM is ready
-      setTimeout(() => {
-        enterFullscreen();
-      }, 500);
-      
-      // Block all navigation
+      // Block all navigation first
       blockAllNavigation(true);
       
+      // Try fullscreen after a delay (with user gesture handling)
+      setTimeout(() => {
+        tryEnterFullscreen();
+      }, 1000);
+      
     } catch (err) {
+      console.error("Start exam error:", err);
       if (err.response?.status === 401) {
-        toast.error("Unauthorized. Please login again.");
+        safeToast.error("Unauthorized. Please login again.");
         navigate("/login");
       } else if (err.response?.status === 403) {
-        toast.error(err.response.data.message || "You cannot take this exam.");
+        safeToast.error(err.response.data.message || "You cannot take this exam.");
         navigate("/student/dashboard");
       } else {
-        toast.error(err.response?.data?.message || "Failed to start exam.");
+        safeToast.error(err.response?.data?.message || "Failed to start exam.");
       }
     } finally {
       setLoading(false);
@@ -139,245 +173,236 @@ const StudentExams = () => {
 
   // Block all navigation and interactions outside exam
   const blockAllNavigation = (block) => {
-    if (block) {
-      // Block all clicks on navigation elements
-      const blocker = (e) => {
-        // Check if click is inside exam container
-        const examContainer = document.getElementById('exam-container');
-        if (examContainer && !examContainer.contains(e.target)) {
-          e.preventDefault();
-          e.stopPropagation();
-          handleSecurityViolation("Attempted to navigate away from exam");
-          return false;
-        }
-        return true;
-      };
-
-      // Block all links
-      document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
-        if (!el.closest('#exam-container')) {
-          el.style.pointerEvents = 'none';
-          el.style.opacity = '0.5';
-        }
-      });
-
-      // Block back/forward navigation
-      window.history.pushState(null, '', window.location.href);
-      
-      const popStateHandler = (e) => {
-        e.preventDefault();
-        handleSecurityViolation("Attempted to use browser navigation");
-        window.history.pushState(null, '', window.location.href);
-      };
-      
-      window.addEventListener('popstate', popStateHandler);
-      blockNavigationRef.current = popStateHandler;
-
-      // Block beforeunload (closing tab)
-      const beforeUnloadHandler = (e) => {
-        e.preventDefault();
-        e.returnValue = '';
-        handleSecurityViolation("Attempted to close or reload tab");
-        return '';
-      };
-      
-      window.addEventListener('beforeunload', beforeUnloadHandler);
-      blockNavigationRef.current.beforeUnload = beforeUnloadHandler;
-
-    } else {
-      // Unblock navigation
-      document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
-        el.style.pointerEvents = '';
-        el.style.opacity = '';
-      });
-      
-      if (blockNavigationRef.current) {
-        window.removeEventListener('popstate', blockNavigationRef.current);
-        if (blockNavigationRef.current.beforeUnload) {
-          window.removeEventListener('beforeunload', blockNavigationRef.current.beforeUnload);
-        }
-        blockNavigationRef.current = null;
-      }
-    }
-  };
-
-  // Fullscreen management - FIXED to handle user gesture requirement
-  const enterFullscreen = () => {
-    // Check if fullscreen is already active
-    if (document.fullscreenElement) {
-      setIsFullscreen(true);
-      return;
-    }
-
-    // Don't attempt if already attempted
-    if (fullscreenAttemptedRef.current) {
-      return;
-    }
-
-    const element = document.documentElement;
-    
-    // For mobile, try both ways
-    const requestFullscreen = element.requestFullscreen || element.webkitRequestFullscreen || element.msRequestFullscreen;
-    
-    if (requestFullscreen) {
-      fullscreenAttemptedRef.current = true;
-      requestFullscreen.call(element)
-        .then(() => {
-          setIsFullscreen(true);
-          fullscreenAttemptedRef.current = false;
-          toast.success("🔒 Fullscreen mode activated");
-        })
-        .catch((err) => {
-          console.error("Fullscreen error:", err);
-          fullscreenAttemptedRef.current = false;
-          if (isMobile) {
-            toast.warning("Please enable fullscreen for exam security");
-          } else {
-            // Don't auto-submit on fullscreen failure, just warn
-            toast.warning("⚠️ Please enter fullscreen mode for exam security");
+    try {
+      if (block) {
+        // Block all links and buttons outside exam container
+        document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
+          if (!el.closest('#exam-container')) {
+            el.style.pointerEvents = 'none';
+            el.style.opacity = '0.5';
           }
         });
-    } else {
-      // Some mobile browsers don't support fullscreen API
-      if (isMobile) {
-        toast.info("📱 Please stay on this page and don't switch apps");
+
+        // Block back/forward navigation
+        window.history.pushState(null, '', window.location.href);
+        
+        const popStateHandler = (e) => {
+          e.preventDefault();
+          handleSecurityViolation("Attempted to use browser navigation");
+          window.history.pushState(null, '', window.location.href);
+        };
+        
+        window.addEventListener('popstate', popStateHandler);
+        blockNavigationRef.current = popStateHandler;
+
+        // Block beforeunload
+        const beforeUnloadHandler = (e) => {
+          e.preventDefault();
+          e.returnValue = '';
+          return '';
+        };
+        
+        window.addEventListener('beforeunload', beforeUnloadHandler);
+        blockNavigationRef.current.beforeUnload = beforeUnloadHandler;
+
+      } else {
+        // Unblock navigation
+        document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
+          el.style.pointerEvents = '';
+          el.style.opacity = '';
+        });
+        
+        if (blockNavigationRef.current) {
+          if (typeof blockNavigationRef.current === 'function') {
+            window.removeEventListener('popstate', blockNavigationRef.current);
+          }
+          if (blockNavigationRef.current.beforeUnload) {
+            window.removeEventListener('beforeunload', blockNavigationRef.current.beforeUnload);
+          }
+          blockNavigationRef.current = null;
+        }
       }
+    } catch (e) {
+      console.warn("Navigation blocking error:", e);
     }
   };
 
-  // Try fullscreen on user interaction (click)
+  // Safe fullscreen attempt
+  const tryEnterFullscreen = () => {
+    try {
+      // Check if fullscreen is already active
+      if (document.fullscreenElement) {
+        setIsFullscreen(true);
+        return;
+      }
+
+      // Don't attempt if already attempted or if error shown
+      if (fullscreenAttemptedRef.current || fullscreenErrorShown) {
+        return;
+      }
+
+      const element = document.documentElement;
+      const requestFullscreen = element.requestFullscreen || element.webkitRequestFullscreen || element.msRequestFullscreen;
+      
+      if (requestFullscreen) {
+        fullscreenAttemptedRef.current = true;
+        requestFullscreen.call(element)
+          .then(() => {
+            setIsFullscreen(true);
+            fullscreenAttemptedRef.current = false;
+            safeToast.success("🔒 Fullscreen mode activated");
+          })
+          .catch((err) => {
+            console.warn("Fullscreen error:", err);
+            fullscreenAttemptedRef.current = false;
+            setFullscreenErrorShown(true);
+            
+            if (isMobile) {
+              safeToast.warning("Please enable fullscreen for exam security");
+            } else {
+              // Don't auto-submit on fullscreen failure
+              safeToast.warning("⚠️ Please enter fullscreen mode for exam security");
+            }
+          });
+      } else {
+        if (isMobile) {
+          safeToast.info("📱 Please stay on this page and don't switch apps");
+        }
+      }
+    } catch (e) {
+      console.warn("Fullscreen attempt error:", e);
+      fullscreenAttemptedRef.current = false;
+    }
+  };
+
+  // Try fullscreen on user interaction
   const handleUserInteractionForFullscreen = () => {
-    if (!document.fullscreenElement && !fullscreenAttemptedRef.current) {
-      enterFullscreen();
+    if (!document.fullscreenElement && !fullscreenAttemptedRef.current && !fullscreenErrorShown) {
+      tryEnterFullscreen();
     }
   };
 
   const exitFullscreen = () => {
-    const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-    if (exitFullscreen) {
-      exitFullscreen.call(document).catch(() => {});
+    try {
+      const exitFullscreen = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      if (exitFullscreen) {
+        exitFullscreen.call(document).catch(() => {});
+      }
+      setIsFullscreen(false);
+    } catch (e) {
+      console.warn("Exit fullscreen error:", e);
     }
-    setIsFullscreen(false);
   };
 
   const handleFullscreenChange = () => {
-    const isFull = !!document.fullscreenElement;
-    setIsFullscreen(isFull);
-    
-    if (!isFull && !submitted && !showResult && !isExamBlocked) {
-      // Only count as violation if it was previously fullscreen
-      // On mobile, check if it's a user gesture or system
-      if (isMobile) {
-        handleSecurityViolation("Exited exam mode - fullscreen lost");
-      } else {
-        handleSecurityViolation("You exited fullscreen mode");
+    try {
+      const isFull = !!document.fullscreenElement;
+      setIsFullscreen(isFull);
+      
+      if (!isFull && !submitted && !showResult && !isExamBlocked) {
+        // Only trigger if it was previously fullscreen
+        if (isFullscreen) {
+          handleSecurityViolation("Exited fullscreen mode");
+        }
       }
+    } catch (e) {
+      console.warn("Fullscreen change error:", e);
     }
   };
 
-  // Security violation handler - Auto-submit on any violation
+  // Security violation handler
   const handleSecurityViolation = (message) => {
     if (submitted || showResult || isExamBlocked) return;
     
-    const newCount = securityViolations + 1;
-    setSecurityViolations(newCount);
-    setSecurityWarningMessage(message); // FIXED: Using correct setter
-    setShowSecurityWarning(true);
-    
-    // Log violation
-    console.warn(`⚠️ Security violation ${newCount}: ${message}`);
-    console.warn(`📱 Device: ${isMobile ? 'Mobile' : 'Desktop'}`);
-    console.warn(`⏱️ Time elapsed: ${Math.floor((Date.now() - startTime) / 1000)}s`);
-    
-    // Auto-hide warning after 2 seconds
-    setTimeout(() => {
-      setShowSecurityWarning(false);
-    }, 2000);
-    
-    // Auto-submit on ANY violation (strict mode)
-    if (newCount >= MAX_VIOLATIONS) {
-      setIsExamBlocked(true);
-      toast.error(`⚠️ Exam auto-submitted due to security violation: ${message}`);
+    try {
+      const newCount = securityViolations + 1;
+      setSecurityViolations(newCount);
+      setSecurityWarningMessage(message);
+      setShowSecurityWarning(true);
       
-      // Submit exam automatically after a short delay
+      console.warn(`⚠️ Security violation ${newCount}: ${message}`);
+      
       setTimeout(() => {
-        handleSubmit(true);
-      }, 1000);
+        setShowSecurityWarning(false);
+      }, 3000);
+      
+      if (newCount >= MAX_VIOLATIONS) {
+        setIsExamBlocked(true);
+        safeToast.error(`⚠️ Exam auto-submitted: ${message}`);
+        
+        setTimeout(() => {
+          handleSubmit(true);
+        }, 1500);
+      }
+    } catch (e) {
+      console.warn("Security violation error:", e);
     }
   };
 
   // Mouse leave detection
   const handleMouseLeave = () => {
-    if (submitted || showResult || isExamBlocked) return;
-    if (isMobile) return; // Mobile doesn't have mouse leave
+    if (submitted || showResult || isExamBlocked || isMobile) return;
     
-    const newCount = mouseLeaveCount + 1;
-    setMouseLeaveCount(newCount);
-    
-    if (newCount >= MAX_MOUSE_LEAVES) {
-      handleSecurityViolation(`Mouse left exam window`);
+    try {
+      const newCount = mouseLeaveCount + 1;
+      setMouseLeaveCount(newCount);
+      
+      if (newCount >= MAX_MOUSE_LEAVES) {
+        handleSecurityViolation("Mouse left exam window");
+      }
+    } catch (e) {
+      console.warn("Mouse leave error:", e);
     }
   };
 
-  // Detect mobile app switching (visibility change)
+  // Visibility change detection
   const handleVisibilityChange = () => {
-    if (document.hidden) {
-      // User switched tabs, apps, or went to home screen
-      if (!submitted && !showResult && !isExamBlocked) {
-        const newCount = visibilityWarnings + 1;
-        setVisibilityWarnings(newCount);
-        setHasBeenHidden(true);
-        
-        // On mobile, this is a serious violation
-        const deviceType = isMobile ? 'mobile app' : 'tab';
-        handleSecurityViolation(`Switched away from exam (${deviceType})`);
-        
-        // Add visual feedback
-        document.body.style.filter = "blur(8px)";
-        document.body.style.transition = "filter 0.3s ease";
-        
-        // Show prominent warning
-        toast.error(`🚫 EXAM INTERRUPTED! Do not switch ${isMobile ? 'apps' : 'tabs'}!`, {
-          duration: 3000,
-          icon: '⚠️'
-        });
-      }
-    } else {
-      // User returned
-      document.body.style.filter = "";
-      setLastActiveTime(Date.now());
-      
-      if (!submitted && !showResult && !isExamBlocked) {
-        // Check if fullscreen was lost
-        if (!document.fullscreenElement && !isFullscreen) {
-          handleSecurityViolation("Lost fullscreen during tab switch");
+    try {
+      if (document.hidden) {
+        if (!submitted && !showResult && !isExamBlocked) {
+          setVisibilityWarnings(prev => prev + 1);
+          setHasBeenHidden(true);
+          
+          const deviceType = isMobile ? 'mobile app' : 'tab';
+          handleSecurityViolation(`Switched away from exam (${deviceType})`);
+          
+          document.body.style.filter = "blur(8px)";
+          document.body.style.transition = "filter 0.3s ease";
+          
+          safeToast.error(`🚫 Do not switch ${isMobile ? 'apps' : 'tabs'}!`, {
+            duration: 3000
+          });
         }
+      } else {
+        document.body.style.filter = "";
+        setLastActiveTime(Date.now());
         
-        // If they were hidden for too long, auto-submit
-        if (hasBeenHidden) {
-          // Check how long they were away
-          const awayTime = Date.now() - lastActiveTime;
-          if (awayTime > 5000) { // 5 seconds
-            handleSecurityViolation(`Away from exam for ${Math.floor(awayTime/1000)} seconds`);
+        if (!submitted && !showResult && !isExamBlocked) {
+          if (hasBeenHidden) {
+            const awayTime = Date.now() - lastActiveTime;
+            if (awayTime > 5000) {
+              handleSecurityViolation(`Away for ${Math.floor(awayTime/1000)}s`);
+            }
           }
         }
       }
+    } catch (e) {
+      console.warn("Visibility change error:", e);
     }
   };
 
-  // Detect window blur (for desktop)
+  // Window blur detection
   const handleWindowBlur = () => {
     if (!submitted && !showResult && !isExamBlocked) {
-      // Check if it's a mobile app switch or desktop alt-tab
       setTimeout(() => {
         if (document.hidden) {
-          handleSecurityViolation(`Window lost focus - possible ${isMobile ? 'app switch' : 'Alt+Tab'}`);
+          handleSecurityViolation(`Window lost focus`);
         }
       }, 500);
     }
   };
 
-  // Prevent all copy operations
+  // Prevent copy/paste
   const handleCopy = (e) => {
     e.preventDefault();
     handleSecurityViolation("Attempted to copy");
@@ -405,192 +430,162 @@ const StudentExams = () => {
 
   // Prevent keyboard shortcuts
   const handleKeyDown = (e) => {
-    const isCtrl = e.ctrlKey || e.metaKey;
-    const isShift = e.shiftKey;
-    const key = e.key.toLowerCase();
+    try {
+      const isCtrl = e.ctrlKey || e.metaKey;
+      const isShift = e.shiftKey;
+      const key = e.key.toLowerCase();
 
-    // Block all problematic shortcuts
-    const blockedKeys = ['c', 'v', 'x', 'p', 's', 'u', 'a', 'r', 't', 'w', 'n'];
-    if (isCtrl && blockedKeys.includes(key)) {
-      e.preventDefault();
-      e.stopPropagation();
-      handleSecurityViolation(`Attempted to use Ctrl+${key.toUpperCase()}`);
-      return;
-    }
-
-    // Block F12, F5, F6, F7, F8, F9, F10, F11
-    if (e.key.startsWith('F') && parseInt(e.key.replace('F', '')) >= 5) {
-      e.preventDefault();
-      handleSecurityViolation(`Attempted to use ${e.key} key`);
-      return;
-    }
-
-    // Block DevTools shortcuts
-    if (isCtrl && isShift && ['i', 'j', 'c'].includes(key)) {
-      e.preventDefault();
-      handleSecurityViolation("Attempted to open developer tools");
-      return;
-    }
-
-    // Block Alt+Tab, Alt+F4, Alt+Esc
-    if (e.altKey && ['tab', 'f4', 'escape'].includes(key)) {
-      e.preventDefault();
-      handleSecurityViolation(`Attempted to use Alt+${key}`);
-      return;
-    }
-
-    // Block Windows key
-    if (key === 'meta' || key === 'win' || key === 'command') {
-      e.preventDefault();
-      handleSecurityViolation("Attempted to use Windows/Command key");
-      return;
-    }
-
-    // Block refresh shortcuts
-    if (isCtrl && key === 'r') {
-      e.preventDefault();
-      handleSecurityViolation("Attempted to refresh page");
-      return;
-    }
-
-    // Block back/forward shortcuts
-    if (e.key === 'Backspace' || e.key === 'Delete') {
-      // Allow Backspace for text input, but not for navigation
-      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+      const blockedKeys = ['c', 'v', 'x', 'p', 's', 'u', 'a', 'r', 't', 'w', 'n'];
+      if (isCtrl && blockedKeys.includes(key)) {
         e.preventDefault();
-        handleSecurityViolation("Attempted to use Backspace/Delete for navigation");
+        e.stopPropagation();
+        handleSecurityViolation(`Ctrl+${key.toUpperCase()}`);
         return;
       }
+
+      if (e.key.startsWith('F') && parseInt(e.key.replace('F', '')) >= 5) {
+        e.preventDefault();
+        handleSecurityViolation(`${e.key} key`);
+        return;
+      }
+
+      if (isCtrl && isShift && ['i', 'j', 'c'].includes(key)) {
+        e.preventDefault();
+        handleSecurityViolation("DevTools");
+        return;
+      }
+
+      if (e.altKey && ['tab', 'f4', 'escape'].includes(key)) {
+        e.preventDefault();
+        handleSecurityViolation(`Alt+${key}`);
+        return;
+      }
+
+      if (key === 'meta' || key === 'win' || key === 'command') {
+        e.preventDefault();
+        handleSecurityViolation("Windows key");
+        return;
+      }
+
+      if (isCtrl && key === 'r') {
+        e.preventDefault();
+        handleSecurityViolation("Refresh");
+        return;
+      }
+    } catch (err) {
+      console.warn("Keydown error:", err);
     }
   };
 
-  // Prevent screenshot - Multiple detection methods
+  // Prevent screenshot
   const preventScreenshot = (e) => {
-    // Detect Print Screen
-    if (e.key === 'PrintScreen') {
-      e.preventDefault();
-      e.stopPropagation();
-      handleSecurityViolation("Attempted to take screenshot (Print Screen)");
-      return false;
-    }
+    try {
+      if (e.key === 'PrintScreen') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSecurityViolation("Screenshot (Print Screen)");
+        return false;
+      }
 
-    // Detect Ctrl+Shift+S (Snipping Tool)
-    if (e.ctrlKey && e.shiftKey && e.key === 's') {
-      e.preventDefault();
-      e.stopPropagation();
-      handleSecurityViolation("Attempted to use Snipping Tool");
-      return false;
-    }
+      if (e.ctrlKey && e.shiftKey && e.key === 's') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSecurityViolation("Snipping Tool");
+        return false;
+      }
 
-    // Detect Alt+PrintScreen
-    if (e.altKey && e.key === 'PrintScreen') {
-      e.preventDefault();
-      e.stopPropagation();
-      handleSecurityViolation("Attempted to take screenshot (Alt+PrintScreen)");
-      return false;
-    }
+      if (e.altKey && e.key === 'PrintScreen') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSecurityViolation("Alt+PrintScreen");
+        return false;
+      }
 
-    // Detect Windows+Shift+S (Windows Snipping)
-    if (e.metaKey && e.shiftKey && e.key === 's') {
-      e.preventDefault();
-      e.stopPropagation();
-      handleSecurityViolation("Attempted to use Windows Snipping Tool");
-      return false;
-    }
+      if (e.metaKey && e.shiftKey && e.key === 's') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSecurityViolation("Win+Shift+S");
+        return false;
+      }
 
-    // Detect Windows+PrintScreen
-    if (e.metaKey && e.key === 'PrintScreen') {
-      e.preventDefault();
-      e.stopPropagation();
-      handleSecurityViolation("Attempted to take screenshot (Win+PrintScreen)");
-      return false;
-    }
+      if (e.metaKey && e.key === 'PrintScreen') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSecurityViolation("Win+PrintScreen");
+        return false;
+      }
 
-    return true;
+      return true;
+    } catch (err) {
+      console.warn("Screenshot prevention error:", err);
+      return true;
+    }
   };
 
-  // Mobile touch events - prevent multi-touch gestures
+  // Mobile touch events
   const handleTouchStart = (e) => {
-    // Detect pinch to zoom on mobile
     if (e.touches && e.touches.length > 1) {
       e.preventDefault();
-      handleSecurityViolation("Attempted to pinch/zoom (mobile)");
+      handleSecurityViolation("Pinch/zoom");
     }
   };
 
-  const handleTouchMove = (e) => {
-    // Prevent swipe gestures that might navigate away
-    if (!submitted && !showResult && !isExamBlocked) {
-      // Allow vertical scrolling only
-    }
-  };
-
-  // Prevent dragging/selection
+  // Prevent selection
   const handleSelectStart = (e) => {
     e.preventDefault();
     return false;
   };
 
-  // Mouse movement tracking for inactivity
-  const handleMouseMove = () => {
-    setLastActiveTime(Date.now());
-  };
-
-  // Keyboard activity tracking
-  const handleKeyPress = () => {
-    setLastActiveTime(Date.now());
-  };
-
   // Inactivity check
   const checkInactivity = () => {
-    const now = Date.now();
-    const inactiveTime = (now - lastActiveTime) / 1000;
-    
-    if (inactiveTime > 15 && !submitted && !showResult && !isExamBlocked) {
-      // Short inactivity warning
-      toast.warning(`⚠️ You've been inactive for ${Math.floor(inactiveTime)} seconds`);
+    try {
+      const now = Date.now();
+      const inactiveTime = (now - lastActiveTime) / 1000;
       
-      // If inactive for more than 30 seconds, count as violation
-      if (inactiveTime > 30) {
-        handleSecurityViolation(`Inactive for ${Math.floor(inactiveTime)} seconds`);
+      if (inactiveTime > 15 && !submitted && !showResult && !isExamBlocked) {
+        safeToast.warning(`⚠️ Inactive for ${Math.floor(inactiveTime)}s`);
+        
+        if (inactiveTime > 30) {
+          handleSecurityViolation(`Inactive ${Math.floor(inactiveTime)}s`);
+        }
+        
+        setLastActiveTime(now);
       }
-      
-      setLastActiveTime(now);
+    } catch (e) {
+      console.warn("Inactivity check error:", e);
     }
   };
 
   const handleSelect = async (qId, option) => {
     if (submitted || isExamBlocked) return;
 
-    const updated = { ...answers, [qId]: option };
-    setAnswers(updated);
-    localStorage.setItem("examAnswers", JSON.stringify(updated));
+    try {
+      const updated = { ...answers, [qId]: option };
+      setAnswers(updated);
+      localStorage.setItem("examAnswers", JSON.stringify(updated));
 
-    if (attemptId) {
-      try {
+      if (attemptId) {
         await axios.post("/exam/save-progress", {
           attemptId,
           answers: updated,
-        });
-      } catch (err) {
-        console.error("Auto-save failed:", err);
+        }).catch(() => {});
       }
+    } catch (err) {
+      console.error("Save progress error:", err);
     }
   };
 
   const next = () => {
-    if (currentIndex < questions.length - 1) setCurrentIndex((prev) => prev + 1);
+    if (currentIndex < questions.length - 1) setCurrentIndex(prev => prev + 1);
   };
 
   const prev = () => {
-    if (currentIndex > 0) setCurrentIndex((prev) => prev - 1);
+    if (currentIndex > 0) setCurrentIndex(prev => prev - 1);
   };
 
   const handleSubmit = async (isAutoSubmit = false) => {
-    if (!attemptId) return;
-    if (submitted) return;
+    if (!attemptId || submitted) return;
 
-    // If auto-submit, clear blocking state
     if (isAutoSubmit) {
       setIsExamBlocked(false);
     }
@@ -609,70 +604,56 @@ const StudentExams = () => {
 
       setSubmitted(true);
       setScoreData({
-        score: res.data.score,
-        percentage: res.data.percentage,
+        score: res.data.score || 0,
+        percentage: res.data.percentage || 0,
         questionResults: res.data.questionResults || []
       });
       setShowResult(true);
 
       localStorage.removeItem("examAnswers");
       
-      // Exit fullscreen
       exitFullscreen();
-      
-      // Unblock navigation
       blockAllNavigation(false);
-      
-      // Clean up security listeners
       cleanupSecurityListeners();
       
       if (isAutoSubmit) {
-        toast.error(`⚠️ Exam auto-submitted due to security violation`);
+        safeToast.error(`⚠️ Exam auto-submitted due to security violation`);
       } else {
-        toast.success("✅ Exam submitted successfully!");
+        safeToast.success("✅ Exam submitted successfully!");
       }
     } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.message || "Failed to submit exam.");
+      console.error("Submit error:", err);
+      safeToast.error(err.response?.data?.message || "Failed to submit exam.");
     }
   };
 
-  // Cleanup security listeners
   const cleanupSecurityListeners = () => {
-    // Remove all event listeners
-    document.removeEventListener("copy", handleCopy);
-    document.removeEventListener("paste", handlePaste);
-    document.removeEventListener("cut", handleCut);
-    document.removeEventListener("contextmenu", handleContextMenu);
-    document.removeEventListener("keydown", handleKeyDown);
-    document.removeEventListener("keyup", preventScreenshot);
-    document.removeEventListener("visibilitychange", handleVisibilityChange);
-    document.removeEventListener("fullscreenchange", handleFullscreenChange);
-    document.removeEventListener("blur", handleWindowBlur);
-    document.removeEventListener("focus", handleWindowFocus);
-    document.removeEventListener("selectstart", handleSelectStart);
-    document.removeEventListener("mousemove", handleMouseMove);
-    document.removeEventListener("keypress", handleKeyPress);
-    document.removeEventListener("mouseleave", handleMouseLeave);
-    document.removeEventListener("touchstart", handleTouchStart);
-    document.removeEventListener("touchmove", handleTouchMove);
-    
-    // Clear intervals
-    if (securityIntervalRef.current) {
-      clearInterval(securityIntervalRef.current);
+    try {
+      document.removeEventListener("copy", handleCopy);
+      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("cut", handleCut);
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keyup", preventScreenshot);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("blur", handleWindowBlur);
+      document.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("selectstart", handleSelectStart);
+      document.removeEventListener("mouseleave", handleMouseLeave);
+      document.removeEventListener("touchstart", handleTouchStart);
+      
+      if (securityIntervalRef.current) {
+        clearInterval(securityIntervalRef.current);
+      }
+      
+      document.body.style.filter = "";
+      blockAllNavigation(false);
+    } catch (e) {
+      console.warn("Cleanup error:", e);
     }
-    if (mouseCheckIntervalRef.current) {
-      clearInterval(mouseCheckIntervalRef.current);
-    }
-    
-    // Remove blur filter
-    document.body.style.filter = "";
-    
-    // Unblock navigation
-    blockAllNavigation(false);
   };
 
-  // Window focus handler
   const handleWindowFocus = () => {
     setLastActiveTime(Date.now());
     document.body.style.filter = "";
@@ -699,46 +680,38 @@ const StudentExams = () => {
   // Initialize security listeners
   useEffect(() => {
     if (!loading && !submitted && questions.length > 0) {
-      // Set up all security event listeners
-      document.addEventListener("copy", handleCopy);
-      document.addEventListener("paste", handlePaste);
-      document.addEventListener("cut", handleCut);
-      document.addEventListener("contextmenu", handleContextMenu);
-      document.addEventListener("keydown", handleKeyDown);
-      document.addEventListener("keyup", preventScreenshot);
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-      document.addEventListener("fullscreenchange", handleFullscreenChange);
-      document.addEventListener("blur", handleWindowBlur);
-      document.addEventListener("focus", handleWindowFocus);
-      document.addEventListener("selectstart", handleSelectStart);
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("keypress", handleKeyPress);
-      document.addEventListener("mouseleave", handleMouseLeave);
-      document.addEventListener("touchstart", handleTouchStart);
-      document.addEventListener("touchmove", handleTouchMove);
+      try {
+        document.addEventListener("copy", handleCopy);
+        document.addEventListener("paste", handlePaste);
+        document.addEventListener("cut", handleCut);
+        document.addEventListener("contextmenu", handleContextMenu);
+        document.addEventListener("keydown", handleKeyDown);
+        document.addEventListener("keyup", preventScreenshot);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        document.addEventListener("blur", handleWindowBlur);
+        document.addEventListener("focus", handleWindowFocus);
+        document.addEventListener("selectstart", handleSelectStart);
+        document.addEventListener("mouseleave", handleMouseLeave);
+        document.addEventListener("touchstart", handleTouchStart);
 
-      // Set up inactivity checker
-      securityIntervalRef.current = setInterval(checkInactivity, 5000);
+        securityIntervalRef.current = setInterval(checkInactivity, 5000);
 
-      // Try to enter fullscreen if not already
-      if (!document.fullscreenElement && !isFullscreen) {
-        setTimeout(() => {
-          enterFullscreen();
-        }, 1000);
-      }
+        if (!document.fullscreenElement && !isFullscreen) {
+          setTimeout(() => tryEnterFullscreen(), 1500);
+        }
 
-      // Show security reminder
-      toast.success(`🔒 Maximum security mode active - ${isMobile ? '📱' : '💻'}`, {
-        duration: 5000,
-        icon: '🛡️'
-      });
-      
-      // On mobile, show special warning
-      if (isMobile) {
-        toast.warning("📱 Do not switch apps or lock your screen during the exam!", {
-          duration: 7000,
-          icon: '⚠️'
+        safeToast.success(`🔒 Security mode active - ${isMobile ? '📱' : '💻'}`, {
+          duration: 4000
         });
+        
+        if (isMobile) {
+          safeToast.warning("📱 Do not switch apps or lock your screen!", {
+            duration: 6000
+          });
+        }
+      } catch (e) {
+        console.warn("Security setup error:", e);
       }
     }
 
@@ -751,7 +724,7 @@ const StudentExams = () => {
   useEffect(() => {
     if (timeLeft > 0 && !submitted && !loading && !isExamBlocked) {
       const timer = setInterval(() => {
-        setTimeLeft((prev) => {
+        setTimeLeft(prev => {
           if (prev <= 1) {
             clearInterval(timer);
             handleSubmit(false);
@@ -771,9 +744,8 @@ const StudentExams = () => {
   useEffect(() => {
     if (timeLeft <= 60 && timeLeft > 0 && !warningShown && !submitted) {
       setWarningShown(true);
-      toast.warning(`⏰ Only ${Math.floor(timeLeft / 60)} minute${Math.floor(timeLeft / 60) !== 1 ? 's' : ''} remaining!`, {
-        duration: 5000,
-        icon: '⏰'
+      safeToast.warning(`⏰ ${Math.floor(timeLeft / 60)} minute${Math.floor(timeLeft / 60) !== 1 ? 's' : ''} remaining!`, {
+        duration: 5000
       });
     }
   }, [timeLeft, warningShown, submitted]);
@@ -860,9 +832,6 @@ const StudentExams = () => {
       onClick={handleUserInteractionForFullscreen}
     >
       <Toaster position="top-right" />
-      
-      {/* Security Overlay - Blocks all external clicks */}
-      <div className="fixed inset-0 z-40 pointer-events-none" />
       
       {/* Security Status Bar */}
       <div className="max-w-4xl mx-auto mb-4">
