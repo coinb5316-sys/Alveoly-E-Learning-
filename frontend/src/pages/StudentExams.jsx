@@ -1,4 +1,4 @@
-// StudentExams.jsx - Professional Exam Protection with Timer Persistence
+// StudentExams.jsx - Honest Mobile Screenshot Protection
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -51,14 +51,11 @@ const StudentExams = () => {
   const [isScreenshotAttempted, setIsScreenshotAttempted] = useState(false);
   const [startTime, setStartTime] = useState(Date.now());
   const [blurActive, setBlurActive] = useState(false);
-  const [examStartTime, setExamStartTime] = useState(null);
-  const [totalDuration, setTotalDuration] = useState(0);
 
   // Refs
   const examContainerRef = useRef(null);
   const inactivityTimerRef = useRef(null);
   const fullscreenAttemptedRef = useRef(false);
-  const screenshotDetectionRef = useRef(null);
   const timerIntervalRef = useRef(null);
 
   const current = questions[currentIndex];
@@ -79,9 +76,9 @@ const StudentExams = () => {
   // TIMER PERSISTENCE - Fix refresh issue
   // ============================================
 
-  // Save exam state to sessionStorage (clears on tab close, not on refresh)
   const saveExamState = useCallback(() => {
     try {
+      if (!attemptId) return;
       const state = {
         questions,
         currentIndex,
@@ -89,28 +86,19 @@ const StudentExams = () => {
         attemptId,
         timeLeft,
         startTime,
-        examStartTime,
-        totalDuration,
-        isScreenshotAttempted,
-        submitted: false // Don't persist submitted state
+        isScreenshotAttempted
       };
       sessionStorage.setItem('exam_state_' + attemptId, JSON.stringify(state));
-    } catch (e) {
-      // Silently fail
-    }
-  }, [questions, currentIndex, answers, attemptId, timeLeft, startTime, examStartTime, totalDuration, isScreenshotAttempted]);
+    } catch (e) {}
+  }, [questions, currentIndex, answers, attemptId, timeLeft, startTime, isScreenshotAttempted]);
 
-  // Restore exam state on refresh
   const restoreExamState = useCallback(() => {
     try {
       if (!attemptId) return null;
       const saved = sessionStorage.getItem('exam_state_' + attemptId);
       if (saved) {
         const state = JSON.parse(saved);
-        // Only restore if not submitted
-        if (!state.submitted) {
-          return state;
-        }
+        if (!state.submitted) return state;
       }
       return null;
     } catch (e) {
@@ -118,98 +106,19 @@ const StudentExams = () => {
     }
   }, [attemptId]);
 
-  // Clear exam state on completion
   const clearExamState = useCallback(() => {
     try {
       if (attemptId) {
         sessionStorage.removeItem('exam_state_' + attemptId);
       }
-    } catch (e) {
-      // Silently fail
-    }
+    } catch (e) {}
   }, [attemptId]);
 
   // ============================================
-  // EFFECTIVE SCREENSHOT PROTECTION
+  // SCREENSHOT PROTECTION - What Actually Works
   // ============================================
 
-  // 1. Continuous Canvas Overlay
-  const createScreenshotCanvas = useCallback(() => {
-    try {
-      const existing = document.getElementById('screenshot-canvas');
-      if (existing) existing.remove();
-
-      const canvas = document.createElement('canvas');
-      canvas.id = 'screenshot-canvas';
-      canvas.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 99999;
-        opacity: 0.001;
-        display: block;
-      `;
-
-      const ctx = canvas.getContext('2d');
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-
-      // Fill with near-transparent pattern
-      ctx.fillStyle = 'rgba(0,0,0,0.001)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Draw random pattern that corrupts screenshots
-      for (let i = 0; i < 200; i++) {
-        const r = Math.floor(Math.random() * 255);
-        const g = Math.floor(Math.random() * 255);
-        const b = Math.floor(Math.random() * 255);
-        ctx.fillStyle = `rgba(${r},${g},${b},0.001)`;
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const w = 20 + Math.random() * 80;
-        const h = 20 + Math.random() * 80;
-        ctx.fillRect(x, y, w, h);
-      }
-
-      // Add text that appears in screenshots
-      ctx.font = 'bold 40px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(255,0,0,0.02)';
-      ctx.fillText('📸 SCREENSHOT BLOCKED', canvas.width / 2, canvas.height / 2 - 50);
-      ctx.fillText('EXAM PROTECTED', canvas.width / 2, canvas.height / 2 + 50);
-
-      // Add diagonal lines that corrupt screenshots
-      ctx.strokeStyle = 'rgba(255,0,0,0.001)';
-      ctx.lineWidth = 2;
-      for (let i = -canvas.height; i < canvas.width + canvas.height; i += 30) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i + canvas.height, canvas.height);
-        ctx.stroke();
-      }
-
-      document.body.appendChild(canvas);
-      screenshotDetectionRef.current = canvas;
-
-      const resizeHandler = () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      };
-      window.addEventListener('resize', resizeHandler);
-      canvas._resizeHandler = resizeHandler;
-
-      return canvas;
-    } catch (e) {
-      console.warn("Canvas error:", e);
-      return null;
-    }
-  }, []);
-
-  // 2. CSS Protection
+  // 1. CSS Protection - Blurs content when app switches
   const applyCSSProtection = useCallback(() => {
     const styleId = 'exam-protection-style';
     let style = document.getElementById(styleId);
@@ -218,6 +127,7 @@ const StudentExams = () => {
     style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
+      /* Block print/screenshot attempts */
       @media print {
         body, #exam-container, .exam-content, * {
           display: none !important;
@@ -238,6 +148,7 @@ const StudentExams = () => {
         }
       }
 
+      /* Block selection and copy */
       #exam-container, .exam-content, .exam-content * {
         user-select: none !important;
         -webkit-user-select: none !important;
@@ -245,9 +156,9 @@ const StudentExams = () => {
         -ms-user-select: none !important;
         -webkit-touch-callout: none !important;
         -webkit-user-drag: none !important;
-        -webkit-touch-callout: none !important;
       }
 
+      /* Mobile screenshot overlay - shows when app switches */
       #exam-blur-overlay {
         display: none;
         position: fixed;
@@ -293,8 +204,9 @@ const StudentExams = () => {
         50% { opacity: 1; }
       }
 
+      /* Blur class for exam content */
       .exam-blurred {
-        filter: blur(20px) !important;
+        filter: blur(30px) !important;
         pointer-events: none !important;
         transition: filter 0.3s ease !important;
       }
@@ -302,7 +214,7 @@ const StudentExams = () => {
     document.head.appendChild(style);
   }, []);
 
-  // 3. Blur overlay
+  // 2. Show blur overlay - This is the key protection
   const showBlurOverlay = useCallback((message = "Exam Paused", icon = "🔒") => {
     let overlay = document.getElementById('exam-blur-overlay');
     if (!overlay) {
@@ -355,89 +267,69 @@ const StudentExams = () => {
     setLastActivityTime(Date.now());
   }, []);
 
-  // 4. Screenshot detection
+  // 3. MOBILE APP SWITCH DETECTION - This works on all devices
+  const handleVisibilityChange = useCallback(() => {
+    if (document.hidden) {
+      // User switched apps, went home, or locked screen
+      if (!submitted && !showResult) {
+        setIsScreenshotAttempted(true);
+        showBlurOverlay("📱 App Switch Detected", "📱");
+        // Log the attempt
+        console.warn("📱 App switch detected - possible screenshot attempt");
+      }
+    } else {
+      // User came back - they must tap to resume
+      // Don't auto-resume - user must tap
+    }
+  }, [submitted, showResult, showBlurOverlay]);
+
+  // 4. Window blur detection - Works on both desktop and mobile
+  const handleWindowBlur = useCallback(() => {
+    if (!submitted && !showResult && !document.hidden) {
+      // Window lost focus (could be app switch)
+      setTimeout(() => {
+        if (document.hidden) {
+          setIsScreenshotAttempted(true);
+          showBlurOverlay("👀 Focus Lost", "👀");
+        }
+      }, 300);
+    }
+  }, [submitted, showResult, showBlurOverlay]);
+
+  // 5. Desktop screenshot key detection only
   const handleScreenshotDetection = useCallback((e) => {
     const key = e.key;
-
-    // Desktop screenshot keys - Note: Hardware screenshots on mobile CANNOT be intercepted
+    
+    // These only work on desktop
     if (key === 'PrintScreen' || key === 'Screen') {
       e.preventDefault();
       e.stopPropagation();
       setIsScreenshotAttempted(true);
       showBlurOverlay("📸 Screenshot Blocked", "🚫");
-      setTimeout(() => {
-        const overlay = document.getElementById('exam-blur-overlay');
-        if (overlay) {
-          overlay.classList.remove('active');
-          setIsBlocked(false);
-          setBlurActive(false);
-          const container = document.getElementById('exam-container');
-          if (container) {
-            container.classList.remove('exam-blurred');
-          }
-        }
-      }, 1500);
+      setTimeout(hideBlurOverlay, 1500);
       return false;
     }
 
-    // Ctrl+Shift+S, Win+Shift+S, Cmd+Shift+3/4/5
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['s', 'S', '3', '4', '5'].includes(key)) {
       e.preventDefault();
       e.stopPropagation();
       setIsScreenshotAttempted(true);
       showBlurOverlay("📸 Screenshot Blocked", "🚫");
-      setTimeout(() => {
-        const overlay = document.getElementById('exam-blur-overlay');
-        if (overlay) {
-          overlay.classList.remove('active');
-          setIsBlocked(false);
-          setBlurActive(false);
-          const container = document.getElementById('exam-container');
-          if (container) {
-            container.classList.remove('exam-blurred');
-          }
-        }
-      }, 1500);
+      setTimeout(hideBlurOverlay, 1500);
       return false;
     }
 
-    // Alt+PrintScreen, Win+PrintScreen
     if ((e.altKey || e.metaKey) && key === 'PrintScreen') {
       e.preventDefault();
       e.stopPropagation();
       setIsScreenshotAttempted(true);
       showBlurOverlay("📸 Screenshot Blocked", "🚫");
-      setTimeout(() => {
-        const overlay = document.getElementById('exam-blur-overlay');
-        if (overlay) {
-          overlay.classList.remove('active');
-          setIsBlocked(false);
-          setBlurActive(false);
-          const container = document.getElementById('exam-container');
-          if (container) {
-            container.classList.remove('exam-blurred');
-          }
-        }
-      }, 1500);
+      setTimeout(hideBlurOverlay, 1500);
       return false;
     }
 
     return true;
-  }, [showBlurOverlay]);
-
-  // 5. Mobile app switch detection
-  const handleVisibilityChange = useCallback(() => {
-    if (document.hidden) {
-      if (!submitted && !showResult) {
-        showBlurOverlay("📱 App Switch Detected", "📱");
-        // For mobile, we don't auto-resume - user must tap
-      }
-    } else {
-      if (!isBlocked) {
-        hideBlurOverlay();
-      }
-    }
-  }, [submitted, showResult, showBlurOverlay, hideBlurOverlay, isBlocked]);
+  }, [showBlurOverlay, hideBlurOverlay]);
 
   // ============================================
   // INACTIVITY DETECTION (30 seconds)
@@ -467,7 +359,7 @@ const StudentExams = () => {
   }, [lastActivityTime, isInactive, submitted, showResult, showBlurOverlay]);
 
   // ============================================
-  // KEYBOARD SHORTCUT BLOCKING
+  // KEYBOARD SHORTCUT BLOCKING (Desktop only)
   // ============================================
 
   const handleKeyDown = useCallback((e) => {
@@ -631,10 +523,8 @@ const StudentExams = () => {
 
       setAttemptId(newAttemptId);
       setQuestions(examQuestions);
-      setTotalDuration(duration);
       setTimeLeft(duration);
       setStartTime(Date.now());
-      setExamStartTime(Date.now());
       setLastActivityTime(Date.now());
 
       const saved = JSON.parse(localStorage.getItem("examAnswers_" + newAttemptId) || "{}");
@@ -647,12 +537,9 @@ const StudentExams = () => {
 
       // Apply protections
       applyCSSProtection();
-      createScreenshotCanvas();
       blockNavigation(true);
 
       setTimeout(enterFullscreen, 1000);
-
-      // Save initial state
       setTimeout(() => saveExamState(), 100);
 
     } catch (err) {
@@ -671,7 +558,6 @@ const StudentExams = () => {
     }
   };
 
-  // Restore exam on refresh
   const restoreExam = useCallback(() => {
     if (!attemptId) return;
     
@@ -682,28 +568,23 @@ const StudentExams = () => {
       setAnswers(savedState.answers || {});
       setTimeLeft(savedState.timeLeft || 0);
       setStartTime(savedState.startTime || Date.now());
-      setExamStartTime(savedState.examStartTime || Date.now());
-      setTotalDuration(savedState.totalDuration || 0);
       setIsScreenshotAttempted(savedState.isScreenshotAttempted || false);
       
-      // Restore answers from localStorage
       const savedAnswers = JSON.parse(localStorage.getItem("examAnswers_" + attemptId) || "{}");
       if (Object.keys(savedAnswers).length > 0) {
         setAnswers(savedAnswers);
       }
       
-      // Re-apply protections
       applyCSSProtection();
-      createScreenshotCanvas();
       blockNavigation(true);
       
       toast.custom((t) => (
         <div className="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
-          🔄 Exam restored - continuing where you left off
+          🔄 Exam restored
         </div>
       ), { duration: 3000 });
     }
-  }, [attemptId, restoreExamState, applyCSSProtection, createScreenshotCanvas, blockNavigation]);
+  }, [attemptId, restoreExamState, applyCSSProtection, blockNavigation]);
 
   const handleSubmit = async (isAutoSubmit = false) => {
     if (!attemptId || submitted) return;
@@ -726,7 +607,6 @@ const StudentExams = () => {
       });
       setShowResult(true);
 
-      // Clear all saved data
       localStorage.removeItem("examAnswers_" + attemptId);
       clearExamState();
       blockNavigation(false);
@@ -741,13 +621,6 @@ const StudentExams = () => {
   };
 
   const cleanup = () => {
-    if (screenshotDetectionRef.current) {
-      if (screenshotDetectionRef.current._resizeHandler) {
-        window.removeEventListener('resize', screenshotDetectionRef.current._resizeHandler);
-      }
-      screenshotDetectionRef.current.remove();
-      screenshotDetectionRef.current = null;
-    }
     const overlay = document.getElementById('exam-blur-overlay');
     if (overlay) overlay.remove();
     const style = document.getElementById('exam-protection-style');
@@ -798,7 +671,6 @@ const StudentExams = () => {
   // EFFECTS
   // ============================================
 
-  // Initial exam start
   useEffect(() => {
     if (!courseId || !subjectId) return;
     startExam();
@@ -808,14 +680,12 @@ const StudentExams = () => {
     };
   }, [courseId, subjectId]);
 
-  // Check for saved state on refresh
   useEffect(() => {
     if (attemptId && !loading) {
       restoreExam();
     }
   }, [attemptId, loading, restoreExam]);
 
-  // Save state periodically
   useEffect(() => {
     if (!loading && !submitted && attemptId) {
       const saveInterval = setInterval(() => {
@@ -825,12 +695,13 @@ const StudentExams = () => {
     }
   }, [loading, submitted, attemptId, saveExamState]);
 
-  // Security listeners
   useEffect(() => {
     if (!loading && !submitted && questions.length > 0) {
       document.addEventListener("keydown", handleKeyDown);
       document.addEventListener("visibilitychange", handleVisibilityChange);
       document.addEventListener("fullscreenchange", handleFullscreenChange);
+      document.addEventListener("blur", handleWindowBlur);
+      
       document.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         showBlurOverlay("🖱️ Right-click Blocked", "🖱️");
@@ -850,11 +721,6 @@ const StudentExams = () => {
         e.preventDefault();
         showBlurOverlay("✂️ Cut Blocked", "✂️");
         setTimeout(hideBlurOverlay, 1500);
-      });
-      document.addEventListener("blur", () => {
-        if (!submitted && !showResult) {
-          showBlurOverlay("👀 Focus Lost", "👀");
-        }
       });
       document.addEventListener("focus", () => {
         hideBlurOverlay();
@@ -880,19 +746,18 @@ const StudentExams = () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("blur", handleWindowBlur);
       if (inactivityTimerRef.current) {
         clearInterval(inactivityTimerRef.current);
       }
     };
   }, [loading, submitted, questions.length]);
 
-  // Timer effect - persists across refresh
   useEffect(() => {
     if (timeLeft > 0 && !submitted && !loading) {
       timerIntervalRef.current = setInterval(() => {
         setTimeLeft(prev => {
           const newTime = prev - 1;
-          // Save state on each tick
           saveExamState();
           if (newTime <= 0) {
             clearInterval(timerIntervalRef.current);
@@ -910,7 +775,6 @@ const StudentExams = () => {
     }
   }, [timeLeft, submitted, loading, saveExamState]);
 
-  // Low time warning
   useEffect(() => {
     if (timeLeft <= 60 && timeLeft > 0 && !warningShown && !submitted) {
       setWarningShown(true);
@@ -998,7 +862,6 @@ const StudentExams = () => {
       </div>
 
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="mb-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -1007,11 +870,13 @@ const StudentExams = () => {
                 Exam
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {questions.length} questions • {isMobile ? 'Mobile' : 'Desktop'} mode
-                {attemptId && (
-                  <span className="ml-2 text-xs text-gray-400">ID: {attemptId.slice(-6)}</span>
-                )}
+                {questions.length} questions • {isMobile ? '📱 Mobile' : '💻 Desktop'} mode
               </p>
+              {isMobile && (
+                <p className="text-xs text-yellow-500 mt-1">
+                  ⚠️ Leaving the app will blur your exam
+                </p>
+              )}
             </div>
             {timeLeft > 0 && !submitted && (
               <div className={`flex items-center gap-2 px-4 py-2 rounded-xl font-mono text-xl font-bold ${
@@ -1031,7 +896,6 @@ const StudentExams = () => {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid gap-3 grid-cols-3 mb-6">
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3">
             <p className="text-xs text-gray-500 dark:text-gray-400">Progress</p>
@@ -1053,7 +917,15 @@ const StudentExams = () => {
           </div>
         </div>
 
-        {/* Question Card */}
+        {/* Mobile Warning */}
+        {isMobile && !isBlocked && (
+          <div className="mb-4 p-2 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <p className="text-xs text-yellow-700 dark:text-yellow-400 text-center">
+              📱 Switching apps will blur your exam. Tap to resume when you return.
+            </p>
+          </div>
+        )}
+
         {current && !submitted && (
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
             <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-4 md:px-6 py-4 text-white">
@@ -1128,7 +1000,6 @@ const StudentExams = () => {
                 )}
               </div>
 
-              {/* Question Navigator */}
               <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                 <div className="flex flex-wrap gap-1.5">
                   {questions.map((_, idx) => {
@@ -1155,7 +1026,6 @@ const StudentExams = () => {
         )}
       </div>
 
-      {/* Results Modal */}
       {showResult && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
@@ -1178,7 +1048,7 @@ const StudentExams = () => {
                 </p>
                 {isScreenshotAttempted && (
                   <p className="mt-2 text-xs bg-red-500/30 p-2 rounded-lg">
-                    📸 Screenshot attempt detected
+                    📸 App switch detected during exam
                   </p>
                 )}
               </div>
