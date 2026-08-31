@@ -1,4 +1,4 @@
-// StudentExams.jsx - Maximum protection across all devices
+// StudentExams.jsx - Maximum protection across all devices (FIXED)
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -45,7 +45,7 @@ const StudentExams = () => {
   // Security state
   const [securityViolations, setSecurityViolations] = useState(0);
   const [showSecurityWarning, setShowSecurityWarning] = useState(false);
-  const [securityWarningMessage, setSecurityWarningMessage] = useState("");
+  const [securityWarningMessage, setSecurityWarningMessage] = useState(""); // FIXED: This was setSecurityViolationMessage
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isExamBlocked, setIsExamBlocked] = useState(false);
   const [mouseLeaveCount, setMouseLeaveCount] = useState(0);
@@ -60,6 +60,7 @@ const StudentExams = () => {
   const securityIntervalRef = useRef(null);
   const mouseCheckIntervalRef = useRef(null);
   const blockNavigationRef = useRef(null);
+  const fullscreenAttemptedRef = useRef(false);
 
   const current = questions[currentIndex];
   
@@ -112,8 +113,11 @@ const StudentExams = () => {
       setAnswers(initialAnswers);
       localStorage.setItem("examAnswers", JSON.stringify(initialAnswers));
       
-      // Enter fullscreen automatically when exam starts
-      enterFullscreen();
+      // Enter fullscreen automatically when exam starts (with user gesture)
+      // We'll use a setTimeout to ensure the DOM is ready
+      setTimeout(() => {
+        enterFullscreen();
+      }, 500);
       
       // Block all navigation
       blockAllNavigation(true);
@@ -197,25 +201,40 @@ const StudentExams = () => {
     }
   };
 
-  // Fullscreen management
+  // Fullscreen management - FIXED to handle user gesture requirement
   const enterFullscreen = () => {
+    // Check if fullscreen is already active
+    if (document.fullscreenElement) {
+      setIsFullscreen(true);
+      return;
+    }
+
+    // Don't attempt if already attempted
+    if (fullscreenAttemptedRef.current) {
+      return;
+    }
+
     const element = document.documentElement;
     
     // For mobile, try both ways
     const requestFullscreen = element.requestFullscreen || element.webkitRequestFullscreen || element.msRequestFullscreen;
     
     if (requestFullscreen) {
+      fullscreenAttemptedRef.current = true;
       requestFullscreen.call(element)
         .then(() => {
           setIsFullscreen(true);
+          fullscreenAttemptedRef.current = false;
           toast.success("🔒 Fullscreen mode activated");
         })
         .catch((err) => {
           console.error("Fullscreen error:", err);
+          fullscreenAttemptedRef.current = false;
           if (isMobile) {
             toast.warning("Please enable fullscreen for exam security");
           } else {
-            handleSecurityViolation("Failed to enter fullscreen");
+            // Don't auto-submit on fullscreen failure, just warn
+            toast.warning("⚠️ Please enter fullscreen mode for exam security");
           }
         });
     } else {
@@ -223,6 +242,13 @@ const StudentExams = () => {
       if (isMobile) {
         toast.info("📱 Please stay on this page and don't switch apps");
       }
+    }
+  };
+
+  // Try fullscreen on user interaction (click)
+  const handleUserInteractionForFullscreen = () => {
+    if (!document.fullscreenElement && !fullscreenAttemptedRef.current) {
+      enterFullscreen();
     }
   };
 
@@ -239,9 +265,9 @@ const StudentExams = () => {
     setIsFullscreen(isFull);
     
     if (!isFull && !submitted && !showResult && !isExamBlocked) {
+      // Only count as violation if it was previously fullscreen
       // On mobile, check if it's a user gesture or system
       if (isMobile) {
-        // Mobile: Check if user switched apps or exited fullscreen
         handleSecurityViolation("Exited exam mode - fullscreen lost");
       } else {
         handleSecurityViolation("You exited fullscreen mode");
@@ -255,7 +281,7 @@ const StudentExams = () => {
     
     const newCount = securityViolations + 1;
     setSecurityViolations(newCount);
-    setSecurityViolationMessage(message);
+    setSecurityWarningMessage(message); // FIXED: Using correct setter
     setShowSecurityWarning(true);
     
     // Log violation
@@ -480,13 +506,6 @@ const StudentExams = () => {
       return false;
     }
 
-    // For mobile: Detect volume down + power button combo is not possible in JS
-    // But we can detect when screen is being recorded
-    if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-      // We can't prevent, but we can detect and warn
-      // This is passive detection
-    }
-
     return true;
   };
 
@@ -502,23 +521,7 @@ const StudentExams = () => {
   const handleTouchMove = (e) => {
     // Prevent swipe gestures that might navigate away
     if (!submitted && !showResult && !isExamBlocked) {
-      const touch = e.touches[0];
-      // Check for horizontal swipe (could be app switching on iOS)
-      // We'll prevent any touch that might cause navigation
-      if (e.touches.length === 1) {
-        // Allow vertical scrolling only
-        const startX = touch.clientX;
-        // We'll use a passive approach - just monitor
-      }
-    }
-  };
-
-  // Prevent screen recording (passive detection)
-  const handleScreenChange = () => {
-    if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-      // Log potential screen recording
-      console.warn("Screen recording might be active");
-      // We can't prevent it, but we can warn
+      // Allow vertical scrolling only
     }
   };
 
@@ -719,7 +722,9 @@ const StudentExams = () => {
 
       // Try to enter fullscreen if not already
       if (!document.fullscreenElement && !isFullscreen) {
-        enterFullscreen();
+        setTimeout(() => {
+          enterFullscreen();
+        }, 1000);
       }
 
       // Show security reminder
@@ -806,7 +811,7 @@ const StudentExams = () => {
           </p>
           <div className="bg-red-100 dark:bg-red-950/30 p-3 rounded-lg mb-4">
             <p className="text-sm text-red-700 dark:text-red-400">
-              Violation: {securityViolationMessage}
+              Violation: {securityWarningMessage}
             </p>
           </div>
           <button
@@ -852,6 +857,7 @@ const StudentExams = () => {
       ref={examContainerRef}
       className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 py-4 px-4 md:py-8"
       style={{ touchAction: 'pan-y' }}
+      onClick={handleUserInteractionForFullscreen}
     >
       <Toaster position="top-right" />
       
@@ -879,7 +885,7 @@ const StudentExams = () => {
       {showSecurityWarning && (
         <div className="fixed top-16 left-1/2 transform -translate-x-1/2 z-50 bg-red-500 text-white px-4 py-3 rounded-xl shadow-2xl animate-pulse flex items-center gap-2 max-w-md text-sm">
           <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-          <span className="font-medium">{securityViolationMessage}</span>
+          <span className="font-medium">{securityWarningMessage}</span>
         </div>
       )}
 
