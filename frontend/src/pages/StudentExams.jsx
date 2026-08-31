@@ -1,4 +1,4 @@
-// StudentExams.jsx - Professional Exam Protection with Mobile Screenshot Defense
+// StudentExams.jsx - Professional Exam Protection with Timer Persistence
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -51,12 +51,15 @@ const StudentExams = () => {
   const [isScreenshotAttempted, setIsScreenshotAttempted] = useState(false);
   const [startTime, setStartTime] = useState(Date.now());
   const [blurActive, setBlurActive] = useState(false);
+  const [examStartTime, setExamStartTime] = useState(null);
+  const [totalDuration, setTotalDuration] = useState(0);
 
   // Refs
   const examContainerRef = useRef(null);
   const inactivityTimerRef = useRef(null);
   const fullscreenAttemptedRef = useRef(false);
   const screenshotDetectionRef = useRef(null);
+  const timerIntervalRef = useRef(null);
 
   const current = questions[currentIndex];
 
@@ -73,13 +76,66 @@ const StudentExams = () => {
   }, []);
 
   // ============================================
-  // EFFECTIVE SCREENSHOT PROTECTION FOR MOBILE
+  // TIMER PERSISTENCE - Fix refresh issue
   // ============================================
 
-  // 1. Continuous Canvas Overlay - This actually works on mobile
+  // Save exam state to sessionStorage (clears on tab close, not on refresh)
+  const saveExamState = useCallback(() => {
+    try {
+      const state = {
+        questions,
+        currentIndex,
+        answers,
+        attemptId,
+        timeLeft,
+        startTime,
+        examStartTime,
+        totalDuration,
+        isScreenshotAttempted,
+        submitted: false // Don't persist submitted state
+      };
+      sessionStorage.setItem('exam_state_' + attemptId, JSON.stringify(state));
+    } catch (e) {
+      // Silently fail
+    }
+  }, [questions, currentIndex, answers, attemptId, timeLeft, startTime, examStartTime, totalDuration, isScreenshotAttempted]);
+
+  // Restore exam state on refresh
+  const restoreExamState = useCallback(() => {
+    try {
+      if (!attemptId) return null;
+      const saved = sessionStorage.getItem('exam_state_' + attemptId);
+      if (saved) {
+        const state = JSON.parse(saved);
+        // Only restore if not submitted
+        if (!state.submitted) {
+          return state;
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }, [attemptId]);
+
+  // Clear exam state on completion
+  const clearExamState = useCallback(() => {
+    try {
+      if (attemptId) {
+        sessionStorage.removeItem('exam_state_' + attemptId);
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }, [attemptId]);
+
+  // ============================================
+  // EFFECTIVE SCREENSHOT PROTECTION
+  // ============================================
+
+  // 1. Continuous Canvas Overlay
   const createScreenshotCanvas = useCallback(() => {
     try {
-      // Remove existing canvas
       const existing = document.getElementById('screenshot-canvas');
       if (existing) existing.remove();
 
@@ -139,7 +195,6 @@ const StudentExams = () => {
       document.body.appendChild(canvas);
       screenshotDetectionRef.current = canvas;
 
-      // Force redraw on resize
       const resizeHandler = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -154,7 +209,7 @@ const StudentExams = () => {
     }
   }, []);
 
-  // 2. CSS Protection with mobile support
+  // 2. CSS Protection
   const applyCSSProtection = useCallback(() => {
     const styleId = 'exam-protection-style';
     let style = document.getElementById(styleId);
@@ -163,7 +218,6 @@ const StudentExams = () => {
     style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      /* Block all screenshot attempts */
       @media print {
         body, #exam-container, .exam-content, * {
           display: none !important;
@@ -184,7 +238,6 @@ const StudentExams = () => {
         }
       }
 
-      /* Block selection on all devices */
       #exam-container, .exam-content, .exam-content * {
         user-select: none !important;
         -webkit-user-select: none !important;
@@ -195,7 +248,6 @@ const StudentExams = () => {
         -webkit-touch-callout: none !important;
       }
 
-      /* Fullscreen overlay for mobile */
       #exam-blur-overlay {
         display: none;
         position: fixed;
@@ -241,7 +293,6 @@ const StudentExams = () => {
         50% { opacity: 1; }
       }
 
-      /* Blur class for exam content */
       .exam-blurred {
         filter: blur(20px) !important;
         pointer-events: none !important;
@@ -271,7 +322,6 @@ const StudentExams = () => {
         setIsInactive(false);
         setBlurActive(false);
         setLastActivityTime(Date.now());
-        // Remove blur from container
         const container = document.getElementById('exam-container');
         if (container) {
           container.classList.remove('exam-blurred');
@@ -284,7 +334,6 @@ const StudentExams = () => {
     overlay.classList.add('active');
     setIsBlocked(true);
     setBlurActive(true);
-    // Blur the exam container
     const container = document.getElementById('exam-container');
     if (container) {
       container.classList.add('exam-blurred');
@@ -306,11 +355,11 @@ const StudentExams = () => {
     setLastActivityTime(Date.now());
   }, []);
 
-  // 4. Screenshot detection - Desktop + Mobile
+  // 4. Screenshot detection
   const handleScreenshotDetection = useCallback((e) => {
     const key = e.key;
 
-    // Desktop screenshot keys
+    // Desktop screenshot keys - Note: Hardware screenshots on mobile CANNOT be intercepted
     if (key === 'PrintScreen' || key === 'Screen') {
       e.preventDefault();
       e.stopPropagation();
@@ -376,22 +425,14 @@ const StudentExams = () => {
     return true;
   }, [showBlurOverlay]);
 
-  // 5. Mobile-specific: Detect when app goes to background
+  // 5. Mobile app switch detection
   const handleVisibilityChange = useCallback(() => {
     if (document.hidden) {
-      // On mobile, this could be app switch or screenshot
-      // We blur and show overlay
       if (!submitted && !showResult) {
         showBlurOverlay("📱 App Switch Detected", "📱");
-        // Auto-resume after 2 seconds (assuming they came back)
-        setTimeout(() => {
-          if (!document.hidden) {
-            hideBlurOverlay();
-          }
-        }, 2000);
+        // For mobile, we don't auto-resume - user must tap
       }
     } else {
-      // Came back to app - remove blur if not blocked
       if (!isBlocked) {
         hideBlurOverlay();
       }
@@ -430,7 +471,6 @@ const StudentExams = () => {
   // ============================================
 
   const handleKeyDown = useCallback((e) => {
-    // Check for screenshot first
     if (!handleScreenshotDetection(e)) return;
 
     const isCtrl = e.ctrlKey || e.metaKey;
@@ -591,24 +631,29 @@ const StudentExams = () => {
 
       setAttemptId(newAttemptId);
       setQuestions(examQuestions);
+      setTotalDuration(duration);
       setTimeLeft(duration);
       setStartTime(Date.now());
+      setExamStartTime(Date.now());
       setLastActivityTime(Date.now());
 
-      const saved = JSON.parse(localStorage.getItem("examAnswers") || "{}");
+      const saved = JSON.parse(localStorage.getItem("examAnswers_" + newAttemptId) || "{}");
       const initial = examQuestions.reduce((acc, q) => {
         acc[q._id] = saved[q._id] || "";
         return acc;
       }, {});
       setAnswers(initial);
-      localStorage.setItem("examAnswers", JSON.stringify(initial));
+      localStorage.setItem("examAnswers_" + newAttemptId, JSON.stringify(initial));
 
-      // Apply all protections
+      // Apply protections
       applyCSSProtection();
       createScreenshotCanvas();
       blockNavigation(true);
 
       setTimeout(enterFullscreen, 1000);
+
+      // Save initial state
+      setTimeout(() => saveExamState(), 100);
 
     } catch (err) {
       console.error("Start exam error:", err);
@@ -625,6 +670,40 @@ const StudentExams = () => {
       setLoading(false);
     }
   };
+
+  // Restore exam on refresh
+  const restoreExam = useCallback(() => {
+    if (!attemptId) return;
+    
+    const savedState = restoreExamState();
+    if (savedState) {
+      setQuestions(savedState.questions || []);
+      setCurrentIndex(savedState.currentIndex || 0);
+      setAnswers(savedState.answers || {});
+      setTimeLeft(savedState.timeLeft || 0);
+      setStartTime(savedState.startTime || Date.now());
+      setExamStartTime(savedState.examStartTime || Date.now());
+      setTotalDuration(savedState.totalDuration || 0);
+      setIsScreenshotAttempted(savedState.isScreenshotAttempted || false);
+      
+      // Restore answers from localStorage
+      const savedAnswers = JSON.parse(localStorage.getItem("examAnswers_" + attemptId) || "{}");
+      if (Object.keys(savedAnswers).length > 0) {
+        setAnswers(savedAnswers);
+      }
+      
+      // Re-apply protections
+      applyCSSProtection();
+      createScreenshotCanvas();
+      blockNavigation(true);
+      
+      toast.custom((t) => (
+        <div className="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+          🔄 Exam restored - continuing where you left off
+        </div>
+      ), { duration: 3000 });
+    }
+  }, [attemptId, restoreExamState, applyCSSProtection, createScreenshotCanvas, blockNavigation]);
 
   const handleSubmit = async (isAutoSubmit = false) => {
     if (!attemptId || submitted) return;
@@ -647,7 +726,9 @@ const StudentExams = () => {
       });
       setShowResult(true);
 
-      localStorage.removeItem("examAnswers");
+      // Clear all saved data
+      localStorage.removeItem("examAnswers_" + attemptId);
+      clearExamState();
       blockNavigation(false);
       cleanup();
 
@@ -660,7 +741,6 @@ const StudentExams = () => {
   };
 
   const cleanup = () => {
-    // Remove canvas
     if (screenshotDetectionRef.current) {
       if (screenshotDetectionRef.current._resizeHandler) {
         window.removeEventListener('resize', screenshotDetectionRef.current._resizeHandler);
@@ -668,15 +748,15 @@ const StudentExams = () => {
       screenshotDetectionRef.current.remove();
       screenshotDetectionRef.current = null;
     }
-    // Remove overlays
     const overlay = document.getElementById('exam-blur-overlay');
     if (overlay) overlay.remove();
-    // Remove style
     const style = document.getElementById('exam-protection-style');
     if (style) style.remove();
-    // Clear timers
     if (inactivityTimerRef.current) {
       clearInterval(inactivityTimerRef.current);
+    }
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
     }
     blockNavigation(false);
     document.body.style.filter = "";
@@ -686,8 +766,9 @@ const StudentExams = () => {
     if (submitted) return;
     const updated = { ...answers, [qId]: option };
     setAnswers(updated);
-    localStorage.setItem("examAnswers", JSON.stringify(updated));
+    localStorage.setItem("examAnswers_" + attemptId, JSON.stringify(updated));
     handleActivity();
+    saveExamState();
 
     if (attemptId) {
       await axios.post("/exam/save-progress", {
@@ -701,6 +782,7 @@ const StudentExams = () => {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(prev => prev + 1);
       handleActivity();
+      saveExamState();
     }
   };
 
@@ -708,6 +790,7 @@ const StudentExams = () => {
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       handleActivity();
+      saveExamState();
     }
   };
 
@@ -715,6 +798,7 @@ const StudentExams = () => {
   // EFFECTS
   // ============================================
 
+  // Initial exam start
   useEffect(() => {
     if (!courseId || !subjectId) return;
     startExam();
@@ -724,9 +808,26 @@ const StudentExams = () => {
     };
   }, [courseId, subjectId]);
 
+  // Check for saved state on refresh
+  useEffect(() => {
+    if (attemptId && !loading) {
+      restoreExam();
+    }
+  }, [attemptId, loading, restoreExam]);
+
+  // Save state periodically
+  useEffect(() => {
+    if (!loading && !submitted && attemptId) {
+      const saveInterval = setInterval(() => {
+        saveExamState();
+      }, 5000);
+      return () => clearInterval(saveInterval);
+    }
+  }, [loading, submitted, attemptId, saveExamState]);
+
+  // Security listeners
   useEffect(() => {
     if (!loading && !submitted && questions.length > 0) {
-      // Security listeners
       document.addEventListener("keydown", handleKeyDown);
       document.addEventListener("visibilitychange", handleVisibilityChange);
       document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -760,16 +861,13 @@ const StudentExams = () => {
         handleActivity();
       });
 
-      // User activity listeners
       const activityEvents = ['click', 'touchstart', 'mousemove', 'keydown', 'scroll', 'touchmove'];
       activityEvents.forEach(event => {
         document.addEventListener(event, handleActivity);
       });
 
-      // Inactivity checker
       inactivityTimerRef.current = setInterval(checkInactivity, 5000);
 
-      // Show protection active toast once
       toast.custom((t) => (
         <div className="bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm flex items-center gap-2">
           <Shield className="h-4 w-4" />
@@ -788,22 +886,29 @@ const StudentExams = () => {
     };
   }, [loading, submitted, questions.length]);
 
-  // Timer effect
+  // Timer effect - persists across refresh
   useEffect(() => {
     if (timeLeft > 0 && !submitted && !loading) {
-      const timer = setInterval(() => {
+      timerIntervalRef.current = setInterval(() => {
         setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
+          const newTime = prev - 1;
+          // Save state on each tick
+          saveExamState();
+          if (newTime <= 0) {
+            clearInterval(timerIntervalRef.current);
             handleSubmit(false);
             return 0;
           }
-          return prev - 1;
+          return newTime;
         });
       }, 1000);
-      return () => clearInterval(timer);
+      return () => {
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+        }
+      };
     }
-  }, [timeLeft, submitted, loading]);
+  }, [timeLeft, submitted, loading, saveExamState]);
 
   // Low time warning
   useEffect(() => {
@@ -903,6 +1008,9 @@ const StudentExams = () => {
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {questions.length} questions • {isMobile ? 'Mobile' : 'Desktop'} mode
+                {attemptId && (
+                  <span className="ml-2 text-xs text-gray-400">ID: {attemptId.slice(-6)}</span>
+                )}
               </p>
             </div>
             {timeLeft > 0 && !submitted && (
