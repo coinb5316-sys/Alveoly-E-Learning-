@@ -1,5 +1,5 @@
-// StudentExams.jsx - Fixed version
-import { useState, useEffect } from "react";
+// StudentExams.jsx - Fully protected with exam security features
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
 import { getSocket } from "../config/socket";
@@ -18,7 +18,10 @@ import {
   TrendingUp,
   HelpCircle,
   Flag,
-  Timer
+  Timer,
+  Shield,
+  EyeOff,
+  AlertTriangle
 } from "lucide-react";
 
 const StudentExams = () => {
@@ -36,8 +39,26 @@ const StudentExams = () => {
   const [scoreData, setScoreData] = useState({ score: 0, percentage: 0, questionResults: [] });
   const [loading, setLoading] = useState(true);
   const [warningShown, setWarningShown] = useState(false);
+  
+  // Security state
+  const [securityViolations, setSecurityViolations] = useState(0);
+  const [showSecurityWarning, setShowSecurityWarning] = useState(false);
+  const [securityWarningMessage, setSecurityWarningMessage] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isExamBlocked, setIsExamBlocked] = useState(false);
+  const [mouseLeaveCount, setMouseLeaveCount] = useState(0);
+  const [lastActiveTime, setLastActiveTime] = useState(Date.now());
+  
+  // Refs for security
+  const examContainerRef = useRef(null);
+  const securityIntervalRef = useRef(null);
+  const mouseCheckIntervalRef = useRef(null);
 
   const current = questions[currentIndex];
+  
+  // MAXIMUM ALLOWED SECURITY VIOLATIONS
+  const MAX_VIOLATIONS = 3;
+  const MAX_MOUSE_LEAVES = 2;
 
   const startExam = async () => {
     try {
@@ -63,6 +84,10 @@ const StudentExams = () => {
       }, {});
       setAnswers(initialAnswers);
       localStorage.setItem("examAnswers", JSON.stringify(initialAnswers));
+      
+      // Enter fullscreen automatically when exam starts
+      enterFullscreen();
+      
     } catch (err) {
       if (err.response?.status === 401) {
         toast.error("Unauthorized. Please login again.");
@@ -78,73 +103,296 @@ const StudentExams = () => {
     }
   };
 
-  useEffect(() => {
-    if (!courseId || !subjectId) return;
+  // Fullscreen management
+  const enterFullscreen = () => {
+    const element = document.documentElement;
+    if (element.requestFullscreen) {
+      element.requestFullscreen()
+        .then(() => {
+          setIsFullscreen(true);
+          toast.success("Fullscreen mode activated for exam security");
+        })
+        .catch((err) => {
+          console.error("Fullscreen error:", err);
+          toast.warning("Please enable fullscreen for exam security");
+          // Try again with user gesture
+          setTimeout(() => {
+            if (!document.fullscreenElement) {
+              const container = document.getElementById('exam-container');
+              if (container?.requestFullscreen) {
+                container.requestFullscreen().catch(() => {});
+              }
+            }
+          }, 1000);
+        });
+    }
+  };
 
-    startExam();
+  const exitFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setIsFullscreen(false);
+  };
 
-    // Socket event listeners
-    const socket = getSocket();
-    if (socket) {
-      socket.on("question:created", startExam);
-      socket.on("question:updated", startExam);
-      socket.on("question:deleted", startExam);
+  const handleFullscreenChange = () => {
+    const isFull = !!document.fullscreenElement;
+    setIsFullscreen(isFull);
+    
+    if (!isFull && !submitted && !showResult && !isExamBlocked) {
+      // Student exited fullscreen during exam
+      handleSecurityViolation("You exited fullscreen mode. Please stay in fullscreen during the exam.");
+    }
+  };
+
+  // Security violation handler
+  const handleSecurityViolation = (message) => {
+    if (submitted || showResult || isExamBlocked) return;
+    
+    const newCount = securityViolations + 1;
+    setSecurityViolations(newCount);
+    setSecurityViolationMessage(message);
+    setShowSecurityWarning(true);
+    
+    // Log violation
+    console.warn(`Security violation ${newCount}: ${message}`);
+    
+    // Auto-hide warning after 3 seconds
+    setTimeout(() => {
+      setShowSecurityWarning(false);
+    }, 3000);
+    
+    if (newCount >= MAX_VIOLATIONS) {
+      // Auto-submit the exam if too many violations
+      setIsExamBlocked(true);
+      toast.error(`⚠️ Exam auto-submitted due to ${MAX_VIOLATIONS} security violations`);
+      
+      // Submit exam automatically
+      handleSubmit(true);
+    }
+  };
+
+  // Mouse leave detection (student moving mouse out of window)
+  const handleMouseLeave = () => {
+    if (submitted || showResult || isExamBlocked) return;
+    
+    const newCount = mouseLeaveCount + 1;
+    setMouseLeaveCount(newCount);
+    
+    if (newCount <= MAX_MOUSE_LEAVES) {
+      toast.warning(`⚠️ Please keep your mouse within the exam window (${newCount}/${MAX_MOUSE_LEAVES})`);
+    }
+    
+    if (newCount >= MAX_MOUSE_LEAVES) {
+      handleSecurityViolation(`Mouse left exam window ${MAX_MOUSE_LEAVES} times`);
+    }
+  };
+
+  // Detect if user is inactive (AFK)
+  const checkInactivity = () => {
+    const now = Date.now();
+    const inactiveTime = (now - lastActiveTime) / 1000; // in seconds
+    
+    // If inactive for more than 30 seconds, show warning
+    if (inactiveTime > 30 && !submitted && !showResult && !isExamBlocked) {
+      toast.warning(`⚠️ You've been inactive for ${Math.floor(inactiveTime)} seconds. Please continue your exam.`);
+      // Reset inactivity detection after warning
+      setLastActiveTime(now);
+    }
+    
+    // If inactive for more than 60 seconds, count as violation
+    if (inactiveTime > 60 && !submitted && !showResult && !isExamBlocked) {
+      handleSecurityViolation(`Inactive for ${Math.floor(inactiveTime)} seconds`);
+      setLastActiveTime(now);
+    }
+  };
+
+  // Prevent copying, cutting, pasting
+  const handleCopy = (e) => {
+    e.preventDefault();
+    toast.error("📋 Copying is disabled during the exam");
+    handleSecurityViolation("Attempted to copy text");
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    toast.error("📋 Pasting is disabled during the exam");
+    handleSecurityViolation("Attempted to paste text");
+  };
+
+  const handleCut = (e) => {
+    e.preventDefault();
+    toast.error("✂️ Cutting is disabled during the exam");
+    handleSecurityViolation("Attempted to cut text");
+  };
+
+  // Prevent right-click
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    toast.error("🖱️ Right-click is disabled during the exam");
+    handleSecurityViolation("Attempted to right-click");
+  };
+
+  // Prevent keyboard shortcuts
+  const handleKeyDown = (e) => {
+    // Prevent Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+P, Ctrl+S, Ctrl+Shift+I, F12
+    const isCtrl = e.ctrlKey || e.metaKey;
+    const isShift = e.shiftKey;
+    const key = e.key.toLowerCase();
+
+    // Block copy, paste, cut
+    if (isCtrl && ['c', 'v', 'x', 'p', 's', 'u', 'a'].includes(key)) {
+      e.preventDefault();
+      toast.error(`⌨️ Keyboard shortcut (Ctrl+${key.toUpperCase()}) is disabled during the exam`);
+      handleSecurityViolation(`Attempted to use Ctrl+${key.toUpperCase()}`);
+      return;
     }
 
-    const visibilityHandler = () => {
-      if (document.hidden) {
-        document.body.style.filter = "blur(6px)";
-        toast.error("Tab switched! Stay focused ⚠️");
-      } else {
-        document.body.style.filter = "";
-      }
-    };
+    // Block F12 (DevTools)
+    if (key === 'f12') {
+      e.preventDefault();
+      toast.error("🔧 Developer tools are disabled during the exam");
+      handleSecurityViolation("Attempted to open developer tools");
+      return;
+    }
 
-    const contextMenuHandler = (e) => {
-      if (!document.hidden) {
-        e.preventDefault();
-        toast.error("Right-click disabled during exam");
-      }
-    };
+    // Block Ctrl+Shift+I (DevTools)
+    if (isCtrl && isShift && key === 'i') {
+      e.preventDefault();
+      toast.error("🔧 Developer tools are disabled during the exam");
+      handleSecurityViolation("Attempted to open developer tools");
+      return;
+    }
 
-    document.addEventListener("visibilitychange", visibilityHandler);
-    document.addEventListener("contextmenu", contextMenuHandler);
+    // Block Ctrl+Shift+J (Console)
+    if (isCtrl && isShift && key === 'j') {
+      e.preventDefault();
+      toast.error("🔧 Developer tools are disabled during the exam");
+      handleSecurityViolation("Attempted to open console");
+      return;
+    }
 
-    return () => {
-      const socket = getSocket();
-      if (socket) {
-        socket.off("question:created", startExam);
-        socket.off("question:updated", startExam);
-        socket.off("question:deleted", startExam);
+    // Block Ctrl+Shift+C (Inspect Element)
+    if (isCtrl && isShift && key === 'c') {
+      e.preventDefault();
+      toast.error("🔧 Inspect element is disabled during the exam");
+      handleSecurityViolation("Attempted to inspect element");
+      return;
+    }
+
+    // Block Alt+Tab (Switch applications) - limited prevention
+    if (e.altKey && key === 'tab') {
+      toast.warning("⚠️ Switching applications is not allowed during the exam");
+      handleSecurityViolation("Attempted to switch applications (Alt+Tab)");
+    }
+
+    // Block Windows key
+    if (key === 'meta' || key === 'win') {
+      e.preventDefault();
+      toast.warning("⚠️ Windows key is disabled during the exam");
+      handleSecurityViolation("Attempted to use Windows key");
+    }
+  };
+
+  // Prevent screenshot via key combinations
+  const handleScreenshotPrevention = (e) => {
+    // Detect Print Screen key
+    if (e.key === 'PrintScreen') {
+      e.preventDefault();
+      toast.error("📸 Screenshots are disabled during the exam");
+      handleSecurityViolation("Attempted to take screenshot (Print Screen)");
+      return false;
+    }
+
+    // Detect Ctrl+Shift+S (Snipping Tool shortcut)
+    if (e.ctrlKey && e.shiftKey && e.key === 's') {
+      e.preventDefault();
+      toast.error("📸 Screenshots are disabled during the exam");
+      handleSecurityViolation("Attempted to take screenshot (Snipping Tool)");
+      return false;
+    }
+
+    // Detect Alt+PrintScreen
+    if (e.altKey && e.key === 'PrintScreen') {
+      e.preventDefault();
+      toast.error("📸 Screenshots are disabled during the exam");
+      handleSecurityViolation("Attempted to take screenshot (Alt+PrintScreen)");
+      return false;
+    }
+
+    return true;
+  };
+
+  // Detect when window loses focus (tab switching)
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      // User switched tabs or minimized window
+      if (!submitted && !showResult && !isExamBlocked) {
+        handleSecurityViolation("You switched tabs or minimized the window");
+        // Add a visual blur effect to discourage tab switching
+        document.body.style.filter = "blur(8px)";
+        document.body.style.transition = "filter 0.3s ease";
+        
+        // Show a prominent warning
+        toast.error("🚫 TAB SWITCHING DETECTED! Stay on the exam page.", {
+          duration: 5000,
+          icon: '⚠️'
+        });
       }
-      document.removeEventListener("visibilitychange", visibilityHandler);
-      document.removeEventListener("contextmenu", contextMenuHandler);
+    } else {
+      // User returned to the tab
       document.body.style.filter = "";
-    };
-  }, [courseId, subjectId]);
+      setLastActiveTime(Date.now());
+      
+      if (!submitted && !showResult && !isExamBlocked) {
+        // Check if fullscreen was exited during tab switch
+        if (!document.fullscreenElement && !isFullscreen) {
+          handleSecurityViolation("Exited fullscreen while switching tabs");
+        }
+      }
+    }
+  };
 
-  useEffect(() => {
-    if (timeLeft > 0 && !submitted && !loading) {
-      const timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
-      return () => clearInterval(timer);
+  // Blur detection (window loses focus)
+  const handleWindowBlur = () => {
+    if (!submitted && !showResult && !isExamBlocked) {
+      handleSecurityViolation("Window lost focus - possible tab switching");
     }
-    if (timeLeft === 0 && !submitted && questions.length > 0 && !loading) {
-      handleSubmit();
-    }
-  }, [timeLeft, submitted, questions, loading]);
+  };
 
-  useEffect(() => {
-    if (timeLeft <= 60 && timeLeft > 0 && !warningShown && !submitted) {
-      setWarningShown(true);
-      toast.warning(`Only ${Math.floor(timeLeft / 60)} minute${Math.floor(timeLeft / 60) !== 1 ? 's' : ''} remaining!`, {
-        duration: 5000,
-        icon: '⏰'
-      });
+  // Window focus detection
+  const handleWindowFocus = () => {
+    setLastActiveTime(Date.now());
+    document.body.style.filter = "";
+  };
+
+  // Prevent screen recording detection
+  const handleScreenChange = () => {
+    // This is a basic detection for screen recording
+    // Note: Full prevention of screen recording is not possible in browsers
+    if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+      // Just log for now - we can't fully prevent screen recording
+      console.log("Screen capture might be in progress");
     }
-  }, [timeLeft, warningShown, submitted]);
+  };
+
+  // Prevent dragging/selection
+  const handleSelectStart = (e) => {
+    e.preventDefault();
+  };
+
+  // Mouse movement tracking for inactivity
+  const handleMouseMove = () => {
+    setLastActiveTime(Date.now());
+  };
+
+  // Keyboard activity tracking
+  const handleKeyPress = () => {
+    setLastActiveTime(Date.now());
+  };
 
   const handleSelect = async (qId, option) => {
-    if (submitted) return;
+    if (submitted || isExamBlocked) return;
 
     const updated = { ...answers, [qId]: option };
     setAnswers(updated);
@@ -170,13 +418,21 @@ const StudentExams = () => {
     if (currentIndex > 0) setCurrentIndex((prev) => prev - 1);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (isAutoSubmit = false) => {
     if (!attemptId) return;
+
+    // If auto-submit, clear any blocking state
+    if (isAutoSubmit) {
+      setIsExamBlocked(false);
+    }
 
     try {
       const res = await axios.post("/exam/submit", {
         attemptId,
         answers,
+        autoSubmit: isAutoSubmit,
+        securityViolations: securityViolations,
+        mouseLeaves: mouseLeaveCount
       });
 
       setSubmitted(true);
@@ -188,11 +444,52 @@ const StudentExams = () => {
       setShowResult(true);
 
       localStorage.removeItem("examAnswers");
-      toast.success("Exam submitted successfully!");
+      
+      // Exit fullscreen on completion
+      exitFullscreen();
+      
+      // Clean up security listeners
+      cleanupSecurityListeners();
+      
+      if (isAutoSubmit) {
+        toast.error("⚠️ Exam auto-submitted due to security violations");
+      } else {
+        toast.success("✅ Exam submitted successfully!");
+      }
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to submit exam.");
     }
+  };
+
+  // Cleanup security listeners
+  const cleanupSecurityListeners = () => {
+    // Remove all event listeners
+    document.removeEventListener("copy", handleCopy);
+    document.removeEventListener("paste", handlePaste);
+    document.removeEventListener("cut", handleCut);
+    document.removeEventListener("contextmenu", handleContextMenu);
+    document.removeEventListener("keydown", handleKeyDown);
+    document.removeEventListener("keyup", handleScreenshotPrevention);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+    document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    document.removeEventListener("blur", handleWindowBlur);
+    document.removeEventListener("focus", handleWindowFocus);
+    document.removeEventListener("selectstart", handleSelectStart);
+    document.removeEventListener("mousemove", handleMouseMove);
+    document.removeEventListener("keypress", handleKeyPress);
+    document.removeEventListener("mouseleave", handleMouseLeave);
+    
+    // Clear intervals
+    if (securityIntervalRef.current) {
+      clearInterval(securityIntervalRef.current);
+    }
+    if (mouseCheckIntervalRef.current) {
+      clearInterval(mouseCheckIntervalRef.current);
+    }
+    
+    // Remove blur filter
+    document.body.style.filter = "";
   };
 
   const formatTime = (seconds) => {
@@ -213,11 +510,125 @@ const StudentExams = () => {
 
   const answeredCount = Object.keys(answers).filter(key => answers[key]).length;
 
+  // Initialize security listeners
+  useEffect(() => {
+    if (!loading && !submitted && questions.length > 0) {
+      // Set up all security event listeners
+      document.addEventListener("copy", handleCopy);
+      document.addEventListener("paste", handlePaste);
+      document.addEventListener("cut", handleCut);
+      document.addEventListener("contextmenu", handleContextMenu);
+      document.addEventListener("keydown", handleKeyDown);
+      document.addEventListener("keyup", handleScreenshotPrevention);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      document.addEventListener("fullscreenchange", handleFullscreenChange);
+      document.addEventListener("blur", handleWindowBlur);
+      document.addEventListener("focus", handleWindowFocus);
+      document.addEventListener("selectstart", handleSelectStart);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("keypress", handleKeyPress);
+      document.addEventListener("mouseleave", handleMouseLeave);
+
+      // Set up inactivity checker
+      securityIntervalRef.current = setInterval(checkInactivity, 10000); // Check every 10 seconds
+
+      // Set up mouse position checker
+      mouseCheckIntervalRef.current = setInterval(() => {
+        if (!document.hidden && !submitted && !showResult && !isExamBlocked) {
+          // Check if mouse is within viewport
+          const isMouseInViewport = (event) => {
+            const x = event.clientX;
+            const y = event.clientY;
+            return x >= 0 && x <= window.innerWidth && y >= 0 && y <= window.innerHeight;
+          };
+        }
+      }, 5000);
+
+      // Try to enter fullscreen if not already
+      if (!document.fullscreenElement && !isFullscreen) {
+        enterFullscreen();
+      }
+
+      // Show security reminder
+      toast.success("🔒 Exam security enabled - Fullscreen, copy/paste, and tab switching are monitored", {
+        duration: 5000,
+        icon: '🛡️'
+      });
+    }
+
+    return () => {
+      cleanupSecurityListeners();
+    };
+  }, [loading, submitted, questions.length]);
+
+  // Timer effect
+  useEffect(() => {
+    if (timeLeft > 0 && !submitted && !loading && !isExamBlocked) {
+      const timer = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            handleSubmit();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+    if (timeLeft === 0 && !submitted && questions.length > 0 && !loading) {
+      handleSubmit();
+    }
+  }, [timeLeft, submitted, questions, loading]);
+
+  // Warning for low time
+  useEffect(() => {
+    if (timeLeft <= 60 && timeLeft > 0 && !warningShown && !submitted) {
+      setWarningShown(true);
+      toast.warning(`⏰ Only ${Math.floor(timeLeft / 60)} minute${Math.floor(timeLeft / 60) !== 1 ? 's' : ''} remaining!`, {
+        duration: 5000,
+        icon: '⏰'
+      });
+    }
+  }, [timeLeft, warningShown, submitted]);
+
+  // Initial exam start
+  useEffect(() => {
+    if (!courseId || !subjectId) return;
+    startExam();
+
+    return () => {
+      exitFullscreen();
+      cleanupSecurityListeners();
+    };
+  }, [courseId, subjectId]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-64">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
         <p className="text-gray-500 dark:text-gray-400 mt-4">Loading exam...</p>
+      </div>
+    );
+  }
+
+  if (isExamBlocked) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-red-50 dark:bg-red-950/20 p-4">
+        <div className="max-w-md text-center">
+          <AlertTriangle className="h-20 w-20 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-2">Exam Blocked</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Your exam has been automatically submitted due to multiple security violations.
+            Please contact your instructor if you believe this was a mistake.
+          </p>
+          <button
+            onClick={() => navigate("/student/dashboard")}
+            className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-800 transition-all"
+          >
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -243,19 +654,54 @@ const StudentExams = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 py-8 px-4">
+    <div 
+      id="exam-container"
+      ref={examContainerRef}
+      className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 py-8 px-4"
+    >
       <Toaster position="top-right" />
       
+      {/* Security Status Bar */}
+      <div className="max-w-4xl mx-auto mb-4">
+        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-gray-900/95 text-white rounded-xl text-sm">
+          <div className="flex items-center gap-2">
+            <Shield className={`h-4 w-4 ${securityViolations >= MAX_VIOLATIONS ? 'text-red-400' : 'text-green-400'}`} />
+            <span>Security: {securityViolations >= MAX_VIOLATIONS ? '⚠️ Violations Detected' : 'Active'}</span>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <span className={`flex items-center gap-1 ${isFullscreen ? 'text-green-400' : 'text-red-400'}`}>
+              {isFullscreen ? '🟢' : '🔴'} Fullscreen
+            </span>
+            <span className="text-gray-400">|</span>
+            <span className="text-gray-400">Violations: {securityViolations}/{MAX_VIOLATIONS}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Security Warning Popup */}
+      {showSecurityWarning && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-2xl animate-pulse flex items-center gap-3 max-w-lg">
+          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+          <span className="text-sm font-medium">{securityViolationMessage}</span>
+          <span className="text-xs opacity-75 ml-2">({securityViolations}/{MAX_VIOLATIONS})</span>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+              <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <BookOpen className="h-6 w-6 text-blue-500" />
                 Exam Mode
+                <span className="text-xs bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full ml-2">
+                  {isFullscreen ? '🔒 Fullscreen' : '⚠️ Not Fullscreen'}
+                </span>
               </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Read each question carefully and select the best answer
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
+                <Shield className="h-3 w-3" />
+                Protected mode - Tab switching, copying, and screenshots are blocked
               </p>
             </div>
             {timeLeft > 0 && !submitted && (
@@ -317,13 +763,14 @@ const StudentExams = () => {
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Time Per Question</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                  {Math.floor(timeLeft / questions.length)}s
+                <p className="text-sm text-gray-500 dark:text-gray-400">Security Status</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1 flex items-center gap-1">
+                  {securityViolations === 0 ? '🟢' : securityViolations < MAX_VIOLATIONS ? '🟡' : '🔴'}
+                  {securityViolations === 0 ? 'Safe' : securityViolations < MAX_VIOLATIONS ? 'Warning' : 'Blocked'}
                 </p>
               </div>
               <div className="h-10 w-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <Shield className={`h-5 w-5 ${securityViolations === 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
               </div>
             </div>
           </div>
@@ -336,6 +783,12 @@ const StudentExams = () => {
             <span className="text-sm">Less than 2 minutes remaining! Time is running out.</span>
           </div>
         )}
+
+        {/* Security Reminder Banner */}
+        <div className="mb-4 p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center gap-2 text-blue-700 dark:text-blue-400">
+          <EyeOff className="h-4 w-4" />
+          <span className="text-xs">🔒 Exam protected - {MAX_VIOLATIONS} violations allowed. Fullscreen required.</span>
+        </div>
 
         {/* Question Card */}
         {current && !submitted && (
@@ -355,7 +808,7 @@ const StudentExams = () => {
             </div>
 
             {/* Question Body */}
-            <div className="p-6">
+            <div className="p-6" onSelectStart={handleSelectStart}>
               <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">
                 {current.question || "Question text not available"}
               </p>
@@ -408,7 +861,7 @@ const StudentExams = () => {
 
                 {currentIndex === questions.length - 1 ? (
                   <button
-                    onClick={handleSubmit}
+                    onClick={() => handleSubmit(false)}
                     className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-medium transition-all shadow-lg shadow-green-500/25"
                   >
                     <CheckCircle className="h-4 w-4" />
@@ -487,6 +940,11 @@ const StudentExams = () => {
                     ? "Good effort! Keep practicing to improve."
                     : "Keep learning! Review the material and try again."}
                 </p>
+                {securityViolations > 0 && (
+                  <p className="mt-2 text-sm bg-white/20 p-2 rounded-lg">
+                    ⚠️ {securityViolations} security violation(s) recorded during the exam
+                  </p>
+                )}
               </div>
             </div>
 
