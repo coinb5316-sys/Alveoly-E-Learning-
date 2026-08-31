@@ -23,7 +23,9 @@ import {
   FaCheck,
   FaEye,
   FaChevronLeft,
-  FaChevronRight
+  FaChevronRight,
+  FaCopy,
+  FaLayerGroup
 } from "react-icons/fa";
 import axios from "../api/axios";
 import initializeSocket, { getSocket } from "../config/socket";
@@ -36,6 +38,15 @@ const AdminQuestions = () => {
   const [filter, setFilter] = useState({ courseId: "", subjectId: "" });
   const [showFilters, setShowFilters] = useState(false);
 
+  // Multi-assignment state
+  const [showMultiAssign, setShowMultiAssign] = useState(false);
+  const [selectedQuestions, setSelectedQuestions] = useState([]);
+  const [multiAssignTargets, setMultiAssignTargets] = useState({
+    courseIds: [],
+    subjectIds: []
+  });
+  const [isMultiAssigning, setIsMultiAssigning] = useState(false);
+
   // Wizard State
   const [step, setStep] = useState(1);
   const [config, setConfig] = useState({
@@ -44,6 +55,10 @@ const AdminQuestions = () => {
     type: "exam",
     examTime: "",
     isExamLocked: false,
+    multiCourseMode: false,
+    multiSubjectMode: false,
+    selectedCourseIds: [],
+    selectedSubjectIds: []
   });
 
   // Questions State
@@ -98,7 +113,6 @@ const AdminQuestions = () => {
     }
   };
 
-  // FIX: Fetch subjects the same way as AdminSubjects
   const fetchSubjects = async (courseId = "") => {
     try {
       let url = "/subjects";
@@ -121,15 +135,28 @@ const AdminQuestions = () => {
     }
   };
 
-  // FIX: Handle populated courseId like AdminSubjects does
   const filteredSubjects = (courseId) => {
     if (!courseId || !subjects.length) return [];
     
     return subjects.filter((s) => {
-      // Get the course ID from the subject - handle both populated and non-populated
       const subjectCourseId = s.courseId?._id?.toString() || s.courseId?.toString() || s.courseId;
       return subjectCourseId === courseId;
     });
+  };
+
+  // Get subjects for multiple course selection
+  const getSubjectsForCourses = (courseIds) => {
+    if (!courseIds || !courseIds.length || !subjects.length) return [];
+    const subjectSet = new Set();
+    const result = [];
+    subjects.forEach(s => {
+      const subjectCourseId = s.courseId?._id?.toString() || s.courseId?.toString() || s.courseId;
+      if (courseIds.includes(subjectCourseId) && !subjectSet.has(s._id)) {
+        subjectSet.add(s._id);
+        result.push(s);
+      }
+    });
+    return result;
   };
 
   const handleConfigChange = (field, value) => {
@@ -138,6 +165,31 @@ const AdminQuestions = () => {
       setConfig({ ...config, courseId: value, subjectId: "" });
       fetchSubjects(value);
     }
+  };
+
+  const handleMultiCourseToggle = (courseId) => {
+    const current = config.selectedCourseIds || [];
+    const newSelection = current.includes(courseId)
+      ? current.filter(id => id !== courseId)
+      : [...current, courseId];
+    setConfig({ ...config, selectedCourseIds: newSelection });
+    
+    // Auto-select subjects for selected courses
+    if (newSelection.length > 0) {
+      const availableSubjects = getSubjectsForCourses(newSelection);
+      const subjectIds = availableSubjects.map(s => s._id);
+      setConfig(prev => ({ ...prev, selectedSubjectIds: subjectIds }));
+    } else {
+      setConfig(prev => ({ ...prev, selectedSubjectIds: [] }));
+    }
+  };
+
+  const handleMultiSubjectToggle = (subjectId) => {
+    const current = config.selectedSubjectIds || [];
+    const newSelection = current.includes(subjectId)
+      ? current.filter(id => id !== subjectId)
+      : [...current, subjectId];
+    setConfig({ ...config, selectedSubjectIds: newSelection });
   };
 
   const handleQuestionChange = (field, value) => {
@@ -222,23 +274,79 @@ const AdminQuestions = () => {
       return;
     }
 
+    // Determine which courses and subjects to submit to
+    let targetCourseIds = [];
+    let targetSubjectIds = [];
+
+    if (config.multiCourseMode && config.selectedCourseIds.length > 0) {
+      targetCourseIds = config.selectedCourseIds;
+      targetSubjectIds = config.selectedSubjectIds || [];
+    } else {
+      targetCourseIds = [config.courseId];
+      targetSubjectIds = [config.subjectId];
+    }
+
+    if (targetCourseIds.length === 0) {
+      alert("Please select at least one course");
+      return;
+    }
+
+    if (targetSubjectIds.length === 0) {
+      alert("Please select at least one subject");
+      return;
+    }
+
     setLoading(true);
     try {
-      const questionsToSubmit = questionList.map(q => ({
-        courseId: config.courseId,
-        subjectId: config.subjectId,
-        type: config.type,
-        examTime: config.type === "exam" ? config.examTime : "",
-        isExamLocked: config.type === "exam" ? config.isExamLocked : false,
-        question: q.question,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-        rationale: q.rationale,
-      }));
+      const totalQuestions = questionList.length;
+      const totalTargets = targetCourseIds.length * targetSubjectIds.length;
+      const totalToCreate = totalQuestions * totalTargets;
+
+      if (totalToCreate > 100) {
+        if (!window.confirm(`This will create ${totalToCreate} questions across ${targetTargets} combinations. Are you sure?`)) {
+          setLoading(false);
+          return;
+        }
+      }
+
+      const questionsToSubmit = [];
+      
+      // For each course and subject combination
+      for (const courseId of targetCourseIds) {
+        for (const subjectId of targetSubjectIds) {
+          // Check if subject belongs to this course
+          const subject = subjects.find(s => s._id === subjectId);
+          if (subject) {
+            const subjectCourseId = subject.courseId?._id?.toString() || subject.courseId?.toString() || subject.courseId;
+            if (subjectCourseId === courseId) {
+              // Add all questions for this combination
+              for (const q of questionList) {
+                questionsToSubmit.push({
+                  courseId: courseId,
+                  subjectId: subjectId,
+                  type: config.type,
+                  examTime: config.type === "exam" ? config.examTime : "",
+                  isExamLocked: config.type === "exam" ? config.isExamLocked : false,
+                  question: q.question,
+                  options: q.options,
+                  correctAnswer: q.correctAnswer,
+                  rationale: q.rationale,
+                });
+              }
+            }
+          }
+        }
+      }
+
+      if (questionsToSubmit.length === 0) {
+        alert("No valid course-subject combinations found");
+        setLoading(false);
+        return;
+      }
 
       await axios.post("/questions/bulk", { questions: questionsToSubmit });
 
-      alert(`Successfully added ${questionList.length} questions!`);
+      alert(`✅ Successfully added ${questionsToSubmit.length} questions across ${targetCourseIds.length} course(s) and ${targetSubjectIds.length} subject(s)!`);
       
       setQuestionList([]);
       setStep(1);
@@ -248,6 +356,10 @@ const AdminQuestions = () => {
         type: "exam",
         examTime: "",
         isExamLocked: false,
+        multiCourseMode: false,
+        multiSubjectMode: false,
+        selectedCourseIds: [],
+        selectedSubjectIds: []
       });
       setCurrentQuestion({
         question: "",
@@ -258,7 +370,7 @@ const AdminQuestions = () => {
       fetchQuestions();
     } catch (err) {
       console.error("Error submitting questions:", err);
-      alert("Failed to submit questions");
+      alert("Failed to submit questions: " + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
@@ -271,6 +383,10 @@ const AdminQuestions = () => {
       type: q.type,
       examTime: q.examTime || "",
       isExamLocked: q.isExamLocked || false,
+      multiCourseMode: false,
+      multiSubjectMode: false,
+      selectedCourseIds: [],
+      selectedSubjectIds: []
     });
     setQuestionList([{
       question: q.question,
@@ -300,6 +416,94 @@ const AdminQuestions = () => {
     }
   };
 
+  // Multi-assign existing questions to multiple courses/subjects
+  const handleMultiAssign = async () => {
+    if (selectedQuestions.length === 0) {
+      alert("Please select at least one question to assign");
+      return;
+    }
+
+    const { courseIds, subjectIds } = multiAssignTargets;
+    if (courseIds.length === 0 || subjectIds.length === 0) {
+      alert("Please select at least one course and one subject");
+      return;
+    }
+
+    setIsMultiAssigning(true);
+    try {
+      const totalAssignments = selectedQuestions.length * courseIds.length * subjectIds.length;
+      if (totalAssignments > 200) {
+        if (!window.confirm(`This will create ${totalAssignments} new question assignments. Are you sure?`)) {
+          setIsMultiAssigning(false);
+          return;
+        }
+      }
+
+      const assignments = [];
+      for (const courseId of courseIds) {
+        for (const subjectId of subjectIds) {
+          const subject = subjects.find(s => s._id === subjectId);
+          if (subject) {
+            const subjectCourseId = subject.courseId?._id?.toString() || subject.courseId?.toString() || subject.courseId;
+            if (subjectCourseId === courseId) {
+              for (const qId of selectedQuestions) {
+                const original = questions.find(q => q._id === qId);
+                if (original) {
+                  assignments.push({
+                    courseId: courseId,
+                    subjectId: subjectId,
+                    type: original.type,
+                    examTime: original.examTime || "",
+                    isExamLocked: original.isExamLocked || false,
+                    question: original.question,
+                    options: original.options,
+                    correctAnswer: original.correctAnswer,
+                    rationale: original.rationale,
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (assignments.length === 0) {
+        alert("No valid course-subject combinations found");
+        setIsMultiAssigning(false);
+        return;
+      }
+
+      await axios.post("/questions/bulk", { questions: assignments });
+      alert(`✅ Successfully assigned ${assignments.length} questions across ${courseIds.length} course(s) and ${subjectIds.length} subject(s)!`);
+      
+      setSelectedQuestions([]);
+      setMultiAssignTargets({ courseIds: [], subjectIds: [] });
+      setShowMultiAssign(false);
+      fetchQuestions();
+    } catch (err) {
+      console.error("Error in multi-assign:", err);
+      alert("Failed to assign questions: " + (err.response?.data?.message || err.message));
+    } finally {
+      setIsMultiAssigning(false);
+    }
+  };
+
+  const toggleQuestionSelection = (qId) => {
+    setSelectedQuestions(prev =>
+      prev.includes(qId)
+        ? prev.filter(id => id !== qId)
+        : [...prev, qId]
+    );
+  };
+
+  const selectAllQuestions = () => {
+    if (selectedQuestions.length === filteredQuestions.length) {
+      setSelectedQuestions([]);
+    } else {
+      setSelectedQuestions(filteredQuestions.map(q => q._id));
+    }
+  };
+
   const filteredQuestions = questions.filter(
     (q) =>
       (!filter.courseId || q.courseId === filter.courseId) &&
@@ -315,7 +519,7 @@ const AdminQuestions = () => {
             Question Management
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Create, manage and organize exam questions
+            Create, manage and organize exam questions with multi-course/subject assignment
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -325,6 +529,15 @@ const AdminQuestions = () => {
               Total: {questions.length} questions
             </span>
           </div>
+          {selectedQuestions.length > 0 && (
+            <button
+              onClick={() => setShowMultiAssign(true)}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-purple-500/25 flex items-center gap-2"
+            >
+              <FaLayerGroup className="h-4 w-4" />
+              Assign {selectedQuestions.length} to Multiple
+            </button>
+          )}
         </div>
       </div>
 
@@ -401,7 +614,7 @@ const AdminQuestions = () => {
         </div>
         
         {showFilters && (
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <select
               value={filter.courseId}
               onChange={(e) => setFilter({ ...filter, courseId: e.target.value, subjectId: "" })}
@@ -433,7 +646,17 @@ const AdminQuestions = () => {
             <button
               onClick={() => {
                 setStep(1);
-                setConfig({ courseId: "", subjectId: "", type: "exam", examTime: "", isExamLocked: false });
+                setConfig({ 
+                  courseId: "", 
+                  subjectId: "", 
+                  type: "exam", 
+                  examTime: "", 
+                  isExamLocked: false,
+                  multiCourseMode: false,
+                  multiSubjectMode: false,
+                  selectedCourseIds: [],
+                  selectedSubjectIds: []
+                });
                 setQuestionList([]);
               }}
               className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2"
@@ -441,9 +664,158 @@ const AdminQuestions = () => {
               <FaPlus className="h-4 w-4" />
               Add New Questions
             </button>
+
+            {selectedQuestions.length > 0 && (
+              <button
+                onClick={() => setShowMultiAssign(true)}
+                className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-purple-500/25 flex items-center justify-center gap-2"
+              >
+                <FaLayerGroup className="h-4 w-4" />
+                Assign to Multiple ({selectedQuestions.length})
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* Multi-Assign Modal */}
+      {showMultiAssign && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <FaLayerGroup className="h-5 w-5 text-purple-500" />
+                Assign Questions to Multiple Courses/Subjects
+              </h2>
+              <button
+                onClick={() => setShowMultiAssign(false)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <FaTimes className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Selected Questions ({selectedQuestions.length})
+                </label>
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 max-h-32 overflow-y-auto">
+                  {selectedQuestions.map(qId => {
+                    const q = questions.find(q => q._id === qId);
+                    return q ? (
+                      <div key={qId} className="text-sm text-gray-600 dark:text-gray-400 py-1 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                        {q.question.substring(0, 80)}...
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Courses to Assign To
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {courses.map(c => (
+                    <label key={c._id} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={multiAssignTargets.courseIds.includes(c._id)}
+                        onChange={(e) => {
+                          const current = multiAssignTargets.courseIds;
+                          const newSelection = e.target.checked
+                            ? [...current, c._id]
+                            : current.filter(id => id !== c._id);
+                          setMultiAssignTargets({ ...multiAssignTargets, courseIds: newSelection });
+                          // Auto-select subjects for selected courses
+                          if (newSelection.length > 0) {
+                            const availableSubjects = getSubjectsForCourses(newSelection);
+                            const subjectIds = availableSubjects.map(s => s._id);
+                            setMultiAssignTargets(prev => ({ ...prev, subjectIds }));
+                          } else {
+                            setMultiAssignTargets(prev => ({ ...prev, subjectIds: [] }));
+                          }
+                        }}
+                        className="w-4 h-4 text-purple-600"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{c.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Subjects to Assign To
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {getSubjectsForCourses(multiAssignTargets.courseIds).map(s => (
+                    <label key={s._id} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={multiAssignTargets.subjectIds.includes(s._id)}
+                        onChange={(e) => {
+                          const current = multiAssignTargets.subjectIds;
+                          const newSelection = e.target.checked
+                            ? [...current, s._id]
+                            : current.filter(id => id !== s._id);
+                          setMultiAssignTargets({ ...multiAssignTargets, subjectIds: newSelection });
+                        }}
+                        className="w-4 h-4 text-purple-600"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{s.name}</span>
+                    </label>
+                  ))}
+                  {getSubjectsForCourses(multiAssignTargets.courseIds).length === 0 && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 col-span-2 text-center py-2">
+                      Select courses first to see available subjects
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-purple-50 dark:bg-purple-950/20 rounded-lg p-3">
+                <p className="text-sm text-purple-700 dark:text-purple-400">
+                  <FaExclamationCircle className="inline h-4 w-4 mr-1" />
+                  This will create copies of the selected questions for each combination of selected courses and subjects.
+                  {multiAssignTargets.courseIds.length > 0 && multiAssignTargets.subjectIds.length > 0 && (
+                    <span className="font-medium">
+                      {" "}Total: {selectedQuestions.length * multiAssignTargets.courseIds.length * multiAssignTargets.subjectIds.length} new questions will be created.
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                <button
+                  onClick={() => setShowMultiAssign(false)}
+                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleMultiAssign}
+                  disabled={isMultiAssigning || multiAssignTargets.courseIds.length === 0 || multiAssignTargets.subjectIds.length === 0}
+                  className="px-6 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-purple-500/25 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isMultiAssigning ? (
+                    <>
+                      <FaSpinner className="h-4 w-4 animate-spin" />
+                      Assigning...
+                    </>
+                  ) : (
+                    <>
+                      <FaLayerGroup className="h-4 w-4" />
+                      Assign Questions
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Wizard Steps */}
       {(step === 1 || step === 2 || step === 3) && (
@@ -483,48 +855,150 @@ const AdminQuestions = () => {
           <div className="p-6">
             {/* Step 1: Configuration */}
             {step === 1 && (
-              <div className="max-w-2xl mx-auto space-y-5">
+              <div className="max-w-3xl mx-auto space-y-5">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                   Exam Configuration
                 </h3>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Select Course
+                {/* Multi-Assign Toggle */}
+                <div className="bg-purple-50 dark:bg-purple-950/20 rounded-xl p-4 border border-purple-200 dark:border-purple-800">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={config.multiCourseMode}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setConfig({ 
+                          ...config, 
+                          multiCourseMode: checked,
+                          multiSubjectMode: checked,
+                          selectedCourseIds: checked ? [] : [],
+                          selectedSubjectIds: checked ? [] : []
+                        });
+                      }}
+                      className="w-5 h-5 text-purple-600 rounded"
+                    />
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      Enable Multi-Course/Subject Assignment
+                    </span>
+                    <span className="text-xs text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-950/50 px-2 py-1 rounded">
+                      Beta
+                    </span>
                   </label>
-                  <select
-                    value={config.courseId}
-                    onChange={(e) => handleConfigChange("courseId", e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  >
-                    <option value="">Select Course</option>
-                    {courses.map((c) => (
-                      <option key={c._id} value={c._id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 ml-8">
+                    Create these questions once and assign them to multiple courses and subjects simultaneously
+                  </p>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Select Subject
-                  </label>
-                  <select
-                    value={config.subjectId}
-                    onChange={(e) => handleConfigChange("subjectId", e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
-                    disabled={!config.courseId}
-                  >
-                    <option value="">Select Subject</option>
-                    {config.courseId &&
-                      filteredSubjects(config.courseId).map((s) => (
-                        <option key={s._id} value={s._id}>
-                          {s.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
+                {!config.multiCourseMode ? (
+                  // Single mode - original behavior
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Select Course
+                      </label>
+                      <select
+                        value={config.courseId}
+                        onChange={(e) => handleConfigChange("courseId", e.target.value)}
+                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      >
+                        <option value="">Select Course</option>
+                        {courses.map((c) => (
+                          <option key={c._id} value={c._id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Select Subject
+                      </label>
+                      <select
+                        value={config.subjectId}
+                        onChange={(e) => handleConfigChange("subjectId", e.target.value)}
+                        className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
+                        disabled={!config.courseId}
+                      >
+                        <option value="">Select Subject</option>
+                        {config.courseId &&
+                          filteredSubjects(config.courseId).map((s) => (
+                            <option key={s._id} value={s._id}>
+                              {s.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  // Multi mode - select multiple courses and subjects
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Select Courses
+                      </label>
+                      <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        {courses.map((c) => (
+                          <label key={c._id} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(config.selectedCourseIds || []).includes(c._id)}
+                              onChange={() => handleMultiCourseToggle(c._id)}
+                              className="w-4 h-4 text-blue-600"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{c.name}</span>
+                          </label>
+                        ))}
+                        {courses.length === 0 && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 col-span-2 text-center py-2">
+                            No courses available
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Selected: {(config.selectedCourseIds || []).length} course(s)
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Select Subjects for Selected Courses
+                      </label>
+                      <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        {getSubjectsForCourses(config.selectedCourseIds || []).map((s) => (
+                          <label key={s._id} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(config.selectedSubjectIds || []).includes(s._id)}
+                              onChange={() => handleMultiSubjectToggle(s._id)}
+                              className="w-4 h-4 text-blue-600"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{s.name}</span>
+                          </label>
+                        ))}
+                        {getSubjectsForCourses(config.selectedCourseIds || []).length === 0 && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400 col-span-2 text-center py-2">
+                            Select courses first to see available subjects
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Selected: {(config.selectedSubjectIds || []).length} subject(s)
+                      </p>
+                    </div>
+
+                    {(config.selectedCourseIds || []).length > 0 && (config.selectedSubjectIds || []).length > 0 && (
+                      <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3">
+                        <p className="text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                          <FaCheckCircle className="h-4 w-4" />
+                          Questions will be created for {questionList.length} question(s) × {(config.selectedCourseIds || []).length} course(s) × {(config.selectedSubjectIds || []).length} subject(s) = 
+                          <strong> {questionList.length * (config.selectedCourseIds || []).length * (config.selectedSubjectIds || []).length} total questions</strong>
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -589,9 +1063,20 @@ const AdminQuestions = () => {
                 <div className="flex justify-end pt-4">
                   <button
                     onClick={() => {
-                      if (!config.courseId || !config.subjectId) {
-                        alert("Please select course and subject");
-                        return;
+                      if (config.multiCourseMode) {
+                        if (!config.selectedCourseIds || config.selectedCourseIds.length === 0) {
+                          alert("Please select at least one course");
+                          return;
+                        }
+                        if (!config.selectedSubjectIds || config.selectedSubjectIds.length === 0) {
+                          alert("Please select at least one subject");
+                          return;
+                        }
+                      } else {
+                        if (!config.courseId || !config.subjectId) {
+                          alert("Please select course and subject");
+                          return;
+                        }
                       }
                       if (config.type === "exam" && !config.examTime) {
                         alert("Please select exam duration");
@@ -716,6 +1201,15 @@ const AdminQuestions = () => {
                       </button>
                     )}
                   </div>
+
+                  {config.multiCourseMode && (config.selectedCourseIds || []).length > 0 && (config.selectedSubjectIds || []).length > 0 && (
+                    <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 mt-2">
+                      <p className="text-xs text-blue-700 dark:text-blue-400 flex items-center gap-1">
+                        <FaCopy className="h-3 w-3" />
+                        Each question will be added to {config.selectedCourseIds.length} course(s) × {config.selectedSubjectIds.length} subject(s)
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Question List Preview */}
@@ -782,32 +1276,74 @@ const AdminQuestions = () => {
               <div className="space-y-6">
                 <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6">
                   <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Configuration Summary</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500 dark:text-gray-400">Course</p>
-                      <p className="font-medium text-gray-900 dark:text-gray-100">{courses.find(c => c._id === config.courseId)?.name}</p>
+                  
+                  {!config.multiCourseMode ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Course</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">{courses.find(c => c._id === config.courseId)?.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Subject</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">{subjects.find(s => s._id === config.subjectId)?.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Type</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100 capitalize">{config.type}</p>
+                      </div>
+                      {config.type === "exam" && (
+                        <>
+                          <div>
+                            <p className="text-gray-500 dark:text-gray-400">Duration</p>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">{config.examTime} minutes</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-500 dark:text-gray-400">Locked</p>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">{config.isExamLocked ? "Yes" : "No"}</p>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div>
-                      <p className="text-gray-500 dark:text-gray-400">Subject</p>
-                      <p className="font-medium text-gray-900 dark:text-gray-100">{subjects.find(s => s._id === config.subjectId)?.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 dark:text-gray-400">Type</p>
-                      <p className="font-medium text-gray-900 dark:text-gray-100 capitalize">{config.type}</p>
-                    </div>
-                    {config.type === "exam" && (
-                      <>
+                  ) : (
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Courses ({config.selectedCourseIds?.length || 0})</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {config.selectedCourseIds?.map(id => {
+                            const course = courses.find(c => c._id === id);
+                            return course ? (
+                              <span key={id} className="px-2 py-1 bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 rounded text-xs">
+                                {course.name}
+                              </span>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Subjects ({config.selectedSubjectIds?.length || 0})</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {config.selectedSubjectIds?.map(id => {
+                            const subject = subjects.find(s => s._id === id);
+                            return subject ? (
+                              <span key={id} className="px-2 py-1 bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 rounded text-xs">
+                                {subject.name}
+                              </span>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400">Type</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100 capitalize">{config.type}</p>
+                      </div>
+                      {config.type === "exam" && (
                         <div>
                           <p className="text-gray-500 dark:text-gray-400">Duration</p>
                           <p className="font-medium text-gray-900 dark:text-gray-100">{config.examTime} minutes</p>
                         </div>
-                        <div>
-                          <p className="text-gray-500 dark:text-gray-400">Locked</p>
-                          <p className="font-medium text-gray-900 dark:text-gray-100">{config.isExamLocked ? "Yes" : "No"}</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -912,8 +1448,19 @@ const AdminQuestions = () => {
 
       {/* Existing Questions List */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">Existing Questions</h3>
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
+          <div>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Existing Questions</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Select questions to assign to multiple courses/subjects</p>
+          </div>
+          {filteredQuestions.length > 0 && (
+            <button
+              onClick={selectAllQuestions}
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {selectedQuestions.length === filteredQuestions.length ? "Deselect All" : "Select All"}
+            </button>
+          )}
         </div>
 
         <div className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -926,11 +1473,18 @@ const AdminQuestions = () => {
           ) : (
             filteredQuestions.map((q) => {
               const subject = subjects.find(s => s._id === q.subjectId);
+              const isSelected = selectedQuestions.includes(q._id);
               return (
-                <div key={q._id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all">
+                <div key={q._id} className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all ${isSelected ? 'bg-blue-50 dark:bg-blue-950/20' : ''}`}>
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleQuestionSelection(q._id)}
+                          className="w-4 h-4 text-blue-600 rounded"
+                        />
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                           q.type === "exam" 
                             ? "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400"
