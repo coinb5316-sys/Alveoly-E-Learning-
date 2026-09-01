@@ -1,4 +1,4 @@
-// Contact.jsx - Exact UWorld Contact Page Clone (Final with Navbar Integration)
+// Contact.jsx - Exact UWorld Contact Page Clone (Final Complete)
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import emailjs from "@emailjs/browser";
@@ -18,6 +18,10 @@ import {
   FaCalendarAlt,
   FaFileAlt,
   FaLaptop,
+  FaMapMarkerAlt,
+  FaClock,
+  FaFax,
+  FaPhoneAlt,
 } from "react-icons/fa";
 
 const Contact = () => {
@@ -208,10 +212,6 @@ const Contact = () => {
     setShowSuggestions(false);
   };
 
-  const openContactModal = () => {
-    setIsModalOpen(true);
-  };
-
   // Get all questions for search suggestions
   const getAllQuestions = () => {
     const allQuestions = [];
@@ -275,6 +275,7 @@ const Contact = () => {
     }
   };
 
+  // Filter FAQs based on search
   const filteredFaqs = searchQuery
     ? faqCategories.map(category => ({
         ...category,
@@ -285,6 +286,7 @@ const Contact = () => {
       })).filter(category => category.questions.length > 0)
     : faqCategories;
 
+  // Close suggestions on click outside
   useEffect(() => {
     const handleClickOutside = () => {
       setShowSuggestions(false);
@@ -295,7 +297,7 @@ const Contact = () => {
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden font-['Inter',sans-serif]">
-      <Navbar onContactClick={openContactModal} />
+      <Navbar />
 
       {/* ==================== HERO SECTION - UWORLD EXACT STYLE ==================== */}
       <header className="relative min-h-[80vh] flex items-center justify-center bg-[#0a1a3a] overflow-hidden pt-16">
@@ -315,7 +317,13 @@ const Contact = () => {
               Hi there, how can we help?
             </h1>
             <p className="text-lg md:text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-              Choose a category to quickly find what you need or contact us
+              Choose a category to quickly find what you need or{' '}
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="text-[#00a3a1] hover:text-[#008b89] underline transition-colors font-medium"
+              >
+                contact us
+              </button>
             </p>
 
             {/* Search Bar - Exact UWorld Style with Search Button */}
@@ -450,11 +458,77 @@ const Contact = () => {
               message us and we will respond back to you promptly.
             </p>
             <button
-              onClick={openContactModal}
+              onClick={() => setIsModalOpen(true)}
               className="bg-[#00a3a1] hover:bg-[#008b89] text-white px-10 py-4 rounded-lg font-semibold text-lg transition-all duration-300 shadow-md hover:shadow-lg"
             >
               Contact Us
             </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ==================== ADDRESS & HOURS OF OPERATION - UWORLD STYLE ==================== */}
+      <section className="py-16 bg-gray-50 border-t border-gray-200">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-2xl shadow-lg p-8 md:p-10">
+            <h2 className="text-2xl md:text-3xl font-bold text-[#0a1a3a] mb-6 text-center">
+              Address & Hours of Operation
+            </h2>
+            
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Address */}
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="bg-[#00a3a1]/10 p-3 rounded-lg mt-1">
+                    <FaMapMarkerAlt className="text-[#00a3a1] text-xl" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">Address</h3>
+                    <p className="text-gray-600 leading-relaxed">
+                      Alveoly E-Learning Academy<br />
+                      Accra, Ghana
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4">
+                  <div className="bg-[#00a3a1]/10 p-3 rounded-lg mt-1">
+                    <FaPhoneAlt className="text-[#00a3a1] text-xl" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">Phone</h3>
+                    <p className="text-gray-600">+233 54 955 6116</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4">
+                  <div className="bg-[#00a3a1]/10 p-3 rounded-lg mt-1">
+                    <FaFax className="text-[#00a3a1] text-xl" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">Fax</h3>
+                    <p className="text-gray-600">+233 54 955 6116</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hours of Operation */}
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="bg-[#00a3a1]/10 p-3 rounded-lg mt-1">
+                    <FaClock className="text-[#00a3a1] text-xl" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">Hours of Operation</h3>
+                    <div className="space-y-2 text-gray-600">
+                      <p><span className="font-medium">Monday - Friday:</span> 9 AM - 6 PM GMT</p>
+                      <p><span className="font-medium">Saturday:</span> 10 AM - 2 PM GMT</p>
+                      <p><span className="font-medium">Sunday:</span> Closed</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
