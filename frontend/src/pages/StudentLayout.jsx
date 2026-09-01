@@ -1,4 +1,4 @@
-// StudentLayout.jsx - Updated with exam navigation blocking
+// StudentLayout.jsx - Updated with exam navigation blocking (Fixed for results)
 import { useState, useEffect, useRef } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -46,8 +46,9 @@ const StudentLayout = () => {
   // Check if currently on exam page
   useEffect(() => {
     const checkExamMode = () => {
-      const isExam = location.pathname.includes('/exam/') || 
-                     location.pathname.includes('/student/exam');
+      // Only block on actual exam pages, not results
+      const isExam = location.pathname.includes('/student/exam/') && 
+                     !location.pathname.includes('/exam-results');
       setIsExamMode(isExam);
       
       // If on exam page, prevent navigation
@@ -61,7 +62,7 @@ const StudentLayout = () => {
           }
         });
       } else {
-        // Restore navigation
+        // Restore navigation - THIS IS CRUCIAL FOR EXAM RESULTS
         document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
           el.style.pointerEvents = '';
           el.style.opacity = '';
@@ -129,8 +130,8 @@ const StudentLayout = () => {
     // Prevent navigation during exam
     if (isExamMode) {
       // Check if we're on exam page
-      const isOnExam = location.pathname.includes('/exam/') || 
-                       location.pathname.includes('/student/exam');
+      const isOnExam = location.pathname.includes('/student/exam/') && 
+                       !location.pathname.includes('/exam-results');
       if (isOnExam) {
         // Show warning and stay on page
         alert("⚠️ You cannot navigate away from the exam page. Please complete your exam first.");
@@ -145,7 +146,7 @@ const StudentLayout = () => {
     { to: "/student/courses", label: "My Courses", icon: BookOpen, color: "text-green-500" },
     { to: "/student/nursing-games", label: "Nursing Games", icon: Award, color: "text-yellow-500" },
     { to: "/student/subjects", label: "Subjects", icon: ClipboardList, color: "text-purple-500" },
-    { to: "/student/exam-results", label: "Exam Results", icon: Trophy, color: "text-amber-500" }, // <-- ADD THIS
+    { to: "/student/exam-results", label: "Exam Results", icon: Trophy, color: "text-amber-500" },
     { to: "/student/progress", label: "Progress", icon: TrendingUp, color: "text-orange-500" },
     { to: "/student/plans", label: "Plans", icon: Tags, color: "text-pink-500" },
     { to: "/student/payments", label: "Payments", icon: Wallet, color: "text-yellow-500" },
@@ -204,7 +205,7 @@ const StudentLayout = () => {
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.to;
-                const isDisabled = isExamMode && location.pathname.includes('/exam/');
+                const isDisabled = isExamMode && location.pathname.includes('/student/exam/');
                 return (
                   <button
                     key={item.to}
