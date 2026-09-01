@@ -423,3 +423,31 @@ export const getPaymentByReference = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// controllers/paymentController.js - Add this new function
+
+// ================= GET PUBLIC PLANS (No Auth Required) =================
+export const getPublicPlans = async (req, res) => {
+  try {
+    const plans = await Plan.find()
+      .populate("subjects", "name isPaid price")
+      .sort({ createdAt: -1 });
+    
+    // Format plans for public display
+    const formattedPlans = plans.map(plan => ({
+      _id: plan._id,
+      title: plan.title,
+      price: plan.price,
+      duration: plan.duration,
+      durationUnit: plan.durationUnit,
+      subjects: plan.subjects || [],
+      subjectCount: plan.subjects?.length || 0,
+      isPopular: plan.isPopular || false,
+    }));
+    
+    res.json(formattedPlans);
+  } catch (err) {
+    console.error("Get Public Plans Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};

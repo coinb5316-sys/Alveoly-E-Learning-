@@ -4,6 +4,7 @@ import {
   getAllPayments,
   getMyPayments,
   getPaymentByReference,
+  getPublicPlans,
   initiatePayment,
   initiatePlanPayment,
   verifyPayment,
@@ -13,6 +14,10 @@ import { protect } from "../middleware/authMiddleware.js";
 import { requireActivePlan } from "../middleware/planMiddleware.js"; // ✅ NEW
 
 const router = express.Router();
+
+// ================= PUBLIC ROUTES =================
+router.get("/plans/public", getPublicPlans); // <-- ADD THIS ROUTE
+
 
 /**
  * ================= PAYMENT ROUTES =================

@@ -1,4 +1,4 @@
-// src/components/Navbar.jsx - UWorld Style with Login Modal & Signup (FULL COMPLETE VERSION)
+// src/components/Navbar.jsx - UWorld Style with Pricing (No Cart)
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,12 +22,12 @@ import {
   FaUserPlus,
   FaBuilding,
   FaBook,
-  FaArrowRight
+  FaArrowRight,
+  FaDollarSign
 } from "react-icons/fa";
 import { GoogleLogin } from "@react-oauth/google";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
-import { useCart } from "../context/CartContext";
 import API from "../api/axios";
 import toast from "react-hot-toast";
 
@@ -35,8 +35,6 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, googleLogin, user, logout, register } = useAuth();
-  const { getCartCount } = useCart();
-  const cartCount = getCartCount();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -61,9 +59,9 @@ const Navbar = () => {
   const [pendingGoogleCredential, setPendingGoogleCredential] = useState(null);
   const [selectedUserType, setSelectedUserType] = useState("");
 
-  // ========== FIX: Define isAuthPage ==========
+  // ========== Define isAuthPage ==========
   const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
-  // ===========================================
+  // =======================================
 
   // Fetch programs for signup
   useEffect(() => {
@@ -360,20 +358,15 @@ const Navbar = () => {
                 <FaUser className="text-xl md:text-2xl" />
               </button>
 
-              {/* Cart Icon with Badge */}
+              {/* Pricing Icon - Direct link to pricing page */}
               <button
-                onClick={() => handleNavigate("/cart")}
-                className={`relative transition-colors duration-300 ${
+                onClick={() => handleNavigate("/pricing")}
+                className={`transition-colors duration-300 ${
                   scrolled || isAuthPage ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
                 }`}
-                aria-label="Cart"
+                aria-label="Pricing"
               >
-                <FaShoppingBag className="text-xl md:text-2xl" />
-                {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-2 w-5 h-5 bg-[#00a3a1] text-white text-xs font-bold rounded-full flex items-center justify-center shadow-lg">
-                    {cartCount > 9 ? '9+' : cartCount}
-                  </span>
-                )}
+                <FaDollarSign className="text-xl md:text-2xl" />
               </button>
 
               {/* Hamburger Menu */}
@@ -858,11 +851,11 @@ const Navbar = () => {
             <div className="space-y-4">
               <button
                 onClick={() => setSelectedUserType("alveoly_student")}
-                className={`w-full p-4 rounded-xl border-2 transition-all duration-300 flex items-center gap-4 ${
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-300 flex items-center gap-4 ${(
                   selectedUserType === "alveoly_student"
                     ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 shadow-lg shadow-indigo-500/20"
                     : "border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700"
-                }`}
+                )}`}
               >
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl">
                   <FaUserGraduate />
