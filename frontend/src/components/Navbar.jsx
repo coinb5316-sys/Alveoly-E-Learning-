@@ -27,6 +27,7 @@ import {
 import { GoogleLogin } from "@react-oauth/google";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
+import { useCart } from "../context/CartContext";
 import API from "../api/axios";
 import toast from "react-hot-toast";
 
@@ -34,6 +35,8 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, googleLogin, user, logout, register } = useAuth();
+  const { getCartCount } = useCart();
+  const cartCount = getCartCount();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -355,15 +358,19 @@ const Navbar = () => {
 
               {/* Cart Icon */}
               <button
-                onClick={() => handleNavigate("/cart")}
-                className={`transition-colors duration-300 ${
-                  scrolled ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
-                }`}
-                aria-label="Cart"
-              >
-                <FaShoppingBag className="text-xl md:text-2xl" />
-              </button>
-
+  onClick={() => handleNavigate("/cart")}
+  className={`relative transition-colors duration-300 ${
+    scrolled || isAuthPage ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
+  }`}
+  aria-label="Cart"
+>
+  <FaShoppingBag className="text-xl md:text-2xl" />
+  {cartCount > 0 && (
+    <span className="absolute -top-1 -right-2 w-5 h-5 bg-[#00a3a1] text-white text-xs font-bold rounded-full flex items-center justify-center shadow-lg">
+      {cartCount > 9 ? '9+' : cartCount}
+    </span>
+  )}
+</button>
               {/* Hamburger Menu */}
               <button
                 className="relative w-10 h-10 focus:outline-none"

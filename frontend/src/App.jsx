@@ -1,4 +1,4 @@
-// App.js - WITH COOKIE BANNER ADDED
+// App.js - WITH CART PROVIDER AND CART ROUTE
 import React, { useEffect } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
@@ -95,6 +95,10 @@ import GameMatch from "./pages/student/GameMatch";
 import GameMatchResults from "./pages/student/GameMatchResults";
 import AdminTopics from "./pages/AdminTopics";
 
+// Import Cart Components
+import Cart from "./pages/Cart";
+import { CartProvider } from "./context/CartContext";
+
 // Import CookieBanner component
 import CookieBanner from "./components/CookieBanner";
 
@@ -110,7 +114,7 @@ function App() {
   }, []);
 
   return (
-    <>
+    <CartProvider>
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; }
@@ -148,6 +152,7 @@ function App() {
           <Route path="/cookies" element={<CookiePolicy />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/cart" element={<Cart />} /> {/* <-- ADDED CART ROUTE */}
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
@@ -276,7 +281,7 @@ function App() {
         {/* Cookie Banner - Appears on all pages */}
         <CookieBanner />
       </div>
-    </>
+    </CartProvider>
   );
 }
 
