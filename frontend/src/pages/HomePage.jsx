@@ -1,4 +1,4 @@
-// HomePage.jsx - UWorld Professional Clone
+// HomePage.jsx - UWorld Professional Style Clone
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -13,7 +13,6 @@ import {
   FaStar,
   FaUsers,
   FaGraduationCap,
-  FaBriefcase,
   FaChartLine,
   FaClock,
   FaHandsHelping,
@@ -57,6 +56,7 @@ const HomePage = () => {
     }
   }, []);
 
+  // Fetch approved testimonials from API (kept from your original code)
   useEffect(() => {
     const fetchTestimonials = async () => {
       try {
@@ -77,6 +77,7 @@ const HomePage = () => {
       } catch (err) {
         console.error("Error fetching testimonials:", err);
         setTestimonialsError("Failed to load testimonials");
+        // Fallback testimonials
         setTestimonials([
           {
             name: "Dr. Sarah Johnson",
@@ -110,7 +111,7 @@ const HomePage = () => {
 
   const displayTestimonials = testimonials.slice(0, 3);
 
-  // Product data matching UWorld's structure
+  // Product data matching UWorld's professional structure
   const productCategories = [
     {
       title: "Medical",
