@@ -1,4 +1,4 @@
-// src/pages/Pricing.jsx - Public Pricing/Cart Page
+// src/pages/Pricing.jsx - Public Pricing Page (No Cart)
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,25 +17,25 @@ import {
   ChevronRight,
   X,
   User,
-  Lock
+  Lock,
+  ArrowRight
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../context/AuthContext";
-import { useCart } from "../context/CartContext";
 import API from "../api/axios";
 import toast from "react-hot-toast";
 
 const Pricing = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { addToCart, cartItems, getCartCount } = useCart();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hoveredPlan, setHoveredPlan] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [pendingPlanId, setPendingPlanId] = useState(null);
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   // Fetch plans
   useEffect(() => {
@@ -55,7 +55,8 @@ const Pricing = () => {
     fetchPlans();
   }, []);
 
-  const handleAddToCart = (plan) => {
+  // Handle direct plan purchase (no cart)
+  const handlePurchasePlan = async (plan) => {
     // Check if user is logged in
     if (!user) {
       setPendingPlanId(plan._id);
@@ -63,33 +64,25 @@ const Pricing = () => {
       return;
     }
 
-    // Check if plan is already in cart
-    const existingInCart = cartItems.some(item => item.id === plan._id && item.type === "plan");
-    if (existingInCart) {
-      toast.info(`${plan.title} is already in your cart`);
-      return;
-    }
+    try {
+      setProcessingPayment(true);
+      
+      // Initiate payment directly
+      const response = await API.post("/payments/initiate-plan", {
+        planId: plan._id,
+      });
 
-    addToCart({
-      id: plan._id,
-      type: "plan",
-      name: plan.title,
-      price: plan.price,
-      quantity: 1,
-      duration: plan.duration,
-      durationUnit: plan.durationUnit,
-      subjects: plan.subjects || [],
-    });
-    
-    toast.success(`Added ${plan.title} to cart`);
-  };
-
-  const handleProceedToCheckout = () => {
-    if (!user) {
-      setShowLoginPrompt(true);
-      return;
+      // Redirect to payment gateway
+      if (response.data.authorizationUrl) {
+        window.location.href = response.data.authorizationUrl;
+      } else {
+        toast.error("Failed to initiate payment");
+      }
+    } catch (err) {
+      console.error("Payment initiation error:", err);
+      toast.error(err.response?.data?.message || "Failed to initiate payment");
+      setProcessingPayment(false);
     }
-    navigate("/cart");
   };
 
   const handleLoginRedirect = () => {
@@ -100,8 +93,6 @@ const Pricing = () => {
     navigate("/login");
     setShowLoginPrompt(false);
   };
-
-  const cartCount = getCartCount();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 font-['Inter',sans-serif]">
@@ -120,23 +111,6 @@ const Pricing = () => {
           <p className="text-gray-500 dark:text-gray-400 mt-4 max-w-2xl mx-auto">
             Select the perfect plan to unlock premium content and accelerate your learning journey
           </p>
-          
-          {/* Cart Summary Button */}
-          {cartCount > 0 && (
-            <button
-              onClick={handleProceedToCheckout}
-              className="mt-6 inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all"
-            >
-              <span className="relative">
-                <CreditCard className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {cartCount}
-                </span>
-              </span>
-              Proceed to Checkout ({cartCount} item{cartCount !== 1 ? 's' : ''})
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          )}
         </div>
 
         {/* Loading State */}
@@ -163,7 +137,6 @@ const Pricing = () => {
             {plans.map((plan, index) => {
               const isPopular = plan.isPopular || index === 1;
               const isHovered = hoveredPlan === plan._id;
-              const isInCart = cartItems.some(item => item.id === plan._id && item.type === "plan");
 
               return (
                 <motion.div
@@ -254,41 +227,28 @@ const Pricing = () => {
                       </div>
                     )}
 
-                    {/* Action Buttons */}
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => handleAddToCart(plan)}
-                        disabled={isInCart}
-                        className={`w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
-                          isInCart
-                            ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
-                            : isPopular
-                            ? "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-500/25"
-                            : "bg-gray-900 dark:bg-gray-800 hover:bg-gray-800 dark:hover:bg-gray-700 text-white"
-                        }`}
-                      >
-                        {isInCart ? (
-                          <>
-                            <CheckCircle className="h-4 w-4" />
-                            In Cart
-                          </>
-                        ) : (
-                          <>
-                            <CreditCard className="h-4 w-4" />
-                            Add to Cart
-                          </>
-                        )}
-                      </button>
-                      
-                      {isInCart && (
-                        <button
-                          onClick={() => navigate("/cart")}
-                          className="w-full py-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                        >
-                          View Cart →
-                        </button>
+                    {/* Action Button - Direct Purchase */}
+                    <button
+                      onClick={() => handlePurchasePlan(plan)}
+                      disabled={processingPayment}
+                      className={`w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
+                        isPopular
+                          ? "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg shadow-blue-500/25"
+                          : "bg-gray-900 dark:bg-gray-800 hover:bg-gray-800 dark:hover:bg-gray-700 text-white"
+                      } disabled:opacity-50`}
+                    >
+                      {processingPayment ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4" />
+                          Choose Plan
+                        </>
                       )}
-                    </div>
+                    </button>
 
                     {/* Features */}
                     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -345,7 +305,7 @@ const Pricing = () => {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Login Required</h2>
                 <p className="text-gray-500 dark:text-gray-400 mt-2">
-                  Please login or create an account to add items to your cart and checkout.
+                  Please login or create an account to purchase a plan.
                 </p>
               </div>
 
