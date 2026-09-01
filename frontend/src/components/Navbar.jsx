@@ -1,7 +1,7 @@
-// src/components/Navbar.jsx - FIXED: Always has background
+// src/components/Navbar.jsx - UWorld Style with Login Modal & Signup
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion"; // <-- ADD THIS LINE
 import { 
   FaQuestionCircle, 
   FaUser, 
@@ -58,17 +58,6 @@ const Navbar = () => {
   const [pendingGoogleCredential, setPendingGoogleCredential] = useState(null);
   const [selectedUserType, setSelectedUserType] = useState("");
 
-  // Check if we're on login or signup page
-  const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 50);
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
   // Fetch programs for signup
   useEffect(() => {
     if (isSignup) {
@@ -88,6 +77,14 @@ const Navbar = () => {
       fetchPrograms();
     }
   }, [isSignup]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 50);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const handleNavigate = (path) => {
     navigate(path);
@@ -188,6 +185,7 @@ const Navbar = () => {
         if (err.response?.status === 404 || 
             err.response?.data?.message?.includes("not found") ||
             err.response?.data?.message?.includes("User not found")) {
+          // Show user type modal for new users
           setShowUserTypeModal(true);
           setGoogleLoading(false);
         } else {
@@ -290,9 +288,9 @@ const Navbar = () => {
     <>
       <nav
         className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
-          scrolled || isAuthPage
+          scrolled
             ? "bg-white/95 backdrop-blur-md shadow-sm py-3 border-b border-gray-100"
-            : "bg-white/90 backdrop-blur-sm py-5 border-b border-gray-100/20"
+            : "bg-transparent py-5"
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -310,17 +308,17 @@ const Navbar = () => {
               <div>
                 <h1
                   className={`text-xl md:text-2xl font-bold transition-all duration-300 ${
-                    scrolled || isAuthPage ? "text-gray-800" : "text-white"
+                    scrolled ? "text-gray-800" : "text-white"
                   }`}
                 >
                   <span className="text-[#00a3a1]">Alveoly</span>
-                  <span className={scrolled || isAuthPage ? "text-gray-600" : "text-gray-300"}>
+                  <span className={scrolled ? "text-gray-600" : "text-gray-300"}>
                     E-Learning
                   </span>
                 </h1>
                 <p
                   className={`text-xs hidden sm:block transition-all duration-300 ${
-                    scrolled || isAuthPage ? "text-gray-500" : "text-white/70"
+                    scrolled ? "text-gray-500" : "text-white/70"
                   }`}
                 >
                   Health & Sciences Academy
@@ -334,7 +332,7 @@ const Navbar = () => {
               <button
                 onClick={() => handleNavigate("/contact_us")}
                 className={`transition-colors duration-300 ${
-                  scrolled || isAuthPage ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
+                  scrolled ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
                 }`}
                 aria-label="Help"
               >
@@ -348,7 +346,7 @@ const Navbar = () => {
                   setShowLoginModal(true);
                 }}
                 className={`transition-colors duration-300 ${
-                  scrolled || isAuthPage ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
+                  scrolled ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
                 }`}
                 aria-label="Login / Register"
               >
@@ -359,7 +357,7 @@ const Navbar = () => {
               <button
                 onClick={() => handleNavigate("/cart")}
                 className={`transition-colors duration-300 ${
-                  scrolled || isAuthPage ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
+                  scrolled ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
                 }`}
                 aria-label="Cart"
               >
@@ -375,13 +373,13 @@ const Navbar = () => {
                 {menuOpen ? (
                   <FaTimes 
                     className={`text-2xl transition-colors duration-300 ${
-                      scrolled || isAuthPage ? "text-gray-800" : "text-white"
+                      scrolled ? "text-gray-800" : "text-white"
                     }`} 
                   />
                 ) : (
                   <FaBars 
                     className={`text-2xl transition-colors duration-300 ${
-                      scrolled || isAuthPage ? "text-gray-800" : "text-white"
+                      scrolled ? "text-gray-800" : "text-white"
                     }`} 
                   />
                 )}
@@ -457,7 +455,7 @@ const Navbar = () => {
         )}
       </nav>
 
-      {/* ==================== LOGIN/SIGNUP MODAL ==================== */}
+      {/* ==================== LOGIN/SIGNUP MODAL - UWORLD STYLE ==================== */}
       {showLoginModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
@@ -494,6 +492,7 @@ const Navbar = () => {
             {/* Modal Body */}
             <div className="p-6">
               {user ? (
+                // If user is already logged in
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
@@ -524,6 +523,7 @@ const Navbar = () => {
                   </button>
                 </div>
               ) : (
+                // Login/Signup Forms
                 <div className="space-y-6">
                   {/* Toggle between Login and Signup */}
                   <div className="flex rounded-xl bg-gray-100 dark:bg-gray-800 p-1">
@@ -584,8 +584,8 @@ const Navbar = () => {
                   </div>
 
                   {isSignup ? (
+                    // SIGNUP FORM
                     <form onSubmit={handleSignupSubmit} className="space-y-4">
-                      {/* Signup form fields */}
                       <div className="relative">
                         <FaUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
                         <input
@@ -731,6 +731,7 @@ const Navbar = () => {
                       </button>
                     </form>
                   ) : (
+                    // LOGIN FORM
                     <form onSubmit={handleLoginSubmit} className="space-y-4">
                       <div className="relative">
                         <FaEnvelope className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />

@@ -1,7 +1,7 @@
-// src/pages/SignupPage.jsx - WITH USER TYPE SELECTION
+// src/pages/SignupPage.jsx - WITH PROFESSIONAL DARK BACKGROUND
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion"; // <-- ADD AnimatePresence here
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   FaUser, 
   FaEnvelope, 
@@ -141,7 +141,6 @@ const SignupPage = () => {
       
       setPendingGoogleCredential(idToken);
       
-      // Try to login with Google to check if user exists
       try {
         const result = await googleLogin(idToken);
         console.log("Google login result:", result);
@@ -158,7 +157,6 @@ const SignupPage = () => {
         toast.success("Login successful!");
         setPendingGoogleCredential(null);
       } catch (err) {
-        // If user doesn't exist, show user type modal
         if (err.response?.status === 404 || 
             err.response?.data?.message?.includes("not found") ||
             err.response?.data?.message?.includes("User not found")) {
@@ -184,7 +182,6 @@ const SignupPage = () => {
     
     try {
       setGoogleLoading(true);
-      // Register with Google and user type
       const result = await googleLogin(pendingGoogleCredential, selectedUserType);
       console.log("Google signup with user type result:", result);
       
@@ -211,16 +208,16 @@ const SignupPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div className="min-h-screen bg-gradient-to-br from-[#0a1a3a] via-[#1a2a4a] to-[#0a1a3a]">
       <Toaster position="top-right" />
       <Navbar />
       
-      <section className="pt-28 pb-20 px-4">
+      <section className="pt-32 pb-20 px-4">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800"
+            className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-white/20 dark:border-slate-800"
           >
             <div className="grid md:grid-cols-2">
               {/* Left Side - Branding */}
