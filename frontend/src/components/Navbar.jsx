@@ -1,6 +1,6 @@
 // src/components/Navbar.jsx - UWorld Style with Icons
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom"; // <-- FIXED: Added useLocation
 import { 
   FaQuestionCircle, 
   FaUser, 
@@ -17,7 +17,7 @@ import logo from "../assets/logo.png";
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const location = useLocation();
+  const location = useLocation(); // <-- Now this works because useLocation is imported
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
