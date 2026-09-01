@@ -1,8 +1,8 @@
-// Contact.jsx - Exact UWorld Contact Page Clone (Complete)
-import React, { useState, useRef } from "react";
+// Contact.jsx - Exact UWorld Contact Page Clone (Final)
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import emailjs from "@emailjs/browser";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import API from "../api/axios";
@@ -26,6 +26,8 @@ const Contact = () => {
   const [loading, setLoading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -100,6 +102,24 @@ const Contact = () => {
       ]
     },
     {
+      id: "content",
+      category: "Content",
+      questions: [
+        {
+          q: "I want to reset/delete my qbank test history (or) start all over again. Is this possible?",
+          a: "We offer a one-time reset option for subscriptions active for 180 days or more. Once a reset has been used, a subscription cannot be reset again, regardless of the duration remaining on the subscription or the purchase of additional renewals."
+        },
+        {
+          q: "How do I reuse questions with no reset option available (to avoid repetition)?",
+          a: "We recommend using Marked Question Mode to redo specific questions and ensure no duplicates in future generated test blocks. To mark a question, click the flag icon during testing or review."
+        },
+        {
+          q: "Can I save my subscription content to my hard disk or print the material?",
+          a: "Printing, saving, copying, screen capture, etc., of Alveoly materials is strictly prohibited. Attempts to use system commands or third-party utilities to capture our content is copyright infringement."
+        },
+      ]
+    },
+    {
       id: "technical",
       category: "Technical",
       questions: [
@@ -127,7 +147,7 @@ const Contact = () => {
   const quickCategories = [
     { icon: FaCreditCard, label: "Payment", target: "payment" },
     { icon: FaCalendarAlt, label: "Subscriptions", target: "subscriptions" },
-    { icon: FaFileAlt, label: "Content", target: "most-common" },
+    { icon: FaFileAlt, label: "Content", target: "content" },
     { icon: FaLaptop, label: "Technical", target: "technical" },
   ];
 
@@ -141,10 +161,8 @@ const Contact = () => {
     setSubmitSuccess(false);
 
     try {
-      // Save to database
       await API.post("/messages", formData);
 
-      // Send email via EmailJS
       await emailjs.send(
         import.meta.env.VITE_EMAILJS_SERVICE_ID,
         import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
@@ -186,8 +204,75 @@ const Contact = () => {
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    // Close search if open
     setSearchQuery("");
+    setShowSuggestions(false);
+  };
+
+  // Get all questions for search suggestions
+  const getAllQuestions = () => {
+    const allQuestions = [];
+    faqCategories.forEach(category => {
+      category.questions.forEach(q => {
+        allQuestions.push({
+          text: q.q,
+          category: category.category,
+          categoryId: category.id
+        });
+      });
+    });
+    return allQuestions;
+  };
+
+  // Handle search input with suggestions
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    if (value.length > 0) {
+      const allQuestions = getAllQuestions();
+      const filtered = allQuestions.filter(q => 
+        q.text.toLowerCase().includes(value.toLowerCase())
+      );
+      setSearchSuggestions(filtered.slice(0, 5)); // Limit to 5 suggestions
+      setShowSuggestions(true);
+    } else {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion) => {
+    setSearchQuery(suggestion.text);
+    setShowSuggestions(false);
+    // Scroll to the category
+    const element = document.getElementById(suggestion.categoryId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Find and expand the specific question
+      const category = faqCategories.find(c => c.id === suggestion.categoryId);
+      if (category) {
+        const questionIndex = category.questions.findIndex(q => q.q === suggestion.text);
+        if (questionIndex !== -1) {
+          const faqIndex = `${faqCategories.indexOf(category)}-${questionIndex}`;
+          setExpandedFaq(faqIndex);
+        }
+      }
+    }
+  };
+
+  // Handle search form submission
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.length > 0) {
+      // Find the first matching question and scroll to it
+      const allQuestions = getAllQuestions();
+      const match = allQuestions.find(q => 
+        q.text.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      if (match) {
+        handleSuggestionClick(match);
+      }
+    }
   };
 
   // Filter FAQs based on search
@@ -200,6 +285,15 @@ const Contact = () => {
         )
       })).filter(category => category.questions.length > 0)
     : faqCategories;
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowSuggestions(false);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden font-['Inter',sans-serif]">
@@ -226,20 +320,55 @@ const Contact = () => {
               Choose a category to quickly find what you need or contact us
             </p>
 
-            {/* Search Bar - Exact UWorld Style */}
-            <div className="max-w-2xl mx-auto relative mb-8">
-              <input
-                type="text"
-                placeholder="Search for answers..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-6 py-4 pl-14 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent text-lg"
-              />
-              <FaSearch className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl" />
+            {/* Search Bar - Exact UWorld Style with Search Button */}
+            <div className="max-w-3xl mx-auto relative mb-8">
+              <form onSubmit={handleSearchSubmit} className="relative">
+                <input
+                  type="text"
+                  placeholder="Search for answers..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  onFocus={() => searchQuery.length > 0 && setShowSuggestions(true)}
+                  className="w-full px-6 py-3 pl-14 pr-32 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent text-base"
+                />
+                <FaSearch className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
+                <button
+                  type="submit"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-[#00a3a1] hover:bg-[#008b89] text-white px-6 py-2 rounded-lg font-medium transition-colors text-sm"
+                >
+                  Search
+                </button>
+              </form>
+
+              {/* Search Suggestions - Like YouTube */}
+              <AnimatePresence>
+                {showSuggestions && searchSuggestions.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 text-left"
+                  >
+                    {searchSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleSuggestionClick(suggestion)}
+                        className="w-full px-6 py-3 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 border-b border-gray-100 last:border-0"
+                      >
+                        <FaSearch className="text-gray-400 text-sm" />
+                        <div>
+                          <p className="text-gray-800 text-sm font-medium">{suggestion.text}</p>
+                          <p className="text-gray-400 text-xs">{suggestion.category}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Quick Category Icons - Like UWorld */}
-            <div className="flex flex-wrap justify-center gap-4 max-w-2xl mx-auto">
+            <div className="flex flex-wrap justify-center gap-4 max-w-3xl mx-auto">
               {quickCategories.map((category, index) => (
                 <button
                   key={index}
@@ -333,117 +462,119 @@ const Contact = () => {
       </section>
 
       {/* ==================== CONTACT MODAL - UWORLD STYLE ==================== */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
-          >
-            <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-gray-200 rounded-t-2xl">
-              <div className="flex items-center gap-3">
-                <div className="bg-[#00a3a1] p-2 rounded-lg">
-                  <FaEnvelope className="text-white text-xl" />
-                </div>
-                <h2 className="text-2xl font-bold text-[#0a1a3a]">Contact Us</h2>
-              </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <FaTimes className="text-2xl" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              {submitSuccess && (
-                <div className="mb-6 p-4 bg-green-50 border border-green-500 rounded-lg flex items-center gap-3">
-                  <FaCheckCircle className="text-green-500 text-xl" />
-                  <div>
-                    <p className="text-green-700 font-semibold">Message Sent Successfully!</p>
-                    <p className="text-green-600 text-sm">We'll get back to you within 24 hours.</p>
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-gray-200 rounded-t-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="bg-[#00a3a1] p-2 rounded-lg">
+                    <FaEnvelope className="text-white text-xl" />
                   </div>
+                  <h2 className="text-2xl font-bold text-[#0a1a3a]">Contact Us</h2>
                 </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 text-sm">Full Name *</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="Enter your full name"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 text-sm">Email Address *</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="Enter your email address"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 text-sm">Subject *</label>
-                  <input
-                    type="text"
-                    name="subject"
-                    value={formData.subject}
-                    onChange={handleChange}
-                    placeholder="What is this regarding?"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-semibold mb-2 text-sm">Message *</label>
-                  <textarea
-                    name="message"
-                    rows="5"
-                    value={formData.message}
-                    onChange={handleChange}
-                    placeholder="Type your message here..."
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent resize-none"
-                  ></textarea>
-                </div>
-
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-[#00a3a1] hover:bg-[#008b89] text-white py-3 rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
                 >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <FaPaperPlane /> Send Message
-                    </>
-                  )}
+                  <FaTimes className="text-2xl" />
                 </button>
-              </form>
-            </div>
-          </motion.div>
-        </div>
-      )}
+              </div>
+
+              <div className="p-6">
+                {submitSuccess && (
+                  <div className="mb-6 p-4 bg-green-50 border border-green-500 rounded-lg flex items-center gap-3">
+                    <FaCheckCircle className="text-green-500 text-xl" />
+                    <div>
+                      <p className="text-green-700 font-semibold">Message Sent Successfully!</p>
+                      <p className="text-green-600 text-sm">We'll get back to you within 24 hours.</p>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2 text-sm">Full Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      placeholder="Enter your full name"
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2 text-sm">Email Address *</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="Enter your email address"
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2 text-sm">Subject *</label>
+                    <input
+                      type="text"
+                      name="subject"
+                      value={formData.subject}
+                      onChange={handleChange}
+                      placeholder="What is this regarding?"
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2 text-sm">Message *</label>
+                    <textarea
+                      name="message"
+                      rows="5"
+                      value={formData.message}
+                      onChange={handleChange}
+                      placeholder="Type your message here..."
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent resize-none"
+                    ></textarea>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-[#00a3a1] hover:bg-[#008b89] text-white py-3 rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <FaPaperPlane /> Send Message
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <Footer />
     </div>
