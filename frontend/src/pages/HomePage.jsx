@@ -29,6 +29,7 @@ import {
   FaMicroscope,
   FaGlobeAfrica,
   FaBriefcase,
+  FaChalkboardTeacher,
 } from "react-icons/fa";
 
 const HomePage = () => {
