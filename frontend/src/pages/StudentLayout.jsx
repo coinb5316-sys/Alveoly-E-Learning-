@@ -25,6 +25,7 @@ import {
   Video,
   Award,
   Lock,
+  Trophy,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import StudentNotificationPanel from "../components/StudentNotificationPanel";
