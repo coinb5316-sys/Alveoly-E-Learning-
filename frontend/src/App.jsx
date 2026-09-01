@@ -100,6 +100,7 @@ import Pricing from "./pages/Pricing";
 
 // Import CookieBanner component
 import CookieBanner from "./components/CookieBanner";
+import StudentExamResults from "./pages/StudentExamResults";
 
 function App() {
   useEffect(() => {
@@ -185,6 +186,7 @@ function App() {
             <Route path="plans" element={<StudentPlans />} />
             <Route path="payments" element={<StudentPayments />} />
             <Route path="lessons/:subjectId" element={<StudentLessons />} />
+            <Route path="exam-results" element={<StudentExamResults />} />
             <Route path="lessons/:lessonId/quiz" element={<LessonQuiz />} />
             <Route path="exams/:courseId/:subjectId" element={<StudentExams />} />
             <Route path="trial/:courseId/:subjectId" element={<StudentTrial />} />

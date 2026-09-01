@@ -389,3 +389,104 @@ export const deleteExamAttempt = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// controllers/examController.js - Add these new functions
+
+// ================= GET STUDENT EXAM RESULTS =================
+export const getStudentExamResults = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    const attempts = await ExamAttempt.find({
+      userId,
+      status: "submitted"
+    })
+    .populate("courseId", "name")
+    .populate("subjectId", "name")
+    .sort({ submittedAt: -1 });
+    
+    // Format results for display
+    const formattedResults = attempts.map(attempt => ({
+      _id: attempt._id,
+      courseName: attempt.courseId?.name || attempt.courseName || "Unknown Course",
+      subjectName: attempt.subjectId?.name || attempt.subjectName || "Unknown Subject",
+      score: attempt.score,
+      totalQuestions: attempt.totalQuestions,
+      percentage: attempt.percentage,
+      result: attempt.result,
+      submittedAt: attempt.submittedAt,
+      attemptNumber: attempt.attemptNumber,
+      duration: attempt.duration,
+      timeSpent: attempt.timeSpent || 0,
+      resitAllowed: attempt.resitAllowed || false,
+    }));
+    
+    res.json(formattedResults);
+  } catch (err) {
+    console.error("Get Student Exam Results Error:", err);
+    res.status(500).json({ message: "Server Error: " + err.message });
+  }
+};
+
+// ================= GET EXAM ATTEMPT DETAILS FOR REVISION =================
+export const getExamAttemptDetails = async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    
+    const attempt = await ExamAttempt.findOne({
+      _id: attemptId,
+      userId: req.user._id,
+      status: "submitted"
+    });
+    
+    if (!attempt) {
+      return res.status(404).json({ message: "Exam attempt not found" });
+    }
+    
+    // Get full question details
+    const questionIds = attempt.questions.map(q => q.questionId);
+    const questions = await Question.find({
+      _id: { $in: questionIds }
+    });
+    
+    // Map questions with user answers
+    const questionDetails = attempt.questions.map(q => {
+      const fullQuestion = questions.find(qt => qt._id.toString() === q.questionId.toString());
+      
+      let userAnswerText = null;
+      if (q.selected) {
+        const answerIndex = q.selected.charCodeAt(0) - 65;
+        if (fullQuestion && answerIndex >= 0 && answerIndex < fullQuestion.options.length) {
+          userAnswerText = fullQuestion.options[answerIndex];
+        }
+      }
+      
+      return {
+        questionId: q.questionId,
+        questionText: fullQuestion?.question || "Question not found",
+        options: fullQuestion?.options || [],
+        userAnswerLetter: q.selected,
+        userAnswerText: userAnswerText,
+        correctAnswer: q.correct,
+        isCorrect: q.isCorrect,
+        rationale: fullQuestion?.rationale || "",
+      };
+    });
+    
+    res.json({
+      attemptId: attempt._id,
+      subjectName: attempt.subjectName || "Exam",
+      courseName: attempt.courseName || "Course",
+      score: attempt.score,
+      totalQuestions: attempt.totalQuestions,
+      percentage: attempt.percentage,
+      result: attempt.result,
+      submittedAt: attempt.submittedAt,
+      attemptNumber: attempt.attemptNumber,
+      questions: questionDetails,
+    });
+  } catch (err) {
+    console.error("Get Exam Attempt Details Error:", err);
+    res.status(500).json({ message: "Server Error: " + err.message });
+  }
+};

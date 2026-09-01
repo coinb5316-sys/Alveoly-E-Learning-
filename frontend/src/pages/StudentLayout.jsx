@@ -144,6 +144,7 @@ const StudentLayout = () => {
     { to: "/student/courses", label: "My Courses", icon: BookOpen, color: "text-green-500" },
     { to: "/student/nursing-games", label: "Nursing Games", icon: Award, color: "text-yellow-500" },
     { to: "/student/subjects", label: "Subjects", icon: ClipboardList, color: "text-purple-500" },
+    { to: "/student/exam-results", label: "Exam Results", icon: Trophy, color: "text-amber-500" }, // <-- ADD THIS
     { to: "/student/progress", label: "Progress", icon: TrendingUp, color: "text-orange-500" },
     { to: "/student/plans", label: "Plans", icon: Tags, color: "text-pink-500" },
     { to: "/student/payments", label: "Payments", icon: Wallet, color: "text-yellow-500" },
