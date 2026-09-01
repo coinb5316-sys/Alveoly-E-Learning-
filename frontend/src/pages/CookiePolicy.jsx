@@ -1,221 +1,181 @@
-// pages/CookiePolicy.jsx - FIXED
-import React, { useState } from "react";
+// src/pages/CookiePolicy.jsx
+import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { 
-  Cookie, 
-  Settings, 
-  BarChart3, 
-  Shield, 
-  CheckCircle, 
-  X, 
-  Info, 
-  RefreshCw,
-  Globe  // ← ADD THIS IMPORT
-} from "lucide-react";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
+import { FaCookie, FaShieldAlt, FaUserCog, FaChartLine } from "react-icons/fa";
 
 const CookiePolicy = () => {
-  const [showPreferences, setShowPreferences] = useState(false);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const cookieTypes = [
     {
-      name: "Essential Cookies",
-      icon: Shield,
-      description: "These cookies are necessary for the platform to function properly.",
-      examples: "Authentication, session management, security",
-      required: true,
-      color: "blue"
+      icon: FaCookie,
+      title: "Essential Cookies",
+      description: "These cookies are necessary for the website to function properly. They enable core functionality such as security, network management, and accessibility. You cannot opt out of these cookies.",
+      examples: ["Session tokens", "Authentication cookies", "Security measures"],
     },
     {
-      name: "Functional Cookies",
-      icon: Settings,
-      description: "These cookies enable enhanced functionality and personalization.",
-      examples: "Language preferences, theme settings, remember login",
-      required: false,
-      color: "purple"
+      icon: FaUserCog,
+      title: "Preference Cookies",
+      description: "These cookies allow the website to remember choices you make and provide enhanced, more personal features.",
+      examples: ["Language preferences", "Theme selection", "Course progress"],
     },
     {
-      name: "Analytics Cookies",
-      icon: BarChart3,
-      description: "These cookies help us understand how visitors interact with our platform.",
-      examples: "Page views, time spent, navigation patterns",
-      required: false,
-      color: "green"
-    }
+      icon: FaChartLine,
+      title: "Analytics Cookies",
+      description: "These cookies help us understand how visitors interact with our website by collecting and reporting information anonymously.",
+      examples: ["Page views", "Session duration", "User journey tracking"],
+    },
+    {
+      icon: FaShieldAlt,
+      title: "Marketing Cookies",
+      description: "These cookies are used to track visitors across websites. The intention is to display ads that are relevant and engaging for the individual user.",
+      examples: ["Ad personalization", "Social media integration", "Retargeting"],
+    },
   ];
 
-  const handleCookiePreference = (cookieName, accept) => {
-    // Set cookie preference in localStorage
-    const preferences = JSON.parse(localStorage.getItem("cookiePreferences") || "{}");
-    preferences[cookieName] = accept;
-    localStorage.setItem("cookiePreferences", JSON.stringify(preferences));
-    
-    // Show confirmation instead of reloading
-    alert(`Cookie preference saved: ${cookieName} ${accept ? 'accepted' : 'declined'}`);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-gray-950 dark:to-gray-900">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-16 md:py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <Cookie className="h-16 w-16 mx-auto mb-6 text-white/80" />
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">Cookie Policy</h1>
-            <p className="text-xl text-teal-100 max-w-3xl mx-auto">
-              Learn how we use cookies to enhance your experience.
-            </p>
-            <p className="text-sm text-teal-200 mt-4">Last Updated: January 1, 2025</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        {/* Introduction */}
-        <div className="mb-8 p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="flex items-start gap-4">
-            <Info className="h-6 w-6 text-teal-600 dark:text-teal-400 mt-1" />
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">What Are Cookies?</h2>
-              <p className="text-gray-600 dark:text-gray-300">
-                Cookies are small text files that are placed on your device when you visit our website. They help us 
-                provide you with a better experience, understand how you use our platform, and personalize content.
-              </p>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <Navbar />
+      
+      <main className="flex-grow pt-24 pb-12 px-4 md:px-6">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-3 bg-blue-100 text-blue-800 px-4 py-2 rounded-full mb-4">
+              <FaCookie className="text-2xl" />
+              <span className="font-semibold">Cookie Policy</span>
             </div>
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+              Your Privacy Matters to Us
+            </h1>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Learn how Alveoly uses cookies to enhance your learning experience and protect your data.
+            </p>
           </div>
-        </div>
 
-        {/* Cookie Types */}
-        <div className="space-y-6 mb-8">
-          {cookieTypes.map((cookie, index) => {
-            const Icon = cookie.icon;
-            const colorClasses = {
-              blue: "from-blue-100 to-indigo-100 dark:from-blue-950/50 dark:to-indigo-950/50 text-blue-600",
-              purple: "from-purple-100 to-pink-100 dark:from-purple-950/50 dark:to-pink-950/50 text-purple-600",
-              green: "from-green-100 to-emerald-100 dark:from-green-950/50 dark:to-emerald-950/50 text-green-600"
-            };
-            return (
-              <div key={index} className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-                <div className="flex items-start justify-between flex-wrap gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 bg-gradient-to-br ${colorClasses[cookie.color]} rounded-xl`}>
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{cookie.name}</h2>
-                      {cookie.required && (
-                        <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
-                          Always Active
+          {/* Last Updated */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-8 text-center">
+            <p className="text-sm text-gray-600">
+              <span className="font-semibold">Last Updated:</span> January 1, 2024
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              This policy applies to all Alveoly E-Learning platforms and services
+            </p>
+          </div>
+
+          {/* Introduction */}
+          <div className="bg-white rounded-xl shadow-sm p-6 md:p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">What Are Cookies?</h2>
+            <p className="text-gray-600 leading-relaxed mb-4">
+              Cookies are small text files that are placed on your computer or mobile device when you visit a website. 
+              They are widely used to make websites work more efficiently, as well as to provide information to the owners of the site.
+            </p>
+            <p className="text-gray-600 leading-relaxed">
+              At Alveoly, we use cookies to enhance your learning experience, remember your preferences, 
+              and help us improve our platform to better serve you.
+            </p>
+          </div>
+
+          {/* Cookie Types */}
+          <div className="space-y-6 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Types of Cookies We Use</h2>
+            
+            {cookieTypes.map((type, index) => (
+              <div key={index} className="bg-white rounded-xl shadow-sm p-6 md:p-8 hover:shadow-md transition-shadow">
+                <div className="flex items-start gap-4">
+                  <div className="bg-blue-100 p-3 rounded-lg text-blue-600 flex-shrink-0">
+                    <type.icon className="text-2xl" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">{type.title}</h3>
+                    <p className="text-gray-600 leading-relaxed mb-3">{type.description}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {type.examples.map((example, idx) => (
+                        <span key={idx} className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full">
+                          {example}
                         </span>
-                      )}
+                      ))}
                     </div>
                   </div>
-                  {!cookie.required && (
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => handleCookiePreference(cookie.name, true)}
-                        className="px-3 py-1 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => handleCookiePreference(cookie.name, false)}
-                        className="px-3 py-1 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-4 ml-4">
-                  <p className="text-gray-600 dark:text-gray-300 mb-2">{cookie.description}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    <span className="font-medium">Examples:</span> {cookie.examples}
-                  </p>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
 
-        {/* Manage Preferences */}
-        <div className="mb-8 p-6 bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 rounded-2xl">
-          <div className="flex items-start justify-between flex-wrap gap-4">
-            <div className="flex items-start gap-4">
-              <RefreshCw className="h-6 w-6 text-teal-600 dark:text-teal-400 mt-1" />
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Manage Cookie Preferences
-                </h3>
-                <p className="text-gray-600 dark:text-gray-300">
-                  You can change your cookie preferences at any time by adjusting your browser settings.
+          {/* Your Choices */}
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 md:p-8 text-white mb-8">
+            <h2 className="text-2xl font-bold mb-4">Your Cookie Choices</h2>
+            <p className="text-blue-100 leading-relaxed mb-4">
+              You have the right to choose whether to accept cookies. You can manage your cookie preferences 
+              through your browser settings or through our cookie consent tool.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <h4 className="font-semibold mb-2">Browser Settings</h4>
+                <p className="text-sm text-blue-100">
+                  Most web browsers allow you to control cookies through their settings. You can block or delete cookies at any time.
+                </p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <h4 className="font-semibold mb-2">Cookie Consent Tool</h4>
+                <p className="text-sm text-blue-100">
+                  You can change your cookie preferences at any time by clicking the cookie icon in the bottom-left corner of your screen.
                 </p>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* How to Control Cookies */}
-        <div className="mb-8 p-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Settings className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-            How to Control Cookies
-          </h3>
-          <div className="space-y-3 text-gray-600 dark:text-gray-300">
-            <p>You can control cookies through your browser settings:</p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>Chrome: Settings → Privacy and Security → Cookies and other site data</li>
-              <li>Firefox: Options → Privacy & Security → Cookies and Site Data</li>
-              <li>Safari: Preferences → Privacy → Cookies and website data</li>
-              <li>Edge: Settings → Site permissions → Cookies and site data</li>
-            </ul>
-            <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-              Please note that disabling certain cookies may affect the functionality of our platform.
+          {/* Third-Party Cookies */}
+          <div className="bg-white rounded-xl shadow-sm p-6 md:p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Third-Party Cookies</h2>
+            <p className="text-gray-600 leading-relaxed mb-4">
+              We may also use third-party cookies from trusted partners to enhance your experience. These include:
             </p>
+            <ul className="space-y-2 text-gray-600">
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold">•</span>
+                <span><span className="font-semibold">Analytics:</span> Google Analytics to help us understand how you use our platform</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold">•</span>
+                <span><span className="font-semibold">Payments:</span> Payment processors like Stripe for secure transactions</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold">•</span>
+                <span><span className="font-semibold">Social Media:</span> Social media platforms for sharing content and authentication</span>
+              </li>
+            </ul>
           </div>
-        </div>
 
-        {/* Third-Party Cookies */}
-        <div className="mb-8 p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="flex items-start gap-4">
-            <Globe className="h-6 w-6 text-teal-600 dark:text-teal-400 mt-1" />
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Third-Party Cookies
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                We may also use third-party services (such as Google Analytics, payment processors, and video hosting) 
-                that set their own cookies. We do not control these cookies, and you should check the respective 
-                privacy policies of these third parties.
-              </p>
+          {/* Contact Section */}
+          <div className="bg-gray-900 rounded-xl p-6 md:p-8 text-white text-center">
+            <h2 className="text-2xl font-bold mb-4">Questions About Our Cookie Policy?</h2>
+            <p className="text-gray-300 mb-6">
+              If you have any questions or concerns about our use of cookies, please don't hesitate to contact us.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link 
+                to="/contact" 
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300 hover:scale-105"
+              >
+                Contact Us
+              </Link>
+              <Link 
+                to="/privacy" 
+                className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300"
+              >
+                View Privacy Policy
+              </Link>
             </div>
           </div>
         </div>
+      </main>
 
-        {/* Contact Section */}
-        <div className="mb-8 p-6 bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 rounded-2xl">
-          <div className="flex items-start gap-4">
-            <Info className="h-6 w-6 text-teal-600 dark:text-teal-400 mt-1" />
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Questions About Cookies?
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                If you have questions about our use of cookies, please contact us at{" "}
-                <a href="mailto:privacy@alveoly.com" className="text-teal-600 hover:text-teal-700 dark:text-teal-400">
-                  alveolyelearning@gmail.com
-                </a>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Back Link */}
-        <div className="text-center">
-          <Link to="/" className="inline-flex items-center gap-2 text-teal-600 hover:text-teal-700 dark:text-teal-400 transition-colors">
-            ← Back to Home
-          </Link>
-        </div>
-      </div>
+      <Footer />
     </div>
   );
 };

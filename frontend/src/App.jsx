@@ -1,4 +1,4 @@
-// App.js - WITH EDIT ROUTE ADDED
+// App.js - WITH COOKIE BANNER ADDED
 import React, { useEffect } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
@@ -95,6 +95,9 @@ import GameMatch from "./pages/student/GameMatch";
 import GameMatchResults from "./pages/student/GameMatchResults";
 import AdminTopics from "./pages/AdminTopics";
 
+// Import CookieBanner component
+import CookieBanner from "./components/CookieBanner";
+
 function App() {
   useEffect(() => {
     document.documentElement.style.scrollBehavior = "smooth";
@@ -140,11 +143,11 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
-<Route path="/terms" element={<TermsOfService />} />
-<Route path="/disclaimer" element={<Disclaimer />} />
-<Route path="/cookies" element={<CookiePolicy />} />
-<Route path="/blog" element={<Blog />} />
-<Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/disclaimer" element={<Disclaimer />} />
+          <Route path="/cookies" element={<CookiePolicy />} />
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
@@ -154,15 +157,6 @@ function App() {
           <Route path="/join/:classId" element={<JoinLiveClass />} />
 
           {/* ==================== STUDENT ROUTES ==================== */}
-          {/* <Route
-            path="/select-course"
-            element={
-              <ProtectedRoute role="student">
-                <SelectCoursePage />
-              </ProtectedRoute>
-            }
-          /> */}
-
           <Route
             path="/select-program"
             element={
@@ -198,7 +192,7 @@ function App() {
             <Route path="ai" element={<AIChat />} />
             <Route path="nursing-games" element={<NursingGamesHub />} />
             <Route path="game-match/:matchId" element={<GameMatch />} />
-<Route path="game-match/:matchId/results" element={<GameMatchResults />} />
+            <Route path="game-match/:matchId/results" element={<GameMatchResults />} />
           </Route>
 
           {/* ==================== ADMIN ROUTES ==================== */}
@@ -215,7 +209,7 @@ function App() {
             <Route path="programs" element={<AdminPrograms />} />
             <Route path="courses" element={<AdminCourses />} />
             <Route path="subjects" element={<AdminSubjects />} />
-             <Route path="topics" element={<AdminTopics />} />
+            <Route path="topics" element={<AdminTopics />} />
             <Route path="questions" element={<AdminQuestions />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="plans" element={<AdminPlans />} />
@@ -237,11 +231,11 @@ function App() {
             <Route path="ai-plans" element={<AIPlansAdmin />} />
             <Route path="ai-generator" element={<AIGenerator />} />
             <Route path="blog" element={<AdminBlog />} />
-<Route path="blog/create" element={<AdminBlogCreate />} />
-<Route path="blog/edit/:id" element={<AdminBlogEdit />} />
-<Route path="blog-quiz-results" element={<AdminBlogQuizResults />} />
-<Route path="subscribers" element={<AdminSubscribers />} />
-<Route path="comments" element={<AdminComments />} />
+            <Route path="blog/create" element={<AdminBlogCreate />} />
+            <Route path="blog/edit/:id" element={<AdminBlogEdit />} />
+            <Route path="blog-quiz-results" element={<AdminBlogQuizResults />} />
+            <Route path="subscribers" element={<AdminSubscribers />} />
+            <Route path="comments" element={<AdminComments />} />
           </Route>
 
           {/* ==================== LECTURER ROUTES ==================== */}
@@ -273,12 +267,14 @@ function App() {
             <Route path="live-classes" element={<LecturerLiveClasses />} />
             <Route path="live-class/:classId" element={<LiveClassRoom />} />
             <Route path="nursing-games" element={<NursingGames />} />
-
           </Route>
 
           {/* ==================== 404 CATCH-ALL ROUTE ==================== */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+
+        {/* Cookie Banner - Appears on all pages */}
+        <CookieBanner />
       </div>
     </>
   );
