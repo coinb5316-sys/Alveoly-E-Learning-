@@ -1,7 +1,7 @@
-// src/components/Navbar.jsx - UWorld Style with Login Modal & Signup
+// src/components/Navbar.jsx - UWorld Style with Login Modal & Signup (FULL COMPLETE VERSION)
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion"; // <-- ADD THIS LINE
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   FaQuestionCircle, 
   FaUser, 
@@ -60,6 +60,10 @@ const Navbar = () => {
   const [showUserTypeModal, setShowUserTypeModal] = useState(false);
   const [pendingGoogleCredential, setPendingGoogleCredential] = useState(null);
   const [selectedUserType, setSelectedUserType] = useState("");
+
+  // ========== FIX: Define isAuthPage ==========
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
+  // ===========================================
 
   // Fetch programs for signup
   useEffect(() => {
@@ -291,7 +295,7 @@ const Navbar = () => {
     <>
       <nav
         className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
-          scrolled
+          scrolled || isAuthPage
             ? "bg-white/95 backdrop-blur-md shadow-sm py-3 border-b border-gray-100"
             : "bg-transparent py-5"
         }`}
@@ -311,17 +315,17 @@ const Navbar = () => {
               <div>
                 <h1
                   className={`text-xl md:text-2xl font-bold transition-all duration-300 ${
-                    scrolled ? "text-gray-800" : "text-white"
+                    scrolled || isAuthPage ? "text-gray-800" : "text-white"
                   }`}
                 >
                   <span className="text-[#00a3a1]">Alveoly</span>
-                  <span className={scrolled ? "text-gray-600" : "text-gray-300"}>
+                  <span className={scrolled || isAuthPage ? "text-gray-600" : "text-gray-300"}>
                     E-Learning
                   </span>
                 </h1>
                 <p
                   className={`text-xs hidden sm:block transition-all duration-300 ${
-                    scrolled ? "text-gray-500" : "text-white/70"
+                    scrolled || isAuthPage ? "text-gray-500" : "text-white/70"
                   }`}
                 >
                   Health & Sciences Academy
@@ -335,7 +339,7 @@ const Navbar = () => {
               <button
                 onClick={() => handleNavigate("/contact_us")}
                 className={`transition-colors duration-300 ${
-                  scrolled ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
+                  scrolled || isAuthPage ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
                 }`}
                 aria-label="Help"
               >
@@ -349,28 +353,29 @@ const Navbar = () => {
                   setShowLoginModal(true);
                 }}
                 className={`transition-colors duration-300 ${
-                  scrolled ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
+                  scrolled || isAuthPage ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
                 }`}
                 aria-label="Login / Register"
               >
                 <FaUser className="text-xl md:text-2xl" />
               </button>
 
-              {/* Cart Icon */}
+              {/* Cart Icon with Badge */}
               <button
-  onClick={() => handleNavigate("/cart")}
-  className={`relative transition-colors duration-300 ${
-    scrolled || isAuthPage ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
-  }`}
-  aria-label="Cart"
->
-  <FaShoppingBag className="text-xl md:text-2xl" />
-  {cartCount > 0 && (
-    <span className="absolute -top-1 -right-2 w-5 h-5 bg-[#00a3a1] text-white text-xs font-bold rounded-full flex items-center justify-center shadow-lg">
-      {cartCount > 9 ? '9+' : cartCount}
-    </span>
-  )}
-</button>
+                onClick={() => handleNavigate("/cart")}
+                className={`relative transition-colors duration-300 ${
+                  scrolled || isAuthPage ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
+                }`}
+                aria-label="Cart"
+              >
+                <FaShoppingBag className="text-xl md:text-2xl" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1 -right-2 w-5 h-5 bg-[#00a3a1] text-white text-xs font-bold rounded-full flex items-center justify-center shadow-lg">
+                    {cartCount > 9 ? '9+' : cartCount}
+                  </span>
+                )}
+              </button>
+
               {/* Hamburger Menu */}
               <button
                 className="relative w-10 h-10 focus:outline-none"
@@ -380,13 +385,13 @@ const Navbar = () => {
                 {menuOpen ? (
                   <FaTimes 
                     className={`text-2xl transition-colors duration-300 ${
-                      scrolled ? "text-gray-800" : "text-white"
+                      scrolled || isAuthPage ? "text-gray-800" : "text-white"
                     }`} 
                   />
                 ) : (
                   <FaBars 
                     className={`text-2xl transition-colors duration-300 ${
-                      scrolled ? "text-gray-800" : "text-white"
+                      scrolled || isAuthPage ? "text-gray-800" : "text-white"
                     }`} 
                   />
                 )}
