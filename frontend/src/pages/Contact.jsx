@@ -1,4 +1,4 @@
-// Contact.jsx - UWorld Professional Style (Exact Match)
+// Contact.jsx - Exact UWorld Contact Page Clone (Complete)
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import emailjs from "@emailjs/browser";
@@ -13,6 +13,11 @@ import {
   FaCheckCircle,
   FaChevronDown,
   FaChevronUp,
+  FaTimes,
+  FaCreditCard,
+  FaCalendarAlt,
+  FaFileAlt,
+  FaLaptop,
 } from "react-icons/fa";
 
 const Contact = () => {
@@ -22,6 +27,7 @@ const Contact = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedFaq, setExpandedFaq] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -32,6 +38,7 @@ const Contact = () => {
   // FAQ Data - Directly from UWorld's page structure
   const faqCategories = [
     {
+      id: "most-common",
       category: "Most Common Questions",
       questions: [
         {
@@ -57,6 +64,7 @@ const Contact = () => {
       ]
     },
     {
+      id: "payment",
       category: "Payment",
       questions: [
         {
@@ -74,6 +82,7 @@ const Contact = () => {
       ]
     },
     {
+      id: "subscriptions",
       category: "Subscriptions",
       questions: [
         {
@@ -91,6 +100,7 @@ const Contact = () => {
       ]
     },
     {
+      id: "technical",
       category: "Technical",
       questions: [
         {
@@ -111,6 +121,14 @@ const Contact = () => {
         },
       ]
     },
+  ];
+
+  // Quick Category Icons - Like UWorld
+  const quickCategories = [
+    { icon: FaCreditCard, label: "Payment", target: "payment" },
+    { icon: FaCalendarAlt, label: "Subscriptions", target: "subscriptions" },
+    { icon: FaFileAlt, label: "Content", target: "most-common" },
+    { icon: FaLaptop, label: "Technical", target: "technical" },
   ];
 
   const handleChange = (e) => {
@@ -147,7 +165,10 @@ const Contact = () => {
         message: "",
       });
       
-      setTimeout(() => setSubmitSuccess(false), 5000);
+      setTimeout(() => {
+        setSubmitSuccess(false);
+        setIsModalOpen(false);
+      }, 3000);
     } catch (err) {
       console.error("Error sending message:", err);
       alert(err.response?.data?.message || "Failed to send message. Please try again.");
@@ -158,6 +179,15 @@ const Contact = () => {
 
   const toggleFaq = (index) => {
     setExpandedFaq(expandedFaq === index ? null : index);
+  };
+
+  const scrollToCategory = (targetId) => {
+    const element = document.getElementById(targetId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    // Close search if open
+    setSearchQuery("");
   };
 
   // Filter FAQs based on search
@@ -176,20 +206,20 @@ const Contact = () => {
       <Navbar />
 
       {/* ==================== HERO SECTION - UWORLD EXACT STYLE ==================== */}
-      <header className="relative min-h-[60vh] flex items-center justify-center bg-[#0a1a3a] overflow-hidden">
+      <header className="relative min-h-[80vh] flex items-center justify-center bg-[#0a1a3a] overflow-hidden pt-16">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute inset-0" style={{
             backgroundImage: `radial-gradient(circle at 20% 50%, rgba(0,163,161,0.3) 0%, transparent 50%)`,
           }}></div>
         </div>
         
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full text-center">
+        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full text-center">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-2">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-4">
               Hi there, how can we help?
             </h1>
             <p className="text-lg md:text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
@@ -197,7 +227,7 @@ const Contact = () => {
             </p>
 
             {/* Search Bar - Exact UWorld Style */}
-            <div className="max-w-2xl mx-auto relative">
+            <div className="max-w-2xl mx-auto relative mb-8">
               <input
                 type="text"
                 placeholder="Search for answers..."
@@ -206,6 +236,20 @@ const Contact = () => {
                 className="w-full px-6 py-4 pl-14 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent text-lg"
               />
               <FaSearch className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl" />
+            </div>
+
+            {/* Quick Category Icons - Like UWorld */}
+            <div className="flex flex-wrap justify-center gap-4 max-w-2xl mx-auto">
+              {quickCategories.map((category, index) => (
+                <button
+                  key={index}
+                  onClick={() => scrollToCategory(category.target)}
+                  className="flex items-center gap-3 bg-white/10 backdrop-blur-sm hover:bg-white/20 border border-white/20 rounded-xl px-5 py-3 text-white transition-all duration-300 group"
+                >
+                  <category.icon className="text-xl text-[#00a3a1] group-hover:scale-110 transition-transform" />
+                  <span className="font-medium">{category.label}</span>
+                </button>
+              ))}
             </div>
           </motion.div>
         </div>
@@ -217,11 +261,12 @@ const Contact = () => {
           {filteredFaqs.map((category, catIndex) => (
             <motion.div
               key={catIndex}
+              id={category.id}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.2 }}
               transition={{ delay: catIndex * 0.1 }}
-              className="mb-12"
+              className="mb-12 scroll-mt-24"
             >
               <h2 className="text-2xl md:text-3xl font-bold text-[#0a1a3a] mb-6 pb-2 border-b-2 border-gray-200">
                 {category.category}
@@ -267,111 +312,138 @@ const Contact = () => {
               <p className="text-gray-400 mt-2">Try searching with different keywords</p>
             </div>
           )}
+
+          {/* ==================== CAN'T FIND WHAT YOU'RE LOOKING FOR? ==================== */}
+          <div className="text-center mt-12 pt-12 border-t border-gray-200">
+            <h3 className="text-2xl font-bold text-[#0a1a3a] mb-3">
+              Can't find what you are looking for?
+            </h3>
+            <p className="text-gray-600 max-w-lg mx-auto mb-6">
+              If you can't find the answers to the questions you are looking for, simply
+              message us and we will respond back to you promptly.
+            </p>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="bg-[#00a3a1] hover:bg-[#008b89] text-white px-10 py-4 rounded-lg font-semibold text-lg transition-all duration-300 shadow-md hover:shadow-lg"
+            >
+              Contact Us
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* ==================== CONTACT FORM SECTION ==================== */}
-      <section className="py-16 md:py-20 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* ==================== CONTACT MODAL - UWORLD STYLE ==================== */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="bg-white rounded-2xl shadow-lg p-8 md:p-10"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
           >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="bg-[#00a3a1] p-3 rounded-lg">
-                <FaEnvelope className="text-white text-xl" />
+            <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-gray-200 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="bg-[#00a3a1] p-2 rounded-lg">
+                  <FaEnvelope className="text-white text-xl" />
+                </div>
+                <h2 className="text-2xl font-bold text-[#0a1a3a]">Contact Us</h2>
               </div>
-              <h2 className="text-2xl font-bold text-[#0a1a3a]">Contact Us</h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <FaTimes className="text-2xl" />
+              </button>
             </div>
 
-            {submitSuccess && (
-              <div className="mb-6 p-4 bg-green-50 border border-green-500 rounded-lg flex items-center gap-3">
-                <FaCheckCircle className="text-green-500 text-xl" />
-                <div>
-                  <p className="text-green-700 font-semibold">Message Sent Successfully!</p>
-                  <p className="text-green-600 text-sm">We'll get back to you within 24 hours.</p>
+            <div className="p-6">
+              {submitSuccess && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-500 rounded-lg flex items-center gap-3">
+                  <FaCheckCircle className="text-green-500 text-xl" />
+                  <div>
+                    <p className="text-green-700 font-semibold">Message Sent Successfully!</p>
+                    <p className="text-green-600 text-sm">We'll get back to you within 24 hours.</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2 text-sm">Full Name *</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Enter your full name"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
-                />
-              </div>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">Full Name *</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Enter your full name"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2 text-sm">Email Address *</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="Enter your email address"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
-                />
-              </div>
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">Email Address *</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="Enter your email address"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2 text-sm">Subject *</label>
-                <input
-                  type="text"
-                  name="subject"
-                  value={formData.subject}
-                  onChange={handleChange}
-                  placeholder="What is this regarding?"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
-                />
-              </div>
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">Subject *</label>
+                  <input
+                    type="text"
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleChange}
+                    placeholder="What is this regarding?"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-gray-700 font-semibold mb-2 text-sm">Message *</label>
-                <textarea
-                  name="message"
-                  rows="5"
-                  value={formData.message}
-                  onChange={handleChange}
-                  placeholder="Type your message here..."
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent resize-none"
-                ></textarea>
-              </div>
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">Message *</label>
+                  <textarea
+                    name="message"
+                    rows="5"
+                    value={formData.message}
+                    onChange={handleChange}
+                    placeholder="Type your message here..."
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent resize-none"
+                  ></textarea>
+                </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[#00a3a1] hover:bg-[#008b89] text-white py-3 rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <FaPaperPlane /> Send Message
-                  </>
-                )}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-[#00a3a1] hover:bg-[#008b89] text-white py-3 rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <FaPaperPlane /> Send Message
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
           </motion.div>
         </div>
-      </section>
+      )}
 
       <Footer />
     </div>
