@@ -1,25 +1,23 @@
-// pages/PaymentSuccess.jsx - Updated to handle both
+// pages/PaymentSuccess.jsx - Updated to handle plan activation
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import axios from "../api/axios";
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import API from "../api/axios";
+import { Loader2, CheckCircle, XCircle, Crown } from "lucide-react";
 
 const PaymentSuccess = () => {
   const { search } = useLocation();
   const navigate = useNavigate();
+  const { setUser } = useAuth();
   const [verifying, setVerifying] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
-  const [isPlan, setIsPlan] = useState(true);
-  const [countdown, setCountdown] = useState(3);
+  const [countdown, setCountdown] = useState(5);
+  const [planTitle, setPlanTitle] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(search);
     const reference = params.get("reference");
-    const courseId = params.get("courseId");
-    const isPlanPayment = !reference?.startsWith("subject_");
-
-    setIsPlan(isPlanPayment);
 
     if (!reference) {
       setError("No payment reference found");
@@ -30,24 +28,25 @@ const PaymentSuccess = () => {
     const verifyPayment = async () => {
       try {
         console.log("Verifying payment with reference:", reference);
-        const res = await axios.get(`/payments/verify?reference=${reference}`);
+        const res = await API.get(`/payments/verify?reference=${reference}`);
         console.log("Verification response:", res.data);
+        
+        // Refresh user data to get updated plan
+        const userRes = await API.get("/auth/me");
+        setUser(userRes.data);
         
         if (res.data.success === true || 
             res.data.message === "Plan activated successfully" || 
             res.data.message === "Subject unlocked successfully") {
           setSuccess(true);
+          setPlanTitle(res.data.planTitle || "Plan");
           
           // Start countdown redirect
           const interval = setInterval(() => {
             setCountdown((prev) => {
               if (prev <= 1) {
                 clearInterval(interval);
-                if (courseId && !isPlanPayment) {
-                  navigate(`/student/subjects?course=${courseId}`);
-                } else {
-                  navigate("/student/plans");
-                }
+                navigate("/student/dashboard");
                 return 0;
               }
               return prev - 1;
@@ -65,7 +64,7 @@ const PaymentSuccess = () => {
     };
 
     verifyPayment();
-  }, [search, navigate]);
+  }, [search, navigate, setUser]);
 
   if (verifying) {
     return (
@@ -83,12 +82,23 @@ const PaymentSuccess = () => {
         <div className="bg-green-100 rounded-full p-4 mb-6">
           <CheckCircle className="h-20 w-20 text-green-600" />
         </div>
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-full p-3 mb-4">
+          <Crown className="h-12 w-12 text-white" />
+        </div>
         <h2 className="text-3xl font-bold text-green-600 mb-3">Payment Successful! 🎉</h2>
         <p className="text-gray-700 text-lg mb-2 text-center max-w-md">
-          {isPlan ? "Your plan has been activated!" : "Your subject has been unlocked!"}
+          Your {planTitle || "plan"} has been activated!
         </p>
-        <p className="text-gray-500 mb-8">You now have full access to all learning materials.</p>
+        <p className="text-gray-500 mb-8 text-center max-w-md">
+          You now have full access to all learning materials in your plan.
+        </p>
         <p className="text-sm text-gray-400">Redirecting in {countdown} seconds...</p>
+        <button
+          onClick={() => navigate("/student/dashboard")}
+          className="mt-4 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all"
+        >
+          Go to Dashboard Now
+        </button>
       </div>
     );
   }
@@ -101,7 +111,7 @@ const PaymentSuccess = () => {
       <h2 className="text-3xl font-bold text-red-600 mb-3">Payment Failed</h2>
       <p className="text-gray-600 mb-6 text-center max-w-md">{error || "Something went wrong"}</p>
       <button
-        onClick={() => navigate("/student/plans")}
+        onClick={() => navigate("/pricing")}
         className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
       >
         Back to Plans
