@@ -118,27 +118,32 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ================= GOOGLE LOGIN - UPDATED =================
-  const googleLogin = async (idToken, userType = null) => {
-    try {
-      // Build payload with userType if provided
-      const payload = { idToken };
-      if (userType) {
-        payload.userType = userType;
-      }
-      
-      const res = await API.post("/auth/google-login", payload);
-      const { token: newToken, user: userData, requiresProgram } = res.data;
-      
-      console.log("Google login response:", { userData, requiresProgram });
-      
-      setAuth(newToken, userData);
-      
-      return { user: userData, requiresProgram };
-    } catch (err) {
-      console.error("Google login error:", err);
+ // src/context/AuthContext.jsx - googleLogin function
+
+const googleLogin = async (idToken, userType = null) => {
+  try {
+    const payload = { idToken };
+    if (userType) {
+      payload.userType = userType;
+    }
+    
+    const res = await API.post("/auth/google-login", payload);
+    const { token: newToken, user: userData, requiresProgram } = res.data;
+    
+    console.log("Google login response:", { userData, requiresProgram });
+    
+    setAuth(newToken, userData);
+    
+    return { user: userData, requiresProgram };
+  } catch (err) {
+    console.error("Google login error:", err);
+    // If the error is 404 with requiresUserType, re-throw so frontend can handle it
+    if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
       throw err;
     }
-  };
+    throw err;
+  }
+};
 
   // ================= LOGOUT =================
   const logout = () => {

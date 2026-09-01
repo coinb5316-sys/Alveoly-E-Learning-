@@ -14,11 +14,11 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // ================= GOOGLE LOGIN (NO AUTO-ASSIGN - REDIRECT TO SELECT PROGRAM) =================
-// controllers/authController.js - Complete googleLogin function
+// controllers/authController.js - FIXED googleLogin function
 
 export const googleLogin = async (req, res) => {
   try {
-    const { idToken, userType } = req.body; // ← userType extracted here
+    const { idToken, userType } = req.body;
 
     if (!idToken) {
       return res.status(400).json({ message: "Google token required" });
@@ -33,25 +33,52 @@ export const googleLogin = async (req, res) => {
     const { email, name, picture } = payload;
 
     let user = await User.findOne({ email });
-    let isNewUser = false;
 
-    if (!user) {
-      isNewUser = true;
-      // Create user WITHOUT program and course - they will select it
-      user = await User.create({ 
+    // ========== CASE 1: USER EXISTS - LOGIN ==========
+    if (user) {
+      // Update login info
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+      const deviceInfo = req.headers['user-agent'];
+      
+      user.lastLoginAt = new Date();
+      user.lastActivityAt = new Date();
+      user.loginCount += 1;
+      user.lastLoginIP = ip;
+      user.deviceInfo = deviceInfo;
+      user.activeSession = crypto.randomBytes(16).toString("hex");
+
+      await user.save();
+
+      // Populate and return user
+      const populatedUser = await User.findById(user._id)
+        .select("-password")
+        .populate("programId", "name code isActive")
+        .populate("courseId", "name");
+
+      const token = generateToken(user, user.activeSession);
+      const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
+
+      return res.json({ token, user: populatedUser, requiresProgram });
+    }
+
+    // ========== CASE 2: USER DOESN'T EXIST - CHECK FOR USER TYPE ==========
+    // If userType is provided, create the user
+    if (userType) {
+      // Create user with the provided userType
+      const newUser = await User.create({ 
         name, 
         email,
         avatar: picture,
         programId: null,
         courseId: null,
-        userType: userType || null, // ← Set userType here too
+        userType: userType,
         lastLoginAt: new Date(),
         lastActivityAt: new Date()
       });
       
-      // Send notifications...
+      // Send welcome notification
       await createNotification(
-        user._id,
+        newUser._id,
         "student",
         "success",
         "Welcome to Alveoly! 🎉",
@@ -60,6 +87,7 @@ export const googleLogin = async (req, res) => {
         { action: "welcome", isNewUser: true }
       );
       
+      // Notify admins
       const adminUsers = await User.find({ role: "admin" });
       for (const admin of adminUsers) {
         await createNotification(
@@ -67,36 +95,44 @@ export const googleLogin = async (req, res) => {
           "admin",
           "info",
           "New Student Registration",
-          `${name} (${email}) has registered as a new student.`,
+          `${name} (${email}) has registered as a new student. (${userType})`,
           "/admin/users",
-          { userId: user._id, action: "new_user" }
+          { userId: newUser._id, action: "new_user" }
         );
       }
+
+      // Update login info
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+      const deviceInfo = req.headers['user-agent'];
+      
+      newUser.lastLoginAt = new Date();
+      newUser.lastActivityAt = new Date();
+      newUser.loginCount += 1;
+      newUser.lastLoginIP = ip;
+      newUser.deviceInfo = deviceInfo;
+      newUser.activeSession = crypto.randomBytes(16).toString("hex");
+
+      await newUser.save();
+
+      // Populate and return user
+      const populatedUser = await User.findById(newUser._id)
+        .select("-password")
+        .populate("programId", "name code isActive")
+        .populate("courseId", "name");
+
+      const token = generateToken(newUser, newUser.activeSession);
+      const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
+
+      return res.json({ token, user: populatedUser, requiresProgram });
     }
 
-    // Update login info
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
-    const deviceInfo = req.headers['user-agent'];
-    
-    user.lastLoginAt = new Date();
-    user.lastActivityAt = new Date();
-    user.loginCount += 1;
-    user.lastLoginIP = ip;
-    user.deviceInfo = deviceInfo;
-    user.activeSession = crypto.randomBytes(16).toString("hex");
+    // ========== CASE 3: USER DOESN'T EXIST AND NO USER TYPE ==========
+    // Return 404 so frontend shows the user type modal
+    return res.status(404).json({ 
+      message: "User not found. Please select your user type to create an account.",
+      requiresUserType: true
+    });
 
-    await user.save();
-
-    // Populate and return user
-    const populatedUser = await User.findById(user._id)
-      .select("-password")
-      .populate("programId", "name code isActive")
-      .populate("courseId", "name");
-
-    const token = generateToken(user, user.activeSession);
-    const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
-
-    res.json({ token, user: populatedUser, requiresProgram });
   } catch (err) {
     console.error("GOOGLE LOGIN ERROR:", err);
     res.status(401).json({ 
