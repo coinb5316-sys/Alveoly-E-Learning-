@@ -1,4 +1,4 @@
-// src/context/AuthContext.jsx - FULLY UPDATED with Program support
+// src/context/AuthContext.jsx - FULLY UPDATED with Program support and userType
 import { createContext, useContext, useState, useEffect } from "react";
 import API from "../api/axios";
 import { initializeSocket } from "../config/socket.js";
@@ -117,23 +117,29 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= GOOGLE LOGIN =================
-const googleLogin = async (idToken) => {
-  try {
-    const res = await API.post("/auth/google-login", { idToken });
-    const { token: newToken, user: userData, requiresProgram } = res.data;
-    
-    console.log("Google login response:", { userData, requiresProgram });
-    
-    setAuth(newToken, userData);
-    
-    // Return requiresProgram so the component knows where to redirect
-    return { user: userData, requiresProgram };
-  } catch (err) {
-    console.error("Google login error:", err);
-    throw err;
-  }
-};
+  // ================= GOOGLE LOGIN - UPDATED =================
+  const googleLogin = async (idToken, userType = null) => {
+    try {
+      // Build payload with userType if provided
+      const payload = { idToken };
+      if (userType) {
+        payload.userType = userType;
+      }
+      
+      const res = await API.post("/auth/google-login", payload);
+      const { token: newToken, user: userData, requiresProgram } = res.data;
+      
+      console.log("Google login response:", { userData, requiresProgram });
+      
+      setAuth(newToken, userData);
+      
+      return { user: userData, requiresProgram };
+    } catch (err) {
+      console.error("Google login error:", err);
+      throw err;
+    }
+  };
+
   // ================= LOGOUT =================
   const logout = () => {
     clearAuth();
