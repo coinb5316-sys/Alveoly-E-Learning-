@@ -1,29 +1,22 @@
-// src/pages/StudentExamResults.jsx - Complete Exam Results & Revision
+// src/pages/StudentExamResults.jsx - Clean Revision View (No Protection)
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Award,
-  TrendingUp,
-  Clock,
   BookOpen,
   CheckCircle,
   XCircle,
-  ChevronRight,
   Loader2,
   Search,
-  Filter,
-  ArrowLeft,
   Calendar,
-  User,
   GraduationCap,
   Eye,
   RefreshCw,
   AlertCircle,
   Trophy,
   BarChart3,
-  ChevronDown,
-  ChevronUp,
+  Clock,
+  ChevronRight,
 } from "lucide-react";
 import API from "../api/axios";
 import toast from "react-hot-toast";
@@ -328,7 +321,7 @@ const StudentExamResults = () => {
         </div>
       )}
 
-      {/* Detail/Revision Modal */}
+      {/* Detail/Revision Modal - No Protection */}
       <AnimatePresence>
         {showDetailModal && selectedResult && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -368,7 +361,7 @@ const StudentExamResults = () => {
                 </div>
               </div>
 
-              {/* Modal Body - Questions */}
+              {/* Modal Body - Questions (No Protection) */}
               <div className="overflow-y-auto max-h-[calc(90vh-120px)] p-6">
                 {detailLoading ? (
                   <div className="flex flex-col items-center justify-center py-12">
