@@ -41,7 +41,7 @@ const Navbar = () => {
       className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
         scrolled
           ? "bg-white/95 backdrop-blur-md shadow-md py-3 border-b border-gray-100"
-          : "bg-[#0a1a3a] py-5"
+          : "bg-transparent py-5"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -69,7 +69,7 @@ const Navbar = () => {
               </h1>
               <p
                 className={`text-xs hidden sm:block transition-all duration-300 ${
-                  scrolled ? "text-gray-500" : "text-blue-200"
+                  scrolled ? "text-gray-500" : "text-white/70"
                 }`}
               >
                 Health & Sciences Academy
