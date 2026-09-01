@@ -1,6 +1,7 @@
 // src/components/Navbar.jsx - UWorld Style with Login Modal & Signup
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion"; // <-- ADD THIS LINE
 import { 
   FaQuestionCircle, 
   FaUser, 
