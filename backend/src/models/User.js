@@ -22,6 +22,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: ""
     },
+    userType: {
+  type: String,
+  enum: ["alveoly_student", "non_alveoly_student"],
+  default: null,
+},
 
     // ================= ROLE, PROGRAM & COURSE =================
     role: {

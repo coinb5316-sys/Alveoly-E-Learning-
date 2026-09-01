@@ -1,4 +1,4 @@
-// src/pages/SignupPage.jsx - Complete working version with course selection
+// src/pages/SignupPage.jsx - WITH USER TYPE SELECTION
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -11,7 +11,9 @@ import {
   FaGraduationCap, 
   FaBuilding,
   FaBook,
-  FaSpinner
+  FaSpinner,
+  FaUserGraduate,
+  FaUserPlus
 } from "react-icons/fa";
 import { GoogleLogin } from "@react-oauth/google";
 import Navbar from "../components/Navbar";
@@ -30,12 +32,16 @@ const SignupPage = () => {
   const [courses, setCourses] = useState([]);
   const [loadingPrograms, setLoadingPrograms] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(false);
+  const [showUserTypeModal, setShowUserTypeModal] = useState(false);
+  const [pendingGoogleCredential, setPendingGoogleCredential] = useState(null);
+  const [selectedUserType, setSelectedUserType] = useState("");
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
     programId: "",
     courseId: "",
+    userType: "",
   });
 
   // Fetch programs
@@ -57,41 +63,53 @@ const SignupPage = () => {
   }, []);
 
   const handleProgramChange = async (programId) => {
-  console.log("Program changed to:", programId);
-  
-  setForm({ ...form, programId, courseId: "" });
-  setCourses([]);
-  
-  if (programId && programId !== "") {
-    try {
-      setLoadingCourses(true);
-      console.log(`Fetching courses for program: ${programId}`);
-      // USE THE PUBLIC ENDPOINT (no authentication required)
-      const res = await API.get(`/courses/public/program/${programId}`);
-      console.log("Courses response:", res.data);
-      
-      const coursesData = Array.isArray(res.data) ? res.data : [];
-      setCourses(coursesData);
-      
-      if (coursesData.length === 0) {
-        toast.warning("No courses available for this program. Please contact admin.");
-      } else {
-        toast.success(`${coursesData.length} course(s) available`);
+    console.log("Program changed to:", programId);
+    
+    setForm({ ...form, programId, courseId: "" });
+    setCourses([]);
+    
+    if (programId && programId !== "") {
+      try {
+        setLoadingCourses(true);
+        console.log(`Fetching courses for program: ${programId}`);
+        const res = await API.get(`/courses/public/program/${programId}`);
+        console.log("Courses response:", res.data);
+        
+        const coursesData = Array.isArray(res.data) ? res.data : [];
+        setCourses(coursesData);
+        
+        if (coursesData.length === 0) {
+          toast.warning("No courses available for this program. Please contact admin.");
+        } else {
+          toast.success(`${coursesData.length} course(s) available`);
+        }
+      } catch (err) {
+        console.error("Error fetching courses:", err);
+        toast.error("Failed to load courses. Please try again.");
+        setCourses([]);
+      } finally {
+        setLoadingCourses(false);
       }
-    } catch (err) {
-      console.error("Error fetching courses:", err);
-      toast.error("Failed to load courses. Please try again.");
-      setCourses([]);
-    } finally {
-      setLoadingCourses(false);
     }
-  }
-};
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+  };
+
+  const handleUserTypeSelect = (type) => {
+    setSelectedUserType(type);
+    setForm({ ...form, userType: type });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!form.userType) {
+      toast.error("Please select your user type (Alveoly Student or Non-Alveoly Student)");
+      return;
+    }
     
     if (!form.programId) {
       toast.error("Please select a program");
@@ -116,28 +134,81 @@ const SignupPage = () => {
   };
 
   const handleGoogleAuth = async (credentialResponse) => {
-  try {
-    setGoogleLoading(true);
-    const idToken = credentialResponse?.credential;
-    if (!idToken) throw new Error("No Google credential received");
-    const result = await googleLogin(idToken);
-    
-    console.log("Google login result:", result);
-    
-    // If user needs to select a program, redirect to select-program page
-    if (result.requiresProgram) {
-      navigate("/select-program");
-    } else {
-      navigate("/student/dashboard");
+    try {
+      setGoogleLoading(true);
+      const idToken = credentialResponse?.credential;
+      if (!idToken) throw new Error("No Google credential received");
+      
+      setPendingGoogleCredential(idToken);
+      
+      // Try to login with Google to check if user exists
+      try {
+        const result = await googleLogin(idToken);
+        console.log("Google login result:", result);
+        
+        if (result.user?.role === "admin") {
+          navigate("/admin");
+        } else if (result.user?.role === "lecturer") {
+          navigate("/lecturer");
+        } else if (result.requiresProgram) {
+          navigate("/select-program");
+        } else {
+          navigate("/student/dashboard");
+        }
+        toast.success("Login successful!");
+        setPendingGoogleCredential(null);
+      } catch (err) {
+        // If user doesn't exist, show user type modal
+        if (err.response?.status === 404 || 
+            err.response?.data?.message?.includes("not found") ||
+            err.response?.data?.message?.includes("User not found")) {
+          setShowUserTypeModal(true);
+          setGoogleLoading(false);
+        } else {
+          throw err;
+        }
+      }
+    } catch (err) {
+      console.error("Google auth error:", err);
+      toast.error(err.response?.data?.message || "Google signup failed");
+      setGoogleLoading(false);
+      setPendingGoogleCredential(null);
     }
-    toast.success("Google signup successful!");
-  } catch (err) {
-    console.error("Google auth error:", err);
-    toast.error(err.response?.data?.message || "Google signup failed");
-  } finally {
-    setGoogleLoading(false);
-  }
-};
+  };
+
+  const handleGoogleSignupWithType = async () => {
+    if (!selectedUserType) {
+      toast.error("Please select your user type");
+      return;
+    }
+    
+    try {
+      setGoogleLoading(true);
+      // Register with Google and user type
+      const result = await googleLogin(pendingGoogleCredential, selectedUserType);
+      console.log("Google signup with user type result:", result);
+      
+      setShowUserTypeModal(false);
+      setPendingGoogleCredential(null);
+      setSelectedUserType("");
+      
+      if (result.user?.role === "admin") {
+        navigate("/admin");
+      } else if (result.user?.role === "lecturer") {
+        navigate("/lecturer");
+      } else if (result.requiresProgram) {
+        navigate("/select-program");
+      } else {
+        navigate("/student/dashboard");
+      }
+      toast.success("Account created successfully!");
+    } catch (err) {
+      console.error("Google signup with user type error:", err);
+      toast.error(err.response?.data?.message || "Failed to complete signup");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -262,6 +333,43 @@ const SignupPage = () => {
                     </button>
                   </div>
 
+                  {/* User Type Selection - Email Signup */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Are you an Alveoly Student?
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleUserTypeSelect("alveoly_student")}
+                        className={`p-3 rounded-xl border-2 transition-all duration-300 flex items-center justify-center gap-2 ${
+                          form.userType === "alveoly_student"
+                            ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 shadow-lg shadow-indigo-500/20"
+                            : "border-slate-200 dark:border-slate-700 hover:border-indigo-300"
+                        }`}
+                      >
+                        <FaUserGraduate className={form.userType === "alveoly_student" ? "text-indigo-600" : "text-slate-400"} />
+                        <span className={form.userType === "alveoly_student" ? "text-indigo-600 dark:text-indigo-400 font-medium" : "text-slate-600 dark:text-slate-400"}>
+                          Alveoly Student
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUserTypeSelect("non_alveoly_student")}
+                        className={`p-3 rounded-xl border-2 transition-all duration-300 flex items-center justify-center gap-2 ${
+                          form.userType === "non_alveoly_student"
+                            ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 shadow-lg shadow-indigo-500/20"
+                            : "border-slate-200 dark:border-slate-700 hover:border-indigo-300"
+                        }`}
+                      >
+                        <FaUserPlus className={form.userType === "non_alveoly_student" ? "text-indigo-600" : "text-slate-400"} />
+                        <span className={form.userType === "non_alveoly_student" ? "text-indigo-600 dark:text-indigo-400 font-medium" : "text-slate-600 dark:text-slate-400"}>
+                          Non-Alveoly Student
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Program Selection */}
                   <div className="relative">
                     <FaBuilding className="absolute left-3 top-3 text-slate-400 text-sm md:text-base" />
@@ -315,7 +423,7 @@ const SignupPage = () => {
 
                   <button
                     type="submit"
-                    disabled={loading || loadingPrograms || programs.length === 0 || !form.courseId}
+                    disabled={loading || loadingPrograms || programs.length === 0 || !form.courseId || !form.userType}
                     className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-2 md:py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 text-sm md:text-base shadow-lg shadow-indigo-500/25"
                   >
                     {loading ? (
@@ -340,6 +448,87 @@ const SignupPage = () => {
           </motion.div>
         </div>
       </section>
+
+      {/* User Type Selection Modal - For Google Signup */}
+      <AnimatePresence>
+        {showUserTypeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-8"
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center mx-auto mb-4">
+                  <FaUserGraduate className="text-3xl text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome to Alveoly!</h2>
+                <p className="text-slate-500 dark:text-slate-400 mt-2">
+                  Please select your user type to continue
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <button
+                  onClick={() => setSelectedUserType("alveoly_student")}
+                  className={`w-full p-4 rounded-xl border-2 transition-all duration-300 flex items-center gap-4 ${
+                    selectedUserType === "alveoly_student"
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 shadow-lg shadow-indigo-500/20"
+                      : "border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700"
+                  }`}
+                >
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl">
+                    <FaUserGraduate />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold text-slate-900 dark:text-white">Alveoly Student</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">I am currently enrolled at Alveoly</p>
+                  </div>
+                  {selectedUserType === "alveoly_student" && (
+                    <div className="ml-auto w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs">✓</div>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setSelectedUserType("non_alveoly_student")}
+                  className={`w-full p-4 rounded-xl border-2 transition-all duration-300 flex items-center gap-4 ${
+                    selectedUserType === "non_alveoly_student"
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 shadow-lg shadow-indigo-500/20"
+                      : "border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700"
+                  }`}
+                >
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xl">
+                    <FaUserPlus />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold text-slate-900 dark:text-white">Non-Alveoly Student</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">I am not currently enrolled at Alveoly</p>
+                  </div>
+                  {selectedUserType === "non_alveoly_student" && (
+                    <div className="ml-auto w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs">✓</div>
+                  )}
+                </button>
+              </div>
+
+              <button
+                onClick={handleGoogleSignupWithType}
+                disabled={!selectedUserType || googleLoading}
+                className="w-full mt-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {googleLoading ? (
+                  <>
+                    <FaSpinner className="animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "Continue"
+                )}
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <Footer />
     </div>

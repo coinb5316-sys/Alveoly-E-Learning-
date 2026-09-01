@@ -40,7 +40,7 @@ const Navbar = () => {
     { name: "Programs", path: "/programs" },
     { name: "Blog", path: "/blog" },
     { name: "Admissions", path: "/admissions" },
-    { name: "Contact", path: "/contact" },
+    { name: "Contact", path: "/contact_us" },
     { name: "Pricing", path: "/pricing" },
     { name: "Help", path: "/help" },
     { name: "Forums", path: "/forums" },

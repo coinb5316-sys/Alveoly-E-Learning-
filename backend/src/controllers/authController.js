@@ -14,9 +14,11 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 // ================= GOOGLE LOGIN (NO AUTO-ASSIGN - REDIRECT TO SELECT PROGRAM) =================
+// controllers/authController.js - Complete googleLogin function
+
 export const googleLogin = async (req, res) => {
   try {
-    const { idToken } = req.body;
+    const { idToken, userType } = req.body; // ← userType extracted here
 
     if (!idToken) {
       return res.status(400).json({ message: "Google token required" });
@@ -42,10 +44,12 @@ export const googleLogin = async (req, res) => {
         avatar: picture,
         programId: null,
         courseId: null,
+        userType: userType || null, // ← Set userType here too
         lastLoginAt: new Date(),
         lastActivityAt: new Date()
       });
       
+      // Send notifications...
       await createNotification(
         user._id,
         "student",
@@ -70,6 +74,7 @@ export const googleLogin = async (req, res) => {
       }
     }
 
+    // Update login info
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
     const deviceInfo = req.headers['user-agent'];
     
@@ -82,14 +87,13 @@ export const googleLogin = async (req, res) => {
 
     await user.save();
 
-    // Populate user before sending
+    // Populate and return user
     const populatedUser = await User.findById(user._id)
       .select("-password")
       .populate("programId", "name code isActive")
       .populate("courseId", "name");
 
     const token = generateToken(user, user.activeSession);
-    // IMPORTANT: This tells frontend to redirect to select-program page
     const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
 
     res.json({ token, user: populatedUser, requiresProgram });
@@ -105,7 +109,8 @@ export const googleLogin = async (req, res) => {
 // ================= EMAIL/PASSWORD REGISTER (WITH AUTO COURSE ASSIGNMENT) =================
 export const register = async (req, res) => {
   try {
-    const { name, email, password, programId, courseId } = req.body;
+    const { name, email, password, programId, courseId, userType } = req.body;
+
     
     if (!name || !email || !password) {
       return res.status(400).json({ message: "All fields required" });
@@ -156,6 +161,7 @@ export const register = async (req, res) => {
       password: hashedPassword,
       programId: validProgramId,
       courseId: validCourseId,  // ← Now always has a value if program exists
+       userType: userType || null, // <-- Add this
       lastLoginAt: new Date(),
       lastActivityAt: new Date()
     });
