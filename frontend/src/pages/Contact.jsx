@@ -1,4 +1,4 @@
-// Contact.jsx - Exact UWorld Contact Page Clone (Final)
+// Contact.jsx - Exact UWorld Contact Page Clone (Final with Navbar Integration)
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import emailjs from "@emailjs/browser";
@@ -208,6 +208,10 @@ const Contact = () => {
     setShowSuggestions(false);
   };
 
+  const openContactModal = () => {
+    setIsModalOpen(true);
+  };
+
   // Get all questions for search suggestions
   const getAllQuestions = () => {
     const allQuestions = [];
@@ -233,7 +237,7 @@ const Contact = () => {
       const filtered = allQuestions.filter(q => 
         q.text.toLowerCase().includes(value.toLowerCase())
       );
-      setSearchSuggestions(filtered.slice(0, 5)); // Limit to 5 suggestions
+      setSearchSuggestions(filtered.slice(0, 5));
       setShowSuggestions(true);
     } else {
       setSearchSuggestions([]);
@@ -244,11 +248,9 @@ const Contact = () => {
   const handleSuggestionClick = (suggestion) => {
     setSearchQuery(suggestion.text);
     setShowSuggestions(false);
-    // Scroll to the category
     const element = document.getElementById(suggestion.categoryId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      // Find and expand the specific question
       const category = faqCategories.find(c => c.id === suggestion.categoryId);
       if (category) {
         const questionIndex = category.questions.findIndex(q => q.q === suggestion.text);
@@ -260,11 +262,9 @@ const Contact = () => {
     }
   };
 
-  // Handle search form submission
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchQuery.length > 0) {
-      // Find the first matching question and scroll to it
       const allQuestions = getAllQuestions();
       const match = allQuestions.find(q => 
         q.text.toLowerCase().includes(searchQuery.toLowerCase())
@@ -275,7 +275,6 @@ const Contact = () => {
     }
   };
 
-  // Filter FAQs based on search
   const filteredFaqs = searchQuery
     ? faqCategories.map(category => ({
         ...category,
@@ -286,7 +285,6 @@ const Contact = () => {
       })).filter(category => category.questions.length > 0)
     : faqCategories;
 
-  // Close suggestions on click outside
   useEffect(() => {
     const handleClickOutside = () => {
       setShowSuggestions(false);
@@ -297,7 +295,7 @@ const Contact = () => {
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden font-['Inter',sans-serif]">
-      <Navbar />
+      <Navbar onContactClick={openContactModal} />
 
       {/* ==================== HERO SECTION - UWORLD EXACT STYLE ==================== */}
       <header className="relative min-h-[80vh] flex items-center justify-center bg-[#0a1a3a] overflow-hidden pt-16">
@@ -452,7 +450,7 @@ const Contact = () => {
               message us and we will respond back to you promptly.
             </p>
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={openContactModal}
               className="bg-[#00a3a1] hover:bg-[#008b89] text-white px-10 py-4 rounded-lg font-semibold text-lg transition-all duration-300 shadow-md hover:shadow-lg"
             >
               Contact Us
