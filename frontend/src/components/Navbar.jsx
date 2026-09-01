@@ -91,7 +91,7 @@ const Navbar = () => {
           <div className="flex items-center gap-3 md:gap-4">
             {/* Help Icon */}
             <button
-              onClick={() => handleNavigate("/help")}
+              onClick={() => handleNavigate("/contact_us")}
               className={`transition-colors duration-300 ${
                 scrolled ? "text-gray-600 hover:text-[#00a3a1]" : "text-white/80 hover:text-white"
               }`}

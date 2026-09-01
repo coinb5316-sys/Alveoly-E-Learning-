@@ -139,7 +139,7 @@ function App() {
           <Route path="/programs" element={<Programs />} />
           <Route path="/programs/:id" element={<ProgramDetail />} />
           <Route path="/admissions" element={<Admissions />} />
-          <Route path="/contact" element={<Contact />} />
+          <Route path="/contact_us" element={<Contact />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
