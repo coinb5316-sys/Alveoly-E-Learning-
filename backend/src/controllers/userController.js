@@ -127,11 +127,11 @@ export const updateUserRole = async (req, res) => {
 };
 
 
-// controllers/userController.js - FIXED updateUser function
+// controllers/userController.js - Add userType to updateUser
 
 export const updateUser = async (req, res) => {
   try {
-    const { name, email, role, programId, courseId, lecturerInfo } = req.body;
+    const { name, email, role, userType, programId, courseId, lecturerInfo } = req.body;
     const userId = req.params.id;
     
     if (req.user._id.toString() === userId) {
@@ -148,6 +148,15 @@ export const updateUser = async (req, res) => {
     if (email) user.email = email;
     if (role && ["student", "admin", "lecturer"].includes(role)) {
       user.role = role;
+    }
+    
+    // Update user type
+    if (userType !== undefined) {
+      if (userType === "" || userType === null) {
+        user.userType = null;
+      } else if (userType === "alveoly_student" || userType === "non_alveoly_student") {
+        user.userType = userType;
+      }
     }
     
     // Update program and course
@@ -178,7 +187,6 @@ export const updateUser = async (req, res) => {
       }
       
       if (lecturerInfo.assignedSubjects !== undefined) {
-        // Filter valid subject IDs
         const validSubjects = Array.isArray(lecturerInfo.assignedSubjects) 
           ? lecturerInfo.assignedSubjects.filter(s => s && s !== "" && s !== "undefined" && s !== "null")
           : [];
@@ -194,7 +202,7 @@ export const updateUser = async (req, res) => {
     }
     
     await user.save();
-    console.log("✅ User saved successfully with program:", user.programId);
+    console.log("✅ User saved successfully with userType:", user.userType);
     
     await createNotification(
       user._id,
@@ -231,6 +239,7 @@ export const updateUser = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 // ================= DELETE USER =================
 export const deleteUser = async (req, res) => {
   try {

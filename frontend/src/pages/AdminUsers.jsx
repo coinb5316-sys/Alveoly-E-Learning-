@@ -1,4 +1,4 @@
-// AdminUsers.jsx - COMPLETE WITH DEBUGGING & FIXES
+// AdminUsers.jsx - WITH USER TYPE DISPLAY AND EDIT
 import { useEffect, useState } from "react";
 import { 
   FaTrash, 
@@ -24,7 +24,9 @@ import {
   FaPhone,
   FaIdCard,
   FaUniversity,
-  FaLayerGroup
+  FaLayerGroup,
+  FaUserCheck,
+  FaUserTimes,
 } from "react-icons/fa";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -37,6 +39,7 @@ const AdminUsers = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [userTypeFilter, setUserTypeFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showAddLecturerModal, setShowAddLecturerModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -55,6 +58,7 @@ const AdminUsers = () => {
     name: "",
     email: "",
     role: "",
+    userType: "",
     programId: "",
     courseId: "",
     title: "",
@@ -63,31 +67,31 @@ const AdminUsers = () => {
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
 
-  // ================= FETCH USERS (with full details) =================
-const fetchUsers = async () => {
-  try {
-    setLoading(true);
-    
-    // Fetch all users with proper population
-    const res = await axios.get("/users");
-    let allUsers = res.data || [];
-    
-    // Format users to ensure program and course names are displayed
-    const formattedUsers = allUsers.map(user => ({
-      ...user,
-      programName: user.programId?.name || "Not assigned",
-      courseName: user.courseId?.name || "Not assigned",
-    }));
-    
-    setUsers(formattedUsers);
-  } catch (err) {
-    console.error("Error fetching users:", err);
-    toast.error("Failed to fetch users");
-    setUsers([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  // ================= FETCH USERS =================
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get("/users");
+      let allUsers = res.data || [];
+      
+      const formattedUsers = allUsers.map(user => ({
+        ...user,
+        programName: user.programId?.name || "Not assigned",
+        courseName: user.courseId?.name || "Not assigned",
+        userTypeDisplay: user.userType === "alveoly_student" ? "Alveoly Student" : 
+                         user.userType === "non_alveoly_student" ? "Non-Alveoly Student" : 
+                         "Not set",
+      }));
+      
+      setUsers(formattedUsers);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      toast.error("Failed to fetch users");
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ================= FETCH PROGRAMS =================
   const fetchPrograms = async () => {
@@ -142,7 +146,7 @@ const fetchUsers = async () => {
     }
   };
 
-  // ================= FETCH FILTERED SUBJECTS (FIXED WITH DEBUG) =================
+  // ================= FETCH FILTERED SUBJECTS =================
   const fetchFilteredSubjects = async (courseId) => {
     console.log("=== FETCHING SUBJECTS FOR COURSE:", courseId);
     
@@ -172,13 +176,6 @@ const fetchUsers = async () => {
     }
   };
 
-  // Debug: Log when availableSubjects changes
-  useEffect(() => {
-    console.log("=== availableSubjects UPDATED ===");
-    console.log("Number of subjects:", availableSubjects.length);
-    console.log("Subjects:", availableSubjects);
-  }, [availableSubjects]);
-
   useEffect(() => {
     fetchUsers();
     fetchPrograms();
@@ -186,7 +183,7 @@ const fetchUsers = async () => {
     fetchSubjects();
   }, []);
 
-  // ================= UPDATE USER (FULL UPDATE) =================
+  // ================= UPDATE USER =================
   const handleUpdateUser = async () => {
     try {
       setLoading(true);
@@ -195,6 +192,7 @@ const fetchUsers = async () => {
         name: editUserData.name,
         email: editUserData.email,
         role: editUserData.role,
+        userType: editUserData.userType || null,
         programId: editUserData.programId || null,
         courseId: editUserData.courseId || null,
       };
@@ -249,6 +247,7 @@ const fetchUsers = async () => {
       name: user.name || "",
       email: user.email || "",
       role: user.role || "student",
+      userType: user.userType || "",
       programId: userProgramId,
       courseId: userCourseId,
       title: user.lecturerInfo?.title || "Dr.",
@@ -300,84 +299,73 @@ const fetchUsers = async () => {
     }
   };
 
-  // ================= ADD LECTURER (REWRITTEN) =================
-const handleAddLecturer = async (e) => {
-  e.preventDefault();
-  
-  console.log("=== SUBMITTING LECTURER ===");
-  console.log("newLecturer state:", newLecturer);
-  console.log("subjectIds to send:", newLecturer.subjectIds);
-  
-  try {
-    setLoading(true);
+  // ================= ADD LECTURER =================
+  const handleAddLecturer = async (e) => {
+    e.preventDefault();
     
-    // Validate required fields
-    if (!newLecturer.name || !newLecturer.email || !newLecturer.password) {
-      toast.error("Please fill in all required fields");
+    console.log("=== SUBMITTING LECTURER ===");
+    console.log("newLecturer state:", newLecturer);
+    
+    try {
+      setLoading(true);
+      
+      if (!newLecturer.name || !newLecturer.email || !newLecturer.password) {
+        toast.error("Please fill in all required fields");
+        setLoading(false);
+        return;
+      }
+      
+      if (!newLecturer.programId) {
+        toast.error("Please select a program");
+        setLoading(false);
+        return;
+      }
+      
+      if (!newLecturer.courseId) {
+        toast.error("Please select a course");
+        setLoading(false);
+        return;
+      }
+      
+      const subjectIdsToSend = Array.isArray(newLecturer.subjectIds) ? newLecturer.subjectIds : [];
+      
+      const payload = {
+        name: newLecturer.name,
+        email: newLecturer.email,
+        password: newLecturer.password,
+        programId: newLecturer.programId,
+        courseId: newLecturer.courseId,
+        title: newLecturer.title || "Dr.",
+        assignedSubjects: subjectIdsToSend
+      };
+      
+      const response = await axios.post("/auth/register-lecturer", payload);
+      
+      if (response.data.success) {
+        toast.success(response.data.message || "Lecturer added successfully!");
+        setShowAddLecturerModal(false);
+        setNewLecturer({
+          name: "",
+          email: "",
+          password: "",
+          programId: "",
+          courseId: "",
+          title: "Dr.",
+          subjectIds: []
+        });
+        setAvailableSubjects([]);
+        setFilteredCourses([]);
+        fetchUsers();
+      } else {
+        toast.error(response.data.message || "Failed to add lecturer");
+      }
+    } catch (err) {
+      console.error("Error adding lecturer:", err);
+      toast.error(err.response?.data?.message || "Failed to add lecturer");
+    } finally {
       setLoading(false);
-      return;
     }
-    
-    if (!newLecturer.programId) {
-      toast.error("Please select a program");
-      setLoading(false);
-      return;
-    }
-    
-    if (!newLecturer.courseId) {
-      toast.error("Please select a course");
-      setLoading(false);
-      return;
-    }
-    
-    // Ensure subjectIds is an array (it should be from state)
-    const subjectIdsToSend = Array.isArray(newLecturer.subjectIds) ? newLecturer.subjectIds : [];
-    
-    console.log("Sending subject IDs:", subjectIdsToSend);
-    
-    const payload = {
-      name: newLecturer.name,
-      email: newLecturer.email,
-      password: newLecturer.password,
-      programId: newLecturer.programId,
-      courseId: newLecturer.courseId,
-      title: newLecturer.title || "Dr.",
-      assignedSubjects: subjectIdsToSend
-    };
-    
-    console.log("Full payload:", JSON.stringify(payload, null, 2));
-    
-    const response = await axios.post("/auth/register-lecturer", payload);
-    
-    console.log("Response:", response.data);
-    
-    if (response.data.success) {
-      toast.success(response.data.message || "Lecturer added successfully!");
-      setShowAddLecturerModal(false);
-      // Reset form
-      setNewLecturer({
-        name: "",
-        email: "",
-        password: "",
-        programId: "",
-        courseId: "",
-        title: "Dr.",
-        subjectIds: []
-      });
-      setAvailableSubjects([]);
-      setFilteredCourses([]);
-      fetchUsers(); // Refresh the user list
-    } else {
-      toast.error(response.data.message || "Failed to add lecturer");
-    }
-  } catch (err) {
-    console.error("Error adding lecturer:", err);
-    console.error("Error response:", err.response?.data);
-    toast.error(err.response?.data?.message || "Failed to add lecturer");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleProgramChange = async (programId) => {
     setEditUserData({...editUserData, programId, courseId: "", subjectIds: []});
@@ -400,7 +388,6 @@ const handleAddLecturer = async (e) => {
     }
   };
 
-  // ================= HANDLE NEW PROGRAM CHANGE (FIXED) =================
   const handleNewProgramChange = async (programId) => {
     console.log("=== PROGRAM CHANGED ===");
     console.log("Selected program ID:", programId);
@@ -419,11 +406,9 @@ const handleAddLecturer = async (e) => {
     }
   };
 
-  // ================= HANDLE NEW COURSE CHANGE (FIXED WITH DEBUG) =================
   const handleNewCourseChange = async (courseId) => {
     console.log("=== COURSE CHANGED ===");
     console.log("Selected course ID:", courseId);
-    console.log("Current newLecturer state:", newLecturer);
     
     setNewLecturer(prev => ({ ...prev, courseId, subjectIds: [] }));
     
@@ -449,25 +434,22 @@ const handleAddLecturer = async (e) => {
     setEditUserData({...editUserData, subjectIds: selectedValues});
   };
 
- // ================= HANDLE NEW SUBJECT SELECTION (REWRITTEN) =================
-const handleNewSubjectSelection = (e) => {
-  const selectedOptions = Array.from(e.target.selectedOptions);
-  const selectedValues = selectedOptions.map(option => option.value);
-  
-  console.log("=== SUBJECT SELECTION CHANGED ===");
-  console.log("Selected values:", selectedValues);
-  console.log("Number selected:", selectedValues.length);
-  
-  // Update the state with the selected subject IDs
-  setNewLecturer(prev => {
-    const updated = { 
-      ...prev, 
-      subjectIds: selectedValues 
-    };
-    console.log("Updated newLecturer state:", updated);
-    return updated;
-  });
-};
+  const handleNewSubjectSelection = (e) => {
+    const selectedOptions = Array.from(e.target.selectedOptions);
+    const selectedValues = selectedOptions.map(option => option.value);
+    
+    console.log("=== SUBJECT SELECTION CHANGED ===");
+    console.log("Selected values:", selectedValues);
+    
+    setNewLecturer(prev => {
+      const updated = { 
+        ...prev, 
+        subjectIds: selectedValues 
+      };
+      console.log("Updated newLecturer state:", updated);
+      return updated;
+    });
+  };
 
   const toggleLecturerExpanded = (userId) => {
     if (expandedLecturer === userId) {
@@ -487,17 +469,43 @@ const handleNewSubjectSelection = (e) => {
     });
   };
 
+  // Get user type badge style
+  const getUserTypeBadgeStyle = (userType) => {
+    switch(userType) {
+      case "alveoly_student":
+        return "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800";
+      case "non_alveoly_student":
+        return "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800";
+      default:
+        return "bg-gray-50 dark:bg-gray-800/30 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700";
+    }
+  };
+
+  const getUserTypeIcon = (userType) => {
+    switch(userType) {
+      case "alveoly_student":
+        return <FaUserCheck className="h-3.5 w-3.5" />;
+      case "non_alveoly_student":
+        return <FaUserTimes className="h-3.5 w-3.5" />;
+      default:
+        return <FaUserTag className="h-3.5 w-3.5" />;
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
-    return matchesSearch && matchesRole;
+    const matchesUserType = userTypeFilter === "all" || user.userType === userTypeFilter;
+    return matchesSearch && matchesRole && matchesUserType;
   });
 
   const totalUsers = users.length;
   const adminCount = users.filter(u => u.role === "admin").length;
   const lecturerCount = users.filter(u => u.role === "lecturer").length;
   const studentCount = users.filter(u => u.role === "student").length;
+  const alveolyStudentCount = users.filter(u => u.userType === "alveoly_student").length;
+  const nonAlveolyStudentCount = users.filter(u => u.userType === "non_alveoly_student").length;
 
   const getRoleBadgeStyle = (role) => {
     switch(role) {
@@ -550,7 +558,7 @@ const handleNewSubjectSelection = (e) => {
         </div>
       </div>
 
-      {/* Stats Summary */}
+      {/* Stats Summary - Updated with User Type Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
@@ -577,28 +585,28 @@ const handleNewSubjectSelection = (e) => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Lecturers</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">{lecturerCount}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Alveoly Students</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">{alveolyStudentCount}</p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
-              <FaChalkboardTeacher className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <div className="h-10 w-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center">
+              <FaUserCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
             </div>
           </div>
         </div>
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Administrators</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">{adminCount}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Non-Alveoly Students</p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">{nonAlveolyStudentCount}</p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
-              <FaShieldAlt className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <div className="h-10 w-10 rounded-lg bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center">
+              <FaUserTimes className="h-5 w-5 text-orange-600 dark:text-orange-400" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters Section */}
+      {/* Filters Section - Updated with User Type Filter */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
           <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
@@ -607,7 +615,7 @@ const handleNewSubjectSelection = (e) => {
           </button>
         </div>
         {showFilters && (
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="relative">
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input 
@@ -628,6 +636,16 @@ const handleNewSubjectSelection = (e) => {
               <option value="lecturer">Lecturer</option>
               <option value="admin">Administrator</option>
             </select>
+            <select 
+              value={userTypeFilter} 
+              onChange={(e) => setUserTypeFilter(e.target.value)} 
+              className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            >
+              <option value="all">All User Types</option>
+              <option value="alveoly_student">Alveoly Student</option>
+              <option value="non_alveoly_student">Non-Alveoly Student</option>
+              <option value="">Not Set</option>
+            </select>
           </div>
         )}
       </div>
@@ -640,7 +658,7 @@ const handleNewSubjectSelection = (e) => {
         </div>
       )}
 
-      {/* Users Table */}
+      {/* Users Table - Updated with User Type Column */}
       {!loading && filteredUsers.length > 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
           <div className="overflow-x-auto">
@@ -649,6 +667,7 @@ const handleNewSubjectSelection = (e) => {
                 <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
                   <th className="px-6 py-4 text-left font-medium">User</th>
                   <th className="px-6 py-4 text-left font-medium">Email</th>
+                  <th className="px-6 py-4 text-left font-medium">User Type</th>
                   <th className="px-6 py-4 text-left font-medium">Program</th>
                   <th className="px-6 py-4 text-left font-medium">Course</th>
                   <th className="px-6 py-4 text-left font-medium">Assigned Subjects</th>
@@ -660,6 +679,9 @@ const handleNewSubjectSelection = (e) => {
                 {filteredUsers.map((user) => {
                   const assignedSubjects = getAssignedSubjectsList(user);
                   const isExpanded = expandedLecturer === user._id;
+                  const userTypeDisplay = user.userType === "alveoly_student" ? "Alveoly Student" : 
+                                         user.userType === "non_alveoly_student" ? "Non-Alveoly Student" : 
+                                         "Not set";
                   
                   return (
                     <>
@@ -684,6 +706,12 @@ const handleNewSubjectSelection = (e) => {
                           <div className="flex items-center gap-2">
                             <FaEnvelope className="h-3.5 w-3.5 text-gray-400" />
                             <span>{user.email}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${getUserTypeBadgeStyle(user.userType)}`}>
+                            {getUserTypeIcon(user.userType)}
+                            {userTypeDisplay}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -757,7 +785,7 @@ const handleNewSubjectSelection = (e) => {
                       {/* Expanded row for assigned subjects */}
                       {isExpanded && user.role === "lecturer" && assignedSubjects.length > 0 && (
                         <tr className="bg-gray-50 dark:bg-gray-800/30">
-                          <td colSpan="7" className="px-6 py-4">
+                          <td colSpan="8" className="px-6 py-4">
                             <div className="ml-12">
                               <div className="flex items-center gap-2 mb-3">
                                 <FaBook className="h-4 w-4 text-blue-500" />
@@ -848,18 +876,18 @@ const handleNewSubjectSelection = (e) => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subjects</label>
                 <select 
-  multiple 
-  onChange={handleNewSubjectSelection} 
-  value={newLecturer.subjectIds}
-  disabled={!newLecturer.courseId || newLecturer.courseId === ""} 
-  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
->
-  {availableSubjects.map(subject => (
-    <option key={subject._id} value={subject._id}>
-      {subject.name}
-    </option>
-  ))}
-</select>
+                  multiple 
+                  onChange={handleNewSubjectSelection} 
+                  value={newLecturer.subjectIds}
+                  disabled={!newLecturer.courseId || newLecturer.courseId === ""} 
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {availableSubjects.map(subject => (
+                    <option key={subject._id} value={subject._id}>
+                      {subject.name}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p>
                 {availableSubjects.length === 0 && newLecturer.courseId && newLecturer.courseId !== "" && (
                   <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">No subjects available for this course. Please create subjects first.</p>
@@ -885,7 +913,7 @@ const handleNewSubjectSelection = (e) => {
         </div>
       )}
 
-      {/* ================= EDIT USER MODAL ================= */}
+      {/* ================= EDIT USER MODAL - Updated with User Type ================= */}
       {showEditUserModal && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200">
@@ -921,6 +949,15 @@ const handleNewSubjectSelection = (e) => {
                   <option value="student">Student</option>
                   <option value="lecturer">Lecturer</option>
                   <option value="admin">Administrator</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">User Type</label>
+                <select value={editUserData.userType || ""} onChange={(e) => setEditUserData({...editUserData, userType: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                  <option value="">Not Set</option>
+                  <option value="alveoly_student">Alveoly Student</option>
+                  <option value="non_alveoly_student">Non-Alveoly Student</option>
                 </select>
               </div>
 
