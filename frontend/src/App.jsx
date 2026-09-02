@@ -158,7 +158,7 @@ function App() {
           <Route path="/pricing" element={<Pricing />} /> {/* <-- ADDED PRICING ROUTE */}
           <Route path="/careers" element={<CareerPage />} />
           <Route path="/careers/what-we-do" element={<CareerWhatWeDo />} />
-          <Route path="/careers/live-at-alveoly" element={<LiveAtAlveoly />} />
+          <Route path="/careers/life-at-alveoly" element={<LiveAtAlveoly />} />
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
