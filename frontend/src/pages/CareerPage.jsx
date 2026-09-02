@@ -5,41 +5,22 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   FaArrowRight, 
   FaCheckCircle, 
-  FaStar,
   FaUsers,
   FaGraduationCap,
-  FaChartLine,
   FaClock,
-  FaHandsHoldingHeart,
-  FaQuoteRight,
   FaSpinner,
   FaAward,
   FaRocket,
-  FaVideo,
-  FaUserMd,
-  FaLaptopMedical,
-  FaFlask,
-  FaStethoscope,
-  FaMicroscope,
   FaGlobeAfrica,
   FaBriefcase,
-  FaChalkboardTeacher,
   FaBuilding,
-  FaBook,
   FaTimes,
-  FaChevronRight,
-  FaChevronDown,
   FaSearch,
   FaHeartbeat,
-  FaAmbulance,
   FaHospital,
   FaCalendarAlt,
   FaDollarSign,
   FaMapMarkerAlt,
-  FaLinkedin,
-  FaTwitter,
-  FaFacebook,
-  FaInstagram,
   FaTrophy,
   FaPiggyBank,
   FaUserTie,
@@ -48,43 +29,22 @@ import {
   FaGlobe,
   FaLaptop,
   FaUsersCog,
-  FaShieldVirus,
-  FaSyringe,
-  FaNotesMedical,
   FaBrain,
   FaHandSparkles,
-  FaPeopleArrows,
   FaHandHoldingHeart,
   FaHouseMedical,
   FaHeartPulse,
-  FaBandAid,
-  FaPersonNurse,
-  FaClipboardCheck,
-  FaHandsBubbles,
   FaUserNurse,
-  FaHospitalUser,
-  FaTooth,
-  FaEye,
-  FaEarListen,
 } from "react-icons/fa";
-import { 
-  MdHealthAndSafety, 
-  MdFamilyRestroom, 
-  MdSchool,
-  MdMedicalServices,
-  MdHealthAndSafety as MdHealth 
-} from "react-icons/md";
+import { MdHealthAndSafety } from "react-icons/md";
 import { IoIosPeople } from "react-icons/io";
-import { GiBrain, GiMedal, GiNurse } from "react-icons/gi";
-import { BiHeart, BiNurse } from "react-icons/bi";
-import API from "../api/axios";
+import { GiBrain } from "react-icons/gi";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { toast } from "react-toastify";
 
 const CareerPage = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
@@ -213,7 +173,7 @@ const CareerPage = () => {
     }
   ];
 
-  // Healthcare-focused job listings
+  // Healthcare-focused job listings - ONLY NURSING & HEALTHCARE POSITIONS
   const sampleJobs = [
     {
       id: 1,
@@ -475,12 +435,14 @@ const CareerPage = () => {
 
   // Initialize with sample data
   useEffect(() => {
-    setJobs(sampleJobs);
-    setFilteredJobs(sampleJobs);
+    // Force refresh by setting jobs with new data
+    const healthcareJobs = sampleJobs;
+    setJobs(healthcareJobs);
+    setFilteredJobs(healthcareJobs);
     
-    const depts = [...new Set(sampleJobs.map(job => job.department))];
-    const locs = [...new Set(sampleJobs.map(job => job.location))];
-    const types = [...new Set(sampleJobs.map(job => job.type))];
+    const depts = [...new Set(healthcareJobs.map(job => job.department))];
+    const locs = [...new Set(healthcareJobs.map(job => job.location))];
+    const types = [...new Set(healthcareJobs.map(job => job.type))];
     
     setDepartments(depts);
     setLocations(locs);
@@ -608,7 +570,6 @@ const CareerPage = () => {
     setSubmitting(true);
     
     try {
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       toast.success(`Application submitted successfully for ${selectedJob.title}!`);
@@ -664,17 +625,14 @@ const CareerPage = () => {
     <div className="min-h-screen bg-white font-['Inter',sans-serif] overflow-x-hidden">
       <Navbar />
 
-      {/* ==================== HERO SECTION ==================== */}
+      {/* HERO SECTION */}
       <section className="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-[#0a1a3a] via-[#0a1a3a]/95 to-[#1a2a5a]">
-          <div className="absolute inset-0 bg-[url('/images/healthcare-pattern.svg')] opacity-10"></div>
           <div className="absolute inset-0 bg-gradient-to-t from-[#0a1a3a] via-transparent to-transparent"></div>
         </div>
         
-        {/* Healthcare-themed decorative elements */}
         <div className="absolute top-20 right-10 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-20 left-10 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-128 h-128 bg-purple-500/5 rounded-full blur-3xl"></div>
         
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 w-full">
           <motion.div
@@ -718,7 +676,6 @@ const CareerPage = () => {
               </button>
             </div>
 
-            {/* Trust indicators */}
             <div className="flex items-center justify-center gap-8 mt-10">
               <div className="flex items-center gap-2 text-white/80">
                 <FaGraduationCap className="text-[#00a3a1] text-lg" />
@@ -737,7 +694,7 @@ const CareerPage = () => {
         </div>
       </section>
 
-      {/* ==================== STATS SECTION ==================== */}
+      {/* STATS SECTION */}
       <section className="py-16 bg-[#0a1a3a] border-t border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -763,7 +720,7 @@ const CareerPage = () => {
         </div>
       </section>
 
-      {/* ==================== COMPANY VALUES SECTION ==================== */}
+      {/* COMPANY VALUES SECTION */}
       <section id="company-values" className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -813,7 +770,7 @@ const CareerPage = () => {
         </div>
       </section>
 
-      {/* ==================== BENEFITS SECTION ==================== */}
+      {/* BENEFITS SECTION */}
       <section className="py-20 bg-gradient-to-br from-gray-50 to-emerald-50/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -855,7 +812,7 @@ const CareerPage = () => {
         </div>
       </section>
 
-      {/* ==================== LIFE AT ALVEOLY SECTION ==================== */}
+      {/* LIFE AT ALVEOLY SECTION */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -934,7 +891,7 @@ const CareerPage = () => {
         </div>
       </section>
 
-      {/* ==================== OPEN POSITIONS SECTION ==================== */}
+      {/* OPEN POSITIONS SECTION */}
       <section id="open-positions" className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -1090,9 +1047,9 @@ const CareerPage = () => {
         </div>
       </section>
 
-      {/* ==================== CTA SECTION ==================== */}
+      {/* CTA SECTION */}
       <section className="py-20 bg-gradient-to-r from-[#0a1a3a] to-[#1a2a5a] relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('/images/healthcare-pattern.svg')] opacity-5"></div>
+        <div className="absolute inset-0 opacity-5"></div>
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl"></div>
         
@@ -1124,7 +1081,7 @@ const CareerPage = () => {
 
       <Footer />
 
-      {/* ==================== JOB DETAIL MODAL ==================== */}
+      {/* JOB DETAIL MODAL */}
       <AnimatePresence>
         {selectedJob && !showApplicationModal && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1234,7 +1191,7 @@ const CareerPage = () => {
         )}
       </AnimatePresence>
 
-      {/* ==================== APPLICATION MODAL ==================== */}
+      {/* APPLICATION MODAL */}
       <AnimatePresence>
         {showApplicationModal && selectedJob && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
