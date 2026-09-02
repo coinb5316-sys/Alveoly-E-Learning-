@@ -255,7 +255,7 @@ const HomePage = () => {
 
   // WhatsApp handler
   const handleWhatsAppClick = () => {
-    const phoneNumber = "0549556116"; // Admin WhatsApp number
+    const phoneNumber = "+233 54 955 6116"; // Admin WhatsApp number
     const message = encodeURIComponent(
       "Hello! I'm interested in learning more about Alveoly E-Learning Academy. Can you help me?"
     );
