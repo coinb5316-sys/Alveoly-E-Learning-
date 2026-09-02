@@ -254,14 +254,14 @@ const HomePage = () => {
   const displayTestimonials = testimonials.slice(0, 3);
 
   // WhatsApp handler
-  const handleWhatsAppClick = () => {
-    const phoneNumber = "+233 54 955 6116"; // Admin WhatsApp number
-    const message = encodeURIComponent(
-      "Hello! I'm interested in learning more about Alveoly E-Learning Academy. Can you help me?"
-    );
-    window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
-  };
-
+ const handleWhatsAppClick = () => {
+  // Remove spaces and the + sign
+  const phoneNumber = "233549556116"; // Ghana country code (233) + your number without the leading 0
+  const message = encodeURIComponent(
+    "Hello! I'm interested in learning more about Alveoly E-Learning Academy. Can you help me?"
+  );
+  window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
+};
   // Product data matching UWorld's professional structure
   const productCategories = [
     {
