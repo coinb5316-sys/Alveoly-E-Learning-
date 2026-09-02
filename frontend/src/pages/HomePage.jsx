@@ -1,7 +1,7 @@
-// HomePage.jsx - UWorld Professional Style with Custom Banner
+// HomePage.jsx - UWorld Professional Style with Products Modal
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import kalveoBg from "../images/kalveo-bg.jpg";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -30,6 +30,13 @@ import {
   FaGlobeAfrica,
   FaBriefcase,
   FaChalkboardTeacher,
+  FaBuilding,
+  FaBook,
+  FaTimes,
+  FaChevronRight,
+  FaChevronDown,
+  FaSearch,
+  FaFilter,
 } from "react-icons/fa";
 
 const HomePage = () => {
@@ -46,6 +53,16 @@ const HomePage = () => {
   const [testimonials, setTestimonials] = useState([]);
   const [loadingTestimonials, setLoadingTestimonials] = useState(true);
   const [testimonialsError, setTestimonialsError] = useState(null);
+
+  // State for products modal
+  const [showProductsModal, setShowProductsModal] = useState(false);
+  const [programs, setPrograms] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [expandedPrograms, setExpandedPrograms] = useState({});
+  const [expandedCourses, setExpandedCourses] = useState({});
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Counters for stats
   const [counters, setCounters] = useState({
@@ -124,6 +141,75 @@ const HomePage = () => {
 
     fetchTestimonials();
   }, []);
+
+  // Fetch products data for modal
+  const fetchProductsData = async () => {
+    try {
+      setLoadingProducts(true);
+      const [programsRes, coursesRes, subjectsRes] = await Promise.all([
+        API.get("/programs/public"),
+        API.get("/courses/public"),
+        API.get("/subjects/public"),
+      ]);
+      
+      setPrograms(programsRes.data || []);
+      setCourses(coursesRes.data || []);
+      setSubjects(subjectsRes.data || []);
+    } catch (err) {
+      console.error("Error fetching products data:", err);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  const openProductsModal = () => {
+    setShowProductsModal(true);
+    fetchProductsData();
+    // Reset expanded states
+    setExpandedPrograms({});
+    setExpandedCourses({});
+    setSearchTerm("");
+  };
+
+  const toggleProgram = (programId) => {
+    setExpandedPrograms(prev => ({
+      ...prev,
+      [programId]: !prev[programId]
+    }));
+  };
+
+  const toggleCourse = (courseId) => {
+    setExpandedCourses(prev => ({
+      ...prev,
+      [courseId]: !prev[courseId]
+    }));
+  };
+
+  // Get courses for a program
+  const getCoursesForProgram = (programId) => {
+    return courses.filter(course => 
+      course.programId?._id === programId || course.programId === programId
+    );
+  };
+
+  // Get subjects for a course
+  const getSubjectsForCourse = (courseId) => {
+    return subjects.filter(subject => 
+      subject.courseId?._id === courseId || subject.courseId === courseId
+    );
+  };
+
+  // Get program name by ID
+  const getProgramName = (programId) => {
+    const program = programs.find(p => p._id === programId);
+    return program?.name || "Unknown Program";
+  };
+
+  // Filter programs based on search
+  const filteredPrograms = programs.filter(program => 
+    program.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (program.code && program.code.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   // Intersection Observer for counters
   useEffect(() => {
@@ -272,7 +358,7 @@ const HomePage = () => {
                   <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
                 </button>
                 <button 
-                  onClick={() => navigate("/programs")}
+                  onClick={openProductsModal}
                   className="bg-transparent border-2 border-[#00a3a1] text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-[#00a3a1] hover:text-white transition-all duration-300"
                 >
                   View Products
@@ -355,7 +441,7 @@ const HomePage = () => {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                onClick={() => navigate(category.link)}
+                onClick={openProductsModal}
                 className={`group ${category.bgColor} border-2 border-transparent rounded-xl p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${category.hoverColor}`}
               >
                 <div className="flex items-start gap-4">
@@ -634,6 +720,240 @@ const HomePage = () => {
       <Footer />
       
       <SmartChatBot userId={userInfo.userId} userName={userInfo.userName} />
+
+      {/* ==================== PRODUCTS MODAL ==================== */}
+      <AnimatePresence>
+        {showProductsModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gradient-to-r from-blue-600 to-purple-600">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                    <FaBuilding className="text-white text-lg" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Our Programs</h2>
+                    <p className="text-sm text-blue-100">Explore all programs, courses, and subjects</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowProductsModal(false)}
+                  className="text-white/70 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+                >
+                  <FaTimes className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+                <div className="relative">
+                  <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search programs, courses, or subjects..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Body - Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {loadingProducts ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <FaSpinner className="h-8 w-8 text-blue-500 animate-spin" />
+                    <p className="text-gray-500 dark:text-gray-400 mt-3">Loading programs...</p>
+                  </div>
+                ) : filteredPrograms.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                      <FaBook className="h-10 w-10 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400 text-lg">
+                      {searchTerm ? "No results found for your search" : "No programs available"}
+                    </p>
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm("")}
+                        className="mt-4 text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                      >
+                        Clear search
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredPrograms.map((program) => {
+                      const isProgramExpanded = expandedPrograms[program._id];
+                      const programCourses = getCoursesForProgram(program._id);
+                      const isActive = program.isActive !== false;
+
+                      return (
+                        <div
+                          key={program._id}
+                          className={`border rounded-xl overflow-hidden ${
+                            isActive 
+                              ? "border-gray-200 dark:border-gray-700" 
+                              : "border-gray-300 dark:border-gray-600 opacity-60"
+                          }`}
+                        >
+                          {/* Program Header */}
+                          <button
+                            onClick={() => toggleProgram(program._id)}
+                            className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                isActive 
+                                  ? "bg-gradient-to-br from-blue-500 to-purple-600" 
+                                  : "bg-gray-400"
+                              }`}>
+                                <FaBuilding className="text-white text-sm" />
+                              </div>
+                              <div>
+                                <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                                  {program.name}
+                                </h3>
+                                {program.code && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                                    {program.code}
+                                  </p>
+                                )}
+                                {!isActive && (
+                                  <span className="text-xs text-red-500 font-medium">(Inactive)</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm text-gray-500 dark:text-gray-400">
+                                {programCourses.length} {programCourses.length === 1 ? 'Course' : 'Courses'}
+                              </span>
+                              {isProgramExpanded ? (
+                                <FaChevronDown className="text-gray-400" />
+                              ) : (
+                                <FaChevronRight className="text-gray-400" />
+                              )}
+                            </div>
+                          </button>
+
+                          {/* Program Content - Courses */}
+                          {isProgramExpanded && (
+                            <div className="border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30 px-5 py-4">
+                              {programCourses.length === 0 ? (
+                                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+                                  No courses available for this program
+                                </p>
+                              ) : (
+                                <div className="space-y-3">
+                                  {programCourses.map((course) => {
+                                    const isCourseExpanded = expandedCourses[course._id];
+                                    const courseSubjects = getSubjectsForCourse(course._id);
+
+                                    return (
+                                      <div
+                                        key={course._id}
+                                        className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-900"
+                                      >
+                                        {/* Course Header */}
+                                        <button
+                                          onClick={() => toggleCourse(course._id)}
+                                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                                              <FaBook className="text-white text-xs" />
+                                            </div>
+                                            <span className="font-medium text-gray-800 dark:text-gray-200">
+                                              {course.name}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-3">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                              {courseSubjects.length} {courseSubjects.length === 1 ? 'Subject' : 'Subjects'}
+                                            </span>
+                                            {isCourseExpanded ? (
+                                              <FaChevronDown className="text-gray-400 text-sm" />
+                                            ) : (
+                                              <FaChevronRight className="text-gray-400 text-sm" />
+                                            )}
+                                          </div>
+                                        </button>
+
+                                        {/* Course Content - Subjects */}
+                                        {isCourseExpanded && (
+                                          <div className="border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30 px-4 py-3">
+                                            {courseSubjects.length === 0 ? (
+                                              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+                                                No subjects available for this course
+                                              </p>
+                                            ) : (
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {courseSubjects.map((subject) => (
+                                                  <button
+                                                    key={subject._id}
+                                                    onClick={() => {
+                                                      setShowProductsModal(false);
+                                                      navigate(`/student/subjects?course=${course._id}`);
+                                                    }}
+                                                    className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-md transition-all text-left group"
+                                                  >
+                                                    <div className={`w-2 h-2 rounded-full ${
+                                                      subject.isPaid 
+                                                        ? 'bg-yellow-500' 
+                                                        : 'bg-green-500'
+                                                    }`}></div>
+                                                    <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex-1">
+                                                      {subject.name}
+                                                    </span>
+                                                    {subject.isPaid && (
+                                                      <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400">
+                                                        Premium
+                                                      </span>
+                                                    )}
+                                                    <FaChevronRight className="text-xs text-gray-400 group-hover:text-blue-500 transition-colors" />
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-between items-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {filteredPrograms.length} programs • {courses.length} courses • {subjects.length} subjects
+                </span>
+                <button
+                  onClick={() => setShowProductsModal(false)}
+                  className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
