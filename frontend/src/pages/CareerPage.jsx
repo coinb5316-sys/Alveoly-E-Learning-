@@ -81,9 +81,9 @@ const CareerPage = () => {
                 tracking-[-0.5px]
               "
             >
-              Love Your Job, Live Your Life,
+              Build Your Career,
               <br />
-              Make An Impact
+              Shape Ghana's Future
             </h1>
 
             <motion.a
@@ -108,14 +108,14 @@ const CareerPage = () => {
                 duration-200
               "
             >
-              See Job Openings
+              View Open Positions
               <FaArrowRight className="text-[11px]" />
             </motion.a>
           </motion.div>
         </div>
 
         {/* =====================================================
-            GREAT PLACE TO WORK BADGE
+            GREAT PLACE TO WORK BADGE - GHANA FOCUSED
         ====================================================== */}
         <div
           className="
@@ -131,7 +131,7 @@ const CareerPage = () => {
 
             <div
               className="
-                bg-[#ed1b2f]
+                bg-[#006b3e]
                 text-white
                 px-3
                 py-4
@@ -141,19 +141,18 @@ const CareerPage = () => {
                 md:text-[30px]
               "
             >
-              Great
+              Best
               <br />
-              Place
+              EdTech
               <br />
-              To
+              in
               <br />
-              Work
-              <span className="text-[12px] align-top ml-1">®</span>
+              Ghana
             </div>
 
             <div
               className="
-                bg-[#173f78]
+                bg-[#f5a623]
                 text-white
                 text-center
                 px-2
@@ -163,15 +162,15 @@ const CareerPage = () => {
               "
             >
               <div className="font-bold text-[21px]">
-                Certified
+                2024
               </div>
 
               <div className="text-[10px] font-medium mt-1">
-                OCT 2023-OCT 2024
+                Winner
               </div>
 
               <div className="text-[10px] font-medium">
-                USA
+                Ghana
               </div>
 
               {/* badge point */}
@@ -188,7 +187,7 @@ const CareerPage = () => {
                   border-t-[17px]
                   border-l-transparent
                   border-r-transparent
-                  border-t-[#173f78]
+                  border-t-[#f5a623]
                 "
               />
             </div>
@@ -198,7 +197,7 @@ const CareerPage = () => {
 
 
       {/* =========================================================
-          GREAT PLACE TO WORK / CULTURE SECTION
+          GREAT PLACE TO WORK / CULTURE SECTION - GHANA FOCUSED
       ========================================================== */}
       <section className="relative bg-[#e8f8fc] overflow-hidden">
 
@@ -232,7 +231,7 @@ const CareerPage = () => {
 
                 <div
                   className="
-                    bg-[#ed1b2f]
+                    bg-[#006b3e]
                     text-white
                     px-3
                     py-3
@@ -241,19 +240,18 @@ const CareerPage = () => {
                     text-[23px]
                   "
                 >
-                  Great
+                  Best
                   <br />
-                  Place
+                  EdTech
                   <br />
-                  To
+                  in
                   <br />
-                  Work
-                  <span className="text-[9px] align-top">®</span>
+                  Ghana
                 </div>
 
                 <div
                   className="
-                    bg-[#173f78]
+                    bg-[#f5a623]
                     text-white
                     text-center
                     px-1
@@ -261,15 +259,15 @@ const CareerPage = () => {
                   "
                 >
                   <div className="font-bold text-[16px]">
-                    Certified
+                    2024
                   </div>
 
                   <div className="text-[7px] mt-1">
-                    OCT 2023-OCT 2024
+                    Winner
                   </div>
 
                   <div className="text-[8px]">
-                    USA
+                    Ghana
                   </div>
                 </div>
               </div>
@@ -287,15 +285,15 @@ const CareerPage = () => {
                   font-medium
                 "
               >
-                Our employees have spoken!
+                Proudly recognized as Ghana's
                 <br />
-                Our company culture is amazing and our
+                Best EdTech Company!
                 <br className="hidden md:block" />
-                Great Place to Work Certification™ proves it.
+                Our commitment to excellence speaks for itself.
               </h2>
 
               <p className="mt-4 text-[10px] md:text-[11px] text-[#4f6875]">
-                Source: 2023 Great Place To Work Trust Index® Survey
+                Awarded by Ghana Education Awards 2024
               </p>
             </div>
           </div>
@@ -354,7 +352,7 @@ const CareerPage = () => {
                 pb-[2px]
               "
             >
-              Featured Job Listings
+              Featured Job Opportunities
             </h2>
           </div>
 
@@ -369,7 +367,7 @@ const CareerPage = () => {
           >
 
             <JobCard
-              title="Physicians"
+              title="Medical Professionals"
               image={IMAGES.physicians}
             />
 
@@ -409,7 +407,7 @@ const CareerPage = () => {
               leading-tight
             "
           >
-            Preparation that enables success
+            Empowering education across Ghana
           </motion.h2>
 
           <motion.p
@@ -427,10 +425,10 @@ const CareerPage = () => {
               text-[#666]
             "
           >
-            We pride ourselves on producing the highest quality
-            educational resources. Our goal is to create an environment
-            where talented people can do meaningful work, grow their
-            skills, and make a lasting impact.
+            We are dedicated to creating exceptional educational 
+            resources that make a difference. Our team is passionate 
+            about helping students succeed and building a brighter 
+            future for education in Ghana and beyond.
           </motion.p>
 
           <motion.a

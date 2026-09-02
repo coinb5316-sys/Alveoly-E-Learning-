@@ -32,6 +32,12 @@ const CareerNavbar = () => {
     setMenuOpen(false);
   };
 
+  // Navigate to homepage
+  const handleHomeNavigate = () => {
+    navigate("/");
+    setMenuOpen(false);
+  };
+
   // Determine if link is active
   const isActive = (path) => {
     return location.pathname === path;
@@ -46,10 +52,12 @@ const CareerNavbar = () => {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
-            {/* Logo */}
+            {/* Logo - Now clickable to homepage */}
             <div
-              onClick={() => handleNavigate("/careers")}
+              onClick={handleHomeNavigate}
               className="cursor-pointer group flex items-center gap-3"
+              role="button"
+              aria-label="Go to homepage"
             >
               <img
                 src={logo}
@@ -148,10 +156,7 @@ const CareerNavbar = () => {
               ))}
               <div className="mt-8 pt-8 border-t border-gray-200">
                 <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    navigate("/");
-                  }}
+                  onClick={handleHomeNavigate}
                   className="w-full bg-[#00a3a1] hover:bg-[#008b89] text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300 shadow-md hover:shadow-lg"
                 >
                   Visit Main Site

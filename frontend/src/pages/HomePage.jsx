@@ -23,6 +23,7 @@ import {
   FaStar,
   FaChevronLeft,
   FaChevronRight,
+  FaEnvelope,
 } from "react-icons/fa";
 
 import Navbar from "../components/Navbar";
@@ -283,7 +284,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          HERO
+          HERO SECTION
       ======================================================= */}
 
       <section className="relative h-[560px] md:h-[600px] overflow-hidden">
@@ -875,7 +876,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          EDUCATORS / CAREERS FEATURE
+          CONTACT US & CAREERS FEATURE
       ======================================================= */}
 
       <section className="bg-[#edf4f7]">
@@ -948,26 +949,59 @@ const HomePage = () => {
                 across Ghana and beyond.
               </p>
 
-              <button
-                onClick={() => navigate("/careers")}
-                className="
-                  mt-6
-                  inline-flex
-                  items-center
-                  gap-2
-                  rounded-full
-                  bg-[#1687df]
-                  hover:bg-[#0d76c8]
-                  px-6
-                  py-2.5
-                  text-[11px]
-                  font-medium
-                  transition-colors
-                "
-              >
-                Join Our Team
-                <FaArrowRight className="text-[8px]" />
-              </button>
+              {/* Button Container with proper spacing */}
+              <div className="mt-6 flex flex-col sm:flex-row items-center gap-4">
+
+                {/* Contact Us Button */}
+                <button
+                  onClick={() => navigate("/contact_us")}
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-full
+                    bg-[#f7c928]
+                    hover:bg-[#eab900]
+                    text-[#222]
+                    px-6
+                    py-2.5
+                    text-[11px]
+                    font-medium
+                    transition-colors
+                    w-full
+                    sm:w-auto
+                  "
+                >
+                  <FaEnvelope className="text-[12px]" />
+                  Contact Us
+                </button>
+
+                {/* Join Our Team Button */}
+                <button
+                  onClick={() => navigate("/careers")}
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-full
+                    bg-[#1687df]
+                    hover:bg-[#0d76c8]
+                    px-6
+                    py-2.5
+                    text-[11px]
+                    font-medium
+                    transition-colors
+                    w-full
+                    sm:w-auto
+                  "
+                >
+                  Join Our Team
+                  <FaArrowRight className="text-[8px]" />
+                </button>
+
+              </div>
 
             </div>
 
