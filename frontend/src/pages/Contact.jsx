@@ -1,39 +1,33 @@
-// Contact.jsx - Exact UWorld Contact Page Clone (Final Complete)
-import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+// Contact.jsx
+import React, { useState, useEffect, useRef } from "react";
 import emailjs from "@emailjs/browser";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import API from "../api/axios";
-import { 
+
+import {
   FaSearch,
-  FaEnvelope,
-  FaPaperPlane,
-  FaCheckCircle,
   FaChevronDown,
   FaChevronUp,
   FaTimes,
-  FaCreditCard,
-  FaCalendarAlt,
-  FaFileAlt,
-  FaLaptop,
-  FaMapMarkerAlt,
-  FaClock,
-  FaFax,
-  FaPhoneAlt,
+  FaPaperPlane,
+  FaCheckCircle,
 } from "react-icons/fa";
 
 const Contact = () => {
-  const navigate = useNavigate();
-  const formRef = useRef();
-  const [loading, setLoading] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const formRef = useRef(null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
   const [expandedFaq, setExpandedFaq] = useState(null);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -41,126 +35,241 @@ const Contact = () => {
     message: "",
   });
 
-  // FAQ Data - Directly from UWorld's page structure
+  /*
+  |--------------------------------------------------------------------------
+  | FAQ DATA
+  |--------------------------------------------------------------------------
+  */
+
   const faqCategories = [
-    {
-      id: "most-common",
-      category: "Most Common Questions",
-      questions: [
-        {
-          q: "What is your refund policy?",
-          a: "All direct Alveoly purchase refund requests are evaluated case-by-case. The refund amounts determined are final. Please contact our support team for assistance."
-        },
-        {
-          q: "Can I upgrade or downgrade my subscription purchase?",
-          a: "If your subscription purchase has not been activated, you may request to upgrade or downgrade it. Current subscription pricing will apply to all upgrades and downgrades."
-        },
-        {
-          q: "How can I renew/extend my subscription?",
-          a: "You can renew your subscription by logging into your account and clicking the 'Renew' button. A renewal is an extension of time to continue accessing an active subscription."
-        },
-        {
-          q: "Can I reset/delete my Qbank test history or start all over again?",
-          a: "We offer a one-time reset option for subscriptions active for 180 days or more. Once a reset has been used, a subscription cannot be reset again."
-        },
-        {
-          q: "When does a new purchase/renewal begin?",
-          a: "All new subscriptions go into effect from when they are activated, not at the time of purchase. Renewal purchases are effective from the existing expiration date."
-        },
-      ]
-    },
     {
       id: "payment",
       category: "Payment",
       questions: [
         {
           q: "How do I purchase a subscription from the website?",
-          a: "Any of our product offerings can be purchased from our website. Payment is due in full at the time of purchase via credit or debit card or via mobile money. You must have an account to make a purchase."
+          a: "Any of our product offerings can be purchased from our website. Payment is due in full at the time of purchase via credit or debit card or via mobile money. You must have an account to make a purchase.",
         },
         {
           q: "What forms of payment do you accept?",
-          a: "We accept credit/debit cards with Visa, MasterCard, or American Express logos, mobile money, and bank transfers. After a successful payment, your subscription will immediately be available."
+          a: "We accept credit/debit cards with Visa, MasterCard, or American Express logos, mobile money, and bank transfers. After a successful payment, your subscription will immediately be available.",
         },
         {
           q: "Do you offer a Military Discount?",
-          a: "We are grateful to our men and women in uniform! We offer a 10% discount on new packages for active duty members and veterans. Please contact us for more information."
+          a: "We are grateful to our men and women in uniform! We offer a 10% discount on new packages for active duty members and veterans. Please contact us for more information.",
         },
-      ]
+        {
+          q: "What is your refund policy?",
+          a: "All direct Alveoly purchase refund requests are evaluated case-by-case. The refund amounts determined are final. Please contact our support team for assistance.",
+        },
+        {
+          q: "Can I upgrade or downgrade my subscription purchase?",
+          a: "If your subscription purchase has not been activated, you may request to upgrade or downgrade it. Current subscription pricing will apply to all upgrades and downgrades.",
+        },
+        {
+          q: "Do you offer a shorter duration or custom packages?",
+          a: "Please contact our support team to discuss available subscription options and current package offerings.",
+        },
+        {
+          q: "Can I get a guest account or a free trial?",
+          a: "Please contact our support team for information about available access options and current trial offers.",
+        },
+        {
+          q: "Can I purchase a subscription as a gift?",
+          a: "Please contact our support team for assistance with subscription purchases intended as gifts.",
+        },
+      ],
     },
+
     {
       id: "subscriptions",
       category: "Subscriptions",
       questions: [
         {
           q: "How do I activate and/or access my subscription?",
-          a: "Log in to your account, click on the 'Activate' button associated with the subscription you wish to start. If already activated, click on the 'Launch' button."
+          a: "Log in to your account, click on the 'Activate' button associated with the subscription you wish to start. If already activated, click on the 'Launch' button.",
         },
         {
           q: "I forgot my username/password; how can I retrieve it?",
-          a: "If you have forgotten your password, please use the 'Forgot Password?' link on the login page to reset your password. You may be required to answer a security question."
+          a: "If you have forgotten your password, please use the 'Forgot Password?' link on the login page to reset your password. You may be required to answer a security question.",
         },
         {
           q: "How can I change my registered email address and password?",
-          a: "You may update your registered email address by signing in, clicking on the Profile tab, and entering your desired email address. A verification email will be sent to confirm the change."
+          a: "You may update your registered email address by signing in, clicking on the Profile tab, and entering your desired email address. A verification email will be sent to confirm the change.",
         },
-      ]
+        {
+          q: "How can I renew/extend my subscription?",
+          a: "You can renew your subscription by logging into your account and clicking the 'Renew' button. A renewal is an extension of time to continue accessing an active subscription.",
+        },
+        {
+          q: "When does a new purchase/renewal begin?",
+          a: "All new subscriptions go into effect from when they are activated, not at the time of purchase. Renewal purchases are effective from the existing expiration date.",
+        },
+      ],
     },
+
     {
       id: "content",
       category: "Content",
       questions: [
         {
           q: "I want to reset/delete my qbank test history (or) start all over again. Is this possible?",
-          a: "We offer a one-time reset option for subscriptions active for 180 days or more. Once a reset has been used, a subscription cannot be reset again, regardless of the duration remaining on the subscription or the purchase of additional renewals."
+          a: "We offer a one-time reset option for subscriptions active for 180 days or more. Once a reset has been used, a subscription cannot be reset again, regardless of the duration remaining on the subscription or the purchase of additional renewals.",
         },
         {
           q: "How do I reuse questions with no reset option available (to avoid repetition)?",
-          a: "We recommend using Marked Question Mode to redo specific questions and ensure no duplicates in future generated test blocks. To mark a question, click the flag icon during testing or review."
+          a: "We recommend using Marked Question Mode to redo specific questions and ensure no duplicates in future generated test blocks. To mark a question, click the flag icon during testing or review.",
         },
         {
           q: "Can I save my subscription content to my hard disk or print the material?",
-          a: "Printing, saving, copying, screen capture, etc., of Alveoly materials is strictly prohibited. Attempts to use system commands or third-party utilities to capture our content is copyright infringement."
+          a: "Printing, saving, copying, screen capture, etc., of Alveoly materials is strictly prohibited. Attempts to use system commands or third-party utilities to capture our content is copyright infringement.",
         },
-      ]
+      ],
     },
+
     {
       id: "technical",
       category: "Technical",
       questions: [
         {
           q: "What are the system/device/network requirements?",
-          a: "Alveoly products are compatible with most recent Windows and Mac laptop or desktop systems. We also offer mobile applications compatible with recent Android and iOS devices."
+          a: "Alveoly products are compatible with most recent Windows and Mac laptop or desktop systems. We also offer mobile applications compatible with recent Android and iOS devices.",
         },
         {
           q: "How do I access my purchased subscription?",
-          a: "All Alveoly subscriptions require an active internet connection. Sign in to your account and click the 'Activate' or 'Launch' button beside your subscription."
+          a: "All Alveoly subscriptions require an active internet connection. Sign in to your account and click the 'Activate' or 'Launch' button beside your subscription.",
         },
         {
           q: "Can I access my subscriptions on a mobile device?",
-          a: "Yes! Access to QBank and Self-Assessment subscriptions is offered through our companion application for Android and iOS devices for convenient on-the-go access."
+          a: "Yes! Access to QBank and Self-Assessment subscriptions is offered through our companion application for Android and iOS devices for convenient on-the-go access.",
+        },
+        {
+          q: "Why are the images/media in the questions not loading?",
+          a: "Please check your internet connection and refresh the application. If the issue continues, contact our support team.",
         },
         {
           q: "How do I ensure I am viewing the latest version of the web app? (Clear browser cache)",
-          a: "To ensure you are viewing the latest version, please clear your browser cache. You can do this by pressing Ctrl-Shift-Delete (Windows) or Command-Shift-Delete (Mac) and selecting 'Clear browsing data'."
+          a: "To ensure you are viewing the latest version, please clear your browser cache. You can do this by pressing Ctrl-Shift-Delete on Windows or Command-Shift-Delete on Mac and selecting 'Clear browsing data'.",
         },
-      ]
+        {
+          q: "How can I delete a test block?",
+          a: "Open your test history and select the test block you would like to remove. If you are unable to delete it, contact our support team.",
+        },
+        {
+          q: "Why did I receive an incompatible process/application or screenshot warning message?",
+          a: "This warning can appear when unsupported applications or screen-capture processes are detected while using protected content.",
+        },
+      ],
     },
   ];
 
-  // Quick Category Icons - Like UWorld
-  const quickCategories = [
-    { icon: FaCreditCard, label: "Payment", target: "payment" },
-    { icon: FaCalendarAlt, label: "Subscriptions", target: "subscriptions" },
-    { icon: FaFileAlt, label: "Content", target: "content" },
-    { icon: FaLaptop, label: "Technical", target: "technical" },
-  ];
+  /*
+  |--------------------------------------------------------------------------
+  | SEARCH
+  |--------------------------------------------------------------------------
+  */
+
+  const getAllQuestions = () => {
+    return faqCategories.flatMap((category) =>
+      category.questions.map((question) => ({
+        ...question,
+        category: category.category,
+        categoryId: category.id,
+      }))
+    );
+  };
+
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+
+    setSearchQuery(value);
+
+    if (!value.trim()) {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const results = getAllQuestions()
+      .filter((item) =>
+        `${item.q} ${item.a}`
+          .toLowerCase()
+          .includes(value.toLowerCase())
+      )
+      .slice(0, 5);
+
+    setSearchSuggestions(results);
+    setShowSuggestions(true);
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) return;
+
+    const match = getAllQuestions().find((item) =>
+      `${item.q} ${item.a}`.toLowerCase().includes(query)
+    );
+
+    if (match) {
+      openQuestion(match);
+    }
+  };
+
+  const openQuestion = (question) => {
+    const categoryIndex = faqCategories.findIndex(
+      (category) => category.id === question.categoryId
+    );
+
+    const questionIndex = faqCategories[
+      categoryIndex
+    ].questions.findIndex((item) => item.q === question.q);
+
+    setExpandedFaq(`${categoryIndex}-${questionIndex}`);
+    setShowSuggestions(false);
+
+    setTimeout(() => {
+      const categoryElement = document.getElementById(question.categoryId);
+
+      if (categoryElement) {
+        categoryElement.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    }, 100);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | FAQ
+  |--------------------------------------------------------------------------
+  */
+
+  const toggleFaq = (id) => {
+    setExpandedFaq((current) => (current === id ? null : id));
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | CONTACT FORM
+  |--------------------------------------------------------------------------
+  */
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData((current) => ({
+      ...current,
+      [e.target.name]: e.target.value,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (loading) return;
+
     setLoading(true);
     setSubmitSuccess(false);
 
@@ -180,467 +289,813 @@ const Contact = () => {
       );
 
       setSubmitSuccess(true);
+
       setFormData({
         name: "",
         email: "",
         subject: "",
         message: "",
       });
-      
+
       setTimeout(() => {
         setSubmitSuccess(false);
         setIsModalOpen(false);
-      }, 3000);
+      }, 2500);
     } catch (err) {
       console.error("Error sending message:", err);
-      alert(err.response?.data?.message || "Failed to send message. Please try again.");
+
+      alert(
+        err.response?.data?.message ||
+          "Failed to send message. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleFaq = (index) => {
-    setExpandedFaq(expandedFaq === index ? null : index);
-  };
+  /*
+  |--------------------------------------------------------------------------
+  | CLOSE SEARCH SUGGESTIONS
+  |--------------------------------------------------------------------------
+  */
 
-  const scrollToCategory = (targetId) => {
-    const element = document.getElementById(targetId);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    setSearchQuery("");
-    setShowSuggestions(false);
-  };
-
-  // Get all questions for search suggestions
-  const getAllQuestions = () => {
-    const allQuestions = [];
-    faqCategories.forEach(category => {
-      category.questions.forEach(q => {
-        allQuestions.push({
-          text: q.q,
-          category: category.category,
-          categoryId: category.id
-        });
-      });
-    });
-    return allQuestions;
-  };
-
-  // Handle search input with suggestions
-  const handleSearchChange = (e) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-    
-    if (value.length > 0) {
-      const allQuestions = getAllQuestions();
-      const filtered = allQuestions.filter(q => 
-        q.text.toLowerCase().includes(value.toLowerCase())
-      );
-      setSearchSuggestions(filtered.slice(0, 5));
-      setShowSuggestions(true);
-    } else {
-      setSearchSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleSuggestionClick = (suggestion) => {
-    setSearchQuery(suggestion.text);
-    setShowSuggestions(false);
-    const element = document.getElementById(suggestion.categoryId);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      const category = faqCategories.find(c => c.id === suggestion.categoryId);
-      if (category) {
-        const questionIndex = category.questions.findIndex(q => q.q === suggestion.text);
-        if (questionIndex !== -1) {
-          const faqIndex = `${faqCategories.indexOf(category)}-${questionIndex}`;
-          setExpandedFaq(faqIndex);
-        }
-      }
-    }
-  };
-
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (searchQuery.length > 0) {
-      const allQuestions = getAllQuestions();
-      const match = allQuestions.find(q => 
-        q.text.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      if (match) {
-        handleSuggestionClick(match);
-      }
-    }
-  };
-
-  // Filter FAQs based on search
-  const filteredFaqs = searchQuery
-    ? faqCategories.map(category => ({
-        ...category,
-        questions: category.questions.filter(
-          q => q.q.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               q.a.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      })).filter(category => category.questions.length > 0)
-    : faqCategories;
-
-  // Close suggestions on click outside
   useEffect(() => {
-    const handleClickOutside = () => {
-      setShowSuggestions(false);
+    const handleClickOutside = (event) => {
+      if (!event.target.closest(".contact-search")) {
+        setShowSuggestions(false);
+      }
     };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
+  /*
+  |--------------------------------------------------------------------------
+  | FILTERED FAQS
+  |--------------------------------------------------------------------------
+  */
+
+  const filteredFaqs = searchQuery.trim()
+    ? faqCategories
+        .map((category) => ({
+          ...category,
+          questions: category.questions.filter((question) =>
+            `${question.q} ${question.a}`
+              .toLowerCase()
+              .includes(searchQuery.toLowerCase())
+          ),
+        }))
+        .filter((category) => category.questions.length > 0)
+    : faqCategories;
+
+  /*
+  |--------------------------------------------------------------------------
+  | RENDER
+  |--------------------------------------------------------------------------
+  */
+
   return (
-    <div className="min-h-screen bg-white overflow-x-hidden font-['Inter',sans-serif]">
+    <div className="min-h-screen bg-white overflow-x-hidden text-[#3f3f46]">
       <Navbar />
 
-      {/* ==================== HERO SECTION - UWORLD EXACT STYLE ==================== */}
-      <header className="relative min-h-[80vh] flex items-center justify-center bg-[#0a1a3a] overflow-hidden pt-16">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{
-            backgroundImage: `radial-gradient(circle at 20% 50%, rgba(0,163,161,0.3) 0%, transparent 50%)`,
-          }}></div>
-        </div>
-        
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-4">
-              Hi there, how can we help?
-            </h1>
-            <p className="text-lg md:text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-              Choose a category to quickly find what you need or{' '}
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="text-[#00a3a1] hover:text-[#008b89] underline transition-colors font-medium"
-              >
-                contact us
-              </button>
-            </p>
+      {/* ================================================================
+          HERO
+      ================================================================ */}
 
-            {/* Search Bar - Exact UWorld Style with Search Button */}
-            <div className="max-w-3xl mx-auto relative mb-8">
-              <form onSubmit={handleSearchSubmit} className="relative">
+      <section className="bg-[#f4f4f6] min-h-[650px] flex items-center">
+        <div className="w-full max-w-[960px] mx-auto px-5 sm:px-8 text-center pt-20 pb-24">
+
+          <motion.h1
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="
+              text-[40px]
+              sm:text-[48px]
+              md:text-[54px]
+              font-light
+              tracking-[-1.5px]
+              text-[#4a4a4a]
+              mb-8
+            "
+          >
+            Hi there, how can we help?
+          </motion.h1>
+
+          {/* Search */}
+          <div className="contact-search relative max-w-[605px] mx-auto">
+
+            <form
+              onSubmit={handleSearchSubmit}
+              className="flex h-[48px] bg-white shadow-sm"
+            >
+              <div className="relative flex-1">
+                <FaSearch
+                  className="
+                    absolute
+                    left-4
+                    top-1/2
+                    -translate-y-1/2
+                    text-[#9acbe8]
+                    text-[17px]
+                  "
+                />
+
                 <input
                   type="text"
-                  placeholder="Search for answers..."
                   value={searchQuery}
                   onChange={handleSearchChange}
-                  onFocus={() => searchQuery.length > 0 && setShowSuggestions(true)}
-                  className="w-full px-6 py-3 pl-14 pr-32 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent text-base"
+                  onFocus={() =>
+                    searchQuery && setShowSuggestions(true)
+                  }
+                  placeholder="Ask a question..."
+                  className="
+                    w-full
+                    h-full
+                    pl-11
+                    pr-4
+                    bg-white
+                    border-0
+                    outline-none
+                    text-[16px]
+                    text-[#555]
+                    placeholder:text-[#c8c8c8]
+                  "
                 />
-                <FaSearch className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg" />
-                <button
-                  type="submit"
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-[#00a3a1] hover:bg-[#008b89] text-white px-6 py-2 rounded-lg font-medium transition-colors text-sm"
+              </div>
+
+              <button
+                type="submit"
+                className="
+                  w-[76px]
+                  bg-[#1689df]
+                  hover:bg-[#087aca]
+                  text-white
+                  text-[14px]
+                  font-medium
+                  transition-colors
+                "
+              >
+                Search
+              </button>
+            </form>
+
+            {/* Search Suggestions */}
+            <AnimatePresence>
+              {showSuggestions && searchSuggestions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  className="
+                    absolute
+                    left-0
+                    right-0
+                    top-[54px]
+                    z-40
+                    bg-white
+                    border
+                    border-gray-200
+                    shadow-xl
+                    text-left
+                  "
                 >
-                  Search
-                </button>
-              </form>
-
-              {/* Search Suggestions - Like YouTube */}
-              <AnimatePresence>
-                {showSuggestions && searchSuggestions.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="absolute left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 text-left"
-                  >
-                    {searchSuggestions.map((suggestion, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleSuggestionClick(suggestion)}
-                        className="w-full px-6 py-3 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 border-b border-gray-100 last:border-0"
-                      >
-                        <FaSearch className="text-gray-400 text-sm" />
-                        <div>
-                          <p className="text-gray-800 text-sm font-medium">{suggestion.text}</p>
-                          <p className="text-gray-400 text-xs">{suggestion.category}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Quick Category Icons - Like UWorld */}
-            <div className="flex flex-wrap justify-center gap-4 max-w-3xl mx-auto">
-              {quickCategories.map((category, index) => (
-                <button
-                  key={index}
-                  onClick={() => scrollToCategory(category.target)}
-                  className="flex items-center gap-3 bg-white/10 backdrop-blur-sm hover:bg-white/20 border border-white/20 rounded-xl px-5 py-3 text-white transition-all duration-300 group"
-                >
-                  <category.icon className="text-xl text-[#00a3a1] group-hover:scale-110 transition-transform" />
-                  <span className="font-medium">{category.label}</span>
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </header>
-
-      {/* ==================== FAQ SECTION - UWORLD EXACT STYLE ==================== */}
-      <section className="py-16 md:py-20 bg-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          {filteredFaqs.map((category, catIndex) => (
-            <motion.div
-              key={catIndex}
-              id={category.id}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ delay: catIndex * 0.1 }}
-              className="mb-12 scroll-mt-24"
-            >
-              <h2 className="text-2xl md:text-3xl font-bold text-[#0a1a3a] mb-6 pb-2 border-b-2 border-gray-200">
-                {category.category}
-              </h2>
-              
-              <div className="space-y-3">
-                {category.questions.map((faq, idx) => {
-                  const faqIndex = `${catIndex}-${idx}`;
-                  return (
-                    <div
-                      key={idx}
-                      className="border border-gray-200 rounded-xl overflow-hidden hover:border-[#00a3a1] transition-colors"
+                  {searchSuggestions.map((suggestion, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => openQuestion(suggestion)}
+                      className="
+                        w-full
+                        px-5
+                        py-3
+                        text-left
+                        border-b
+                        border-gray-100
+                        last:border-0
+                        hover:bg-[#f7faff]
+                        transition-colors
+                      "
                     >
-                      <button
-                        onClick={() => toggleFaq(faqIndex)}
-                        className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
-                      >
-                        <span className="text-base md:text-lg font-medium text-gray-800">
-                          {faq.q}
-                        </span>
-                        {expandedFaq === faqIndex ? (
-                          <FaChevronUp className="text-[#00a3a1] flex-shrink-0 ml-4" />
-                        ) : (
-                          <FaChevronDown className="text-gray-400 flex-shrink-0 ml-4" />
-                        )}
-                      </button>
-                      
-                      {expandedFaq === faqIndex && (
-                        <div className="px-6 pb-5 text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
-                          {faq.a}
+                      <div className="flex items-start gap-3">
+                        <FaSearch className="mt-1 text-[#1689df] text-xs" />
+
+                        <div>
+                          <p className="text-sm text-[#444]">
+                            {suggestion.q}
+                          </p>
+
+                          <p className="text-xs text-gray-400 mt-1">
+                            {suggestion.category}
+                          </p>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          ))}
+                      </div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-          {filteredFaqs.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No results found for "{searchQuery}"</p>
-              <p className="text-gray-400 mt-2">Try searching with different keywords</p>
-            </div>
-          )}
-
-          {/* ==================== CAN'T FIND WHAT YOU'RE LOOKING FOR? ==================== */}
-          <div className="text-center mt-12 pt-12 border-t border-gray-200">
-            <h3 className="text-2xl font-bold text-[#0a1a3a] mb-3">
-              Can't find what you are looking for?
-            </h3>
-            <p className="text-gray-600 max-w-lg mx-auto mb-6">
-              If you can't find the answers to the questions you are looking for, simply
-              message us and we will respond back to you promptly.
-            </p>
+          <p className="mt-7 text-[16px] sm:text-[17px] text-[#777]">
+            Choose a category to quickly find what you need or{" "}
             <button
+              type="button"
               onClick={() => setIsModalOpen(true)}
-              className="bg-[#00a3a1] hover:bg-[#008b89] text-white px-10 py-4 rounded-lg font-semibold text-lg transition-all duration-300 shadow-md hover:shadow-lg"
+              className="
+                text-[#1689df]
+                hover:text-[#087aca]
+                transition-colors
+              "
             >
-              Contact Us
+              contact us
             </button>
-          </div>
+          </p>
+
         </div>
       </section>
 
-      {/* ==================== ADDRESS & HOURS OF OPERATION - UWORLD STYLE ==================== */}
-      <section className="py-16 bg-gray-50 border-t border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-white rounded-2xl shadow-lg p-8 md:p-10">
-            <h2 className="text-2xl md:text-3xl font-bold text-[#0a1a3a] mb-6 text-center">
-              Address & Hours of Operation
-            </h2>
-            
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Address */}
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="bg-[#00a3a1]/10 p-3 rounded-lg mt-1">
-                    <FaMapMarkerAlt className="text-[#00a3a1] text-xl" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Address</h3>
-                    <p className="text-gray-600 leading-relaxed">
-                      Alveoly E-Learning Academy<br />
-                      Accra, Ghana
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-4">
-                  <div className="bg-[#00a3a1]/10 p-3 rounded-lg mt-1">
-                    <FaPhoneAlt className="text-[#00a3a1] text-xl" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Phone</h3>
-                    <p className="text-gray-600">+233 54 955 6116</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-4">
-                  <div className="bg-[#00a3a1]/10 p-3 rounded-lg mt-1">
-                    <FaFax className="text-[#00a3a1] text-xl" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Fax</h3>
-                    <p className="text-gray-600">+233 54 955 6116</p>
-                  </div>
-                </div>
-              </div>
+      {/* ================================================================
+          FAQ SECTION
+      ================================================================ */}
 
-              {/* Hours of Operation */}
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="bg-[#00a3a1]/10 p-3 rounded-lg mt-1">
-                    <FaClock className="text-[#00a3a1] text-xl" />
+      <main className="bg-white">
+
+        {filteredFaqs.map((category, categoryIndex) => (
+          <section
+            key={category.id}
+            id={category.id}
+            className="
+              max-w-[960px]
+              mx-auto
+              px-5
+              sm:px-8
+              pt-16
+              pb-6
+              scroll-mt-24
+            "
+          >
+
+            <motion.h2
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4 }}
+              className="
+                text-center
+                text-[30px]
+                sm:text-[32px]
+                font-light
+                text-[#4d4d4d]
+                mb-9
+              "
+            >
+              {category.category}
+            </motion.h2>
+
+            <div className="max-w-[560px] mx-auto">
+
+              {category.questions.map((faq, questionIndex) => {
+                const faqId = `${categoryIndex}-${questionIndex}`;
+                const isOpen = expandedFaq === faqId;
+
+                return (
+                  <div
+                    key={faq.q}
+                    className="border-b border-[#b9d8e8]"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleFaq(faqId)}
+                      className="
+                        w-full
+                        min-h-[62px]
+                        py-4
+                        flex
+                        items-center
+                        justify-between
+                        gap-5
+                        text-left
+                        group
+                      "
+                    >
+                      <span
+                        className="
+                          text-[16px]
+                          sm:text-[17px]
+                          leading-[1.45]
+                          text-[#505050]
+                          group-hover:text-[#1689df]
+                          transition-colors
+                        "
+                      >
+                        {faq.q}
+                      </span>
+
+                      <span className="flex-shrink-0 text-[#1689df]">
+                        {isOpen ? (
+                          <FaChevronUp className="text-[13px]" />
+                        ) : (
+                          <span className="text-[22px] font-light leading-none">
+                            +
+                          </span>
+                        )}
+                      </span>
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          initial={{
+                            height: 0,
+                            opacity: 0,
+                          }}
+                          animate={{
+                            height: "auto",
+                            opacity: 1,
+                          }}
+                          exit={{
+                            height: 0,
+                            opacity: 0,
+                          }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="pb-5 pr-8 text-[15px] leading-7 text-[#777]">
+                            {faq.a}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Hours of Operation</h3>
-                    <div className="space-y-2 text-gray-600">
-                      <p><span className="font-medium">Monday - Friday:</span> 9 AM - 6 PM GMT</p>
-                      <p><span className="font-medium">Saturday:</span> 10 AM - 2 PM GMT</p>
-                      <p><span className="font-medium">Sunday:</span> Closed</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                );
+              })}
+
             </div>
+          </section>
+        ))}
+
+        {/* No search results */}
+        {filteredFaqs.length === 0 && (
+          <section className="max-w-[960px] mx-auto px-5 py-24 text-center">
+            <h2 className="text-2xl font-light text-[#555]">
+              No results found
+            </h2>
+
+            <p className="mt-3 text-gray-500">
+              Try searching with different keywords.
+            </p>
+          </section>
+        )}
+
+      </main>
+
+      {/* ================================================================
+          ADDRESS & HOURS
+      ================================================================ */}
+
+      <section className="bg-white pt-20 pb-24">
+        <div className="max-w-[760px] mx-auto px-5 sm:px-8">
+
+          <h2
+            className="
+              text-center
+              text-[30px]
+              sm:text-[32px]
+              font-light
+              text-[#555]
+              mb-12
+            "
+          >
+            Address &amp; Hours of Operation
+          </h2>
+
+          <div className="grid md:grid-cols-2 gap-10 md:gap-20">
+
+            {/* Address */}
+            <div className="text-[#666] text-[16px] leading-6">
+              <p>Alveoly E-Learning Academy</p>
+              <p>Accra, Ghana</p>
+            </div>
+
+            {/* Hours */}
+            <div className="text-[#666] text-[16px] leading-6">
+              <p>Monday-Friday</p>
+              <p>9 AM to 6 PM GMT</p>
+
+              <p className="mt-6">
+                Phone: +233 54 955 6116
+              </p>
+
+              <p className="mt-1">
+                Fax: +233 54 955 6116
+              </p>
+            </div>
+
           </div>
         </div>
       </section>
 
-      {/* ==================== CONTACT MODAL - UWORLD STYLE ==================== */}
+      {/* ================================================================
+          CONTACT CTA
+      ================================================================ */}
+
+      <section
+        className="
+          bg-[#1689df]
+          min-h-[430px]
+          flex
+          items-center
+          justify-center
+          text-center
+          px-5
+        "
+      >
+        <div className="max-w-[720px]">
+
+          <motion.h2
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="
+              text-white
+              text-[30px]
+              sm:text-[34px]
+              font-light
+              mb-7
+            "
+          >
+            Can't find what you are looking for?
+          </motion.h2>
+
+          <p
+            className="
+              text-white
+              text-[16px]
+              sm:text-[17px]
+              leading-7
+              max-w-[620px]
+              mx-auto
+              mb-10
+            "
+          >
+            If you can't find the answers to the questions you are
+            looking for, simply message us and we will respond back
+            to you promptly.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="
+              bg-white
+              text-[#2775a8]
+              px-10
+              py-3
+              rounded-full
+              text-[17px]
+              shadow-md
+              hover:shadow-lg
+              hover:-translate-y-[1px]
+              transition-all
+            "
+          >
+            Contact Us
+          </button>
+
+        </div>
+      </section>
+
+      {/* ================================================================
+          PRODUCT EXPLORER
+      ================================================================ */}
+
+      <section className="bg-[#071522] text-white py-16">
+
+        <div className="max-w-[1100px] mx-auto px-6">
+
+          <div className="text-center mb-14">
+
+            <h2 className="text-[29px] sm:text-[32px] font-light">
+              Explore All Alveoly Products
+            </h2>
+
+            <p className="text-gray-300 mt-3 text-[15px]">
+              Choose your exam
+            </p>
+
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-10">
+
+            {/* Accounting */}
+            <ProductColumn
+              title="Accounting"
+              items={[
+                "CPA",
+                "CMA",
+                "CIA",
+                "CPE",
+                "EA",
+                "Blog",
+              ]}
+            />
+
+            {/* High School */}
+            <ProductColumn
+              title="High School"
+              items={[
+                "For Students",
+                "SAT®",
+                "ACT®",
+                "AP®",
+                "Blog",
+                "For Educators",
+                "AP®",
+                "SAT®",
+                "ACT®",
+                "Blog",
+              ]}
+            />
+
+            {/* Finance */}
+            <ProductColumn
+              title="Finance"
+              items={[
+                "CFA®",
+                "CMT®",
+                "Blog",
+                "Grad School",
+                "MCAT®",
+                "Blog",
+              ]}
+            />
+
+            {/* Legal */}
+            <ProductColumn
+              title="Legal"
+              items={[
+                "Bar Review",
+                "MBE®",
+                "LLM",
+                "MPT®",
+                "Legal Curriculum",
+                "JD-Next",
+                "Blog",
+              ]}
+            />
+
+            {/* Medical */}
+            <ProductColumn
+              title="Medical"
+              items={[
+                "USMLE® Step 1",
+                "USMLE Step 2 CK",
+                "USMLE Step 2 CS",
+                "USMLE Step 3",
+                "COMLEX® Level 1",
+                "COMLEX Level 2",
+                "Internal Medicine",
+                "Family Medicine",
+                "International Clinical QBank",
+                "Medical Library",
+                "PA (PANCE® / PANRE®)",
+                "Blog",
+              ]}
+            />
+
+            {/* Nursing / Pharmacy */}
+            <div>
+              <h3 className="text-[18px] font-semibold mb-5">
+                Nursing
+              </h3>
+
+              <ProductItems
+                items={[
+                  "NCLEX RN®",
+                  "NCLEX PN®",
+                  "Clinical Med Math",
+                  "FNP",
+                  "Blog",
+                ]}
+              />
+
+              <h3 className="text-[18px] font-semibold mt-8 mb-5">
+                Pharmacy
+              </h3>
+
+              <ProductItems
+                items={[
+                  "NAPLEX®",
+                  "MPJE®",
+                  "CPJE",
+                ]}
+              />
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ================================================================
+          CONTACT MODAL
+      ================================================================ */}
+
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div
+            className="
+              fixed
+              inset-0
+              z-[100]
+              bg-black/50
+              flex
+              items-center
+              justify-center
+              p-4
+            "
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) {
+                setIsModalOpen(false);
+              }
+            }}
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+              initial={{
+                opacity: 0,
+                scale: 0.97,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                scale: 0.97,
+              }}
+              transition={{ duration: 0.2 }}
+              className="
+                bg-white
+                w-full
+                max-w-[520px]
+                max-h-[90vh]
+                overflow-y-auto
+                shadow-2xl
+              "
             >
-              <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-6 border-b border-gray-200 rounded-t-2xl">
-                <div className="flex items-center gap-3">
-                  <div className="bg-[#00a3a1] p-2 rounded-lg">
-                    <FaEnvelope className="text-white text-xl" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-[#0a1a3a]">Contact Us</h2>
-                </div>
+
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+
+                <h2 className="text-[24px] font-light text-[#444]">
+                  Contact Us
+                </h2>
+
                 <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-lg"
+                  className="
+                    text-gray-400
+                    hover:text-gray-700
+                    p-2
+                    transition-colors
+                  "
                 >
-                  <FaTimes className="text-2xl" />
+                  <FaTimes />
                 </button>
+
               </div>
 
-              <div className="p-6">
+              <div className="px-6 py-6">
+
                 {submitSuccess && (
-                  <div className="mb-6 p-4 bg-green-50 border border-green-500 rounded-lg flex items-center gap-3">
-                    <FaCheckCircle className="text-green-500 text-xl" />
+                  <div
+                    className="
+                      mb-5
+                      p-4
+                      bg-green-50
+                      border
+                      border-green-200
+                      flex
+                      gap-3
+                      items-start
+                    "
+                  >
+                    <FaCheckCircle className="text-green-500 mt-1" />
+
                     <div>
-                      <p className="text-green-700 font-semibold">Message Sent Successfully!</p>
-                      <p className="text-green-600 text-sm">We'll get back to you within 24 hours.</p>
+                      <p className="font-medium text-green-700">
+                        Message Sent Successfully!
+                      </p>
+
+                      <p className="text-sm text-green-600 mt-1">
+                        We'll get back to you within 24 hours.
+                      </p>
                     </div>
                   </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-2 text-sm">Full Name *</label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleChange}
-                      placeholder="Enter your full name"
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
-                    />
-                  </div>
+                <form
+                  ref={formRef}
+                  onSubmit={handleSubmit}
+                  className="space-y-5"
+                >
+
+                  <FormField
+                    label="Full Name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Enter your full name"
+                  />
+
+                  <FormField
+                    label="Email Address"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="Enter your email address"
+                  />
+
+                  <FormField
+                    label="Subject"
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleChange}
+                    placeholder="What is this regarding?"
+                  />
 
                   <div>
-                    <label className="block text-gray-700 font-semibold mb-2 text-sm">Email Address *</label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="Enter your email address"
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
-                    />
-                  </div>
+                    <label className="block text-sm text-[#555] mb-2">
+                      Message
+                    </label>
 
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-2 text-sm">Subject *</label>
-                    <input
-                      type="text"
-                      name="subject"
-                      value={formData.subject}
-                      onChange={handleChange}
-                      placeholder="What is this regarding?"
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-2 text-sm">Message *</label>
                     <textarea
                       name="message"
-                      rows="5"
                       value={formData.message}
                       onChange={handleChange}
-                      placeholder="Type your message here..."
+                      rows={5}
                       required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00a3a1] focus:border-transparent resize-none"
-                    ></textarea>
+                      placeholder="Type your message here..."
+                      className="
+                        w-full
+                        border
+                        border-gray-300
+                        px-4
+                        py-3
+                        outline-none
+                        resize-none
+                        focus:border-[#1689df]
+                        transition-colors
+                      "
+                    />
                   </div>
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-[#00a3a1] hover:bg-[#008b89] text-white py-3 rounded-lg font-semibold transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="
+                      w-full
+                      bg-[#1689df]
+                      hover:bg-[#087aca]
+                      disabled:opacity-60
+                      text-white
+                      py-3
+                      flex
+                      items-center
+                      justify-center
+                      gap-2
+                      transition-colors
+                    "
                   >
                     {loading ? (
                       <>
-                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
+                        <span
+                          className="
+                            w-4
+                            h-4
+                            border-2
+                            border-white/40
+                            border-t-white
+                            rounded-full
+                            animate-spin
+                          "
+                        />
                         Sending...
                       </>
                     ) : (
                       <>
-                        <FaPaperPlane /> Send Message
+                        <FaPaperPlane />
+                        Send Message
                       </>
                     )}
                   </button>
+
                 </form>
               </div>
             </motion.div>
@@ -652,5 +1107,76 @@ const Contact = () => {
     </div>
   );
 };
+
+/*
+|--------------------------------------------------------------------------
+| SMALL REUSABLE COMPONENTS
+|--------------------------------------------------------------------------
+*/
+
+const ProductColumn = ({ title, items }) => (
+  <div>
+    <h3 className="text-[18px] font-semibold mb-5">
+      {title}
+    </h3>
+
+    <ProductItems items={items} />
+  </div>
+);
+
+const ProductItems = ({ items }) => (
+  <div className="space-y-2.5">
+    {items.map((item, index) => (
+      <button
+        key={`${item}-${index}`}
+        type="button"
+        className="
+          block
+          text-left
+          text-[13px]
+          text-gray-300
+          hover:text-white
+          transition-colors
+        "
+      >
+        {item}
+      </button>
+    ))}
+  </div>
+);
+
+const FormField = ({
+  label,
+  name,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+}) => (
+  <div>
+    <label className="block text-sm text-[#555] mb-2">
+      {label}
+    </label>
+
+    <input
+      type={type}
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      required
+      className="
+        w-full
+        border
+        border-gray-300
+        px-4
+        py-3
+        outline-none
+        focus:border-[#1689df]
+        transition-colors
+      "
+    />
+  </div>
+);
 
 export default Contact;
