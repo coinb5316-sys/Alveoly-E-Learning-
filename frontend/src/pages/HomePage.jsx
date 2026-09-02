@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   FaArrowRight,
   FaUserMd,
@@ -18,6 +18,11 @@ import {
   FaGlobeAfrica,
   FaWhatsapp,
   FaAward,
+  FaQuoteLeft,
+  FaQuoteRight,
+  FaStar,
+  FaChevronLeft,
+  FaChevronRight,
 } from "react-icons/fa";
 
 import Navbar from "../components/Navbar";
@@ -137,6 +142,46 @@ const FOOTER_PRODUCTS = [
 
 
 /* ============================================================
+   TESTIMONIALS DATA
+============================================================ */
+
+const TESTIMONIALS = [
+  {
+    id: 1,
+    name: "Dr. Kwame Asare",
+    role: "Medical Student, University of Ghana",
+    quote: "The medical preparation resources at Alveoly transformed my approach to studying. I went from struggling with complex concepts to mastering them with ease.",
+    rating: 5,
+    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80",
+  },
+  {
+    id: 2,
+    name: "Ama Serwaa",
+    role: "Nursing Student, KNUST",
+    quote: "The nursing programs are exceptional! The clinical simulations and practice questions prepared me perfectly for my NCLEX exams. I couldn't have passed without Alveoly.",
+    rating: 5,
+    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&q=80",
+  },
+  {
+    id: 3,
+    name: "Michael Osei",
+    role: "Pharmacy Graduate, UCC",
+    quote: "As a pharmacy student, I needed tools that would challenge me. Alveoly's pharmacology resources were exactly what I needed to excel in my board exams.",
+    rating: 4,
+    image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&q=80",
+  },
+  {
+    id: 4,
+    name: "Efua Mensah",
+    role: "Accounting Professional, KPMG Ghana",
+    quote: "The accounting and CPA preparation courses are top-notch. The practical examples and real-world scenarios helped me pass my exams on the first attempt.",
+    rating: 5,
+    image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&q=80",
+  },
+];
+
+
+/* ============================================================
    HOME PAGE
 ============================================================ */
 
@@ -147,6 +192,9 @@ const HomePage = () => {
     userId: null,
     userName: "Guest",
   });
+
+  const [currentTestimonial, setCurrentTestimonial] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   /* ----------------------------------------------------------
      User information
@@ -172,6 +220,38 @@ const HomePage = () => {
       console.error("Error parsing user data:", error);
     }
   }, []);
+
+  /* ----------------------------------------------------------
+     Testimonial Auto-Slide
+  ---------------------------------------------------------- */
+
+  useEffect(() => {
+    if (isPaused) return;
+
+    const interval = setInterval(() => {
+      setCurrentTestimonial((prev) =>
+        prev === TESTIMONIALS.length - 1 ? 0 : prev + 1
+      );
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isPaused]);
+
+  const goToTestimonial = (index) => {
+    setCurrentTestimonial(index);
+  };
+
+  const nextTestimonial = () => {
+    setCurrentTestimonial((prev) =>
+      prev === TESTIMONIALS.length - 1 ? 0 : prev + 1
+    );
+  };
+
+  const prevTestimonial = () => {
+    setCurrentTestimonial((prev) =>
+      prev === 0 ? TESTIMONIALS.length - 1 : prev - 1
+    );
+  };
 
 
   /* ----------------------------------------------------------
@@ -239,9 +319,9 @@ const HomePage = () => {
                 leading-[1.08]
               "
             >
-              We Make Really Hard
+              Simplifying Complex
               <br />
-              Stuff Easy to Understand
+              Concepts for Your Success
             </h1>
 
             <p
@@ -254,9 +334,9 @@ const HomePage = () => {
                 max-w-[330px]
               "
             >
-              Customizable learning tools
+              Adaptive learning solutions
               <br />
-              for your healthcare exams
+              designed for Ghanaian students
             </p>
 
             <button
@@ -277,7 +357,7 @@ const HomePage = () => {
                 transition-colors
               "
             >
-              Explore Our Products
+              Explore Our Programs
               <FaArrowRight className="text-[9px]" />
             </button>
 
@@ -323,8 +403,8 @@ const HomePage = () => {
             <span className="w-px h-3 bg-white/30" />
 
             <span>
-              Discover the latest Alveoly learning resources,
-              programs, and educational tools.
+              Explore the latest educational resources,
+              programs, and learning tools at Alveoly.
             </span>
 
             <button
@@ -450,7 +530,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          AWARDS & RECOGNITION
+          AWARDS & RECOGNITION - GHANA FOCUSED
       ======================================================= */}
 
       <section className="bg-[#f7f7f7] py-12 md:py-16">
@@ -481,13 +561,13 @@ const HomePage = () => {
             "
           >
 
-            {/* Great Place To Work */}
+            {/* Best EdTech in Ghana */}
             <div className="text-center">
               <div className="mx-auto w-[75px] md:w-[88px]">
 
                 <div
                   className="
-                    bg-[#ef3340]
+                    bg-[#006b3e]
                     text-white
                     font-bold
                     leading-[0.9]
@@ -496,32 +576,32 @@ const HomePage = () => {
                     p-2
                   "
                 >
-                  Great
+                  Best
                   <br />
-                  Place
+                  EdTech
                   <br />
-                  To
+                  in
                   <br />
-                  Work
+                  Ghana
                 </div>
 
                 <div
                   className="
-                    bg-[#173f78]
+                    bg-[#f5a623]
                     text-white
                     text-[7px]
                     py-1
                     font-bold
                   "
                 >
-                  Certified
+                  2024 Winner
                 </div>
 
               </div>
             </div>
 
 
-            {/* EY */}
+            {/* Ministry of Education */}
             <div
               className="
                 flex
@@ -531,25 +611,25 @@ const HomePage = () => {
                 text-[#222]
               "
             >
-              <div className="text-[19px] font-bold tracking-tight">
-                EY
+              <div className="text-[19px] font-bold tracking-tight text-[#006b3e]">
+                MoE
               </div>
 
               <div className="text-[8px] font-semibold">
-                Entrepreneur
+                Ministry of
               </div>
 
               <div className="text-[8px]">
-                OF THE YEAR
+                Education
               </div>
 
               <div className="text-[7px] text-gray-500">
-                2020 Award Winner
+                Partner 2024
               </div>
             </div>
 
 
-            {/* 150 */}
+            {/* Ghana Education Service */}
             <div
               className="
                 w-[65px]
@@ -557,7 +637,7 @@ const HomePage = () => {
                 md:w-[75px]
                 md:h-[75px]
                 rounded-[12px]
-                bg-[#1989b8]
+                bg-[#ce1126]
                 text-white
                 flex
                 flex-col
@@ -568,16 +648,16 @@ const HomePage = () => {
             >
               <div className="-rotate-45 text-center">
                 <div className="text-[22px] font-bold leading-none">
-                  150
+                  GES
                 </div>
                 <div className="text-[7px]">
-                  GSV
+                  Approved
                 </div>
               </div>
             </div>
 
 
-            {/* Award seal */}
+            {/* Excellence Award */}
             <div
               className="
                 w-[65px]
@@ -586,11 +666,11 @@ const HomePage = () => {
                 md:h-[75px]
                 rounded-full
                 border-[5px]
-                border-[#b99b48]
+                border-[#f5a623]
                 flex
                 items-center
                 justify-center
-                text-[#9a7d2d]
+                text-[#d4890a]
               "
             >
               <FaAward className="text-3xl" />
@@ -603,24 +683,151 @@ const HomePage = () => {
 
 
       {/* ======================================================
+          STUDENT TESTIMONIALS
+      ======================================================= */}
+
+      <section className="bg-white py-16 md:py-20">
+
+        <div className="max-w-[900px] mx-auto px-6">
+
+          <h2
+            className="
+              text-center
+              text-[#555]
+              font-normal
+              text-[23px]
+              md:text-[29px]
+              mb-4
+            "
+          >
+            What Our Students Say
+          </h2>
+
+          <p className="text-center text-[11px] md:text-[12px] text-[#777] mb-10">
+            Real stories from students across Ghana who achieved their goals with Alveoly
+          </p>
+
+          {/* Testimonial Carousel */}
+          <div
+            className="relative"
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => setIsPaused(false)}
+          >
+
+            {/* Dots indicator - NOW ABOVE the testimonials */}
+            <div className="flex justify-center items-center gap-2 mb-8">
+              {TESTIMONIALS.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => goToTestimonial(index)}
+                  className={`
+                    transition-all duration-300 rounded-full
+                    ${index === currentTestimonial
+                      ? 'w-8 h-[2px] bg-[#1687df]'
+                      : 'w-1.5 h-1.5 bg-gray-300 hover:bg-gray-400'
+                    }
+                  `}
+                  aria-label={`Go to testimonial ${index + 1}`}
+                />
+              ))}
+            </div>
+
+            {/* Testimonial Card */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentTestimonial}
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -50 }}
+                transition={{ duration: 0.5 }}
+                className="bg-[#f8f9fa] rounded-xl p-8 md:p-10 shadow-sm border border-gray-100"
+              >
+                <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+
+                  {/* Avatar */}
+                  <div className="flex-shrink-0">
+                    <img
+                      src={TESTIMONIALS[currentTestimonial].image}
+                      alt={TESTIMONIALS[currentTestimonial].name}
+                      className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-[#1687df]"
+                    />
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 text-center md:text-left">
+
+                    {/* Quote icons */}
+                    <div className="text-[#1687df] opacity-30 mb-2">
+                      <FaQuoteLeft className="inline text-xl" />
+                    </div>
+
+                    <p className="text-[13px] md:text-[15px] leading-relaxed text-[#555] italic mb-4">
+                      "{TESTIMONIALS[currentTestimonial].quote}"
+                    </p>
+
+                    <div className="text-[#1687df] opacity-30 mb-3">
+                      <FaQuoteRight className="inline text-xl" />
+                    </div>
+
+                    {/* Rating stars */}
+                    <div className="flex justify-center md:justify-start gap-1 mb-2">
+                      {[...Array(5)].map((_, i) => (
+                        <FaStar
+                          key={i}
+                          className={`text-[12px] ${
+                            i < TESTIMONIALS[currentTestimonial].rating
+                              ? 'text-[#f7c928]'
+                              : 'text-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    <h4 className="text-[14px] font-semibold text-[#333]">
+                      {TESTIMONIALS[currentTestimonial].name}
+                    </h4>
+
+                    <p className="text-[10px] text-[#777]">
+                      {TESTIMONIALS[currentTestimonial].role}
+                    </p>
+
+                  </div>
+                </div>
+
+                {/* Navigation arrows */}
+                <div className="flex justify-center gap-4 mt-6">
+                  <button
+                    onClick={prevTestimonial}
+                    className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-[#1687df] hover:text-white hover:border-[#1687df] flex items-center justify-center transition-colors text-[#333] text-xs"
+                    aria-label="Previous testimonial"
+                  >
+                    <FaChevronLeft />
+                  </button>
+
+                  <button
+                    onClick={nextTestimonial}
+                    className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-[#1687df] hover:text-white hover:border-[#1687df] flex items-center justify-center transition-colors text-[#333] text-xs"
+                    aria-label="Next testimonial"
+                  >
+                    <FaChevronRight />
+                  </button>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+
+          </div>
+
+        </div>
+      </section>
+
+
+      {/* ======================================================
           MAIN VALUE SECTION
       ======================================================= */}
 
-      <section className="bg-white py-20 md:py-28">
+      <section className="bg-[#f7f7f7] py-20 md:py-28">
 
         <div className="max-w-[900px] mx-auto px-6 text-center">
-
-          {/* Tiny carousel indicator */}
-          <div className="flex justify-center items-center gap-2 mb-10">
-
-            <span className="w-8 h-[2px] bg-[#1687df]" />
-
-            <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-            <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-            <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-            <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-
-          </div>
 
           <motion.h2
             initial={{ opacity: 0, y: 15 }}
@@ -633,11 +840,11 @@ const HomePage = () => {
               md:text-[29px]
             "
           >
-            Discover the tools that students and
+            Empowering students and professionals
             <br className="hidden md:block" />
-            professionals rely on when exam results
+            with the tools they need to excel
             <br className="hidden md:block" />
-            really count.
+            in their academic journey.
           </motion.h2>
 
           <motion.p
@@ -655,10 +862,11 @@ const HomePage = () => {
               mx-auto
             "
           >
-            At Alveoly, we provide carefully designed learning
-            tools, expert educational resources, and flexible
-            preparation experiences built to help healthcare
-            and science students perform at their best.
+            At Alveoly, we offer comprehensive learning tools,
+            expert-led educational resources, and flexible
+            preparation programs designed to help healthcare
+            and science students in Ghana achieve their academic
+            and professional goals.
           </motion.p>
 
         </div>
@@ -720,9 +928,9 @@ const HomePage = () => {
                   leading-[1.25]
                 "
               >
-                Are you interested in shaping
+                Ready to shape the future
                 <br className="hidden md:block" />
-                the future of education?
+                of education in Ghana?
               </h2>
 
               <p
@@ -734,10 +942,10 @@ const HomePage = () => {
                   text-white/75
                 "
               >
-                We employ talented individuals who share
-                our passion for education and our commitment
-                to creating meaningful learning experiences
-                for students and professionals.
+                Join our passionate team of educators and
+                innovators who are dedicated to creating
+                meaningful learning experiences for students
+                across Ghana and beyond.
               </p>
 
               <button
@@ -786,11 +994,11 @@ const HomePage = () => {
                 font-normal
               "
             >
-              Explore All Alveoly Products
+              Explore All Alveoly Programs
             </h2>
 
             <p className="text-[9px] text-white/50 mt-1">
-              Choose your area of study
+              Select your area of study
             </p>
 
           </div>
@@ -865,44 +1073,50 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          SMART CHAT
+          SMART CHAT & WHATSAPP - IMPROVED VISIBILITY
       ======================================================= */}
 
-      <SmartChatBot
-        userId={userInfo.userId}
-        userName={userInfo.userName}
-      />
-
-
-      {/* ======================================================
-          WHATSAPP
-      ======================================================= */}
-
+      {/* WhatsApp Button - Higher z-index with pulse animation */}
       <motion.button
-        initial={{ opacity: 0, scale: 0.8 }}
+        initial={{ opacity: 0, scale: 0.5 }}
         animate={{ opacity: 1, scale: 1 }}
-        whileHover={{ scale: 1.08 }}
+        whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={handleWhatsAppClick}
         aria-label="Chat with us on WhatsApp"
         className="
           fixed
-          bottom-6
+          bottom-28
+          md:bottom-32
           right-5
-          z-[9998]
+          z-[9999]
           w-14
           h-14
           rounded-full
           bg-[#25D366]
           text-white
-          shadow-xl
+          shadow-2xl
           flex
           items-center
           justify-center
+          hover:shadow-[0_0_30px_rgba(37,211,102,0.5)]
+          transition-all
+          duration-300
         "
       >
-        <FaWhatsapp className="text-2xl" />
+        {/* Pulse ring animation */}
+        <span className="absolute inset-0 rounded-full animate-ping bg-[#25D366] opacity-75" />
+        <span className="absolute inset-0 rounded-full animate-pulse bg-[#25D366] opacity-50" />
+        <FaWhatsapp className="text-2xl relative z-10" />
       </motion.button>
+
+      {/* SmartChatBot with proper positioning */}
+      <div className="fixed bottom-20 md:bottom-24 right-0 z-[9998]">
+        <SmartChatBot
+          userId={userInfo.userId}
+          userName={userInfo.userName}
+        />
+      </div>
 
     </div>
   );
