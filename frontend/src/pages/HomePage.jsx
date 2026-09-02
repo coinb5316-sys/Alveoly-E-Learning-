@@ -1,4 +1,4 @@
-// HomePage.jsx - UWorld Professional Style with Products Modal
+// HomePage.jsx - UWorld Professional Style with WhatsApp Chat
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -37,6 +37,7 @@ import {
   FaChevronDown,
   FaSearch,
   FaFilter,
+  FaWhatsapp,
 } from "react-icons/fa";
 
 const HomePage = () => {
@@ -71,6 +72,10 @@ const HomePage = () => {
     employment: 0,
     programs: 0,
   });
+
+  // WhatsApp state
+  const [showWhatsAppTooltip, setShowWhatsAppTooltip] = useState(false);
+  const [isWhatsAppHovered, setIsWhatsAppHovered] = useState(false);
 
   // Fetch user info from localStorage
   useEffect(() => {
@@ -165,7 +170,6 @@ const HomePage = () => {
   const openProductsModal = () => {
     setShowProductsModal(true);
     fetchProductsData();
-    // Reset expanded states
     setExpandedPrograms({});
     setExpandedCourses({});
     setSearchTerm("");
@@ -197,12 +201,6 @@ const HomePage = () => {
     return subjects.filter(subject => 
       subject.courseId?._id === courseId || subject.courseId === courseId
     );
-  };
-
-  // Get program name by ID
-  const getProgramName = (programId) => {
-    const program = programs.find(p => p._id === programId);
-    return program?.name || "Unknown Program";
   };
 
   // Filter programs based on search
@@ -254,6 +252,15 @@ const HomePage = () => {
   };
 
   const displayTestimonials = testimonials.slice(0, 3);
+
+  // WhatsApp handler
+  const handleWhatsAppClick = () => {
+    const phoneNumber = "2335495566116"; // Admin WhatsApp number
+    const message = encodeURIComponent(
+      "Hello! I'm interested in learning more about Alveoly E-Learning Academy. Can you help me?"
+    );
+    window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
+  };
 
   // Product data matching UWorld's professional structure
   const productCategories = [
@@ -317,7 +324,7 @@ const HomePage = () => {
     <div className="min-h-screen bg-white font-['Inter',sans-serif] overflow-x-hidden">
       <Navbar />
 
-      {/* ==================== HERO SECTION - WITH YOUR BANNER IMAGE ==================== */}
+      {/* ==================== HERO SECTION ==================== */}
       <header className="relative min-h-[90vh] flex items-center justify-center bg-cover bg-center overflow-hidden">
         <div 
           className="absolute inset-0 bg-cover bg-center"
@@ -719,7 +726,57 @@ const HomePage = () => {
 
       <Footer />
       
+      {/* ==================== SMART CHAT BOT ==================== */}
       <SmartChatBot userId={userInfo.userId} userName={userInfo.userName} />
+
+      {/* ==================== WHATSAPP FLOATING BUTTON ==================== */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 1, duration: 0.5 }}
+        className="fixed bottom-28 right-4 sm:bottom-32 sm:right-6 z-[9998]"
+        onMouseEnter={() => setIsWhatsAppHovered(true)}
+        onMouseLeave={() => setIsWhatsAppHovered(false)}
+      >
+        {/* Tooltip */}
+        <AnimatePresence>
+          {(showWhatsAppTooltip || isWhatsAppHovered) && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.9 }}
+              className="absolute bottom-16 right-0 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-xl whitespace-nowrap"
+            >
+              Chat with us on WhatsApp
+              <div className="absolute bottom-[-6px] right-4 w-3 h-3 bg-gray-900 transform rotate-45"></div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* WhatsApp Button */}
+        <motion.button
+          onClick={handleWhatsAppClick}
+          onMouseEnter={() => setShowWhatsAppTooltip(true)}
+          onMouseLeave={() => setShowWhatsAppTooltip(false)}
+          className="relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#25D366] text-white shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-110 group"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          {/* Pulsing animation ring */}
+          <span className="absolute inset-0 rounded-full bg-[#25D366] animate-ping opacity-75"></span>
+          
+          {/* WhatsApp Icon */}
+          <FaWhatsapp className="text-2xl sm:text-3xl relative z-10" />
+          
+          {/* Notification dot */}
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+        </motion.button>
+
+        {/* Available status text */}
+        <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-[10px] text-green-600 font-medium whitespace-nowrap">
+          Online
+        </div>
+      </motion.div>
 
       {/* ==================== PRODUCTS MODAL ==================== */}
       <AnimatePresence>
