@@ -32,12 +32,11 @@ import {
   FaBrain,
   FaHandSparkles,
   FaHandHoldingHeart,
-  FaHouseMedical,
   FaUserNurse,
 } from "react-icons/fa";
-// Removed FaHeartPulse - it doesn't exist in react-icons/fa
-// Using FaHeartbeat instead (which exists and is similar)
-import { MdHealthAndSafety } from "react-icons/md";
+// Removed: FaHeartPulse and FaHouseMedical (don't exist in react-icons/fa)
+// Using FaHeartbeat and FaHospital instead
+import { MdHealthAndSafety, MdFamilyRestroom } from "react-icons/md";
 import { IoIosPeople } from "react-icons/io";
 import { GiBrain } from "react-icons/gi";
 import Navbar from "../components/Navbar";
@@ -101,7 +100,7 @@ const CareerPage = () => {
       color: "from-red-400 to-rose-500"
     },
     {
-      icon: FaHeartbeat, // Changed from FaHeartPulse to FaHeartbeat
+      icon: FaHeartbeat,
       title: "Lifelong Learning",
       description: "We empower healthcare professionals to embrace continuous learning, staying current with medical advancements and evolving best practices.",
       color: "from-indigo-400 to-purple-500"
@@ -138,7 +137,7 @@ const CareerPage = () => {
       bgColor: "bg-green-50"
     },
     {
-      icon: FaHouseMedical,
+      icon: MdFamilyRestroom, // Changed from FaHouseMedical
       title: "Family Support Services",
       description: "Parental leave, childcare assistance, and flexible family-friendly policies.",
       iconColor: "text-pink-500",
