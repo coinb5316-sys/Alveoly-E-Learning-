@@ -102,6 +102,7 @@ import Pricing from "./pages/Pricing";
 import CookieBanner from "./components/CookieBanner";
 import StudentExamResults from "./pages/StudentExamResults";
 import CareerPage from "./pages/CareerPage";
+import CareerWhatWeDo from "./pages/CareerWhatWeDo";
 
 function App() {
   useEffect(() => {
@@ -155,6 +156,7 @@ function App() {
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/pricing" element={<Pricing />} /> {/* <-- ADDED PRICING ROUTE */}
           <Route path="/careers" element={<CareerPage />} />
+          <Route path="/careers/what-we-do" element={<CareerWhatWeDo />} />
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
