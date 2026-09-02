@@ -6,16 +6,17 @@ import { FaSearch } from "react-icons/fa";
 import CareerNavbar from "../components/CareerNavbar";
 import Footer from "../components/Footer";
 
-import accountingImg from "../assets/careers/accounting.jpg";
-import adminImg from "../assets/careers/admin-hr.jpg";
-import animationImg from "../assets/careers/animation.jpg";
-import financeImg from "../assets/careers/finance.jpg";
-import legalImg from "../assets/careers/legal.jpg";
-import medicalImg from "../assets/careers/medical.jpg";
-import nursingImg from "../assets/careers/nursing.jpg";
-import pharmacyImg from "../assets/careers/pharmacy.jpg";
-import salesImg from "../assets/careers/sales.jpg";
-import softwareImg from "../assets/careers/software.jpg";
+// Using Unsplash placeholder images instead of local files
+const accountingImg = "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=600&q=80";
+const adminImg = "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=600&q=80";
+const animationImg = "https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=600&q=80";
+const financeImg = "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&q=80";
+const legalImg = "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&q=80";
+const medicalImg = "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&q=80";
+const nursingImg = "https://images.unsplash.com/photo-1581056771107-24ca5f033842?w=600&q=80";
+const pharmacyImg = "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&q=80";
+const salesImg = "https://images.unsplash.com/photo-1552581234-26160f608093?w=600&q=80";
+const softwareImg = "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&q=80";
 
 const fadeUp = {
   hidden: {
