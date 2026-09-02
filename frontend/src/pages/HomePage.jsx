@@ -17,6 +17,7 @@ import {
   FaBook,
   FaGlobeAfrica,
   FaWhatsapp,
+  FaAward,
 } from "react-icons/fa";
 
 import Navbar from "../components/Navbar";
