@@ -33,9 +33,10 @@ import {
   FaHandSparkles,
   FaHandHoldingHeart,
   FaHouseMedical,
-  FaHeartPulse,
   FaUserNurse,
 } from "react-icons/fa";
+// Removed FaHeartPulse - it doesn't exist in react-icons/fa
+// Using FaHeartbeat instead (which exists and is similar)
 import { MdHealthAndSafety } from "react-icons/md";
 import { IoIosPeople } from "react-icons/io";
 import { GiBrain } from "react-icons/gi";
@@ -100,7 +101,7 @@ const CareerPage = () => {
       color: "from-red-400 to-rose-500"
     },
     {
-      icon: FaHeartPulse,
+      icon: FaHeartbeat, // Changed from FaHeartPulse to FaHeartbeat
       title: "Lifelong Learning",
       description: "We empower healthcare professionals to embrace continuous learning, staying current with medical advancements and evolving best practices.",
       color: "from-indigo-400 to-purple-500"
@@ -642,7 +643,7 @@ const CareerPage = () => {
             className="text-center max-w-4xl mx-auto"
           >
             <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-6 border border-white/10">
-              <FaHeartPulse className="text-[#00a3a1] animate-pulse" />
+              <FaHeartbeat className="text-[#00a3a1] animate-pulse" />
               <span className="text-white text-sm font-medium">Healthcare Education Careers</span>
             </div>
             
@@ -730,7 +731,7 @@ const CareerPage = () => {
             className="text-center mb-12"
           >
             <div className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full mb-4">
-              <FaHeartPulse className="text-sm" />
+              <FaHeartbeat className="text-sm" />
               <span className="text-sm font-semibold">Our Healthcare Mission</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-bold text-[#0a1a3a] mb-3">
@@ -1059,7 +1060,7 @@ const CareerPage = () => {
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <FaHeartPulse className="text-5xl text-[#00a3a1] mx-auto mb-4" />
+            <FaHeartbeat className="text-5xl text-[#00a3a1] mx-auto mb-4" />
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               Ready to Transform <span className="text-[#00a3a1]">Healthcare Education</span>?
             </h2>
@@ -1163,7 +1164,7 @@ const CareerPage = () => {
                     <ul className="space-y-2">
                       {selectedJob.benefits.map((item, idx) => (
                         <li key={idx} className="flex items-start gap-3">
-                          <FaHeartPulse className="text-[#00a3a1] mt-1 flex-shrink-0" />
+                          <FaHeartbeat className="text-[#00a3a1] mt-1 flex-shrink-0" />
                           <span className="text-gray-600">{item}</span>
                         </li>
                       ))}
