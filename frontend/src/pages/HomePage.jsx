@@ -605,7 +605,7 @@ const HomePage = () => {
                 ))}
               </ul>
               <button 
-                onClick={() => navigate("/contact")}
+                onClick={() => navigate("/contact_us")}
                 className="bg-[#0a1a3a] hover:bg-[#1a2a4a] text-white px-8 py-3 rounded-lg font-semibold transition-all duration-300 inline-flex items-center gap-2 shadow-md hover:shadow-lg"
               >
                 Contact Our Team

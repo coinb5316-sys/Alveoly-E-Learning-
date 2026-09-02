@@ -277,8 +277,7 @@ const Navbar = () => {
     { name: "Admissions", path: "/admissions" },
     { name: "Contact", path: "/contact_us" },
     { name: "Pricing", path: "/pricing" },
-    { name: "Help", path: "/help" },
-    { name: "Forums", path: "/forums" },
+    { name: "Help", path: "/contact_us" },
   ];
 
   const socialLinks = [
