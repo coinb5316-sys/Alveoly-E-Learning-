@@ -11,6 +11,11 @@ import {
   FaQuestionCircle,
   FaExternalLinkAlt,
   FaShareAlt,
+  FaLink,
+  FaFacebook,
+  FaTwitter,
+  FaLinkedin,
+  FaEnvelope,
 } from "react-icons/fa";
 
 import CareerNavbar from "../components/CareerNavbar";
@@ -26,6 +31,8 @@ const JobApplication = () => {
 
   const jobTitle = state.jobTitle || "Career Opportunity";
   const jobLocation = state.jobLocation || "Alveoly";
+  const jobDescription = state.jobDescription || "";
+  const openings = state.openings || 1;
 
   const [form, setForm] = useState({
     firstName: "",
@@ -34,6 +41,7 @@ const JobApplication = () => {
     phone: "",
     address: "",
     coverLetter: "",
+    salaryExpectation: "",
 
     isCPA: "",
     requiresSponsorship: "",
@@ -46,6 +54,8 @@ const JobApplication = () => {
   const [submitted, setSubmitted] = useState(false);
   const [showImportMenu, setShowImportMenu] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState("application");
+  const [showShareMenu, setShowShareMenu] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -146,6 +156,7 @@ const JobApplication = () => {
     setForm((previous) => ({
       ...previous,
       coverLetter: "",
+      salaryExpectation: "",
     }));
   };
 
@@ -159,6 +170,11 @@ const JobApplication = () => {
 
     if (!form.isCPA) {
       alert("Please answer whether you are a Certified Public Accountant.");
+      return;
+    }
+
+    if (!form.salaryExpectation) {
+      alert("Please provide your salary expectations.");
       return;
     }
 
@@ -205,6 +221,37 @@ const JobApplication = () => {
       top: 0,
       behavior: "smooth",
     });
+  };
+
+  const handleShare = (platform) => {
+    const url = window.location.href;
+    const text = `Check out this job opportunity: ${jobTitle} at Alveoly`;
+
+    switch (platform) {
+      case "linkedin":
+        window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, "_blank");
+        break;
+      case "twitter":
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, "_blank");
+        break;
+      case "facebook":
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, "_blank");
+        break;
+      case "email":
+        window.location.href = `mailto:?subject=${encodeURIComponent(`Job Opportunity: ${jobTitle}`)}&body=${encodeURIComponent(`${text}\n\n${url}`)}`;
+        break;
+      case "copy":
+        navigator.clipboard.writeText(`${text}\n${url}`).then(() => {
+          alert("Link copied to clipboard!");
+        }).catch(() => {
+          // Fallback
+          prompt("Copy this link:", `${text}\n${url}`);
+        });
+        break;
+      default:
+        break;
+    }
+    setShowShareMenu(false);
   };
 
   /*
@@ -268,7 +315,7 @@ const JobApplication = () => {
 
       <header className="bg-white">
         <div className="mx-auto max-w-[940px] px-5 pb-7 pt-28 text-center sm:px-8 sm:pt-32">
-          <div className="mb-5">
+          <div className="mb-5 flex items-center justify-between">
             <button
               type="button"
               onClick={() => navigate(-1)}
@@ -277,6 +324,58 @@ const JobApplication = () => {
               <FaArrowLeft />
               Back
             </button>
+
+            {/* Share Button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowShareMenu(!showShareMenu)}
+                className="inline-flex items-center gap-2 text-sm text-[#0c6175] transition hover:text-[#084e5f]"
+              >
+                <FaShareAlt />
+                Share Job
+              </button>
+
+              {showShareMenu && (
+                <div className="absolute right-0 top-[calc(100%+8px)] z-50 min-w-[200px] overflow-hidden rounded-md border border-[#ddd] bg-white shadow-lg">
+                  <button
+                    onClick={() => handleShare("linkedin")}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#444] transition hover:bg-[#f3f7f8]"
+                  >
+                    <FaLinkedin className="text-[#0077B5]" />
+                    LinkedIn
+                  </button>
+                  <button
+                    onClick={() => handleShare("twitter")}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#444] transition hover:bg-[#f3f7f8]"
+                  >
+                    <FaTwitter className="text-[#1DA1F2]" />
+                    Twitter
+                  </button>
+                  <button
+                    onClick={() => handleShare("facebook")}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#444] transition hover:bg-[#f3f7f8]"
+                  >
+                    <FaFacebook className="text-[#1877F2]" />
+                    Facebook
+                  </button>
+                  <button
+                    onClick={() => handleShare("email")}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[#444] transition hover:bg-[#f3f7f8]"
+                  >
+                    <FaEnvelope className="text-[#666]" />
+                    Email
+                  </button>
+                  <button
+                    onClick={() => handleShare("copy")}
+                    className="flex w-full items-center gap-3 border-t border-[#eee] px-4 py-2.5 text-left text-sm text-[#444] transition hover:bg-[#f3f7f8]"
+                  >
+                    <FaLink className="text-[#666]" />
+                    Copy Link
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Replace this with your actual Alveoly logo if needed */}
@@ -304,346 +403,452 @@ const JobApplication = () => {
         <div className="mx-auto flex max-w-[940px] justify-center">
           <button
             type="button"
-            onClick={() => navigate(-1)}
-            className="relative px-6 py-4 text-[12px] font-medium uppercase tracking-wide text-[#666] transition hover:text-[#0c6175]"
+            onClick={() => setActiveTab("overview")}
+            className={`relative px-6 py-4 text-[12px] font-medium uppercase tracking-wide transition ${
+              activeTab === "overview"
+                ? "text-[#0c6175] font-semibold"
+                : "text-[#666] hover:text-[#0c6175]"
+            }`}
           >
             Overview
+            {activeTab === "overview" && (
+              <span className="absolute bottom-0 left-1/2 h-[3px] w-[78px] -translate-x-1/2 bg-[#0c6175]" />
+            )}
           </button>
 
           <button
             type="button"
-            className="relative px-6 py-4 text-[12px] font-semibold uppercase tracking-wide text-[#0c6175]"
+            onClick={() => setActiveTab("application")}
+            className={`relative px-6 py-4 text-[12px] font-medium uppercase tracking-wide transition ${
+              activeTab === "application"
+                ? "text-[#0c6175] font-semibold"
+                : "text-[#666] hover:text-[#0c6175]"
+            }`}
           >
             Application
-            <span className="absolute bottom-0 left-1/2 h-[3px] w-[78px] -translate-x-1/2 bg-[#0c6175]" />
+            {activeTab === "application" && (
+              <span className="absolute bottom-0 left-1/2 h-[3px] w-[78px] -translate-x-1/2 bg-[#0c6175]" />
+            )}
           </button>
         </div>
       </div>
 
       {/* ============================================================
-          APPLICATION
+          TAB CONTENT
       ============================================================ */}
 
       <main className="mx-auto w-full max-w-[940px] px-5 pb-16 sm:px-8">
-        <form onSubmit={handleSubmit}>
-          {/* ========================================================
-              AUTOFILL
-          ======================================================== */}
-
-          <section className="mt-8 rounded-[7px] border border-[#777] bg-white px-5 py-6 sm:px-6">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <FaBolt className="text-[15px] text-[#333]" />
-
-                  <h2 className="text-[13px] font-bold uppercase tracking-wide text-[#333]">
-                    Autofill application
-                  </h2>
-                </div>
-
-                <p className="mt-2 max-w-[400px] text-[13px] leading-5 text-[#777]">
-                  Save time by importing your resume in one of the following
-                  formats: .pdf, .doc, .docx, .odt, or .rtf.
+        {activeTab === "overview" ? (
+          /* ========================================================
+             OVERVIEW TAB
+          ======================================================== */
+          <div className="mt-8">
+            <div className="rounded-[7px] bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-[#333] mb-4">
+                Job Description
+              </h2>
+              
+              <div className="prose max-w-none text-[#555]">
+                <p className="text-[15px] leading-7">
+                  Looking to do something more creative with your career? Want to be part of a dream team of educators and innovators? Come join Alveoly and be part of something extraordinary.
                 </p>
+
+                <h3 className="text-[16px] font-semibold text-[#333] mt-6 mb-3">
+                  Requirements
+                </h3>
+                <ul className="list-disc pl-5 space-y-2 text-[14px] leading-6">
+                  <li>Degree in accounting or taxation</li>
+                  <li>CPA certification required</li>
+                  <li>CIA or CMA certifications welcome</li>
+                  <li>3+ years of experience in accounting or auditing</li>
+                  <li>Subject matter expertise in Audit, Taxation, Risk Management, Financial Accounting, Managerial Accounting, or IT Audit</li>
+                  <li>Experience in tutoring, teaching, or corporate learning and development is a plus</li>
+                </ul>
+
+                <h3 className="text-[16px] font-semibold text-[#333] mt-6 mb-3">
+                  Responsibilities
+                </h3>
+                <ul className="list-disc pl-5 space-y-2 text-[14px] leading-6">
+                  <li>Project development, planning, and execution for question banks, textbooks, and videos</li>
+                  <li>Create practice questions, answers, and explanations for the question bank</li>
+                  <li>Develop, review, and update course review textbooks</li>
+                  <li>Write scripts for video lecture materials</li>
+                  <li>Validate accuracy and relevance of content</li>
+                  <li>Work with a team of experts to identify topics for new product development</li>
+                </ul>
+
+                <h3 className="text-[16px] font-semibold text-[#333] mt-6 mb-3">
+                  Benefits
+                </h3>
+                <ul className="list-disc pl-5 space-y-2 text-[14px] leading-6">
+                  <li>Competitive compensation (contingent on experience)</li>
+                  <li>Paid time off, parental leave, and volunteer time</li>
+                  <li>Comprehensive benefits package (medical, vision, dental, life, disability)</li>
+                  <li>401(k) plan with employer matching</li>
+                  <li>Annual professional and career development opportunities</li>
+                  <li>Relaxed work environment with remote flexibility</li>
+                </ul>
               </div>
 
-              <div className="relative">
+              <div className="mt-8 pt-6 border-t border-[#e5e5e5] text-center">
                 <button
                   type="button"
-                  onClick={() => setShowImportMenu((previous) => !previous)}
-                  className="flex min-w-[245px] items-center justify-center gap-3 rounded-[7px] bg-[#0c6175] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#084e5f]"
+                  onClick={() => setActiveTab("application")}
+                  className="bg-[#0c6175] px-8 py-3 text-sm font-semibold text-white transition hover:bg-[#084e5f]"
                 >
-                  Import resume from
-                  <FaChevronDown
-                    className={`text-[11px] transition-transform ${
-                      showImportMenu ? "rotate-180" : ""
-                    }`}
-                  />
+                  Start Your Application
                 </button>
-
-                {showImportMenu && (
-                  <div className="absolute right-0 top-[calc(100%+7px)] z-50 w-full min-w-[245px] overflow-hidden rounded-md border border-[#ddd] bg-white shadow-lg">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowImportMenu(false);
-                        resumeInputRef.current?.click();
-                      }}
-                      className="block w-full px-4 py-3 text-left text-sm text-[#444] transition hover:bg-[#f3f7f8]"
-                    >
-                      Upload resume from computer
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowImportMenu(false)}
-                      className="block w-full border-t border-[#eee] px-4 py-3 text-left text-sm text-[#888]"
-                    >
-                      Import from another service
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
-          </section>
-
-          {/* ========================================================
-              REQUIRED FIELDS
-          ======================================================== */}
-
-          <div className="mt-8 text-[12px] text-[#777]">
-            <span className="text-[#b44b4b]">*</span> Required fields
           </div>
+        ) : (
+          /* ========================================================
+             APPLICATION TAB
+          ======================================================== */
+          <form onSubmit={handleSubmit}>
+            {/* ========================================================
+                AUTOFILL
+            ======================================================== */}
 
-          {/* ========================================================
-              PERSONAL INFORMATION
-          ======================================================== */}
+            <section className="mt-8 rounded-[7px] border border-[#777] bg-white px-5 py-6 sm:px-6">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <FaBolt className="text-[15px] text-[#333]" />
 
-          <section className="mt-5">
-            <SectionHeading
-              title="Personal information"
-              onClear={clearPersonalInformation}
-            />
-
-            <div className="mt-7 space-y-6">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <Input
-                  label="First name"
-                  name="firstName"
-                  value={form.firstName}
-                  onChange={handleChange}
-                  required
-                />
-
-                <Input
-                  label="Last name"
-                  name="lastName"
-                  value={form.lastName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <Input
-                label="Email"
-                name="email"
-                type="email"
-                value={form.email}
-                onChange={handleChange}
-                required
-              />
-
-              <div>
-                <FieldLabel required>Phone</FieldLabel>
-
-                <div className="mt-2 flex h-[40px] w-full overflow-hidden rounded-[6px] border border-[#b9b9b9] bg-white">
-                  <div className="flex w-[105px] shrink-0 items-center justify-center gap-2 border-r border-[#d2d2d2] bg-[#fafafa] text-sm text-[#555]">
-                    <span>🇬🇭</span>
-                    <span>+233</span>
-                    <FaChevronDown className="ml-1 text-[9px] text-[#888]" />
+                    <h2 className="text-[13px] font-bold uppercase tracking-wide text-[#333]">
+                      Autofill application
+                    </h2>
                   </div>
 
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={form.phone}
+                  <p className="mt-2 max-w-[400px] text-[13px] leading-5 text-[#777]">
+                    Save time by importing your resume in one of the following
+                    formats: .pdf, .doc, .docx, .odt, or .rtf.
+                  </p>
+                </div>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowImportMenu((previous) => !previous)}
+                    className="flex min-w-[245px] items-center justify-center gap-3 rounded-[7px] bg-[#0c6175] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#084e5f]"
+                  >
+                    Import resume from
+                    <FaChevronDown
+                      className={`text-[11px] transition-transform ${
+                        showImportMenu ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {showImportMenu && (
+                    <div className="absolute right-0 top-[calc(100%+7px)] z-50 w-full min-w-[245px] overflow-hidden rounded-md border border-[#ddd] bg-white shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowImportMenu(false);
+                          resumeInputRef.current?.click();
+                        }}
+                        className="block w-full px-4 py-3 text-left text-sm text-[#444] transition hover:bg-[#f3f7f8]"
+                      >
+                        Upload resume from computer
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowImportMenu(false)}
+                        className="block w-full border-t border-[#eee] px-4 py-3 text-left text-sm text-[#888]"
+                      >
+                        Import from another service
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* ========================================================
+                REQUIRED FIELDS
+            ======================================================== */}
+
+            <div className="mt-8 text-[12px] text-[#777]">
+              <span className="text-[#b44b4b]">*</span> Required fields
+            </div>
+
+            {/* ========================================================
+                PERSONAL INFORMATION
+            ======================================================== */}
+
+            <section className="mt-5">
+              <SectionHeading
+                title="Personal information"
+                onClear={clearPersonalInformation}
+              />
+
+              <div className="mt-7 space-y-6">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <Input
+                    label="First name"
+                    name="firstName"
+                    value={form.firstName}
                     onChange={handleChange}
                     required
-                    className="min-w-0 flex-1 border-0 bg-white px-4 text-sm text-[#444] outline-none"
+                  />
+
+                  <Input
+                    label="Last name"
+                    name="lastName"
+                    value={form.lastName}
+                    onChange={handleChange}
+                    required
                   />
                 </div>
 
-                <p className="mt-1.5 text-[12px] text-[#777]">
-                  The hiring team may use this number to contact you about this
-                  job.
-                </p>
-              </div>
-
-              <Input
-                label="Address"
-                name="address"
-                value={form.address}
-                onChange={handleChange}
-                required
-                helper="Include your city, region, and country, so that employers can easily manage your application."
-              />
-            </div>
-          </section>
-
-          {/* ========================================================
-              PROFILE
-          ======================================================== */}
-
-          <section className="mt-12">
-            <SectionHeading title="Profile" onClear={clearProfile} />
-
-            <div className="mt-7">
-              <FieldLabel required info>
-                Resume
-              </FieldLabel>
-
-              <div
-                onDragEnter={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={(e) => {
-                  e.preventDefault();
-                  setIsDragging(false);
-                }}
-                onDrop={handleDrop}
-                onClick={() => resumeInputRef.current?.click()}
-                className={`mt-2 flex min-h-[118px] cursor-pointer flex-col items-center justify-center rounded-[6px] border border-dashed px-5 text-center transition ${
-                  isDragging
-                    ? "border-[#0c6175] bg-[#edf8fa]"
-                    : "border-[#999] bg-white hover:border-[#0c6175] hover:bg-[#fbffff]"
-                }`}
-              >
-                <input
-                  ref={resumeInputRef}
-                  type="file"
-                  accept=".pdf,.doc,.docx,.rtf"
-                  onChange={handleResumeChange}
-                  className="hidden"
+                <Input
+                  label="Email"
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  required
                 />
 
-                {resume ? (
-                  <>
-                    <FaCheckCircle className="text-[28px] text-[#0c6175]" />
+                <div>
+                  <FieldLabel required>Phone</FieldLabel>
 
-                    <p className="mt-2 max-w-full truncate text-sm font-medium text-[#444]">
-                      {resume.name}
-                    </p>
-
-                    <p className="mt-1 text-xs text-[#888]">
-                      {(resume.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        clearResume();
-                      }}
-                      className="mt-2 text-xs font-medium text-[#b34d4d] hover:underline"
-                    >
-                      Remove file
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#effbfc]">
-                      <FaCloudUploadAlt className="text-[25px] text-[#0c6175]" />
+                  <div className="mt-2 flex h-[40px] w-full overflow-hidden rounded-[6px] border border-[#b9b9b9] bg-white">
+                    <div className="flex w-[105px] shrink-0 items-center justify-center gap-2 border-r border-[#d2d2d2] bg-[#fafafa] text-sm text-[#555]">
+                      <span>🇬🇭</span>
+                      <span>+233</span>
+                      <FaChevronDown className="ml-1 text-[9px] text-[#888]" />
                     </div>
 
-                    <p className="mt-3 text-[13px] text-[#445]">
-                      <span className="font-medium">Choose file</span>{" "}
-                      or drag and drop here
-                    </p>
-                  </>
-                )}
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={form.phone}
+                      onChange={handleChange}
+                      required
+                      className="min-w-0 flex-1 border-0 bg-white px-4 text-sm text-[#444] outline-none"
+                    />
+                  </div>
+
+                  <p className="mt-1.5 text-[12px] text-[#777]">
+                    The hiring team may use this number to contact you about this
+                    job.
+                  </p>
+                </div>
+
+                <Input
+                  label="Address"
+                  name="address"
+                  value={form.address}
+                  onChange={handleChange}
+                  required
+                  helper="Include your city, region, and country, so that employers can easily manage your application."
+                />
               </div>
-            </div>
-          </section>
+            </section>
 
-          {/* ========================================================
-              DETAILS
-          ======================================================== */}
+            {/* ========================================================
+                PROFILE
+            ======================================================== */}
 
-          <section className="mt-12">
-            <SectionHeading title="Details" onClear={clearDetails} />
+            <section className="mt-12">
+              <SectionHeading title="Profile" onClear={clearProfile} />
 
-            <div className="mt-7">
-              <label className="block text-[13px] font-semibold text-[#444]">
-                Cover letter{" "}
-                <span className="font-normal text-[#777]">(Optional)</span>
-              </label>
+              <div className="mt-7">
+                <FieldLabel required info>
+                  Resume
+                </FieldLabel>
 
-              <textarea
-                name="coverLetter"
-                value={form.coverLetter}
-                onChange={handleChange}
-                rows={6}
-                className="mt-2 w-full resize-y rounded-[6px] border border-[#b9b9b9] bg-white px-4 py-3 text-sm leading-6 text-[#444] outline-none transition focus:border-[#0c6175]"
-              />
-            </div>
-          </section>
+                <div
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                  }}
+                  onDrop={handleDrop}
+                  onClick={() => resumeInputRef.current?.click()}
+                  className={`mt-2 flex min-h-[118px] cursor-pointer flex-col items-center justify-center rounded-[6px] border border-dashed px-5 text-center transition ${
+                    isDragging
+                      ? "border-[#0c6175] bg-[#edf8fa]"
+                      : "border-[#999] bg-white hover:border-[#0c6175] hover:bg-[#fbffff]"
+                  }`}
+                >
+                  <input
+                    ref={resumeInputRef}
+                    type="file"
+                    accept=".pdf,.doc,.docx,.rtf"
+                    onChange={handleResumeChange}
+                    className="hidden"
+                  />
 
-          {/* ========================================================
-              CPA QUESTION
-          ======================================================== */}
+                  {resume ? (
+                    <>
+                      <FaCheckCircle className="text-[28px] text-[#0c6175]" />
 
-          <Question
-            required
-            question="Are you a Certified Public Accountant?"
-            value={form.isCPA}
-            onChange={(value) => handleRadioChoice("isCPA", value)}
-          />
+                      <p className="mt-2 max-w-full truncate text-sm font-medium text-[#444]">
+                        {resume.name}
+                      </p>
 
-          {/* ========================================================
-              SPONSORSHIP
-          ======================================================== */}
+                      <p className="mt-1 text-xs text-[#888]">
+                        {(resume.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
 
-          <Question
-            required
-            question={`Will you now, or in the future require Alveoly to commence ("sponsor") an immigration case in order to employ you? (For example, H-1B or other employment-based immigration case.)`}
-            value={form.requiresSponsorship}
-            onChange={(value) =>
-              handleRadioChoice("requiresSponsorship", value)
-            }
-          />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          clearResume();
+                        }}
+                        className="mt-2 text-xs font-medium text-[#b34d4d] hover:underline"
+                      >
+                        Remove file
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#effbfc]">
+                        <FaCloudUploadAlt className="text-[25px] text-[#0c6175]" />
+                      </div>
 
-          {/* ========================================================
-              RELOCATION
-          ======================================================== */}
+                      <p className="mt-3 text-[13px] text-[#445]">
+                        <span className="font-medium">Choose file</span>{" "}
+                        or drag and drop here
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </section>
 
-          <Question
-            required
-            question={`This is a full-time, on-site opportunity. If you are not currently in the area, are you open to relocating?`}
-            value={form.willingToRelocate}
-            onChange={(value) =>
-              handleRadioChoice("willingToRelocate", value)
-            }
-          />
+            {/* ========================================================
+                DETAILS
+            ======================================================== */}
 
-          {/* ========================================================
-              REFERRAL
-          ======================================================== */}
+            <section className="mt-12">
+              <SectionHeading title="Details" onClear={clearDetails} />
 
-          <section className="mt-8">
-            <FieldLabel required>
-              Were you referred to apply by anyone? If so, please provide the
-              referrer's name
-            </FieldLabel>
+              <div className="mt-7">
+                <label className="block text-[13px] font-semibold text-[#444]">
+                  Cover letter{" "}
+                  <span className="font-normal text-[#777]">(Optional)</span>
+                </label>
 
-            <input
-              type="text"
-              name="referralName"
-              value={form.referralName}
-              onChange={handleChange}
+                <textarea
+                  name="coverLetter"
+                  value={form.coverLetter}
+                  onChange={handleChange}
+                  rows={6}
+                  className="mt-2 w-full resize-y rounded-[6px] border border-[#b9b9b9] bg-white px-4 py-3 text-sm leading-6 text-[#444] outline-none transition focus:border-[#0c6175]"
+                />
+              </div>
+            </section>
+
+            {/* ========================================================
+                CPA QUESTION
+            ======================================================== */}
+
+            <Question
               required
-              className="mt-2 h-[40px] w-full rounded-[6px] border border-[#b9b9b9] bg-white px-4 text-sm text-[#444] outline-none transition focus:border-[#0c6175]"
+              question="Are you a Certified Public Accountant?"
+              value={form.isCPA}
+              onChange={(value) => handleRadioChoice("isCPA", value)}
             />
-          </section>
 
-          {/* ========================================================
-              SUBMIT
-          ======================================================== */}
+            {/* ========================================================
+                SALARY EXPECTATIONS - NEW FIELD
+            ======================================================== */}
 
-          <section className="pb-12 pt-10">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex h-[42px] w-full items-center justify-center rounded-[6px] bg-[#0c6175] text-[13px] font-semibold text-white transition hover:bg-[#084e5f] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {submitting ? "Submitting application..." : "Submit application"}
-            </button>
-          </section>
-        </form>
+            <section className="mt-8">
+              <FieldLabel required>
+                What are your salary expectations? Please provide a number or range.
+              </FieldLabel>
+
+              <input
+                type="text"
+                name="salaryExpectation"
+                value={form.salaryExpectation}
+                onChange={handleChange}
+                required
+                placeholder="e.g., GHS 5,000 - GHS 8,000 per month"
+                className="mt-2 h-[40px] w-full rounded-[6px] border border-[#b9b9b9] bg-white px-4 text-sm text-[#444] outline-none transition focus:border-[#0c6175]"
+              />
+
+              <p className="mt-1.5 text-[12px] text-[#777]">
+                Please provide your expected salary range in Ghana Cedis (GHS) or your home currency.
+              </p>
+            </section>
+
+            {/* ========================================================
+                SPONSORSHIP
+            ======================================================== */}
+
+            <Question
+              required
+              question={`Will you now, or in the future require Alveoly to commence ("sponsor") an immigration case in order to employ you? (For example, H-1B or other employment-based immigration case.)`}
+              value={form.requiresSponsorship}
+              onChange={(value) =>
+                handleRadioChoice("requiresSponsorship", value)
+              }
+            />
+
+            {/* ========================================================
+                RELOCATION
+            ======================================================== */}
+
+            <Question
+              required
+              question={`This is a full-time, on-site opportunity. If you are not currently in the area, are you open to relocating?`}
+              value={form.willingToRelocate}
+              onChange={(value) =>
+                handleRadioChoice("willingToRelocate", value)
+              }
+            />
+
+            {/* ========================================================
+                REFERRAL
+            ======================================================== */}
+
+            <section className="mt-8">
+              <FieldLabel required>
+                Were you referred to apply by anyone? If so, please provide the
+                referrer's name
+              </FieldLabel>
+
+              <input
+                type="text"
+                name="referralName"
+                value={form.referralName}
+                onChange={handleChange}
+                required
+                className="mt-2 h-[40px] w-full rounded-[6px] border border-[#b9b9b9] bg-white px-4 text-sm text-[#444] outline-none transition focus:border-[#0c6175]"
+              />
+            </section>
+
+            {/* ========================================================
+                SUBMIT
+            ======================================================== */}
+
+            <section className="pb-12 pt-10">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex h-[42px] w-full items-center justify-center rounded-[6px] bg-[#0c6175] text-[13px] font-semibold text-white transition hover:bg-[#084e5f] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? "Submitting application..." : "Submit application"}
+              </button>
+            </section>
+          </form>
+        )}
       </main>
 
       {/* ============================================================

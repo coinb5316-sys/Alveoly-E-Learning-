@@ -2,6 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { FaArrowRight } from "react-icons/fa";
 import CareerNavbar from "../components/CareerNavbar";
 import Footer from "../components/Footer";
@@ -18,7 +19,50 @@ const IMAGES = {
     "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=1200&q=85",
 };
 
+// Job data with slugs for job details
+const FEATURED_JOBS = [
+  {
+    title: "Medical Professionals",
+    image: IMAGES.physicians,
+    slug: "medical-professionals",
+    description: "Join our medical team and help shape healthcare education",
+    openings: 5,
+  },
+  {
+    title: "Marketing",
+    image: IMAGES.marketing,
+    slug: "marketing",
+    description: "Drive growth through strategic marketing initiatives",
+    openings: 3,
+  },
+  {
+    title: "Sales",
+    image: IMAGES.sales,
+    slug: "sales",
+    description: "Build relationships and drive revenue growth",
+    openings: 4,
+  },
+];
+
 const CareerPage = () => {
+  const navigate = useNavigate();
+
+  const handleViewOpenings = () => {
+    navigate("/careers/jobs");
+  };
+
+  const handleJobClick = (job) => {
+    navigate(`/careers/jobs/${job.slug}`, {
+      state: {
+        jobTitle: job.title,
+        jobDescription: job.description,
+        openings: job.openings,
+        image: job.image,
+        jobLocation: "Alveoly",
+      }
+    });
+  };
+
   return (
     <div className="min-h-screen bg-white overflow-x-hidden text-[#333]">
 
@@ -86,8 +130,8 @@ const CareerPage = () => {
               Shape Ghana's Future
             </h1>
 
-            <motion.a
-              href="#featured-jobs"
+            <motion.button
+              onClick={handleViewOpenings}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.98 }}
               className="
@@ -110,7 +154,7 @@ const CareerPage = () => {
             >
               View Open Positions
               <FaArrowRight className="text-[11px]" />
-            </motion.a>
+            </motion.button>
           </motion.div>
         </div>
 
@@ -366,20 +410,15 @@ const CareerPage = () => {
             "
           >
 
-            <JobCard
-              title="Medical Professionals"
-              image={IMAGES.physicians}
-            />
-
-            <JobCard
-              title="Marketing"
-              image={IMAGES.marketing}
-            />
-
-            <JobCard
-              title="Sales"
-              image={IMAGES.sales}
-            />
+            {FEATURED_JOBS.map((job) => (
+              <JobCard
+                key={job.title}
+                title={job.title}
+                image={job.image}
+                onClick={() => handleJobClick(job)}
+                openings={job.openings}
+              />
+            ))}
 
           </div>
         </div>
@@ -468,24 +507,25 @@ const CareerPage = () => {
 
 
 /* =============================================================
-   JOB CARD
+   JOB CARD - Now clickable with navigation
 ============================================================= */
 
-const JobCard = ({ title, image }) => {
+const JobCard = ({ title, image, onClick, openings }) => {
   return (
-    <motion.a
-      href="#jobs"
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      whileHover={{ y: -2 }}
+      whileHover={{ y: -5 }}
       transition={{ duration: 0.35 }}
+      onClick={onClick}
       className="
         group
         block
         relative
         overflow-hidden
         bg-gray-100
+        cursor-pointer
       "
     >
       <div className="relative h-[190px] md:h-[160px] lg:h-[175px]">
@@ -502,9 +542,12 @@ const JobCard = ({ title, image }) => {
             object-cover
             transition-transform
             duration-500
-            group-hover:scale-[1.03]
+            group-hover:scale-[1.08]
           "
         />
+
+        {/* Dark overlay on hover */}
+        <div className="absolute inset-0 bg-black/0 transition-all duration-300 group-hover:bg-black/20" />
 
         {/* Reference-style dark translucent strip */}
         <div
@@ -513,24 +556,45 @@ const JobCard = ({ title, image }) => {
             left-0
             right-0
             bottom-0
-            bg-black/55
+            bg-gradient-to-t from-black/80 via-black/60 to-transparent
             px-4
-            py-4
+            pt-8
+            pb-4
           "
         >
           <span
             className="
+              block
               text-white
               text-[19px]
               md:text-[18px]
               font-normal
+              text-center
             "
           >
             {title}
           </span>
+
+          {/* Openings badge */}
+          <div className="flex justify-center items-center gap-2 mt-1">
+            <span className="text-[10px] text-white/70 font-light">
+              {openings} {openings === 1 ? 'opening' : 'openings'}
+            </span>
+            <span className="w-1 h-1 rounded-full bg-white/30" />
+            <span className="text-[10px] text-white/70 font-light">
+              Click to apply
+            </span>
+          </div>
+        </div>
+
+        {/* View details indicator on hover */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+          <span className="bg-white/90 text-[#333] px-4 py-2 rounded-full text-xs font-medium shadow-lg">
+            View Openings →
+          </span>
         </div>
       </div>
-    </motion.a>
+    </motion.div>
   );
 };
 
