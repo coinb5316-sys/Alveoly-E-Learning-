@@ -333,7 +333,7 @@ const SignupPage = () => {
                   {/* User Type Selection - Email Signup */}
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Are you an Alveoly Student (Applicable only to an already registered student from Alveoly who has registered through 0549556116)?
+                      Are you an Alveoly Student?
                     </label>
                     <div className="grid grid-cols-2 gap-3">
                       <button
