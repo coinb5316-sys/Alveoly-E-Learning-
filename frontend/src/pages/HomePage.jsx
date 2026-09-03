@@ -34,7 +34,7 @@ import kalveoBg from "../images/kalveo-bg.jpg";
 
 
 /* ============================================================
-   PRODUCT DATA
+   PRODUCT DATA - Updated with proper category links
 ============================================================ */
 
 const PRODUCTS = [
@@ -43,48 +43,56 @@ const PRODUCTS = [
     description: "Making the dream to practice medicine a reality",
     icon: FaUserMd,
     link: "/programs?category=medical",
+    category: "medical",
   },
   {
     title: "Nursing",
     description: "Guiding your success from classroom to clinical",
     icon: FaLaptopMedical,
     link: "/programs?category=nursing",
+    category: "nursing",
   },
   {
     title: "Accounting",
     description: "Helping you pass your CPA exams with confidence",
     icon: FaCalculator,
     link: "/programs?category=accounting",
+    category: "accounting",
   },
   {
     title: "Finance",
     description: "Preparing you for success in financial careers",
     icon: FaMoneyBillWave,
     link: "/programs?category=finance",
+    category: "finance",
   },
   {
     title: "High School",
     description: "Helping students prepare for the next step",
     icon: FaGraduationCap,
     link: "/programs?category=high-school",
+    category: "high-school",
   },
   {
     title: "Grad School",
     description: "Taking your graduate preparation to the next level",
     icon: FaUserGraduate,
     link: "/programs?category=grad-school",
+    category: "grad-school",
   },
   {
     title: "Legal",
     description: "Equipping you with the tools to pass the bar",
     icon: FaBalanceScale,
     link: "/programs?category=legal",
+    category: "legal",
   },
   {
     title: "Pharmacy",
     description: "Preparing the next generation of pharmacists",
     icon: FaFlask,
     link: "/programs?category=pharmacy",
+    category: "pharmacy",
   },
 ];
 
@@ -350,16 +358,16 @@ const HomePage = () => {
                 bg-[#f7c928]
                 hover:bg-[#eab900]
                 text-[#222]
-                px-5
-                py-2.5
+                px-6
+                py-3
                 rounded-full
-                text-[12px]
+                text-[14px]
                 font-semibold
                 transition-colors
               "
             >
               Explore Our Programs
-              <FaArrowRight className="text-[9px]" />
+              <FaArrowRight className="text-[11px]" />
             </button>
 
           </motion.div>
@@ -421,7 +429,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          PRODUCT CATEGORIES
+          PRODUCT CATEGORIES - ENLARGED FONTS & ICONS
       ======================================================= */}
 
       <section className="bg-white py-10 md:py-14">
@@ -452,7 +460,7 @@ const HomePage = () => {
                     duration: 0.4,
                     delay: index * 0.04,
                   }}
-                  onClick={() => navigate(product.link)}
+                  onClick={() => navigate(`/programs?category=${product.category}`)}
                   className="
                     group
                     text-center
@@ -460,14 +468,14 @@ const HomePage = () => {
                   "
                 >
 
-                  {/* Icon */}
-                  <div className="flex justify-center mb-2">
+                  {/* Icon - ENLARGED */}
+                  <div className="flex justify-center mb-3">
 
                     <Icon
                       className="
                         text-[#1687df]
-                        text-[20px]
-                        md:text-[23px]
+                        text-[32px]
+                        md:text-[38px]
                         group-hover:scale-110
                         transition-transform
                       "
@@ -475,49 +483,50 @@ const HomePage = () => {
 
                   </div>
 
-                  {/* Title */}
+                  {/* Title - ENLARGED */}
                   <h3
                     className="
                       text-[#1687df]
-                      text-[12px]
-                      md:text-[13px]
-                      font-medium
+                      text-[16px]
+                      md:text-[18px]
+                      font-semibold
                     "
                   >
                     {product.title}
                   </h3>
 
-                  {/* Description */}
+                  {/* Description - ENLARGED */}
                   <p
                     className="
-                      mt-1
-                      text-[9px]
-                      md:text-[10px]
-                      leading-[1.35]
+                      mt-2
+                      text-[12px]
+                      md:text-[13px]
+                      leading-[1.4]
                       text-[#777]
-                      max-w-[160px]
+                      max-w-[180px]
                       mx-auto
-                      min-h-[28px]
+                      min-h-[32px]
                     "
                   >
                     {product.description}
                   </p>
 
-                  {/* CTA */}
+                  {/* CTA - ENLARGED */}
                   <span
                     className="
                       inline-flex
                       items-center
-                      gap-1
-                      mt-2
+                      gap-2
+                      mt-3
                       text-[#1687df]
-                      text-[9px]
-                      font-medium
+                      text-[13px]
+                      md:text-[14px]
+                      font-semibold
                       group-hover:underline
                     "
                   >
                     Get Started
-                    <FaArrowRight className="text-[6px]" />
+                    <FaArrowRight className="text-[10px]" />
                   </span>
 
                 </motion.button>
