@@ -639,7 +639,7 @@ const Navbar = () => {
                       {/* User Type Selection */}
                       <div className="space-y-2">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Are you an Alveoly Student?
+                          Are you an Alveoly Student (Applicable only to an already registered student from Alveoly who has registered through 0549556116)?
                         </label>
                         <div className="grid grid-cols-2 gap-3">
                           <button
