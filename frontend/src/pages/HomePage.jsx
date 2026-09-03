@@ -34,7 +34,7 @@ import kalveoBg from "../images/kalveo-bg.jpg";
 
 
 /* ============================================================
-   PRODUCT DATA - Updated with proper category links
+   PRODUCT DATA - Updated with direct page routes
 ============================================================ */
 
 const PRODUCTS = [
@@ -42,56 +42,56 @@ const PRODUCTS = [
     title: "Medical",
     description: "Making the dream to practice medicine a reality",
     icon: FaUserMd,
-    link: "/programs?category=medical",
+    route: "/medical",
     category: "medical",
   },
   {
     title: "Nursing",
     description: "Guiding your success from classroom to clinical",
     icon: FaLaptopMedical,
-    link: "/programs?category=nursing",
+    route: "/nursing",
     category: "nursing",
   },
   {
     title: "Accounting",
     description: "Helping you pass your CPA exams with confidence",
     icon: FaCalculator,
-    link: "/programs?category=accounting",
+    route: "/accounting",
     category: "accounting",
   },
   {
     title: "Finance",
     description: "Preparing you for success in financial careers",
     icon: FaMoneyBillWave,
-    link: "/programs?category=finance",
+    route: "/finance",
     category: "finance",
   },
   {
     title: "High School",
     description: "Helping students prepare for the next step",
     icon: FaGraduationCap,
-    link: "/programs?category=high-school",
+    route: "/high-school",
     category: "high-school",
   },
   {
     title: "Grad School",
     description: "Taking your graduate preparation to the next level",
     icon: FaUserGraduate,
-    link: "/programs?category=grad-school",
+    route: "/grad-school",
     category: "grad-school",
   },
   {
     title: "Legal",
     description: "Equipping you with the tools to pass the bar",
     icon: FaBalanceScale,
-    link: "/programs?category=legal",
+    route: "/legal",
     category: "legal",
   },
   {
     title: "Pharmacy",
     description: "Preparing the next generation of pharmacists",
     icon: FaFlask,
-    link: "/programs?category=pharmacy",
+    route: "/pharmacy",
     category: "pharmacy",
   },
 ];
@@ -430,6 +430,7 @@ const HomePage = () => {
 
       {/* ======================================================
           PRODUCT CATEGORIES - ENLARGED FONTS & ICONS
+          Now using direct routes like /medical, /nursing, etc.
       ======================================================= */}
 
       <section className="bg-white py-10 md:py-14">
@@ -460,7 +461,7 @@ const HomePage = () => {
                     duration: 0.4,
                     delay: index * 0.04,
                   }}
-                  onClick={() => navigate(`/programs?category=${product.category}`)}
+                  onClick={() => navigate(product.route)}
                   className="
                     group
                     text-center
