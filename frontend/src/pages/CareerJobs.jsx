@@ -37,42 +37,72 @@ const departments = [
   {
     title: "Accounting",
     image: accountingImg,
+    slug: "accounting",
+    description: "Join our accounting team and help shape financial strategies",
+    openings: 3,
   },
   {
     title: "Admin, HR & Recruiting",
     image: adminImg,
+    slug: "admin-hr-recruiting",
+    description: "Be part of our people operations and talent acquisition team",
+    openings: 2,
   },
   {
     title: "Animation & Illustration",
     image: animationImg,
+    slug: "animation-illustration",
+    description: "Create engaging visual content for our educational platforms",
+    openings: 4,
   },
   {
     title: "Finance",
     image: financeImg,
+    slug: "finance",
+    description: "Drive financial excellence and strategic growth",
+    openings: 2,
   },
   {
     title: "Legal",
     image: legalImg,
+    slug: "legal",
+    description: "Provide legal expertise and compliance support",
+    openings: 1,
   },
   {
     title: "Medical",
     image: medicalImg,
+    slug: "medical",
+    description: "Develop medical content and educational resources",
+    openings: 5,
   },
   {
     title: "Nursing",
     image: nursingImg,
+    slug: "nursing",
+    description: "Create nursing education materials and exam preparation",
+    openings: 4,
   },
   {
     title: "Pharmacy",
     image: pharmacyImg,
+    slug: "pharmacy",
+    description: "Develop pharmacy education and clinical resources",
+    openings: 3,
   },
   {
     title: "Sales",
     image: salesImg,
+    slug: "sales",
+    description: "Drive growth through strategic sales and partnerships",
+    openings: 6,
   },
   {
     title: "Software Development",
     image: softwareImg,
+    slug: "software-development",
+    description: "Build innovative learning platforms and tools",
+    openings: 8,
   },
 ];
 
@@ -146,6 +176,18 @@ const CareerJobs = () => {
     );
   }, [search]);
 
+  // Navigate to job details page
+  const handleJobClick = (department) => {
+    navigate(`/careers/jobs/${department.slug}`, {
+      state: {
+        jobTitle: department.title,
+        jobDescription: department.description,
+        openings: department.openings,
+        image: department.image,
+      }
+    });
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-white text-[#4d4d4d]">
       <CareerNavbar />
@@ -175,7 +217,7 @@ const CareerJobs = () => {
                   onChange={(e) => setSearch(e.target.value)}
                   aria-label="Search jobs"
                   className="h-12 w-full border-0 border-b border-[#555] bg-transparent px-1 pr-3 text-base font-light text-[#444] outline-none placeholder:text-[#999] focus:border-[#258EDB]"
-                  placeholder=""
+                  placeholder="Search departments..."
                 />
               </div>
 
@@ -190,7 +232,7 @@ const CareerJobs = () => {
           </motion.div>
 
           {/* ======================================================
-              DEPARTMENT CARDS
+              DEPARTMENT CARDS - Now Clickable
           ====================================================== */}
 
           <motion.div
@@ -201,26 +243,47 @@ const CareerJobs = () => {
             className="mt-16 grid grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3"
           >
             {filteredDepartments.map((department) => (
-              <motion.button
+              <motion.div
                 key={department.title}
-                type="button"
-                whileHover={{ y: -3 }}
+                whileHover={{ y: -5 }}
                 transition={{ duration: 0.2 }}
-                className="group relative block h-[170px] w-full overflow-hidden bg-gray-100 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-[#258EDB]"
+                className="group relative block h-[220px] w-full overflow-hidden bg-gray-100 text-left shadow-sm cursor-pointer"
+                onClick={() => handleJobClick(department)}
               >
                 <img
                   src={department.image}
                   alt={department.title}
-                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.08]"
                 />
 
-                {/* Exact-style dark translucent title strip */}
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-5 py-4">
-                  <span className="block text-center text-lg font-light text-white sm:text-[18px]">
+                {/* Dark overlay on hover */}
+                <div className="absolute inset-0 bg-black/0 transition-all duration-300 group-hover:bg-black/20" />
+
+                {/* Title strip */}
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/60 to-transparent px-5 pt-8 pb-4">
+                  <span className="block text-center text-lg font-light text-white sm:text-[20px]">
                     {department.title}
                   </span>
+                  
+                  {/* Openings badge */}
+                  <div className="flex justify-center items-center gap-2 mt-1">
+                    <span className="text-[10px] text-white/70 font-light">
+                      {department.openings} {department.openings === 1 ? 'opening' : 'openings'}
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-white/30" />
+                    <span className="text-[10px] text-white/70 font-light">
+                      Click to apply
+                    </span>
+                  </div>
                 </div>
-              </motion.button>
+
+                {/* View details indicator on hover */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                  <span className="bg-white/90 text-[#333] px-4 py-2 rounded-full text-xs font-medium shadow-lg">
+                    View Openings →
+                  </span>
+                </div>
+              </motion.div>
             ))}
           </motion.div>
 
@@ -231,7 +294,7 @@ const CareerJobs = () => {
               className="py-20 text-center"
             >
               <p className="text-lg font-light text-[#666]">
-                No departments found.
+                No departments found matching "{search}"
               </p>
             </motion.div>
           )}

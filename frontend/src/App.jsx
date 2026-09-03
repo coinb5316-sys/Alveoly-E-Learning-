@@ -106,6 +106,7 @@ import CareerWhatWeDo from "./pages/CareerWhatWeDo";
 import LiveAtAlveoly from "./pages/LiveAtAlveoly";
 import CareerBenefits from "./pages/CareerBenefits";
 import CareerJobs from "./pages/CareerJobs";
+import JobDetails from "./pages/JobDetails";
 
 function App() {
   useEffect(() => {
@@ -163,6 +164,7 @@ function App() {
           <Route path="/careers/life-at-alveoly" element={<LiveAtAlveoly />} />
           <Route path="/careers/benefits" element={<CareerBenefits />} />
           <Route path="/careers/jobs" element={<CareerJobs />} />
+          <Route path="/careers/jobs/:slug" element={<JobDetails />} />
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
