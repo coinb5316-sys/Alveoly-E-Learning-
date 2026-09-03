@@ -108,6 +108,7 @@ import CareerBenefits from "./pages/CareerBenefits";
 import CareerJobs from "./pages/CareerJobs";
 import JobDetails from "./pages/JobDetails";
 import JobApplication from "./pages/JobApplication";
+import Medical from "./pages/Medical";
 
 function App() {
   useEffect(() => {
@@ -170,6 +171,7 @@ function App() {
   path="/careers/jobs/apply"
   element={<JobApplication />}
 />
+<Route path="/medical" element={<Medical />} />
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
