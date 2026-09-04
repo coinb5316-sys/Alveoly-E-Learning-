@@ -193,28 +193,31 @@ const HomePage = () => {
   }, []);
 
   /* ----------------------------------------------------------
-     Fetch Testimonials from API
+     Fetch Testimonials from API - FIXED
   ---------------------------------------------------------- */
 
   useEffect(() => {
     const fetchTestimonials = async () => {
       try {
         setLoading(true);
-        // Fetch only approved testimonials
-        const response = await API.get("/testimonials/approved");
+        
+        // Fetch from the public /testimonials endpoint
+        const response = await API.get("/testimonials");
         console.log("Fetched testimonials:", response.data);
         
-        // Ensure we have an array
+        // Filter only approved testimonials
         const data = Array.isArray(response.data) ? response.data : [];
-        setTestimonials(data);
+        const approvedTestimonials = data.filter(t => t.status === "approved");
+        
+        console.log("Approved testimonials:", approvedTestimonials);
+        setTestimonials(approvedTestimonials);
         
         // If we have testimonials, start the carousel
-        if (data.length > 0) {
+        if (approvedTestimonials.length > 0) {
           setCurrentTestimonial(0);
         }
       } catch (error) {
         console.error("Error fetching testimonials:", error);
-        // Fallback to empty array if API fails
         setTestimonials([]);
       } finally {
         setLoading(false);
@@ -570,7 +573,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          STUDENT TESTIMONIALS - FETCHED FROM API
+          STUDENT TESTIMONIALS - FETCHED FROM API (FIXED)
       ======================================================= */}
 
       <section className="bg-white py-16 md:py-20">
