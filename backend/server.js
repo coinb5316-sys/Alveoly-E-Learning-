@@ -1,4 +1,4 @@
-// server.js - COMPLETE WITH VIDEO CONFERENCE SUPPORT AND SENDGRID
+// server.js - COMPLETE WITH VIDEO CONFERENCE SUPPORT AND SENDGRID (UPDATED PATHS)
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
@@ -8,7 +8,8 @@ import { Server } from "socket.io";
 import mongoose from "mongoose";
 import FAQ from "./src/models/FAQ.js";
 import cron from "node-cron";
-import { checkExpiredPlans, checkApproachingExpiry } from "./utils/planScheduler.js";
+// FIXED: Import from src/utils instead of utils
+import { checkExpiredPlans, checkApproachingExpiry } from "./src/utils/planScheduler.js";
 import sgMail from "@sendgrid/mail";
 
 dotenv.config();
