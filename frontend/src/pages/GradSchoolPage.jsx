@@ -1,57 +1,57 @@
-// src/pages/MedicalPage.jsx
+// src/pages/GradSchoolPage.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   FaArrowRight,
-  FaStethoscope,
+  FaUserGraduate,
   FaBook,
   FaVideo,
   FaClipboardCheck,
-  FaUserMd,
-  FaHeartbeat,
-  FaBrain,
-  FaLungs,
-  FaBone,
+  FaFlask,
   FaMicroscope,
+  FaChartLine,
+  FaFileAlt,
+  FaUsers,
+  FaLightbulb,
 } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import medicalBg from "../images/medical-bg.jpg";
+import gradSchoolBg from "../images/gradschool-bg.jpg";
 
-const MedicalPage = () => {
+const GradSchoolPage = () => {
   const navigate = useNavigate();
 
   const features = [
     {
       icon: FaBook,
-      title: "Comprehensive Resources",
-      description: "Access detailed medical textbooks, lecture notes, and study guides covering all major medical disciplines.",
+      title: "Advanced Research",
+      description: "Master research methodologies, literature review, and academic writing skills.",
     },
     {
       icon: FaVideo,
-      title: "Video Lectures",
-      description: "Learn from expert physicians through engaging video lectures that break down complex medical concepts.",
+      title: "Expert Lectures",
+      description: "Learn from experienced professors and industry experts through comprehensive lectures.",
     },
     {
       icon: FaClipboardCheck,
-      title: "Practice Questions",
-      description: "Test your knowledge with thousands of practice questions modeled after real medical board exams.",
+      title: "Thesis Preparation",
+      description: "Get guidance on thesis writing, research design, and academic presentation.",
     },
     {
-      icon: FaUserMd,
-      title: "Clinical Scenarios",
-      description: "Prepare for real-world clinical practice with interactive case studies and patient scenarios.",
+      icon: FaLightbulb,
+      title: "Critical Thinking",
+      description: "Develop advanced analytical and critical thinking skills essential for graduate studies.",
     },
   ];
 
-  const specialties = [
-    { icon: FaHeartbeat, name: "Cardiology", color: "text-red-500" },
-    { icon: FaBrain, name: "Neurology", color: "text-purple-500" },
-    { icon: FaLungs, name: "Pulmonology", color: "text-blue-500" },
-    { icon: FaBone, name: "Orthopedics", color: "text-green-500" },
-    { icon: FaMicroscope, name: "Pathology", color: "text-yellow-600" },
-    { icon: FaStethoscope, name: "Internal Medicine", color: "text-indigo-500" },
+  const gradAreas = [
+    { icon: FaFlask, name: "STEM Research", color: "text-blue-500" },
+    { icon: FaMicroscope, name: "Life Sciences", color: "text-green-500" },
+    { icon: FaChartLine, name: "Business Analytics", color: "text-red-500" },
+    { icon: FaFileAlt, name: "Humanities", color: "text-purple-500" },
+    { icon: FaUsers, name: "Social Sciences", color: "text-indigo-500" },
+    { icon: FaBook, name: "Education", color: "text-yellow-600" },
   ];
 
   return (
@@ -63,7 +63,7 @@ const MedicalPage = () => {
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: `url(${medicalBg})`,
+            backgroundImage: `url(${gradSchoolBg})`,
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
@@ -76,27 +76,27 @@ const MedicalPage = () => {
             className="max-w-[600px]"
           >
             <div className="flex items-center gap-3 mb-4">
-              <FaStethoscope className="text-[#f7c928] text-3xl" />
+              <FaUserGraduate className="text-[#f7c928] text-3xl" />
               <span className="text-[#f7c928] text-sm font-semibold uppercase tracking-wider">
-                Medical Program
+                Graduate School Program
               </span>
             </div>
             <h1 className="text-white font-medium text-[36px] sm:text-[44px] md:text-[52px] leading-[1.1]">
-              Your Journey to
+              Your Path to
               <br />
-              Becoming a Doctor
+              Graduate Success
               <br />
               Starts Here
             </h1>
             <p className="mt-4 text-white/85 text-[15px] md:text-[16px] leading-6 max-w-[450px]">
-              Comprehensive medical exam preparation resources designed to help
-              you succeed in your medical school journey and beyond.
+              Comprehensive graduate school preparation resources designed to
+              help you succeed in advanced studies and research.
             </p>
             <button
-              onClick={() => navigate("/programs?category=medical")}
+              onClick={() => navigate("/programs?category=grad-school")}
               className="mt-6 inline-flex items-center gap-2 bg-[#f7c928] hover:bg-[#eab900] text-[#222] px-6 py-3 rounded-full text-[14px] font-semibold transition-colors"
             >
-              Explore Medical Programs
+              Explore Graduate Programs
               <FaArrowRight className="text-[11px]" />
             </button>
           </motion.div>
@@ -108,10 +108,10 @@ const MedicalPage = () => {
         <div className="max-w-[1180px] mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-[#555] font-normal text-[28px] md:text-[34px]">
-              Why Choose Our Medical Program?
+              Why Choose Our Graduate Program?
             </h2>
             <p className="mt-3 text-[14px] text-[#777] max-w-[600px] mx-auto">
-              Everything you need to excel in medical school and board exams
+              Everything you need to excel in graduate school and beyond
             </p>
           </div>
 
@@ -143,21 +143,21 @@ const MedicalPage = () => {
         </div>
       </section>
 
-      {/* Specialties Section */}
+      {/* Graduate Areas Section */}
       <section className="py-16 md:py-20 bg-[#f7f7f7]">
         <div className="max-w-[1180px] mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-[#555] font-normal text-[28px] md:text-[34px]">
-              Medical Specialties Covered
+              Graduate Areas Covered
             </h2>
             <p className="mt-3 text-[14px] text-[#777]">
-              Comprehensive coverage across all major medical disciplines
+              Comprehensive coverage across all major graduate disciplines
             </p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {specialties.map((specialty, index) => {
-              const Icon = specialty.icon;
+            {gradAreas.map((area, index) => {
+              const Icon = area.icon;
               return (
                 <motion.div
                   key={index}
@@ -167,9 +167,9 @@ const MedicalPage = () => {
                   transition={{ delay: index * 0.05 }}
                   className="bg-white p-6 rounded-xl text-center shadow-sm hover:shadow-md transition-shadow duration-300"
                 >
-                  <Icon className={`${specialty.color} text-3xl mx-auto mb-3`} />
+                  <Icon className={`${area.color} text-3xl mx-auto mb-3`} />
                   <p className="text-[#555] text-sm font-medium">
-                    {specialty.name}
+                    {area.name}
                   </p>
                 </motion.div>
               );
@@ -182,11 +182,11 @@ const MedicalPage = () => {
       <section className="py-16 md:py-20 bg-[#1687df]">
         <div className="max-w-[900px] mx-auto px-6 text-center">
           <h2 className="text-white font-normal text-[28px] md:text-[34px]">
-            Ready to Start Your Medical Journey?
+            Ready to Start Your Graduate Journey?
           </h2>
           <p className="mt-4 text-white/85 text-[15px] max-w-[600px] mx-auto">
-            Join thousands of medical students who have successfully prepared
-            with Alveoly's comprehensive medical program.
+            Join thousands of graduate students who have successfully prepared
+            with Alveoly's comprehensive graduate program.
           </p>
           <button
             onClick={() => navigate("/signup")}
@@ -203,4 +203,4 @@ const MedicalPage = () => {
   );
 };
 
-export default MedicalPage;
+export default GradSchoolPage;

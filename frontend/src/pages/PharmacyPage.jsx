@@ -1,57 +1,57 @@
-// src/pages/MedicalPage.jsx
+// src/pages/PharmacyPage.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   FaArrowRight,
-  FaStethoscope,
+  FaFlask,
   FaBook,
   FaVideo,
   FaClipboardCheck,
-  FaUserMd,
+  FaPills,
+  FaSyringe,
   FaHeartbeat,
-  FaBrain,
-  FaLungs,
-  FaBone,
   FaMicroscope,
+  FaUserMd,
+  FaPrescriptionBottle,
 } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import medicalBg from "../images/medical-bg.jpg";
+import pharmacyBg from "../images/pharmacy-bg.jpg";
 
-const MedicalPage = () => {
+const PharmacyPage = () => {
   const navigate = useNavigate();
 
   const features = [
     {
       icon: FaBook,
-      title: "Comprehensive Resources",
-      description: "Access detailed medical textbooks, lecture notes, and study guides covering all major medical disciplines.",
+      title: "Pharmacy Education",
+      description: "Comprehensive pharmacy education materials covering all major pharmaceutical topics.",
     },
     {
       icon: FaVideo,
-      title: "Video Lectures",
-      description: "Learn from expert physicians through engaging video lectures that break down complex medical concepts.",
+      title: "Expert Lectures",
+      description: "Learn from experienced pharmacists and educators through engaging video content.",
     },
     {
       icon: FaClipboardCheck,
       title: "Practice Questions",
-      description: "Test your knowledge with thousands of practice questions modeled after real medical board exams.",
+      description: "Thousands of practice questions with detailed explanations for each answer.",
     },
     {
-      icon: FaUserMd,
-      title: "Clinical Scenarios",
-      description: "Prepare for real-world clinical practice with interactive case studies and patient scenarios.",
+      icon: FaPills,
+      title: "Drug Information",
+      description: "Access comprehensive drug information, interactions, and clinical guidelines.",
     },
   ];
 
-  const specialties = [
-    { icon: FaHeartbeat, name: "Cardiology", color: "text-red-500" },
-    { icon: FaBrain, name: "Neurology", color: "text-purple-500" },
-    { icon: FaLungs, name: "Pulmonology", color: "text-blue-500" },
-    { icon: FaBone, name: "Orthopedics", color: "text-green-500" },
-    { icon: FaMicroscope, name: "Pathology", color: "text-yellow-600" },
-    { icon: FaStethoscope, name: "Internal Medicine", color: "text-indigo-500" },
+  const pharmacyAreas = [
+    { icon: FaPills, name: "Pharmacology", color: "text-blue-500" },
+    { icon: FaSyringe, name: "Compounding", color: "text-green-500" },
+    { icon: FaHeartbeat, name: "Clinical Pharmacy", color: "text-red-500" },
+    { icon: FaMicroscope, name: "Pharmaceutical Science", color: "text-purple-500" },
+    { icon: FaUserMd, name: "Patient Care", color: "text-indigo-500" },
+    { icon: FaPrescriptionBottle, name: "Drug Therapy", color: "text-yellow-600" },
   ];
 
   return (
@@ -63,7 +63,7 @@ const MedicalPage = () => {
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: `url(${medicalBg})`,
+            backgroundImage: `url(${pharmacyBg})`,
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
@@ -76,27 +76,27 @@ const MedicalPage = () => {
             className="max-w-[600px]"
           >
             <div className="flex items-center gap-3 mb-4">
-              <FaStethoscope className="text-[#f7c928] text-3xl" />
+              <FaFlask className="text-[#f7c928] text-3xl" />
               <span className="text-[#f7c928] text-sm font-semibold uppercase tracking-wider">
-                Medical Program
+                Pharmacy Program
               </span>
             </div>
             <h1 className="text-white font-medium text-[36px] sm:text-[44px] md:text-[52px] leading-[1.1]">
-              Your Journey to
+              Your Path to
               <br />
-              Becoming a Doctor
+              Pharmacy Excellence
               <br />
               Starts Here
             </h1>
             <p className="mt-4 text-white/85 text-[15px] md:text-[16px] leading-6 max-w-[450px]">
-              Comprehensive medical exam preparation resources designed to help
-              you succeed in your medical school journey and beyond.
+              Comprehensive pharmacy education and exam preparation resources
+              designed to help you succeed in pharmacy school and beyond.
             </p>
             <button
-              onClick={() => navigate("/programs?category=medical")}
+              onClick={() => navigate("/programs?category=pharmacy")}
               className="mt-6 inline-flex items-center gap-2 bg-[#f7c928] hover:bg-[#eab900] text-[#222] px-6 py-3 rounded-full text-[14px] font-semibold transition-colors"
             >
-              Explore Medical Programs
+              Explore Pharmacy Programs
               <FaArrowRight className="text-[11px]" />
             </button>
           </motion.div>
@@ -108,10 +108,10 @@ const MedicalPage = () => {
         <div className="max-w-[1180px] mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-[#555] font-normal text-[28px] md:text-[34px]">
-              Why Choose Our Medical Program?
+              Why Choose Our Pharmacy Program?
             </h2>
             <p className="mt-3 text-[14px] text-[#777] max-w-[600px] mx-auto">
-              Everything you need to excel in medical school and board exams
+              Everything you need to excel in pharmacy school and your career
             </p>
           </div>
 
@@ -143,21 +143,21 @@ const MedicalPage = () => {
         </div>
       </section>
 
-      {/* Specialties Section */}
+      {/* Pharmacy Areas Section */}
       <section className="py-16 md:py-20 bg-[#f7f7f7]">
         <div className="max-w-[1180px] mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-[#555] font-normal text-[28px] md:text-[34px]">
-              Medical Specialties Covered
+              Pharmacy Areas Covered
             </h2>
             <p className="mt-3 text-[14px] text-[#777]">
-              Comprehensive coverage across all major medical disciplines
+              Comprehensive coverage across all major pharmacy disciplines
             </p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {specialties.map((specialty, index) => {
-              const Icon = specialty.icon;
+            {pharmacyAreas.map((area, index) => {
+              const Icon = area.icon;
               return (
                 <motion.div
                   key={index}
@@ -167,9 +167,9 @@ const MedicalPage = () => {
                   transition={{ delay: index * 0.05 }}
                   className="bg-white p-6 rounded-xl text-center shadow-sm hover:shadow-md transition-shadow duration-300"
                 >
-                  <Icon className={`${specialty.color} text-3xl mx-auto mb-3`} />
+                  <Icon className={`${area.color} text-3xl mx-auto mb-3`} />
                   <p className="text-[#555] text-sm font-medium">
-                    {specialty.name}
+                    {area.name}
                   </p>
                 </motion.div>
               );
@@ -182,11 +182,11 @@ const MedicalPage = () => {
       <section className="py-16 md:py-20 bg-[#1687df]">
         <div className="max-w-[900px] mx-auto px-6 text-center">
           <h2 className="text-white font-normal text-[28px] md:text-[34px]">
-            Ready to Start Your Medical Journey?
+            Ready to Start Your Pharmacy Journey?
           </h2>
           <p className="mt-4 text-white/85 text-[15px] max-w-[600px] mx-auto">
-            Join thousands of medical students who have successfully prepared
-            with Alveoly's comprehensive medical program.
+            Join thousands of pharmacy students who have successfully prepared
+            with Alveoly's comprehensive pharmacy program.
           </p>
           <button
             onClick={() => navigate("/signup")}
@@ -203,4 +203,4 @@ const MedicalPage = () => {
   );
 };
 
-export default MedicalPage;
+export default PharmacyPage;

@@ -1,57 +1,57 @@
-// src/pages/MedicalPage.jsx
+// src/pages/AccountingPage.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   FaArrowRight,
-  FaStethoscope,
+  FaCalculator,
   FaBook,
   FaVideo,
   FaClipboardCheck,
-  FaUserMd,
-  FaHeartbeat,
-  FaBrain,
-  FaLungs,
-  FaBone,
-  FaMicroscope,
+  FaChartLine,
+  FaBalanceScale,
+  FaFileInvoice,
+  FaMoneyBillWave,
+  FaChartPie,
+  FaBriefcase,
 } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import medicalBg from "../images/medical-bg.jpg";
+import accountingBg from "../images/accounting-bg.jpg";
 
-const MedicalPage = () => {
+const AccountingPage = () => {
   const navigate = useNavigate();
 
   const features = [
     {
       icon: FaBook,
-      title: "Comprehensive Resources",
-      description: "Access detailed medical textbooks, lecture notes, and study guides covering all major medical disciplines.",
+      title: "CPA Exam Preparation",
+      description: "Comprehensive CPA exam preparation materials covering all four sections of the exam.",
     },
     {
       icon: FaVideo,
-      title: "Video Lectures",
-      description: "Learn from expert physicians through engaging video lectures that break down complex medical concepts.",
+      title: "Expert Video Lectures",
+      description: "Learn from experienced accounting professionals through engaging video content.",
     },
     {
       icon: FaClipboardCheck,
       title: "Practice Questions",
-      description: "Test your knowledge with thousands of practice questions modeled after real medical board exams.",
+      description: "Thousands of practice questions with detailed explanations for each answer.",
     },
     {
-      icon: FaUserMd,
-      title: "Clinical Scenarios",
-      description: "Prepare for real-world clinical practice with interactive case studies and patient scenarios.",
+      icon: FaChartLine,
+      title: "Financial Analysis",
+      description: "Master financial statement analysis, reporting, and interpretation skills.",
     },
   ];
 
-  const specialties = [
-    { icon: FaHeartbeat, name: "Cardiology", color: "text-red-500" },
-    { icon: FaBrain, name: "Neurology", color: "text-purple-500" },
-    { icon: FaLungs, name: "Pulmonology", color: "text-blue-500" },
-    { icon: FaBone, name: "Orthopedics", color: "text-green-500" },
-    { icon: FaMicroscope, name: "Pathology", color: "text-yellow-600" },
-    { icon: FaStethoscope, name: "Internal Medicine", color: "text-indigo-500" },
+  const accountingAreas = [
+    { icon: FaBalanceScale, name: "Auditing", color: "text-blue-500" },
+    { icon: FaFileInvoice, name: "Taxation", color: "text-red-500" },
+    { icon: FaMoneyBillWave, name: "Financial Accounting", color: "text-green-500" },
+    { icon: FaChartPie, name: "Managerial Accounting", color: "text-purple-500" },
+    { icon: FaBriefcase, name: "Corporate Finance", color: "text-indigo-500" },
+    { icon: FaCalculator, name: "Cost Accounting", color: "text-yellow-600" },
   ];
 
   return (
@@ -63,7 +63,7 @@ const MedicalPage = () => {
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: `url(${medicalBg})`,
+            backgroundImage: `url(${accountingBg})`,
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
@@ -76,27 +76,27 @@ const MedicalPage = () => {
             className="max-w-[600px]"
           >
             <div className="flex items-center gap-3 mb-4">
-              <FaStethoscope className="text-[#f7c928] text-3xl" />
+              <FaCalculator className="text-[#f7c928] text-3xl" />
               <span className="text-[#f7c928] text-sm font-semibold uppercase tracking-wider">
-                Medical Program
+                Accounting Program
               </span>
             </div>
             <h1 className="text-white font-medium text-[36px] sm:text-[44px] md:text-[52px] leading-[1.1]">
-              Your Journey to
+              Your Path to
               <br />
-              Becoming a Doctor
+              Accounting Success
               <br />
               Starts Here
             </h1>
             <p className="mt-4 text-white/85 text-[15px] md:text-[16px] leading-6 max-w-[450px]">
-              Comprehensive medical exam preparation resources designed to help
-              you succeed in your medical school journey and beyond.
+              Comprehensive accounting and CPA exam preparation resources
+              designed to help you succeed in your accounting career.
             </p>
             <button
-              onClick={() => navigate("/programs?category=medical")}
+              onClick={() => navigate("/programs?category=accounting")}
               className="mt-6 inline-flex items-center gap-2 bg-[#f7c928] hover:bg-[#eab900] text-[#222] px-6 py-3 rounded-full text-[14px] font-semibold transition-colors"
             >
-              Explore Medical Programs
+              Explore Accounting Programs
               <FaArrowRight className="text-[11px]" />
             </button>
           </motion.div>
@@ -108,10 +108,10 @@ const MedicalPage = () => {
         <div className="max-w-[1180px] mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-[#555] font-normal text-[28px] md:text-[34px]">
-              Why Choose Our Medical Program?
+              Why Choose Our Accounting Program?
             </h2>
             <p className="mt-3 text-[14px] text-[#777] max-w-[600px] mx-auto">
-              Everything you need to excel in medical school and board exams
+              Everything you need to excel in accounting and pass your CPA exams
             </p>
           </div>
 
@@ -143,21 +143,21 @@ const MedicalPage = () => {
         </div>
       </section>
 
-      {/* Specialties Section */}
+      {/* Accounting Areas Section */}
       <section className="py-16 md:py-20 bg-[#f7f7f7]">
         <div className="max-w-[1180px] mx-auto px-6">
           <div className="text-center mb-12">
             <h2 className="text-[#555] font-normal text-[28px] md:text-[34px]">
-              Medical Specialties Covered
+              Accounting Areas Covered
             </h2>
             <p className="mt-3 text-[14px] text-[#777]">
-              Comprehensive coverage across all major medical disciplines
+              Comprehensive coverage across all major accounting disciplines
             </p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {specialties.map((specialty, index) => {
-              const Icon = specialty.icon;
+            {accountingAreas.map((area, index) => {
+              const Icon = area.icon;
               return (
                 <motion.div
                   key={index}
@@ -167,9 +167,9 @@ const MedicalPage = () => {
                   transition={{ delay: index * 0.05 }}
                   className="bg-white p-6 rounded-xl text-center shadow-sm hover:shadow-md transition-shadow duration-300"
                 >
-                  <Icon className={`${specialty.color} text-3xl mx-auto mb-3`} />
+                  <Icon className={`${area.color} text-3xl mx-auto mb-3`} />
                   <p className="text-[#555] text-sm font-medium">
-                    {specialty.name}
+                    {area.name}
                   </p>
                 </motion.div>
               );
@@ -182,11 +182,11 @@ const MedicalPage = () => {
       <section className="py-16 md:py-20 bg-[#1687df]">
         <div className="max-w-[900px] mx-auto px-6 text-center">
           <h2 className="text-white font-normal text-[28px] md:text-[34px]">
-            Ready to Start Your Medical Journey?
+            Ready to Start Your Accounting Journey?
           </h2>
           <p className="mt-4 text-white/85 text-[15px] max-w-[600px] mx-auto">
-            Join thousands of medical students who have successfully prepared
-            with Alveoly's comprehensive medical program.
+            Join thousands of accounting students who have successfully prepared
+            with Alveoly's comprehensive accounting program.
           </p>
           <button
             onClick={() => navigate("/signup")}
@@ -203,4 +203,4 @@ const MedicalPage = () => {
   );
 };
 
-export default MedicalPage;
+export default AccountingPage;

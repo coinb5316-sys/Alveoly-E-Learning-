@@ -108,7 +108,14 @@ import CareerBenefits from "./pages/CareerBenefits";
 import CareerJobs from "./pages/CareerJobs";
 import JobDetails from "./pages/JobDetails";
 import JobApplication from "./pages/JobApplication";
-import Medical from "./pages/Medical";
+import MedicalPage from "./pages/Medical";
+import NursingPage from "./pages/NursingPage";
+import AccountingPage from "./pages/AccountingPage";
+import FinancePage from "./pages/FinancePage";
+import HighSchoolPage from "./pages/HighSchoolPage";
+import GradSchoolPage from "./pages/GradSchoolPage";
+import LegalPage from "./pages/LegalPage";
+import PharmacyPage from "./pages/PharmacyPage";
 
 function App() {
   useEffect(() => {
@@ -171,7 +178,14 @@ function App() {
   path="/careers/jobs/apply"
   element={<JobApplication />}
 />
-<Route path="/medical" element={<Medical />} />
+<Route path="/medical" element={<MedicalPage />} />
+<Route path="/nursing" element={<NursingPage />} />
+<Route path="/accounting" element={<AccountingPage />} />
+<Route path="/finance" element={<FinancePage />} />
+<Route path="/high-school" element={<HighSchoolPage />} />
+<Route path="/grad-school" element={<GradSchoolPage />} />
+<Route path="/legal" element={<LegalPage />} />
+<Route path="/pharmacy" element={<PharmacyPage />} />
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />

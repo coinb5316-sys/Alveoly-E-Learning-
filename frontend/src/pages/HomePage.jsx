@@ -17,7 +17,6 @@ import {
   FaBook,
   FaGlobeAfrica,
   FaWhatsapp,
-  FaAward,
   FaQuoteLeft,
   FaQuoteRight,
   FaStar,
@@ -54,7 +53,7 @@ const PRODUCTS = [
   },
   {
     title: "Accounting",
-    description: "Helping you pass your CPA exams with confidence",
+    description: "Helping you pass your professional exams with confidence",
     icon: FaCalculator,
     route: "/accounting",
     category: "accounting",
@@ -151,7 +150,7 @@ const FOOTER_PRODUCTS = [
 
 
 /* ============================================================
-   TESTIMONIALS DATA
+   TESTIMONIALS DATA - Ghanaian names with African images
 ============================================================ */
 
 const TESTIMONIALS = [
@@ -161,15 +160,15 @@ const TESTIMONIALS = [
     role: "Medical Student, University of Ghana",
     quote: "The medical preparation resources at Alveoly transformed my approach to studying. I went from struggling with complex concepts to mastering them with ease.",
     rating: 5,
-    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80",
+    image: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=100&q=80",
   },
   {
     id: 2,
     name: "Ama Serwaa",
     role: "Nursing Student, KNUST",
-    quote: "The nursing programs are exceptional! The clinical simulations and practice questions prepared me perfectly for my NCLEX exams. I couldn't have passed without Alveoly.",
+    quote: "The nursing programs are exceptional! The clinical simulations and practice questions prepared me perfectly for my exams. I couldn't have passed without Alveoly.",
     rating: 5,
-    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&q=80",
+    image: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=100&q=80",
   },
   {
     id: 3,
@@ -177,15 +176,15 @@ const TESTIMONIALS = [
     role: "Pharmacy Graduate, UCC",
     quote: "As a pharmacy student, I needed tools that would challenge me. Alveoly's pharmacology resources were exactly what I needed to excel in my board exams.",
     rating: 4,
-    image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&q=80",
+    image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&q=80",
   },
   {
     id: 4,
     name: "Efua Mensah",
     role: "Accounting Professional, KPMG Ghana",
-    quote: "The accounting and CPA preparation courses are top-notch. The practical examples and real-world scenarios helped me pass my exams on the first attempt.",
+    quote: "The accounting and professional preparation courses are top-notch. The practical examples and real-world scenarios helped me pass my exams on the first attempt.",
     rating: 5,
-    image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&q=80",
+    image: "https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?w=100&q=80",
   },
 ];
 
@@ -430,7 +429,6 @@ const HomePage = () => {
 
       {/* ======================================================
           PRODUCT CATEGORIES - ENLARGED FONTS & ICONS
-          Now using direct routes like /medical, /nursing, etc.
       ======================================================= */}
 
       <section className="bg-white py-10 md:py-14">
@@ -541,159 +539,6 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          AWARDS & RECOGNITION - GHANA FOCUSED
-      ======================================================= */}
-
-      <section className="bg-[#f7f7f7] py-12 md:py-16">
-
-        <div className="max-w-[1050px] mx-auto px-6">
-
-          <h2
-            className="
-              text-center
-              text-[#777]
-              font-normal
-              text-[18px]
-              md:text-[21px]
-              mb-9
-            "
-          >
-            Awards & Recognition
-          </h2>
-
-          <div
-            className="
-              flex
-              flex-wrap
-              justify-center
-              items-center
-              gap-8
-              md:gap-14
-            "
-          >
-
-            {/* Best EdTech in Ghana */}
-            <div className="text-center">
-              <div className="mx-auto w-[75px] md:w-[88px]">
-
-                <div
-                  className="
-                    bg-[#006b3e]
-                    text-white
-                    font-bold
-                    leading-[0.9]
-                    text-[15px]
-                    md:text-[18px]
-                    p-2
-                  "
-                >
-                  Best
-                  <br />
-                  EdTech
-                  <br />
-                  in
-                  <br />
-                  Ghana
-                </div>
-
-                <div
-                  className="
-                    bg-[#f5a623]
-                    text-white
-                    text-[7px]
-                    py-1
-                    font-bold
-                  "
-                >
-                  2024 Winner
-                </div>
-
-              </div>
-            </div>
-
-
-            {/* Ministry of Education */}
-            <div
-              className="
-                flex
-                flex-col
-                items-center
-                justify-center
-                text-[#222]
-              "
-            >
-              <div className="text-[19px] font-bold tracking-tight text-[#006b3e]">
-                MoE
-              </div>
-
-              <div className="text-[8px] font-semibold">
-                Ministry of
-              </div>
-
-              <div className="text-[8px]">
-                Education
-              </div>
-
-              <div className="text-[7px] text-gray-500">
-                Partner 2024
-              </div>
-            </div>
-
-
-            {/* Ghana Education Service */}
-            <div
-              className="
-                w-[65px]
-                h-[65px]
-                md:w-[75px]
-                md:h-[75px]
-                rounded-[12px]
-                bg-[#ce1126]
-                text-white
-                flex
-                flex-col
-                items-center
-                justify-center
-                rotate-45
-              "
-            >
-              <div className="-rotate-45 text-center">
-                <div className="text-[22px] font-bold leading-none">
-                  GES
-                </div>
-                <div className="text-[7px]">
-                  Approved
-                </div>
-              </div>
-            </div>
-
-
-            {/* Excellence Award */}
-            <div
-              className="
-                w-[65px]
-                h-[65px]
-                md:w-[75px]
-                md:h-[75px]
-                rounded-full
-                border-[5px]
-                border-[#f5a623]
-                flex
-                items-center
-                justify-center
-                text-[#d4890a]
-              "
-            >
-              <FaAward className="text-3xl" />
-            </div>
-
-          </div>
-
-        </div>
-      </section>
-
-
-      {/* ======================================================
           STUDENT TESTIMONIALS
       ======================================================= */}
 
@@ -725,7 +570,7 @@ const HomePage = () => {
             onMouseLeave={() => setIsPaused(false)}
           >
 
-            {/* Dots indicator - NOW ABOVE the testimonials */}
+            {/* Dots indicator - ABOVE the testimonials */}
             <div className="flex justify-center items-center gap-2 mb-8">
               {TESTIMONIALS.map((_, index) => (
                 <button
@@ -755,7 +600,7 @@ const HomePage = () => {
               >
                 <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
 
-                  {/* Avatar */}
+                  {/* Avatar - African images */}
                   <div className="flex-shrink-0">
                     <img
                       src={TESTIMONIALS[currentTestimonial].image}
@@ -886,7 +731,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          CONTACT US & CAREERS FEATURE
+          JOIN US SECTION - Updated with African nursing students image
       ======================================================= */}
 
       <section className="bg-[#edf4f7]">
@@ -900,12 +745,12 @@ const HomePage = () => {
           "
         >
 
-          {/* Image */}
+          {/* Image - African nursing students */}
           <div className="min-h-[300px] md:min-h-[380px]">
 
             <img
-              src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=1400&q=85"
-              alt="Alveoly team collaborating"
+              src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1400&q=85"
+              alt="African nursing students learning together"
               className="
                 w-full
                 h-full
@@ -939,9 +784,11 @@ const HomePage = () => {
                   leading-[1.25]
                 "
               >
-                Ready to shape the future
+                Ready to Make Your Learning
                 <br className="hidden md:block" />
-                of education in Ghana?
+                and Exam Practice Easy
+                <br className="hidden md:block" />
+                at Your Doorsteps?
               </h2>
 
               <p
