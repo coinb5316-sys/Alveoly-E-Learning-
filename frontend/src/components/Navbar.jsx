@@ -1,4 +1,4 @@
-// src/components/Navbar.jsx - UWorld Style with Pricing (No Cart)
+// src/components/Navbar.jsx - UWorld Style with Full Registration Flow
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -23,7 +23,12 @@ import {
   FaBuilding,
   FaBook,
   FaArrowRight,
-  FaDollarSign
+  FaDollarSign,
+  FaPhone,
+  FaCheck,
+  FaTimes as FaTimesIcon,
+  FaExclamationTriangle,
+  FaClock,
 } from "react-icons/fa";
 import { GoogleLogin } from "@react-oauth/google";
 import logo from "../assets/logo.png";
@@ -58,6 +63,12 @@ const Navbar = () => {
   const [showUserTypeModal, setShowUserTypeModal] = useState(false);
   const [pendingGoogleCredential, setPendingGoogleCredential] = useState(null);
   const [selectedUserType, setSelectedUserType] = useState("");
+  const [showRegistrationSourceModal, setShowRegistrationSourceModal] = useState(false);
+  const [registrationSource, setRegistrationSource] = useState("");
+  const [registrationDetails, setRegistrationDetails] = useState("");
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [approvalMessage, setApprovalMessage] = useState("");
+  const [registeredUser, setRegisteredUser] = useState(null);
 
   // ========== Define isAuthPage ==========
   const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
@@ -97,18 +108,29 @@ const Navbar = () => {
     setShowLoginModal(false);
   };
 
-  // Handle login form submission
+  // ================= LOGIN HANDLER =================
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const result = await login(loginForm);
+      
+      // Check if user needs approval
+      if (result.requiresApproval) {
+        setShowApprovalModal(true);
+        setApprovalMessage("Your account is pending approval. Please wait for admin approval.");
+        setLoading(false);
+        return;
+      }
+      
       if (result.user?.role === "admin") {
         navigate("/admin");
       } else if (result.user?.role === "lecturer") {
         navigate("/lecturer");
       } else if (result.requiresProgram) {
         navigate("/select-program");
+      } else if (result.requiresPlan) {
+        navigate("/student/plans");
       } else {
         navigate("/student/dashboard");
       }
@@ -116,18 +138,108 @@ const Navbar = () => {
       setShowLoginModal(false);
       setLoginForm({ email: "", password: "" });
     } catch (err) {
-      toast.error(err.response?.data?.message || "Login failed");
+      if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
+        setShowApprovalModal(true);
+        setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+      } else {
+        toast.error(err.response?.data?.message || "Login failed");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle signup form submission
+  // ================= ALVEOLY STUDENT REGISTRATION =================
+  const handleAlveolyRegistration = async (source, details) => {
+    try {
+      setLoading(true);
+      
+      const payload = {
+        name: signupForm.name,
+        email: signupForm.email,
+        password: signupForm.password,
+        registrationSource: source,
+        registrationDetails: details || "",
+        userType: "alveoly_student"
+      };
+      
+      const response = await API.post("/auth/register/alveoly", payload);
+      
+      if (response.data.success) {
+        setRegisteredUser({ email: response.data.email, userId: response.data.userId });
+        setApprovalMessage(response.data.message);
+        setShowApprovalModal(true);
+        setShowLoginModal(false);
+        toast.success("Registration submitted for approval!");
+        // Reset form
+        setSignupForm({
+          name: "",
+          email: "",
+          password: "",
+          programId: "",
+          courseId: "",
+          userType: ""
+        });
+      } else {
+        toast.error(response.data.message || "Registration failed");
+      }
+    } catch (err) {
+      console.error("Registration error:", err);
+      toast.error(err.response?.data?.message || "Registration failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ================= NON-ALVEOLY STUDENT REGISTRATION =================
+  const handleNonAlveolyRegistration = async () => {
+    try {
+      setLoading(true);
+      
+      const payload = {
+        name: signupForm.name,
+        email: signupForm.email,
+        password: signupForm.password,
+        userType: "non_alveoly_student"
+      };
+      
+      const response = await API.post("/auth/register/non-alveoly", payload);
+      
+      if (response.data.success) {
+        toast.success("Registration successful! Please login and select a plan.");
+        setShowLoginModal(false);
+        setSignupForm({
+          name: "",
+          email: "",
+          password: "",
+          programId: "",
+          courseId: "",
+          userType: ""
+        });
+        // Navigate to login
+        navigate("/login", { 
+          state: { 
+            message: "Registration successful! Please login to continue.",
+            email: response.data.email 
+          } 
+        });
+      } else {
+        toast.error(response.data.message || "Registration failed");
+      }
+    } catch (err) {
+      console.error("Registration error:", err);
+      toast.error(err.response?.data?.message || "Registration failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ================= HANDLE SIGNUP SUBMIT =================
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
     
     if (!signupForm.userType) {
-      toast.error("Please select your user type (Alveoly Student or Non-Alveoly Student)");
+      toast.error("Please select your user type");
       return;
     }
     
@@ -141,28 +253,36 @@ const Navbar = () => {
       return;
     }
     
-    setLoading(true);
-    try {
-      const result = await register(signupForm);
-      toast.success("Account created successfully!");
-      setShowLoginModal(false);
-      setSignupForm({
-        name: "",
-        email: "",
-        password: "",
-        programId: "",
-        courseId: "",
-        userType: ""
-      });
-      navigate("/student/dashboard");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Signup failed");
-    } finally {
-      setLoading(false);
+    // If Alveoly student, show registration source modal
+    if (signupForm.userType === "alveoly_student") {
+      setShowRegistrationSourceModal(true);
+      return;
+    }
+    
+    // Non-Alveoly student - direct registration
+    await handleNonAlveolyRegistration();
+  };
+
+  // ================= REGISTRATION SOURCE HANDLER =================
+  const handleRegistrationSourceSelect = async (source) => {
+    setRegistrationSource(source);
+    
+    if (source === "phone") {
+      setShowRegistrationSourceModal(false);
+      await handleAlveolyRegistration("phone", "");
+    } else {
+      setShowRegistrationSourceModal(false);
+      const details = prompt("Please provide details about how you registered with Alveoly (e.g., through a friend, social media, event, etc.):");
+      if (details && details.trim()) {
+        await handleAlveolyRegistration("other", details);
+      } else {
+        toast.error("Registration details are required");
+        setShowRegistrationSourceModal(true);
+      }
     }
   };
 
-  // Handle Google login/signup
+  // ================= HANDLE GOOGLE AUTH =================
   const handleGoogleAuth = async (credentialResponse) => {
     try {
       setGoogleLoading(true);
@@ -174,12 +294,24 @@ const Navbar = () => {
       try {
         const result = await googleLogin(idToken);
         
+        // Check if user needs approval
+        if (result.requiresApproval) {
+          setShowApprovalModal(true);
+          setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
+          setShowLoginModal(false);
+          setGoogleLoading(false);
+          setPendingGoogleCredential(null);
+          return;
+        }
+        
         if (result.user?.role === "admin") {
           navigate("/admin");
         } else if (result.user?.role === "lecturer") {
           navigate("/lecturer");
         } else if (result.requiresProgram) {
           navigate("/select-program");
+        } else if (result.requiresPlan) {
+          navigate("/student/plans");
         } else {
           navigate("/student/dashboard");
         }
@@ -187,11 +319,12 @@ const Navbar = () => {
         setShowLoginModal(false);
         setPendingGoogleCredential(null);
       } catch (err) {
-        if (err.response?.status === 404 || 
-            err.response?.data?.message?.includes("not found") ||
-            err.response?.data?.message?.includes("User not found")) {
-          // Show user type modal for new users
+        if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
           setShowUserTypeModal(true);
+          setGoogleLoading(false);
+        } else if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
+          setShowApprovalModal(true);
+          setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
           setGoogleLoading(false);
         } else {
           throw err;
@@ -205,20 +338,49 @@ const Navbar = () => {
     }
   };
 
+  // ================= COMPLETE GOOGLE SIGNUP WITH USER TYPE =================
   const handleGoogleSignupWithType = async () => {
     if (!selectedUserType) {
       toast.error("Please select your user type");
       return;
     }
     
+    setShowUserTypeModal(false);
+    
+    if (selectedUserType === "alveoly_student") {
+      setShowRegistrationSourceModal(true);
+    } else {
+      await handleGoogleSignupComplete(selectedUserType, "none", "");
+    }
+  };
+
+  const handleGoogleSignupComplete = async (userType, source, details) => {
     try {
       setGoogleLoading(true);
-      const result = await googleLogin(pendingGoogleCredential, selectedUserType);
       
-      setShowUserTypeModal(false);
+      const payload = {
+        idToken: pendingGoogleCredential,
+        userType: userType
+      };
+      
+      if (userType === "alveoly_student") {
+        payload.registrationSource = source;
+        payload.registrationDetails = details || "";
+      }
+      
+      const result = await googleLogin(payload.idToken, payload.userType, payload.registrationSource, payload.registrationDetails);
+      
+      setShowRegistrationSourceModal(false);
       setPendingGoogleCredential(null);
       setSelectedUserType("");
       setShowLoginModal(false);
+      
+      if (result.requiresApproval) {
+        setShowApprovalModal(true);
+        setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
+        setGoogleLoading(false);
+        return;
+      }
       
       if (result.user?.role === "admin") {
         navigate("/admin");
@@ -226,6 +388,8 @@ const Navbar = () => {
         navigate("/lecturer");
       } else if (result.requiresProgram) {
         navigate("/select-program");
+      } else if (result.requiresPlan) {
+        navigate("/student/plans");
       } else {
         navigate("/student/dashboard");
       }
@@ -639,7 +803,7 @@ const Navbar = () => {
                       {/* User Type Selection */}
                       <div className="space-y-2">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Are you an Alveoly Student ?
+                          Are you an Alveoly Student?
                         </label>
                         <div className="grid grid-cols-2 gap-3">
                           <button
@@ -850,11 +1014,11 @@ const Navbar = () => {
             <div className="space-y-4">
               <button
                 onClick={() => setSelectedUserType("alveoly_student")}
-                className={`w-full p-4 rounded-xl border-2 transition-all duration-300 flex items-center gap-4 ${(
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-300 flex items-center gap-4 ${
                   selectedUserType === "alveoly_student"
                     ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 shadow-lg shadow-indigo-500/20"
                     : "border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700"
-                )}`}
+                }`}
               >
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl">
                   <FaUserGraduate />
@@ -903,6 +1067,118 @@ const Navbar = () => {
                 "Continue"
               )}
             </button>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ==================== REGISTRATION SOURCE MODAL ==================== */}
+      {showRegistrationSourceModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-8"
+          >
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/50 dark:to-orange-900/50 flex items-center justify-center mx-auto mb-4">
+                <FaPhone className="text-3xl text-amber-600 dark:text-amber-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Registration Source</h2>
+              <p className="text-gray-500 dark:text-gray-400 mt-2">
+                Did you register through <strong>0549556116</strong>?
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <button
+                onClick={() => handleRegistrationSourceSelect("phone")}
+                className="w-full p-4 rounded-xl border-2 border-green-500 bg-green-50 dark:bg-green-950/30 hover:bg-green-100 dark:hover:bg-green-950/50 transition-all duration-300 flex items-center gap-4"
+              >
+                <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white text-xl">
+                  <FaCheck />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Yes</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">I registered through 0549556116</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowRegistrationSourceModal(false);
+                  const details = prompt("Please provide details about how you registered with Alveoly (e.g., through a friend, social media, event, etc.):");
+                  if (details && details.trim()) {
+                    handleRegistrationSourceSelect("other", details);
+                  } else {
+                    toast.error("Registration details are required");
+                    setShowRegistrationSourceModal(true);
+                  }
+                }}
+                className="w-full p-4 rounded-xl border-2 border-red-500 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all duration-300 flex items-center gap-4"
+              >
+                <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center text-white text-xl">
+                  <FaTimesIcon />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">No</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">I registered through another channel</p>
+                </div>
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-4 text-center">
+              This helps us verify your student status and streamline your registration.
+            </p>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ==================== APPROVAL MODAL ==================== */}
+      {showApprovalModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-8"
+          >
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-100 to-amber-100 dark:from-yellow-900/50 dark:to-amber-900/50 flex items-center justify-center mx-auto mb-4">
+                <FaClock className="text-3xl text-yellow-600 dark:text-yellow-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Account Pending Approval</h2>
+              <p className="text-gray-500 dark:text-gray-400 mt-2">
+                {approvalMessage || "Your account is pending admin approval."}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <FaExclamationTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
+                  <div className="text-left">
+                    <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
+                      What happens next?
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                      An admin will review your account. You will receive an email with your approval token once approved.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowApprovalModal(false);
+                  setShowLoginModal(false);
+                  navigate("/login");
+                }}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                Go to Login
+              </button>
+            </div>
           </motion.div>
         </div>
       )}
