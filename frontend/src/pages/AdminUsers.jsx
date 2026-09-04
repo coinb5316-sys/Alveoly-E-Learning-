@@ -1,4 +1,4 @@
-// AdminUsers.jsx - WITH USER TYPE DISPLAY AND EDIT
+// AdminUsers.jsx - Updated with Plan Assignment feature
 import { useEffect, useState } from "react";
 import { 
   FaTrash, 
@@ -17,7 +17,6 @@ import {
   FaBook,
   FaBuilding,
   FaUserPlus,
-  FaChalkboard,
   FaCheckCircle,
   FaUserTag,
   FaCalendarAlt,
@@ -27,6 +26,15 @@ import {
   FaLayerGroup,
   FaUserCheck,
   FaUserTimes,
+  FaClock,
+  FaHourglassHalf,
+  FaCheck,
+  FaBan,
+  FaCrown,
+  FaRegClock,
+  FaExclamationTriangle,
+  FaCalendar,
+  FaRocket,
 } from "react-icons/fa";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -35,6 +43,7 @@ const AdminUsers = () => {
   const [users, setUsers] = useState([]);
   const [courses, setCourses] = useState([]);
   const [programs, setPrograms] = useState([]);
+  const [plans, setPlans] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -43,8 +52,10 @@ const AdminUsers = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [showAddLecturerModal, setShowAddLecturerModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [showAssignPlanModal, setShowAssignPlanModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [expandedLecturer, setExpandedLecturer] = useState(null);
+  const [selectedPlanForUser, setSelectedPlanForUser] = useState("");
   const [newLecturer, setNewLecturer] = useState({
     name: "",
     email: "",
@@ -81,6 +92,10 @@ const AdminUsers = () => {
         userTypeDisplay: user.userType === "alveoly_student" ? "Alveoly Student" : 
                          user.userType === "non_alveoly_student" ? "Non-Alveoly Student" : 
                          "Not set",
+        planName: user.planId?.title || "No Plan",
+        planStatus: user.isPlanActive ? "Active" : 
+                    user.planId ? "Expired" : "None",
+        isApprovedDisplay: user.isApproved ? "✅ Approved" : "⏳ Pending"
       }));
       
       setUsers(formattedUsers);
@@ -90,6 +105,16 @@ const AdminUsers = () => {
       setUsers([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ================= FETCH PLANS =================
+  const fetchPlans = async () => {
+    try {
+      const res = await axios.get("/plans");
+      setPlans(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Failed to fetch plans:", err);
     }
   };
 
@@ -148,29 +173,17 @@ const AdminUsers = () => {
 
   // ================= FETCH FILTERED SUBJECTS =================
   const fetchFilteredSubjects = async (courseId) => {
-    console.log("=== FETCHING SUBJECTS FOR COURSE:", courseId);
-    
     if (!courseId || courseId === "undefined" || courseId === "null" || courseId === "") {
-      console.log("No valid course ID, clearing subjects");
       setAvailableSubjects([]);
       return [];
     }
-    
     try {
-      console.log("Making request to:", `/subjects?course=${courseId}`);
       const res = await axios.get(`/subjects?course=${courseId}`);
-      console.log("Response status:", res.status);
-      console.log("Response data:", res.data);
-      
       const subjectsArray = Array.isArray(res.data) ? res.data : [];
-      console.log("Subjects found:", subjectsArray.length);
-      subjectsArray.forEach(s => console.log(`  - ${s.name} (${s._id})`));
-      
       setAvailableSubjects(subjectsArray);
       return subjectsArray;
     } catch (err) {
       console.error("Failed to fetch subjects:", err);
-      console.error("Error response:", err.response);
       setAvailableSubjects([]);
       return [];
     }
@@ -181,7 +194,66 @@ const AdminUsers = () => {
     fetchPrograms();
     fetchCourses();
     fetchSubjects();
+    fetchPlans();
   }, []);
+
+  // ================= ASSIGN PLAN TO USER =================
+  const handleAssignPlan = async () => {
+    if (!selectedUser || !selectedPlanForUser) {
+      toast.error("Please select a user and a plan");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.post("/auth/assign-plan", {
+        userId: selectedUser._id,
+        planId: selectedPlanForUser
+      });
+
+      if (response.data.success) {
+        toast.success(`Plan assigned to ${selectedUser.name} successfully!`);
+        setShowAssignPlanModal(false);
+        setSelectedUser(null);
+        setSelectedPlanForUser("");
+        fetchUsers();
+      } else {
+        toast.error(response.data.message || "Failed to assign plan");
+      }
+    } catch (err) {
+      console.error("Assign plan error:", err);
+      toast.error(err.response?.data?.message || "Failed to assign plan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ================= OPEN ASSIGN PLAN MODAL =================
+  const openAssignPlanModal = (user) => {
+    setSelectedUser(user);
+    setSelectedPlanForUser("");
+    setShowAssignPlanModal(true);
+  };
+
+  // ================= APPROVE USER =================
+  const handleApproveUser = async (userId) => {
+    try {
+      setLoading(true);
+      const response = await axios.patch(`/users/${userId}/approve`);
+      
+      if (response.data.success) {
+        toast.success("User approved successfully!");
+        fetchUsers();
+      } else {
+        toast.error(response.data.message || "Failed to approve user");
+      }
+    } catch (err) {
+      console.error("Approve user error:", err);
+      toast.error(err.response?.data?.message || "Failed to approve user");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ================= UPDATE USER =================
   const handleUpdateUser = async () => {
@@ -303,9 +375,6 @@ const AdminUsers = () => {
   const handleAddLecturer = async (e) => {
     e.preventDefault();
     
-    console.log("=== SUBMITTING LECTURER ===");
-    console.log("newLecturer state:", newLecturer);
-    
     try {
       setLoading(true);
       
@@ -389,15 +458,9 @@ const AdminUsers = () => {
   };
 
   const handleNewProgramChange = async (programId) => {
-    console.log("=== PROGRAM CHANGED ===");
-    console.log("Selected program ID:", programId);
-    
     setNewLecturer(prev => ({ ...prev, programId, courseId: "", subjectIds: [] }));
-    
     if (programId && programId !== "undefined" && programId !== "null" && programId !== "") {
-      console.log("Fetching courses for program:", programId);
       const coursesData = await fetchFilteredCourses(programId);
-      console.log("Courses found:", coursesData.length);
       setFilteredCourses(coursesData);
       setAvailableSubjects([]);
     } else {
@@ -407,17 +470,10 @@ const AdminUsers = () => {
   };
 
   const handleNewCourseChange = async (courseId) => {
-    console.log("=== COURSE CHANGED ===");
-    console.log("Selected course ID:", courseId);
-    
     setNewLecturer(prev => ({ ...prev, courseId, subjectIds: [] }));
-    
     if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
-      console.log("Fetching subjects for course:", courseId);
-      const subjects = await fetchFilteredSubjects(courseId);
-      console.log("Subjects loaded:", subjects.length);
+      await fetchFilteredSubjects(courseId);
     } else {
-      console.log("No course selected, clearing subjects");
       setAvailableSubjects([]);
     }
   };
@@ -430,25 +486,13 @@ const AdminUsers = () => {
         selectedValues.push(options[i].value);
       }
     }
-    console.log("Subjects selected for edit:", selectedValues);
     setEditUserData({...editUserData, subjectIds: selectedValues});
   };
 
   const handleNewSubjectSelection = (e) => {
     const selectedOptions = Array.from(e.target.selectedOptions);
     const selectedValues = selectedOptions.map(option => option.value);
-    
-    console.log("=== SUBJECT SELECTION CHANGED ===");
-    console.log("Selected values:", selectedValues);
-    
-    setNewLecturer(prev => {
-      const updated = { 
-        ...prev, 
-        subjectIds: selectedValues 
-      };
-      console.log("Updated newLecturer state:", updated);
-      return updated;
-    });
+    setNewLecturer(prev => ({ ...prev, subjectIds: selectedValues }));
   };
 
   const toggleLecturerExpanded = (userId) => {
@@ -462,14 +506,12 @@ const AdminUsers = () => {
   const getAssignedSubjectsList = (user) => {
     if (user.role !== "lecturer") return [];
     if (!user.lecturerInfo?.assignedSubjects) return [];
-    
     return user.lecturerInfo.assignedSubjects.map(subject => {
       if (typeof subject === 'object' && subject.name) return subject;
       return { _id: subject, name: "Loading..." };
     });
   };
 
-  // Get user type badge style
   const getUserTypeBadgeStyle = (userType) => {
     switch(userType) {
       case "alveoly_student":
@@ -506,6 +548,7 @@ const AdminUsers = () => {
   const studentCount = users.filter(u => u.role === "student").length;
   const alveolyStudentCount = users.filter(u => u.userType === "alveoly_student").length;
   const nonAlveolyStudentCount = users.filter(u => u.userType === "non_alveoly_student").length;
+  const pendingApprovalCount = users.filter(u => u.userType === "alveoly_student" && !u.isApproved).length;
 
   const getRoleBadgeStyle = (role) => {
     switch(role) {
@@ -558,8 +601,8 @@ const AdminUsers = () => {
         </div>
       </div>
 
-      {/* Stats Summary - Updated with User Type Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stats Summary */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -596,7 +639,7 @@ const AdminUsers = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Non-Alveoly Students</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Non-Alveoly</p>
               <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">{nonAlveolyStudentCount}</p>
             </div>
             <div className="h-10 w-10 rounded-lg bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center">
@@ -604,9 +647,20 @@ const AdminUsers = () => {
             </div>
           </div>
         </div>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Pending Approval</p>
+              <p className="text-2xl font-semibold text-amber-600 dark:text-amber-400 mt-1">{pendingApprovalCount}</p>
+            </div>
+            <div className="h-10 w-10 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
+              <FaClock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Filters Section - Updated with User Type Filter */}
+      {/* Filters Section */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
           <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
@@ -658,7 +712,7 @@ const AdminUsers = () => {
         </div>
       )}
 
-      {/* Users Table - Updated with User Type Column */}
+      {/* Users Table */}
       {!loading && filteredUsers.length > 0 && (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
           <div className="overflow-x-auto">
@@ -668,8 +722,10 @@ const AdminUsers = () => {
                   <th className="px-6 py-4 text-left font-medium">User</th>
                   <th className="px-6 py-4 text-left font-medium">Email</th>
                   <th className="px-6 py-4 text-left font-medium">User Type</th>
+                  <th className="px-6 py-4 text-left font-medium">Status</th>
                   <th className="px-6 py-4 text-left font-medium">Program</th>
                   <th className="px-6 py-4 text-left font-medium">Course</th>
+                  <th className="px-6 py-4 text-left font-medium">Plan</th>
                   <th className="px-6 py-4 text-left font-medium">Assigned Subjects</th>
                   <th className="px-6 py-4 text-left font-medium">Role</th>
                   <th className="px-6 py-4 text-left font-medium">Actions</th>
@@ -679,9 +735,7 @@ const AdminUsers = () => {
                 {filteredUsers.map((user) => {
                   const assignedSubjects = getAssignedSubjectsList(user);
                   const isExpanded = expandedLecturer === user._id;
-                  const userTypeDisplay = user.userType === "alveoly_student" ? "Alveoly Student" : 
-                                         user.userType === "non_alveoly_student" ? "Non-Alveoly Student" : 
-                                         "Not set";
+                  const isPending = user.userType === "alveoly_student" && !user.isApproved;
                   
                   return (
                     <>
@@ -689,6 +743,7 @@ const AdminUsers = () => {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${
+                              isPending ? "from-amber-500 to-amber-600" :
                               user.role === "admin" ? "from-purple-500 to-purple-600" :
                               user.role === "lecturer" ? "from-blue-500 to-blue-600" : "from-green-500 to-green-600"
                             }`}>
@@ -696,8 +751,11 @@ const AdminUsers = () => {
                             </div>
                             <div>
                               <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
-                              {user.role === "lecturer" && user.lecturerInfo?.title && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400">{user.lecturerInfo.title}</p>
+                              {isPending && (
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  <FaClock className="h-3 w-3 text-amber-500" />
+                                  <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending Approval</span>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -711,8 +769,29 @@ const AdminUsers = () => {
                         <td className="px-6 py-4">
                           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${getUserTypeBadgeStyle(user.userType)}`}>
                             {getUserTypeIcon(user.userType)}
-                            {userTypeDisplay}
+                            {user.userTypeDisplay}
                           </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {isPending ? (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                                <FaClock className="h-3 w-3" />
+                                Pending
+                              </span>
+                              <button
+                                onClick={() => handleApproveUser(user._id)}
+                                className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium"
+                              >
+                                Approve
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800">
+                              <FaCheckCircle className="h-3 w-3" />
+                              Approved
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
@@ -727,25 +806,38 @@ const AdminUsers = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          {user.role === "lecturer" ? (
-                            assignedSubjects.length > 0 ? (
-                              <div>
-                                <button
-                                  onClick={() => toggleLecturerExpanded(user._id)}
-                                  className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                                >
-                                  <FaBook className="h-3.5 w-3.5" />
-                                  <span className="text-sm font-medium">
-                                    {assignedSubjects.length} subject{assignedSubjects.length !== 1 ? 's' : ''}
-                                  </span>
-                                  <svg className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                  </svg>
-                                </button>
-                              </div>
+                          <div className="flex items-center gap-2">
+                            {user.planId ? (
+                              <>
+                                <FaCrown className="h-3.5 w-3.5 text-yellow-500" />
+                                <span className="text-gray-600 dark:text-gray-400">{user.planId.title}</span>
+                                {user.isPlanActive ? (
+                                  <span className="text-xs text-green-600 dark:text-green-400 font-medium">Active</span>
+                                ) : (
+                                  <span className="text-xs text-red-600 dark:text-red-400 font-medium">Expired</span>
+                                )}
+                              </>
                             ) : (
-                              <span className="text-gray-400 dark:text-gray-500 text-sm">No subjects assigned</span>
-                            )
+                              <span className="text-gray-400 dark:text-gray-500">No Plan</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.role === "lecturer" ? (
+                            <div>
+                              <button
+                                onClick={() => toggleLecturerExpanded(user._id)}
+                                className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                              >
+                                <FaBook className="h-3.5 w-3.5" />
+                                <span className="text-sm font-medium">
+                                  {assignedSubjects.length} subject{assignedSubjects.length !== 1 ? 's' : ''}
+                                </span>
+                                <svg className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                            </div>
                           ) : (
                             <span className="text-gray-400 dark:text-gray-500">—</span>
                           )}
@@ -765,27 +857,35 @@ const AdminUsers = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {!isPending && user.role === "student" && (
+                              <button 
+                                onClick={() => openAssignPlanModal(user)} 
+                                className="flex items-center gap-1 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-950/50 transition-colors text-sm font-medium"
+                                title="Assign Plan"
+                              >
+                                <FaCrown className="h-3 w-3" />
+                              </button>
+                            )}
                             <button 
                               onClick={() => openEditModal(user)} 
-                              className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
+                              className="flex items-center gap-1 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
                             >
-                              <FaEdit className="h-3.5 w-3.5" /> Edit
+                              <FaEdit className="h-3 w-3" />
                             </button>
                             <button 
                               onClick={() => handleDelete(user._id)} 
-                              className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
+                              className="flex items-center gap-1 px-2 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
                             >
-                              <FaTrash className="h-3.5 w-3.5" /> Delete
+                              <FaTrash className="h-3 w-3" />
                             </button>
                           </div>
                         </td>
                       </tr>
                       
-                      {/* Expanded row for assigned subjects */}
                       {isExpanded && user.role === "lecturer" && assignedSubjects.length > 0 && (
                         <tr className="bg-gray-50 dark:bg-gray-800/30">
-                          <td colSpan="8" className="px-6 py-4">
+                          <td colSpan="10" className="px-6 py-4">
                             <div className="ml-12">
                               <div className="flex items-center gap-2 mb-3">
                                 <FaBook className="h-4 w-4 text-blue-500" />
@@ -819,6 +919,79 @@ const AdminUsers = () => {
         <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
           <FaUsers className="h-12 w-12 text-gray-300 dark:text-gray-700 mb-3" />
           <p className="text-gray-500 dark:text-gray-400">No users found</p>
+        </div>
+      )}
+
+      {/* ================= ASSIGN PLAN MODAL ================= */}
+      {showAssignPlanModal && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6 shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center">
+                  <FaCrown className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Assign Plan</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Assign a plan to {selectedUser.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowAssignPlanModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Select Plan
+                </label>
+                <select
+                  value={selectedPlanForUser}
+                  onChange={(e) => setSelectedPlanForUser(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="">Select a Plan</option>
+                  {plans.map((plan) => (
+                    <option key={plan._id} value={plan._id}>
+                      {plan.title} - ₵{plan.price} ({plan.duration} {plan.durationUnit}{plan.duration > 1 ? 's' : ''})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <FaExclamationTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
+                      Assigning a plan will grant immediate access
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                      The user will have access to all content within the plan duration.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setShowAssignPlanModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAssignPlan}
+                  disabled={loading || !selectedPlanForUser}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaCheck className="h-4 w-4" />}
+                  Assign Plan
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -889,9 +1062,6 @@ const AdminUsers = () => {
                   ))}
                 </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p>
-                {availableSubjects.length === 0 && newLecturer.courseId && newLecturer.courseId !== "" && (
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">No subjects available for this course. Please create subjects first.</p>
-                )}
               </div>
 
               <div>
@@ -913,7 +1083,7 @@ const AdminUsers = () => {
         </div>
       )}
 
-      {/* ================= EDIT USER MODAL - Updated with User Type ================= */}
+      {/* ================= EDIT USER MODAL ================= */}
       {showEditUserModal && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200">
@@ -993,22 +1163,6 @@ const AdminUsers = () => {
                       ))}
                     </select>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p>
-                    {editUserData.subjectIds.length > 0 && (
-                      <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2">Selected Subjects:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {editUserData.subjectIds.map((id, idx) => {
-                            const subject = availableSubjects.find(s => s._id === id);
-                            return (
-                              <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">
-                                <FaCheckCircle className="h-2.5 w-2.5" />
-                                {subject?.name || id}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </>
               )}

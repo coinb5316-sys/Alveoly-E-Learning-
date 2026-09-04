@@ -1,4 +1,4 @@
-// server.js - COMPLETE WITH VIDEO CONFERENCE SUPPORT (FIXED ORDER)
+// server.js - COMPLETE WITH VIDEO CONFERENCE SUPPORT AND SENDGRID
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
@@ -7,6 +7,9 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import mongoose from "mongoose";
 import FAQ from "./src/models/FAQ.js";
+import cron from "node-cron";
+import { checkExpiredPlans, checkApproachingExpiry } from "./utils/planScheduler.js";
+import sgMail from "@sendgrid/mail";
 
 dotenv.config();
 
@@ -15,6 +18,15 @@ connectDB();
 
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+
+// ================= SENDGRID INIT =================
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+if (SENDGRID_API_KEY) {
+  sgMail.setApiKey(SENDGRID_API_KEY);
+  console.log("✅ SendGrid initialized");
+} else {
+  console.warn("⚠️ SendGrid API key not configured. Email features disabled.");
+}
 
 // ================= HTTP SERVER =================
 const httpServer = createServer(app);
@@ -85,16 +97,13 @@ io.on("connection", (socket) => {
     
     console.log(`🎥 User ${userName} (${userId}) joining room ${classId}`);
     
-    // Store user info on socket
     socket.userId = userId;
     socket.userName = userName;
     socket.classId = classId;
     socket.role = role;
     
-    // Join the room
     socket.join(classId);
     
-    // Store participant info
     if (!rooms.has(classId)) {
       rooms.set(classId, new Map());
     }
@@ -113,7 +122,6 @@ io.on("connection", (socket) => {
     
     console.log(`📊 Room ${classId} now has ${room.size} participants`);
     
-    // CRITICAL: Get existing participants BEFORE sending any notifications
     const existingParticipants = [];
     for (const [existingUserId, info] of room.entries()) {
       if (existingUserId !== userId) {
@@ -129,13 +137,9 @@ io.on("connection", (socket) => {
     
     console.log(`📨 Sending ${existingParticipants.length} existing participants to ${userName}`);
     
-    // CRITICAL: First send existing participants to the new user
     socket.emit("existing-participants", existingParticipants);
-    
-    // CRITICAL: Then confirm join to the user
     socket.emit("join-confirmed", { classId, userId });
     
-    // CRITICAL: Finally notify others (with small delay to ensure new user is ready)
     setTimeout(() => {
       socket.to(classId).emit("user-joined", {
         userId,
@@ -245,7 +249,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ================= HELPER: Get room participants =================
   socket.on("get-room-participants", (data) => {
     const { classId } = data;
     
@@ -283,7 +286,6 @@ io.on("connection", (socket) => {
     socket.emit("joined:admin", { success: true });
   });
 
-  // ================= NOTIFICATION ROOMS =================
   socket.on("join:notifications", (userId) => {
     if (userId) {
       socket.join(`user_${userId}`);
@@ -307,83 +309,81 @@ io.on("connection", (socket) => {
     socket.emit("bot:ready", { message: "Bot ready!" });
   });
   
- socket.on("bot:question", async (data) => {
-  const { text, userName } = data;
-  const questionText = text?.trim();
-  
-  if (!questionText) {
-    socket.emit("bot:reply", { text: "Please enter a question.", isAuto: true, timestamp: new Date() });
-    return;
-  }
-  
-  console.log(`🤖 Question: "${questionText}"`);
-  socket.emit("bot:typing", { isTyping: true });
-  
-  try {
-    // Search FAQ database first
-    const searchTerm = questionText.toLowerCase().trim();
-    let faq = await FAQ.findOne({
-      isActive: true,
-      question: { $regex: searchTerm, $options: 'i' }
-    });
+  socket.on("bot:question", async (data) => {
+    const { text, userName } = data;
+    const questionText = text?.trim();
     
-    let reply;
-    let usedAI = false;
-    
-    if (faq) {
-      console.log(`✅ Found FAQ: "${faq.question}"`);
-      reply = `📚 **Answer:**\n\n${faq.answer}`;
-      faq.views += 1;
-      await faq.save();
-    } else {
-      console.log(`No FAQ found, calling AI for: "${questionText}"`);
-      
-      try {
-        // FIXED: Correct path to aiService.js
-        const aiModule = await import('./src/services/aiService.js');
-        const askAI = aiModule.askAI;
-        const isMedicalQuestion = aiModule.isMedicalQuestion;
-        
-        const isMedical = isMedicalQuestion(questionText);
-        const aiAnswer = await askAI(questionText, isMedical);
-        
-        console.log(`AI Response received:`, aiAnswer ? "Yes" : "No");
-        
-        if (aiAnswer && aiAnswer !== null && typeof aiAnswer === 'string' && aiAnswer.length > 0) {
-          const icon = isMedical ? "🩺" : "🤖";
-          const prefix = isMedical ? "**Nurse AI:**" : "**AI Assistant:**";
-          reply = `${icon} ${prefix}\n\n${aiAnswer}`;
-          usedAI = true;
-          console.log(`✅ Answered with AI`);
-        } else {
-          throw new Error("AI returned empty response");
-        }
-      } catch (aiError) {
-        console.error("AI error details:", aiError.message);
-        reply = "📝 I'm having trouble connecting to AI. Please try again later or contact support.";
-      }
+    if (!questionText) {
+      socket.emit("bot:reply", { text: "Please enter a question.", isAuto: true, timestamp: new Date() });
+      return;
     }
     
-    setTimeout(() => {
+    console.log(`🤖 Question: "${questionText}"`);
+    socket.emit("bot:typing", { isTyping: true });
+    
+    try {
+      const searchTerm = questionText.toLowerCase().trim();
+      let faq = await FAQ.findOne({
+        isActive: true,
+        question: { $regex: searchTerm, $options: 'i' }
+      });
+      
+      let reply;
+      let usedAI = false;
+      
+      if (faq) {
+        console.log(`✅ Found FAQ: "${faq.question}"`);
+        reply = `📚 **Answer:**\n\n${faq.answer}`;
+        faq.views += 1;
+        await faq.save();
+      } else {
+        console.log(`No FAQ found, calling AI for: "${questionText}"`);
+        
+        try {
+          const aiModule = await import('./src/services/aiService.js');
+          const askAI = aiModule.askAI;
+          const isMedicalQuestion = aiModule.isMedicalQuestion;
+          
+          const isMedical = isMedicalQuestion(questionText);
+          const aiAnswer = await askAI(questionText, isMedical);
+          
+          console.log(`AI Response received:`, aiAnswer ? "Yes" : "No");
+          
+          if (aiAnswer && aiAnswer !== null && typeof aiAnswer === 'string' && aiAnswer.length > 0) {
+            const icon = isMedical ? "🩺" : "🤖";
+            const prefix = isMedical ? "**Nurse AI:**" : "**AI Assistant:**";
+            reply = `${icon} ${prefix}\n\n${aiAnswer}`;
+            usedAI = true;
+            console.log(`✅ Answered with AI`);
+          } else {
+            throw new Error("AI returned empty response");
+          }
+        } catch (aiError) {
+          console.error("AI error details:", aiError.message);
+          reply = "📝 I'm having trouble connecting to AI. Please try again later or contact support.";
+        }
+      }
+      
+      setTimeout(() => {
+        socket.emit("bot:reply", { 
+          text: reply, 
+          isAuto: true, 
+          isAI: usedAI,
+          timestamp: new Date() 
+        });
+        socket.emit("bot:typing", { isTyping: false });
+      }, 500);
+      
+    } catch (error) {
+      console.error("Bot error:", error);
       socket.emit("bot:reply", { 
-        text: reply, 
-        isAuto: true, 
-        isAI: usedAI,
+        text: "Having trouble. Please contact support at alveolyelearning@gmail.com", 
+        error: true, 
         timestamp: new Date() 
       });
       socket.emit("bot:typing", { isTyping: false });
-    }, 500);
-    
-  } catch (error) {
-    console.error("Bot error:", error);
-    socket.emit("bot:reply", { 
-      text: "Having trouble. Please contact support at alveolyelearning@gmail.com", 
-      error: true, 
-      timestamp: new Date() 
-    });
-    socket.emit("bot:typing", { isTyping: false });
-  }
-});
+    }
+  });
   
   socket.on("bot:admin-reply", (data) => {
     const { toSocketId, answer, questionId } = data;
@@ -467,7 +467,8 @@ app.get("/", (req, res) => {
     status: "OK", 
     message: "API is running 🚀",
     socket: "Socket.IO server is ready",
-    activeRooms: rooms.size
+    activeRooms: rooms.size,
+    email: SENDGRID_API_KEY ? "SendGrid enabled ✅" : "SendGrid disabled ❌"
   });
 });
 
@@ -492,6 +493,7 @@ app.get("/socket-status", (req, res) => {
     activeRooms: rooms.size,
     rooms: roomStats,
     allowedOrigins: allowedOrigins,
+    emailStatus: SENDGRID_API_KEY ? "enabled" : "disabled"
   });
 });
 
@@ -525,6 +527,21 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: err.message || "Internal Server Error" });
 });
 
+// ================= PLAN EXPIRY SCHEDULER =================
+// Run every day at midnight
+cron.schedule("0 0 * * *", async () => {
+  console.log("🔄 Running plan expiry checker...");
+  await checkExpiredPlans();
+  await checkApproachingExpiry();
+});
+
+// Also run on server startup
+setTimeout(async () => {
+  console.log("🔄 Initial plan expiry check...");
+  await checkExpiredPlans();
+  await checkApproachingExpiry();
+}, 60000); // Wait 60 seconds after server start
+
 // ================= START SERVER =================
 httpServer.listen(PORT, () => {
   console.log(`\n🚀 Server running on port ${PORT}`);
@@ -532,6 +549,7 @@ httpServer.listen(PORT, () => {
   console.log(`📡 Socket.IO server ready`);
   console.log(`✅ Transports: websocket, polling`);
   console.log(`✅ Allowed origins:`, allowedOrigins);
+  console.log(`✅ SendGrid: ${SENDGRID_API_KEY ? "Enabled ✅" : "Disabled ❌"}`);
   console.log(`\n🎥 Video Conference Ready:`);
   console.log(`   - Peer-to-peer video calling`);
   console.log(`   - Screen sharing support`);
@@ -544,4 +562,12 @@ httpServer.listen(PORT, () => {
   console.log(`   - GET  /                Health check`);
   console.log(`   - GET  /socket-status   Socket.IO status`);
   console.log(`   - GET  /socket-stats    Detailed connection stats`);
+  console.log(`   - POST /auth/register/alveoly  Alveoly student registration`);
+  console.log(`   - POST /auth/register/non-alveoly  Non-Alveoly student registration`);
+  console.log(`   - GET  /auth/verify-approval/:token  Verify approval token`);
+  console.log(`\n📧 Email endpoints:`);
+  console.log(`   - POST /auth/forgot-password  Send password reset email`);
+  console.log(`   - POST /auth/assign-plan  Admin assign plan to user`);
 });
+
+export default httpServer;

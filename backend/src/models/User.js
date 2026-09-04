@@ -1,4 +1,4 @@
-// models/User.js - Updated with programId and lecturer role
+// models/User.js - Updated with registration tracking fields
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -10,11 +10,12 @@ const userSchema = new mongoose.Schema(
       trim: true
     },
     email: {
-  type: String,
-  required: true,
-  lowercase: true,
-  trim: true
-},
+      type: String,
+      required: true,
+      lowercase: true,
+      trim: true,
+      unique: true
+    },
     password: {
       type: String,
     },
@@ -23,10 +24,37 @@ const userSchema = new mongoose.Schema(
       default: ""
     },
     userType: {
-  type: String,
-  enum: ["alveoly_student", "non_alveoly_student"],
-  default: null,
-},
+      type: String,
+      enum: ["alveoly_student", "non_alveoly_student"],
+      default: null,
+    },
+
+    // ================= REGISTRATION TRACKING =================
+    registrationSource: {
+      type: String,
+      enum: ["phone", "other", "none"],
+      default: "none"
+    },
+    registrationDetails: {
+      type: String,
+      default: ""
+    },
+    isApproved: {
+      type: Boolean,
+      default: false
+    },
+    approvalToken: {
+      type: String,
+      default: null
+    },
+    tokenExpiresAt: {
+      type: Date,
+      default: null
+    },
+    registrationCompleted: {
+      type: Boolean,
+      default: false
+    },
 
     // ================= ROLE, PROGRAM & COURSE =================
     role: {
@@ -54,6 +82,29 @@ const userSchema = new mongoose.Schema(
       phoneNumber: { type: String, default: "" },
       isActive: { type: Boolean, default: true },
       hireDate: { type: Date, default: Date.now },
+    },
+
+    // ================= PLAN & SUBSCRIPTION =================
+    planId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Plan",
+      default: null
+    },
+    planStartDate: {
+      type: Date,
+      default: null
+    },
+    planExpiryDate: {
+      type: Date,
+      default: null
+    },
+    isPlanActive: {
+      type: Boolean,
+      default: false
+    },
+    manuallyAssignedPlan: {
+      type: Boolean,
+      default: false
     },
 
     // ================= PASSWORD RESET =================
@@ -104,7 +155,7 @@ const userSchema = new mongoose.Schema(
     },
     subscriptionStatus: {
       type: String,
-      enum: ["none", "active", "expired"],
+      enum: ["none", "active", "expired", "pending"],
       default: "none"
     },
     subscriptionExpiry: {
@@ -126,6 +177,10 @@ userSchema.index({ createdAt: -1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ "lecturerInfo.assignedSubjects": 1 });
 userSchema.index({ "lecturerInfo.assignedCourses": 1 });
+userSchema.index({ isApproved: 1 });
+userSchema.index({ planId: 1 });
+userSchema.index({ isPlanActive: 1 });
+userSchema.index({ planExpiryDate: 1 });
 
 // ================= VIRTUAL: Check if user is active =================
 userSchema.virtual('isRecentlyActive').get(function() {
@@ -133,6 +188,18 @@ userSchema.virtual('isRecentlyActive').get(function() {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   return this.lastLoginAt >= thirtyDaysAgo;
 });
+
+// ================= METHOD: Check if user has active plan =================
+userSchema.methods.hasActivePlan = function() {
+  if (!this.planId) return false;
+  if (!this.isPlanActive) return false;
+  if (this.planExpiryDate && new Date(this.planExpiryDate) < new Date()) {
+    this.isPlanActive = false;
+    this.subscriptionStatus = "expired";
+    return false;
+  }
+  return true;
+};
 
 // ================= METHOD: Update last activity =================
 userSchema.methods.updateActivity = async function() {

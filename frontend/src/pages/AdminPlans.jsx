@@ -1,56 +1,70 @@
-// AdminPlans.jsx - Professional styling with dark mode
-import { useEffect, useState } from "react";
-import axios from "../api/axios";
+// pages/AdminPlans.jsx
+import React, { useState, useEffect } from "react";
 import {
-  Package,
-  Plus,
-  Edit,
-  Trash2,
-  Save,
-  X,
-  DollarSign,
-  Clock,
-  BookOpen,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  Zap,
-  Crown,
-  Star,
-  ChevronRight,
-  Filter,
-  Search,
-  Calendar,
-  Tag,
-  Users
-} from "lucide-react";
+  FaPlus,
+  FaEdit,
+  FaTrash,
+  FaCrown,
+  FaSpinner,
+  FaTimes,
+  FaSave,
+  FaCheck,
+  FaClock,
+  FaCalendarAlt,
+  FaDollarSign,
+  FaTag,
+  FaRocket,
+  FaLock,
+  FaUnlock,
+  FaCheckCircle,
+  FaExclamationTriangle,
+} from "react-icons/fa";
+import API from "../api/axios";
+import toast, { Toaster } from "react-hot-toast";
 
 const AdminPlans = () => {
   const [plans, setPlans] = useState([]);
-  const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-
-  const [form, setForm] = useState({
+  const [showModal, setShowModal] = useState(false);
+  const [editingPlan, setEditingPlan] = useState(null);
+  const [subjects, setSubjects] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  
+  const [formData, setFormData] = useState({
     title: "",
-    price: "",
+    description: "",
+    price: 0,
+    duration: 1,
+    durationUnit: "month",
+    isFree: false,
+    isActive: true,
+    features: [],
+    unlocksAllContent: true,
     subjects: [],
-    duration: "",
-    durationUnit: "days",
+    courses: [],
+    programs: [],
+    accessLevel: "full",
+    freeAccess: false
   });
+  
+  const [featureInput, setFeatureInput] = useState("");
 
-  const [editingId, setEditingId] = useState(null);
+  useEffect(() => {
+    fetchPlans();
+    fetchSubjects();
+    fetchCourses();
+    fetchPrograms();
+  }, []);
 
-  // ================= FETCH =================
   const fetchPlans = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/plans");
-      setPlans(res.data);
+      const res = await API.get("/plans");
+      setPlans(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching plans:", err);
+      toast.error("Failed to fetch plans");
     } finally {
       setLoading(false);
     }
@@ -58,557 +72,650 @@ const AdminPlans = () => {
 
   const fetchSubjects = async () => {
     try {
-      const res = await axios.get("/subjects");
-      setSubjects(res.data);
+      const res = await API.get("/subjects/admin/all");
+      setSubjects(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching subjects:", err);
     }
   };
 
-  useEffect(() => {
-    fetchPlans();
-    fetchSubjects();
-  }, []);
-
-  // ================= HANDLE =================
-  const handleSubmit = async () => {
-    if (!form.title || !form.price || !form.duration) {
-      alert("Please fill all required fields");
-      return;
-    }
-
+  const fetchCourses = async () => {
     try {
-      setSaving(true);
-
-      if (editingId) {
-        await axios.put(`/plans/${editingId}`, form);
-      } else {
-        await axios.post("/plans", form);
-      }
-
-      resetForm();
-      fetchPlans();
+      const res = await API.get("/courses");
+      setCourses(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error(err);
-      alert("Failed to save plan");
-    } finally {
-      setSaving(false);
+      console.error("Error fetching courses:", err);
     }
   };
 
-  const resetForm = () => {
-    setForm({
-      title: "",
-      price: "",
-      subjects: [],
-      duration: "",
-      durationUnit: "days",
-    });
-    setEditingId(null);
-    setShowForm(false);
-  };
-
-  const handleEdit = (plan) => {
-    setForm({
-      title: plan.title,
-      price: plan.price,
-      subjects: plan.subjects.map((s) => s._id),
-      duration: plan.duration || "",
-      durationUnit: plan.durationUnit || "days",
-    });
-    setEditingId(plan._id);
-    setShowForm(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this plan? This action cannot be undone.")) return;
-
+  const fetchPrograms = async () => {
     try {
-      await axios.delete(`/plans/${id}`);
-      fetchPlans();
+      const res = await API.get("/programs");
+      setPrograms(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error(err);
-      alert("Failed to delete plan");
+      console.error("Error fetching programs:", err);
     }
   };
 
-  const toggleSubject = (id) => {
-    setForm((prev) => ({
+  const handleOpenModal = (plan = null) => {
+    if (plan) {
+      setEditingPlan(plan);
+      setFormData({
+        title: plan.title || "",
+        description: plan.description || "",
+        price: plan.price || 0,
+        duration: plan.duration || 1,
+        durationUnit: plan.durationUnit || "month",
+        isFree: plan.isFree || false,
+        isActive: plan.isActive !== undefined ? plan.isActive : true,
+        features: plan.features || [],
+        unlocksAllContent: plan.unlocksAllContent !== undefined ? plan.unlocksAllContent : true,
+        subjects: plan.subjects?.map(s => s._id || s) || [],
+        courses: plan.courses?.map(c => c._id || c) || [],
+        programs: plan.programs?.map(p => p._id || p) || [],
+        accessLevel: plan.accessLevel || "full",
+        freeAccess: plan.freeAccess || false
+      });
+    } else {
+      setEditingPlan(null);
+      setFormData({
+        title: "",
+        description: "",
+        price: 0,
+        duration: 1,
+        durationUnit: "month",
+        isFree: false,
+        isActive: true,
+        features: [],
+        unlocksAllContent: true,
+        subjects: [],
+        courses: [],
+        programs: [],
+        accessLevel: "full",
+        freeAccess: false
+      });
+    }
+    setFeatureInput("");
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingPlan(null);
+    setFeatureInput("");
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
       ...prev,
-      subjects: prev.subjects.includes(id)
-        ? prev.subjects.filter((s) => s !== id)
-        : [...prev.subjects, id],
+      [name]: type === "checkbox" ? checked : value
     }));
   };
 
-  const filteredPlans = plans.filter(plan =>
-    plan.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleSelectChange = (e) => {
+    const { name, options } = e.target;
+    const selected = [];
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].selected) {
+        selected.push(options[i].value);
+      }
+    }
+    setFormData(prev => ({ ...prev, [name]: selected }));
+  };
 
-  const durationUnits = [
-    { value: "minutes", label: "Minutes", icon: Clock },
-    { value: "hours", label: "Hours", icon: Clock },
-    { value: "days", label: "Days", icon: Calendar },
-    { value: "weeks", label: "Weeks", icon: Calendar },
-    { value: "months", label: "Months", icon: Calendar },
-  ];
+  const handleAddFeature = () => {
+    if (featureInput.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        features: [...prev.features, featureInput.trim()]
+      }));
+      setFeatureInput("");
+    }
+  };
 
-  const getDurationUnitIcon = (unit) => {
-    const found = durationUnits.find(u => u.value === unit);
-    return found?.icon || Clock;
+  const handleRemoveFeature = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      features: prev.features.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setLoading(true);
+      
+      // If free plan, set price to 0
+      const submitData = {
+        ...formData,
+        price: formData.isFree || formData.freeAccess ? 0 : formData.price
+      };
+      
+      let response;
+      if (editingPlan) {
+        response = await API.put(`/plans/${editingPlan._id}`, submitData);
+        toast.success("Plan updated successfully!");
+      } else {
+        response = await API.post("/plans", submitData);
+        toast.success("Plan created successfully!");
+      }
+      
+      handleCloseModal();
+      fetchPlans();
+    } catch (err) {
+      console.error("Error saving plan:", err);
+      toast.error(err.response?.data?.message || "Failed to save plan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this plan?")) return;
+    
+    try {
+      setLoading(true);
+      await API.delete(`/plans/${id}`);
+      toast.success("Plan deleted successfully");
+      fetchPlans();
+    } catch (err) {
+      console.error("Error deleting plan:", err);
+      toast.error(err.response?.data?.message || "Failed to delete plan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getDurationLabel = (duration, unit) => {
+    const units = {
+      day: "Day",
+      week: "Week",
+      month: "Month",
+      year: "Year"
+    };
+    return `${duration} ${units[unit] || unit}${duration > 1 ? 's' : ''}`;
   };
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
+      <Toaster position="top-right" />
+      
+      {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
             Subscription Plans
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Create and manage subscription plans for students
+            Manage subscription plans that unlock content access
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-            <Package className="h-4 w-4 text-gray-400" />
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              {plans.length} Plans
-            </span>
-          </div>
+        <button
+          onClick={() => handleOpenModal()}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
+        >
+          <FaPlus className="h-4 w-4" />
+          <span className="text-sm font-medium">Create Plan</span>
+        </button>
+      </div>
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-12">
+          <FaSpinner className="h-8 w-8 text-yellow-500 animate-spin" />
+          <p className="text-gray-500 dark:text-gray-400 mt-3">Loading plans...</p>
+        </div>
+      )}
+
+      {/* Plans Grid */}
+      {!loading && plans.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+          <FaCrown className="h-12 w-12 text-yellow-400 mb-3" />
+          <p className="text-gray-500 dark:text-gray-400">No plans created yet</p>
           <button
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25"
+            onClick={() => handleOpenModal()}
+            className="mt-4 text-yellow-600 dark:text-yellow-400 font-medium hover:underline"
           >
-            <Plus className="h-4 w-4" />
-            New Plan
+            Create your first plan
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Stats Summary */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total Plans</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                {plans.length}
-              </p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
-              <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-        </div>
+      {/* Plans Grid */}
+      {!loading && plans.length > 0 && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {plans.map((plan) => (
+            <div
+              key={plan._id}
+              className={`rounded-xl border overflow-hidden transition-all hover:shadow-lg ${
+                plan.isActive
+                  ? "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900"
+                  : "border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-60"
+              }`}
+            >
+              {/* Plan Header */}
+              <div className={`p-4 ${plan.isFree ? "bg-gradient-to-r from-green-500 to-emerald-600" : "bg-gradient-to-r from-yellow-500 to-orange-600"} text-white`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {plan.isFree ? (
+                      <FaTag className="h-4 w-4" />
+                    ) : (
+                      <FaCrown className="h-4 w-4" />
+                    )}
+                    <h3 className="font-semibold">{plan.title}</h3>
+                  </div>
+                  <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                    {plan.isFree ? "Free" : "Paid"}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <span className="text-2xl font-bold">
+                    ${plan.price}
+                  </span>
+                  <span className="text-sm opacity-80 ml-1">
+                    /{getDurationLabel(plan.duration, plan.durationUnit)}
+                  </span>
+                </div>
+              </div>
 
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Active Subscriptions</p>
-              <p className="text-2xl font-semibold text-green-600 dark:text-green-400 mt-1">
-                N/A
-              </p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center">
-              <Users className="h-5 w-5 text-green-600 dark:text-green-400" />
-            </div>
-          </div>
-        </div>
+              {/* Plan Body */}
+              <div className="p-4 space-y-3">
+                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                  {plan.description || "No description"}
+                </p>
 
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Monthly Revenue</p>
-              <p className="text-2xl font-semibold text-yellow-600 dark:text-yellow-400 mt-1">
-                ₵0
-              </p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 flex items-center justify-center">
-              <DollarSign className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-            </div>
-          </div>
-        </div>
+                {/* Features */}
+                {plan.features && plan.features.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Features
+                    </p>
+                    <ul className="space-y-1">
+                      {plan.features.slice(0, 3).map((feature, idx) => (
+                        <li key={idx} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                          <FaCheck className="h-3 w-3 text-green-500" />
+                          {feature}
+                        </li>
+                      ))}
+                      {plan.features.length > 3 && (
+                        <li className="text-xs text-gray-500">
+                          +{plan.features.length - 3} more
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
 
-        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Subjects Covered</p>
-              <p className="text-2xl font-semibold text-purple-600 dark:text-purple-400 mt-1">
-                {subjects.length}
-              </p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center">
-              <BookOpen className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Create/Edit Plan Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-2xl relative shadow-2xl animate-scaleIn my-8">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  {editingId ? (
-                    <Edit className="h-4 w-4 text-white" />
+                {/* Access Level */}
+                <div className="flex items-center gap-2 text-xs">
+                  {plan.unlocksAllContent || plan.accessLevel === "full" ? (
+                    <>
+                      <FaUnlock className="h-3 w-3 text-green-500" />
+                      <span className="text-green-600 dark:text-green-400 font-medium">Unlocks All Content</span>
+                    </>
                   ) : (
-                    <Plus className="h-4 w-4 text-white" />
+                    <>
+                      <FaLock className="h-3 w-3 text-yellow-500" />
+                      <span className="text-yellow-600 dark:text-yellow-400 font-medium">Limited Access</span>
+                    </>
                   )}
                 </div>
+
+                {/* Subjects/Programs count */}
+                <div className="flex gap-4 text-xs text-gray-500">
+                  {plan.subjects?.length > 0 && (
+                    <span>{plan.subjects.length} Subjects</span>
+                  )}
+                  {plan.courses?.length > 0 && (
+                    <span>{plan.courses.length} Courses</span>
+                  )}
+                  {plan.programs?.length > 0 && (
+                    <span>{plan.programs.length} Programs</span>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => handleOpenModal(plan)}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
+                  >
+                    <FaEdit className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(plan._id)}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
+                  >
+                    <FaTrash className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-600 flex items-center justify-center">
+                  <FaCrown className="h-5 w-5 text-white" />
+                </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    {editingId ? "Edit Plan" : "Create New Plan"}
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                    {editingId ? "Update plan details" : "Add a new subscription plan"}
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    {editingPlan ? "Edit Plan" : "Create New Plan"}
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {editingPlan ? "Update plan details" : "Configure a new subscription plan"}
                   </p>
                 </div>
               </div>
               <button
-                onClick={resetForm}
-                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                onClick={handleCloseModal}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
-                <X className="h-5 w-5" />
+                <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 space-y-5">
-              <div className="grid md:grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Plan Title
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Plan Title <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative">
-                    <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="e.g., Basic Plan, Premium Plan"
-                      value={form.title}
-                      onChange={(e) => setForm({ ...form, title: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleChange}
+                    required
+                    placeholder="e.g., Premium Monthly"
+                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
+                  />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Price (GHS)
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Price (USD) <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="number"
-                      placeholder="e.g., 99"
-                      value={form.price}
-                      onChange={(e) => setForm({ ...form, price: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    />
-                  </div>
+                  <input
+                    type="number"
+                    name="price"
+                    value={formData.price}
+                    onChange={handleChange}
+                    min="0"
+                    step="0.01"
+                    disabled={formData.isFree || formData.freeAccess}
+                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
                 </div>
+              </div>
 
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  rows={2}
+                  placeholder="Describe what this plan includes..."
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all resize-none"
+                />
+              </div>
+
+              {/* Duration */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Duration
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Duration <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="number"
-                      placeholder="e.g., 30"
-                      value={form.duration}
-                      onChange={(e) => setForm({ ...form, duration: e.target.value })}
-                      className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                    />
-                  </div>
+                  <input
+                    type="number"
+                    name="duration"
+                    value={formData.duration}
+                    onChange={handleChange}
+                    min="1"
+                    required
+                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
+                  />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Duration Unit
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Duration Unit <span className="text-red-500">*</span>
                   </label>
                   <select
-                    value={form.durationUnit}
-                    onChange={(e) => setForm({ ...form, durationUnit: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    name="durationUnit"
+                    value={formData.durationUnit}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
                   >
-                    {durationUnits.map((unit) => (
-                      <option key={unit.value} value={unit.value}>
-                        {unit.label}
-                      </option>
-                    ))}
+                    <option value="day">Day</option>
+                    <option value="week">Week</option>
+                    <option value="month">Month</option>
+                    <option value="year">Year</option>
                   </select>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Select Included Subjects
-                </label>
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                  <div className="max-h-64 overflow-y-auto p-3 space-y-1 bg-gray-50 dark:bg-gray-800/30">
-                    {subjects.length === 0 ? (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                        No subjects available. Create subjects first.
-                      </p>
-                    ) : (
-                      subjects.map((s) => (
-                        <label
-                          key={s._id}
-                          className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                            form.subjects.includes(s._id)
-                              ? "bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800"
-                              : "hover:bg-gray-100 dark:hover:bg-gray-800"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={form.subjects.includes(s._id)}
-                            onChange={() => toggleSubject(s._id)}
-                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                          />
-                          <div className="flex-1">
-                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                              {s.name}
-                            </span>
-                            {s.isPaid && (
-                              <span className="ml-2 text-xs text-yellow-600 dark:text-yellow-400">
-                                (Premium)
-                              </span>
-                            )}
-                          </div>
-                          {form.subjects.includes(s._id) && (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          )}
-                        </label>
-                      ))
-                    )}
-                  </div>
+              {/* Checkboxes */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="isFree"
+                    checked={formData.isFree}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
+                  />
+                  <label className="text-sm text-gray-700 dark:text-gray-300">
+                    Free Plan (always available)
+                  </label>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Selected: {form.subjects.length} subjects
-                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="isActive"
+                    checked={formData.isActive}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <label className="text-sm text-gray-700 dark:text-gray-300">
+                    Active
+                  </label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="unlocksAllContent"
+                    checked={formData.unlocksAllContent}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                  />
+                  <label className="text-sm text-gray-700 dark:text-gray-300">
+                    Unlocks All Content
+                  </label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="freeAccess"
+                    checked={formData.freeAccess}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                  />
+                  <label className="text-sm text-gray-700 dark:text-gray-300">
+                    Free Access (no payment)
+                  </label>
+                </div>
               </div>
-            </div>
 
-            {/* Modal Footer */}
-            <div className="flex gap-3 p-6 pt-0 border-t border-gray-200 dark:border-gray-800">
-              <button
-                onClick={handleSubmit}
-                disabled={saving}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    {editingId ? "Update Plan" : "Create Plan"}
-                  </>
-                )}
-              </button>
-              <button
-                onClick={resetForm}
-                className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all"
-              >
-                Cancel
-              </button>
-            </div>
+              {/* Features */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Features
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={featureInput}
+                    onChange={(e) => setFeatureInput(e.target.value)}
+                    placeholder="Add a feature..."
+                    className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
+                    onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), handleAddFeature())}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddFeature}
+                    className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {formData.features.map((feature, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
+                    >
+                      {feature}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFeature(index)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <FaTimes className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Access Control - Specific Subjects/Courses/Programs */}
+              {!formData.unlocksAllContent && (
+                <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Specific Access Control
+                  </p>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Access Level
+                    </label>
+                    <select
+                      name="accessLevel"
+                      value={formData.accessLevel}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
+                    >
+                      <option value="full">Full Access</option>
+                      <option value="subjects">Specific Subjects</option>
+                      <option value="courses">Specific Courses</option>
+                      <option value="programs">Specific Programs</option>
+                      <option value="none">No Access</option>
+                    </select>
+                  </div>
+
+                  {formData.accessLevel === "subjects" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                        Select Subjects
+                      </label>
+                      <select
+                        name="subjects"
+                        multiple
+                        value={formData.subjects}
+                        onChange={handleSelectChange}
+                        className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
+                      >
+                        {subjects.map((subject) => (
+                          <option key={subject._id} value={subject._id}>
+                            {subject.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                    </div>
+                  )}
+
+                  {formData.accessLevel === "courses" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                        Select Courses
+                      </label>
+                      <select
+                        name="courses"
+                        multiple
+                        value={formData.courses}
+                        onChange={handleSelectChange}
+                        className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
+                      >
+                        {courses.map((course) => (
+                          <option key={course._id} value={course._id}>
+                            {course.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                    </div>
+                  )}
+
+                  {formData.accessLevel === "programs" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                        Select Programs
+                      </label>
+                      <select
+                        name="programs"
+                        multiple
+                        value={formData.programs}
+                        onChange={handleSelectChange}
+                        className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
+                      >
+                        {programs.map((program) => (
+                          <option key={program._id} value={program._id}>
+                            {program.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Submit Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {loading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaSave className="h-4 w-4" />}
+                  {editingPlan ? "Update Plan" : "Create Plan"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
-
-      {/* Plans List */}
-      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-        {/* Search Bar */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <input
-              type="text"
-              placeholder="Search plans..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-            />
-          </div>
-        </div>
-
-        {/* Loading State */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-            <p className="text-gray-500 dark:text-gray-400 mt-3">Loading plans...</p>
-          </div>
-        ) : filteredPlans.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Package className="h-12 w-12 text-gray-300 dark:text-gray-700 mb-3" />
-            <p className="text-gray-500 dark:text-gray-400">
-              {searchTerm ? "No plans match your search" : "No plans created yet"}
-            </p>
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm("")}
-                className="mt-4 text-blue-600 dark:text-blue-400 text-sm hover:underline"
-              >
-                Clear search
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800/50">
-                  <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
-                    <th className="px-6 py-4 text-left font-medium">Plan</th>
-                    <th className="px-6 py-4 text-left font-medium">Price</th>
-                    <th className="px-6 py-4 text-left font-medium">Duration</th>
-                    <th className="px-6 py-4 text-left font-medium">Subjects</th>
-                    <th className="px-6 py-4 text-left font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                  {filteredPlans.map((plan) => {
-                    const DurationIcon = getDurationUnitIcon(plan.durationUnit);
-                    return (
-                      <tr key={plan._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                              <Crown className="h-4 w-4 text-white" />
-                            </div>
-                            <span className="font-medium text-gray-900 dark:text-gray-100">
-                              {plan.title}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 text-xs font-semibold">
-                            <DollarSign className="h-3 w-3" />
-                            ₵{plan.price}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-400">
-                            <DurationIcon className="h-3.5 w-3.5" />
-                            {plan.duration} {plan.durationUnit}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-wrap gap-1 max-w-md">
-                            {plan.subjects.slice(0, 3).map((subject) => (
-                              <span key={subject._id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs">
-                                <BookOpen className="h-2.5 w-2.5" />
-                                {subject.name}
-                              </span>
-                            ))}
-                            {plan.subjects.length > 3 && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                +{plan.subjects.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleEdit(plan)}
-                              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-                              title="Edit Plan"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(plan._id)}
-                              className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                              title="Delete Plan"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Card View */}
-            <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-800">
-              {filteredPlans.map((plan) => {
-                const DurationIcon = getDurationUnitIcon(plan.durationUnit);
-                return (
-                  <div key={plan._id} className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                          <Crown className="h-5 w-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                            {plan.title}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 text-xs font-semibold">
-                              <DollarSign className="h-3 w-3" />
-                              ₵{plan.price}
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                              <DurationIcon className="h-3 w-3" />
-                              {plan.duration} {plan.durationUnit}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleEdit(plan)}
-                          className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(plan._id)}
-                          className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {plan.subjects.slice(0, 4).map((subject) => (
-                        <span key={subject._id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs">
-                          <BookOpen className="h-2.5 w-2.5" />
-                          {subject.name}
-                        </span>
-                      ))}
-                      {plan.subjects.length > 4 && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          +{plan.subjects.length - 4} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 };

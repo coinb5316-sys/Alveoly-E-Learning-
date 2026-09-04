@@ -1,7 +1,10 @@
-// routes/authRoutes.js - Updated with Program support
+// routes/authRoutes.js - Updated with registration flow
 import express from "express";
 import {
-  register,
+  registerAlveolyStudent,
+  registerNonAlveolyStudent,
+  verifyApprovalToken,
+  completeRegistration,
   login,
   assignCourse,
   assignProgram,
@@ -11,23 +14,28 @@ import {
   googleLogin,
   registerLecturer,
   updateActivity,
-  debugSubjects,
+  assignPlanToUser,
 } from "../controllers/authController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
+// ================= REGISTRATION FLOW =================
+router.post("/register/alveoly", registerAlveolyStudent);
+router.post("/register/non-alveoly", registerNonAlveolyStudent);
+router.get("/verify-approval/:token", verifyApprovalToken);
+router.post("/complete-registration", protect, completeRegistration);
+
 // ================= EMAIL AUTH =================
-router.post("/register", register);
 router.post("/login", login);
 
-// ================= GOOGLE LOGIN (frontend sends idToken) =================
+// ================= GOOGLE LOGIN =================
 router.post("/google-login", googleLogin);
 
 // ================= USER MANAGEMENT =================
 router.get("/me", protect, getMyInfo);
 router.put("/me/course", protect, assignCourse);
-router.put("/me/program", protect, assignProgram);  // NEW: Assign program to user
+router.put("/me/program", protect, assignProgram);
 router.put("/me/activity", protect, updateActivity);
 
 // ================= PASSWORD RESET =================
@@ -37,37 +45,31 @@ router.post("/reset-password/:token", resetPassword);
 // ================= LECTURER MANAGEMENT (Admin only) =================
 router.post("/register-lecturer", protect, adminOnly, registerLecturer);
 
-// Debug endpoint (remove in production)
-router.get("/debug-subjects", protect, adminOnly, debugSubjects);
+// ================= PLAN ASSIGNMENT (Admin only) =================
+router.post("/assign-plan", protect, adminOnly, assignPlanToUser);
 
-// Test endpoint to directly assign subjects to a lecturer
-router.post("/test-assign-subjects/:userId", protect, adminOnly, async (req, res) => {
+// ================= DEBUG ENDPOINTS =================
+router.get("/debug-subjects", protect, adminOnly, async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { subjectIds } = req.body;
-    
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    
-    if (!user.lecturerInfo) {
-      user.lecturerInfo = {};
-    }
-    
-    user.lecturerInfo.assignedSubjects = subjectIds;
-    await user.save();
-    
-    const updatedUser = await User.findById(userId)
-      .populate('lecturerInfo.assignedSubjects', 'name');
+    const Subject = (await import("../models/Subject.js")).default;
+    const subjects = await Subject.find()
+      .populate("programId", "name")
+      .populate("courseId", "name");
     
     res.json({
-      success: true,
-      message: `Assigned ${subjectIds.length} subjects`,
-      assignedSubjects: updatedUser.lecturerInfo.assignedSubjects
+      count: subjects.length,
+      subjects: subjects.map(s => ({
+        _id: s._id,
+        name: s.name,
+        courseId: s.courseId,
+        courseName: s.courseId?.name,
+        programId: s.programId,
+        programName: s.programId?.name
+      }))
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ message: err.message });
   }
 });
 

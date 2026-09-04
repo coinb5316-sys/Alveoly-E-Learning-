@@ -298,3 +298,50 @@ export const getUserStats = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// ================= APPROVE USER =================
+export const approveUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    if (user.isApproved) {
+      return res.status(400).json({ message: "User is already approved" });
+    }
+    
+    user.isApproved = true;
+    user.approvalToken = null;
+    user.tokenExpiresAt = null;
+    user.registrationCompleted = true;
+    await user.save();
+    
+    // Send notification to user
+    await createNotification(
+      user._id,
+      "student",
+      "success",
+      "Account Approved! 🎉",
+      "Your account has been approved. You can now login and start your learning journey.",
+      "/login",
+      { action: "account_approved" }
+    );
+    
+    const updatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name");
+    
+    res.json({
+      success: true,
+      message: "User approved successfully",
+      user: updatedUser
+    });
+    
+  } catch (err) {
+    console.error("Approve user error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};

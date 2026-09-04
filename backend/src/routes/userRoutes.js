@@ -1,4 +1,4 @@
-// routes/userRoutes.js - UPDATED to allow lecturers
+// routes/userRoutes.js - Add approve endpoint
 import express from "express";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import {
@@ -8,6 +8,7 @@ import {
   deleteUser,
   updateUser,
   getUserStats,
+  approveUser, // Add this
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -19,16 +20,16 @@ router.get("/:id", protect, adminOnly, getUserById);
 router.put("/:id/role", protect, adminOnly, updateUserRole);
 router.delete("/:id", protect, adminOnly, deleteUser);
 router.put("/:id", protect, adminOnly, updateUser);
+router.patch("/:id/approve", protect, adminOnly, approveUser); // Add this
 
 // ================= STUDENTS ROUTE - ALLOW LECTURERS AND ADMINS =================
-
-// Add to userRoutes.js
 router.get("/me", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
       .select("-password")
       .populate("programId", "name code")
-      .populate("courseId", "name");
+      .populate("courseId", "name")
+      .populate("planId", "title duration price durationUnit");
     
     res.json(user);
   } catch (err) {
@@ -36,102 +37,11 @@ router.get("/me", protect, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-// IMPORTANT: Remove adminOnly to allow lecturers
-router.get("/students", protect, async (req, res) => {
-  try {
-    const { courseId } = req.query;
-    
-    // Build filter for students only
-    const filter = { role: "student" };
-    
-    // If courseId is provided, filter by that course
-    if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
-      filter.courseId = courseId;
-    } else {
-      // If no courseId provided, check if user is lecturer and get their assigned courses
-      if (req.user.role === "lecturer") {
-        const user = await User.findById(req.user._id);
-        const assignedCourseIds = user?.lecturerInfo?.assignedCourses || [];
-        if (assignedCourseIds.length > 0) {
-          filter.courseId = { $in: assignedCourseIds };
-        }
-      }
-    }
-    
-    console.log("Fetching students with filter:", filter);
-    
-    const students = await User.find(filter)
-      .select("name email courseId _id createdAt lastLoginAt isActive")
-      .populate("courseId", "name");
-    
-    console.log(`Found ${students.length} students`);
-    
-    res.json(students);
-  } catch (err) {
-    console.error("Error fetching students:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
 
-// Add this route after the existing /students route
-router.get("/students/by-course/:courseId", protect, async (req, res) => {
-  try {
-    const { courseId } = req.params;
-    
-    const filter = { 
-      role: "student",
-      courseId: courseId,
-      _id: { $ne: req.user._id }
-    };
-    
-    console.log("Fetching students by course:", courseId);
-    
-    const students = await User.find(filter)
-      .select("name email courseId _id")
-      .populate("courseId", "name");
-    
-    console.log(`Found ${students.length} students in course ${courseId}`);
-    
-    res.json(students);
-  } catch (err) {
-    console.error("Error fetching students by course:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// routes/userRoutes.js - Add this new endpoint
-router.get("/students/by-program/:programId", protect, async (req, res) => {
-  try {
-    const { programId } = req.params;
-    
-    const filter = { 
-      role: "student",
-      programId: programId,
-      _id: { $ne: req.user._id }
-    };
-    
-    console.log("Fetching students by program:", programId);
-    
-    const students = await User.find(filter)
-      .select("name email programId courseId _id")
-      .populate("programId", "name")
-      .populate("courseId", "name");
-    
-    console.log(`Found ${students.length} students in program ${programId}`);
-    
-    res.json(students);
-  } catch (err) {
-    console.error("Error fetching students by program:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Also update the main /students endpoint to use program
 router.get("/students", protect, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user._id);
     
-    // If user has programId, filter by that program
     if (currentUser.programId) {
       const filter = { 
         role: "student",
@@ -139,18 +49,14 @@ router.get("/students", protect, async (req, res) => {
         _id: { $ne: req.user._id }
       };
       
-      console.log("Fetching students by program:", currentUser.programId);
-      
       const students = await User.find(filter)
         .select("name email programId courseId _id")
         .populate("programId", "name")
         .populate("courseId", "name");
       
-      console.log(`Found ${students.length} students in program`);
       return res.json(students);
     }
     
-    // Fallback to course-based filtering
     if (currentUser.courseId) {
       const filter = { 
         role: "student",
@@ -165,7 +71,6 @@ router.get("/students", protect, async (req, res) => {
       return res.json(students);
     }
     
-    // No program or course assigned
     console.log("User has no program or course assigned");
     res.json([]);
     
@@ -175,13 +80,14 @@ router.get("/students", protect, async (req, res) => {
   }
 });
 
-// Get all students with full details (ADMIN ONLY - keep this restricted)
+// Get all students with full details (ADMIN ONLY)
 router.get("/students/full", protect, adminOnly, async (req, res) => {
   try {
     const students = await User.find({ role: "student" })
       .select("-password")
       .populate("programId", "name code isActive")
       .populate("courseId", "name")
+      .populate("planId", "title duration price durationUnit")
       .populate({
         path: 'lecturerInfo.assignedSubjects',
         model: 'Subject',
@@ -202,10 +108,17 @@ router.get("/students/full", protect, adminOnly, async (req, res) => {
       courseId: student.courseId,
       programName: student.programId?.name || "Not assigned",
       courseName: student.courseId?.name || "Not assigned",
+      planName: student.planId?.title || "No Plan",
+      planId: student.planId?._id || null,
+      isPlanActive: student.isPlanActive || false,
+      planExpiryDate: student.planExpiryDate,
       assignedSubjects: student.lecturerInfo?.assignedSubjects || [],
       createdAt: student.createdAt,
       lastLoginAt: student.lastLoginAt,
-      isActive: student.isActive
+      isActive: student.isActive,
+      userType: student.userType,
+      isApproved: student.isApproved,
+      registrationCompleted: student.registrationCompleted
     }));
     
     res.json(formattedStudents);
