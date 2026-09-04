@@ -3,7 +3,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { FaArrowRight } from "react-icons/fa";
+import { FaArrowRight, FaUsers, FaRocket, FaAward } from "react-icons/fa";
 import CareerNavbar from "../components/CareerNavbar";
 import Footer from "../components/Footer";
 import backgroundVideo from "../assets/background-video.mp4";
@@ -41,6 +41,25 @@ const FEATURED_JOBS = [
     slug: "sales",
     description: "Build relationships and drive revenue growth",
     openings: 4,
+  },
+];
+
+// Career values data
+const CAREER_VALUES = [
+  {
+    icon: FaUsers,
+    title: "Collaborative Culture",
+    description: "Work with passionate educators and innovators who support each other's growth.",
+  },
+  {
+    icon: FaRocket,
+    title: "Growth Opportunities",
+    description: "Continuous learning and professional development to advance your career.",
+  },
+  {
+    icon: FaAward,
+    title: "Meaningful Impact",
+    description: "Shape the future of education and make a difference in students' lives.",
   },
 ];
 
@@ -157,218 +176,49 @@ const CareerPage = () => {
             </motion.button>
           </motion.div>
         </div>
-
-        {/* =====================================================
-            GREAT PLACE TO WORK BADGE - GHANA FOCUSED
-        ====================================================== */}
-        <div
-          className="
-            absolute
-            z-20
-            right-[7%]
-            bottom-[105px]
-            hidden
-            md:block
-          "
-        >
-          <div className="w-[145px] md:w-[160px]">
-
-            <div
-              className="
-                bg-[#006b3e]
-                text-white
-                px-3
-                py-4
-                font-bold
-                leading-[0.92]
-                text-[28px]
-                md:text-[30px]
-              "
-            >
-              Best
-              <br />
-              EdTech
-              <br />
-              in
-              <br />
-              Ghana
-            </div>
-
-            <div
-              className="
-                bg-[#f5a623]
-                text-white
-                text-center
-                px-2
-                pt-2
-                pb-3
-                relative
-              "
-            >
-              <div className="font-bold text-[21px]">
-                2024
-              </div>
-
-              <div className="text-[10px] font-medium mt-1">
-                Winner
-              </div>
-
-              <div className="text-[10px] font-medium">
-                Ghana
-              </div>
-
-              {/* badge point */}
-              <div
-                className="
-                  absolute
-                  left-1/2
-                  -translate-x-1/2
-                  -bottom-[17px]
-                  w-0
-                  h-0
-                  border-l-[28px]
-                  border-r-[28px]
-                  border-t-[17px]
-                  border-l-transparent
-                  border-r-transparent
-                  border-t-[#f5a623]
-                "
-              />
-            </div>
-          </div>
-        </div>
       </section>
 
 
       {/* =========================================================
-          GREAT PLACE TO WORK / CULTURE SECTION - GHANA FOCUSED
+          WHY JOIN US SECTION - Replacing Awards Section
       ========================================================== */}
-      <section className="relative bg-[#e8f8fc] overflow-hidden">
-
-        <div
-          className="
-            max-w-[1100px]
-            mx-auto
-            px-6
-            pt-24
-            md:pt-28
-            pb-0
-          "
-        >
-          <div
-            className="
-              flex
-              flex-col
-              md:flex-row
-              items-center
-              justify-center
-              gap-8
-              md:gap-10
-              text-center
-              md:text-left
-            "
-          >
-
-            {/* Badge */}
-            <div className="shrink-0">
-              <div className="w-[115px] md:w-[125px]">
-
-                <div
-                  className="
-                    bg-[#006b3e]
-                    text-white
-                    px-3
-                    py-3
-                    font-bold
-                    leading-[0.9]
-                    text-[23px]
-                  "
-                >
-                  Best
-                  <br />
-                  EdTech
-                  <br />
-                  in
-                  <br />
-                  Ghana
-                </div>
-
-                <div
-                  className="
-                    bg-[#f5a623]
-                    text-white
-                    text-center
-                    px-1
-                    py-2
-                  "
-                >
-                  <div className="font-bold text-[16px]">
-                    2024
-                  </div>
-
-                  <div className="text-[7px] mt-1">
-                    Winner
-                  </div>
-
-                  <div className="text-[8px]">
-                    Ghana
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Message */}
-            <div className="max-w-[650px]">
-
-              <h2
-                className="
-                  text-[#163c78]
-                  text-[24px]
-                  md:text-[28px]
-                  leading-[1.15]
-                  font-medium
-                "
-              >
-                Proudly recognized as Ghana's
-                <br />
-                Best EdTech Company!
-                <br className="hidden md:block" />
-                Our commitment to excellence speaks for itself.
-              </h2>
-
-              <p className="mt-4 text-[10px] md:text-[11px] text-[#4f6875]">
-                Awarded by Ghana Education Awards 2024
-              </p>
-            </div>
+      <section className="py-20 md:py-24 bg-white">
+        <div className="max-w-[1100px] mx-auto px-6">
+          <div className="text-center mb-14">
+            <h2 className="text-[#333] font-normal text-[30px] md:text-[36px] lg:text-[40px]">
+              Why Join Alveoly?
+            </h2>
+            <p className="mt-4 text-[15px] md:text-[16px] text-[#666] max-w-[650px] mx-auto">
+              Be part of a team that's transforming education in Ghana and beyond
+            </p>
           </div>
-        </div>
 
-        {/* =====================================================
-            PEOPLE ILLUSTRATION
-            Replace this with your actual illustration asset
-            if you have one.
-        ====================================================== */}
-        <div className="mt-12 md:mt-16 h-[220px] md:h-[275px] relative overflow-hidden">
-
-          <div className="absolute inset-x-0 bottom-0 flex items-end justify-center">
-
-            {/* Decorative people silhouettes */}
-            <div className="flex items-end justify-center gap-1 md:gap-3 w-full">
-
-              <Person color="bg-[#0c9aa2]" height="h-36" />
-              <Person color="bg-[#f6ae22]" height="h-44" />
-              <Person color="bg-[#ec6d67]" height="h-40" />
-              <Person color="bg-[#0b4d8b]" height="h-52" />
-              <Person color="bg-[#ef443c]" height="h-48" />
-              <Person color="bg-[#f39b25]" height="h-56" />
-              <Person color="bg-[#159f9b]" height="h-45" />
-              <Person color="bg-[#193d72]" height="h-54" />
-              <Person color="bg-[#ed7049]" height="h-44" />
-              <Person color="bg-[#f2a51e]" height="h-50" />
-              <Person color="bg-[#0b7d88]" height="h-42" />
-              <Person color="bg-[#ef5149]" height="h-53" />
-
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
+            {CAREER_VALUES.map((value, index) => {
+              const Icon = value.icon;
+              return (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                  className="text-center p-6 rounded-xl hover:shadow-lg transition-shadow duration-300"
+                >
+                  <div className="flex justify-center mb-4">
+                    <div className="w-16 h-16 rounded-full bg-[#2189df]/10 flex items-center justify-center">
+                      <Icon className="text-[#2189df] text-2xl" />
+                    </div>
+                  </div>
+                  <h3 className="text-[#333] text-xl font-semibold mb-3">
+                    {value.title}
+                  </h3>
+                  <p className="text-[#666] text-[14px] leading-relaxed">
+                    {value.description}
+                  </p>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -379,25 +229,28 @@ const CareerPage = () => {
       ========================================================== */}
       <section
         id="featured-jobs"
-        className="bg-white pt-20 md:pt-24 pb-20"
+        className="bg-[#f7f7f7] pt-20 md:pt-24 pb-20"
       >
         <div className="max-w-[1100px] mx-auto px-6">
 
-          <div className="mb-7">
+          <div className="text-center mb-10">
             <h2
               className="
                 inline-block
-                text-[16px]
-                md:text-[17px]
+                text-[20px]
+                md:text-[24px]
                 font-medium
                 text-[#333]
-                border-b
-                border-[#333]
-                pb-[2px]
+                border-b-2
+                border-[#2189df]
+                pb-2
               "
             >
               Featured Job Opportunities
             </h2>
+            <p className="mt-3 text-[14px] text-[#666]">
+              Explore exciting career opportunities at Alveoly
+            </p>
           </div>
 
           {/* EXACTLY THREE CARDS */}
@@ -420,6 +273,103 @@ const CareerPage = () => {
               />
             ))}
 
+          </div>
+        </div>
+      </section>
+
+
+      {/* =========================================================
+          CULTURE SECTION
+      ========================================================== */}
+      <section className="relative bg-[#e8f8fc] overflow-hidden py-20 md:py-24">
+
+        <div
+          className="
+            max-w-[1100px]
+            mx-auto
+            px-6
+          "
+        >
+          <div
+            className="
+              flex
+              flex-col
+              md:flex-row
+              items-center
+              justify-center
+              gap-8
+              md:gap-12
+              text-center
+              md:text-left
+            "
+          >
+
+            {/* Message */}
+            <div className="max-w-[650px]">
+
+              <h2
+                className="
+                  text-[#163c78]
+                  text-[24px]
+                  md:text-[28px]
+                  leading-[1.15]
+                  font-medium
+                "
+              >
+                Join a Team That's
+                <br />
+                Making a Difference
+                <br className="hidden md:block" />
+                in Ghana's Education
+              </h2>
+
+              <p className="mt-4 text-[13px] md:text-[14px] text-[#4f6875] leading-relaxed">
+                We're building the future of education in Ghana. Our team is 
+                passionate about creating meaningful learning experiences 
+                that empower students and professionals to achieve their goals.
+              </p>
+
+              <button
+                onClick={handleViewOpenings}
+                className="
+                  mt-6
+                  inline-flex
+                  items-center
+                  gap-2
+                  bg-[#2189df]
+                  hover:bg-[#1678ca]
+                  text-white
+                  px-6
+                  py-3
+                  rounded-lg
+                  text-[14px]
+                  font-medium
+                  transition-colors
+                  duration-200
+                "
+              >
+                Explore Opportunities
+                <FaArrowRight className="text-[10px]" />
+              </button>
+            </div>
+
+            {/* People Illustration */}
+            <div className="flex-shrink-0">
+              <div className="flex items-end justify-center gap-1 md:gap-3">
+                <Person color="bg-[#0c9aa2]" height="h-36" />
+                <Person color="bg-[#f6ae22]" height="h-44" />
+                <Person color="bg-[#ec6d67]" height="h-40" />
+                <Person color="bg-[#0b4d8b]" height="h-52" />
+                <Person color="bg-[#ef443c]" height="h-48" />
+                <Person color="bg-[#f39b25]" height="h-56" />
+                <Person color="bg-[#159f9b]" height="h-45" />
+                <Person color="bg-[#193d72]" height="h-54" />
+                <Person color="bg-[#ed7049]" height="h-44" />
+                <Person color="bg-[#f2a51e]" height="h-50" />
+                <Person color="bg-[#0b7d88]" height="h-42" />
+                <Person color="bg-[#ef5149]" height="h-53" />
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -526,6 +476,11 @@ const JobCard = ({ title, image, onClick, openings }) => {
         overflow-hidden
         bg-gray-100
         cursor-pointer
+        rounded-xl
+        shadow-sm
+        hover:shadow-xl
+        transition-all
+        duration-300
       "
     >
       <div className="relative h-[190px] md:h-[160px] lg:h-[175px]">

@@ -28,6 +28,7 @@ import {
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import SmartChatBot from "../components/SmartChatBot";
+import API from "../api/axios";
 
 import kalveoBg from "../images/kalveo-bg.jpg";
 
@@ -150,46 +151,6 @@ const FOOTER_PRODUCTS = [
 
 
 /* ============================================================
-   TESTIMONIALS DATA - Ghanaian names with African images
-============================================================ */
-
-const TESTIMONIALS = [
-  {
-    id: 1,
-    name: "Dr. Kwame Asare",
-    role: "Medical Student, University of Ghana",
-    quote: "The medical preparation resources at Alveoly transformed my approach to studying. I went from struggling with complex concepts to mastering them with ease.",
-    rating: 5,
-    image: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=100&q=80",
-  },
-  {
-    id: 2,
-    name: "Ama Serwaa",
-    role: "Nursing Student, KNUST",
-    quote: "The nursing programs are exceptional! The clinical simulations and practice questions prepared me perfectly for my exams. I couldn't have passed without Alveoly.",
-    rating: 5,
-    image: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=100&q=80",
-  },
-  {
-    id: 3,
-    name: "Michael Osei",
-    role: "Pharmacy Graduate, UCC",
-    quote: "As a pharmacy student, I needed tools that would challenge me. Alveoly's pharmacology resources were exactly what I needed to excel in my board exams.",
-    rating: 4,
-    image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&q=80",
-  },
-  {
-    id: 4,
-    name: "Efua Mensah",
-    role: "Accounting Professional, KPMG Ghana",
-    quote: "The accounting and professional preparation courses are top-notch. The practical examples and real-world scenarios helped me pass my exams on the first attempt.",
-    rating: 5,
-    image: "https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?w=100&q=80",
-  },
-];
-
-
-/* ============================================================
    HOME PAGE
 ============================================================ */
 
@@ -201,8 +162,10 @@ const HomePage = () => {
     userName: "Guest",
   });
 
+  const [testimonials, setTestimonials] = useState([]);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   /* ----------------------------------------------------------
      User information
@@ -230,20 +193,52 @@ const HomePage = () => {
   }, []);
 
   /* ----------------------------------------------------------
+     Fetch Testimonials from API
+  ---------------------------------------------------------- */
+
+  useEffect(() => {
+    const fetchTestimonials = async () => {
+      try {
+        setLoading(true);
+        // Fetch only approved testimonials
+        const response = await API.get("/testimonials/approved");
+        console.log("Fetched testimonials:", response.data);
+        
+        // Ensure we have an array
+        const data = Array.isArray(response.data) ? response.data : [];
+        setTestimonials(data);
+        
+        // If we have testimonials, start the carousel
+        if (data.length > 0) {
+          setCurrentTestimonial(0);
+        }
+      } catch (error) {
+        console.error("Error fetching testimonials:", error);
+        // Fallback to empty array if API fails
+        setTestimonials([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTestimonials();
+  }, []);
+
+  /* ----------------------------------------------------------
      Testimonial Auto-Slide
   ---------------------------------------------------------- */
 
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || testimonials.length === 0) return;
 
     const interval = setInterval(() => {
       setCurrentTestimonial((prev) =>
-        prev === TESTIMONIALS.length - 1 ? 0 : prev + 1
+        prev === testimonials.length - 1 ? 0 : prev + 1
       );
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [isPaused]);
+  }, [isPaused, testimonials.length]);
 
   const goToTestimonial = (index) => {
     setCurrentTestimonial(index);
@@ -251,16 +246,50 @@ const HomePage = () => {
 
   const nextTestimonial = () => {
     setCurrentTestimonial((prev) =>
-      prev === TESTIMONIALS.length - 1 ? 0 : prev + 1
+      prev === testimonials.length - 1 ? 0 : prev + 1
     );
   };
 
   const prevTestimonial = () => {
     setCurrentTestimonial((prev) =>
-      prev === 0 ? TESTIMONIALS.length - 1 : prev - 1
+      prev === 0 ? testimonials.length - 1 : prev - 1
     );
   };
 
+  /* ----------------------------------------------------------
+     Helper function to get initials
+  ---------------------------------------------------------- */
+
+  const getInitials = (name) => {
+    if (!name) return "?";
+    const nameParts = name.trim().split(" ");
+    if (nameParts.length === 1) {
+      return nameParts[0].charAt(0).toUpperCase();
+    }
+    return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase();
+  };
+
+  /* ----------------------------------------------------------
+     Helper function to get color based on name
+  ---------------------------------------------------------- */
+
+  const getAvatarColor = (name) => {
+    const colors = [
+      "bg-blue-500",
+      "bg-purple-500",
+      "bg-green-500",
+      "bg-red-500",
+      "bg-indigo-500",
+      "bg-pink-500",
+      "bg-teal-500",
+      "bg-orange-500",
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
 
   /* ----------------------------------------------------------
      WhatsApp
@@ -279,6 +308,8 @@ const HomePage = () => {
     );
   };
 
+  // Determine if we have testimonials to show
+  const hasTestimonials = testimonials.length > 0;
 
   return (
     <div className="min-h-screen bg-white text-[#333] overflow-x-hidden">
@@ -539,7 +570,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          STUDENT TESTIMONIALS
+          STUDENT TESTIMONIALS - FETCHED FROM API
       ======================================================= */}
 
       <section className="bg-white py-16 md:py-20">
@@ -563,116 +594,139 @@ const HomePage = () => {
             Real stories from students across Ghana who achieved their goals with Alveoly
           </p>
 
-          {/* Testimonial Carousel */}
-          <div
-            className="relative"
-            onMouseEnter={() => setIsPaused(true)}
-            onMouseLeave={() => setIsPaused(false)}
-          >
-
-            {/* Dots indicator - ABOVE the testimonials */}
-            <div className="flex justify-center items-center gap-2 mb-8">
-              {TESTIMONIALS.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => goToTestimonial(index)}
-                  className={`
-                    transition-all duration-300 rounded-full
-                    ${index === currentTestimonial
-                      ? 'w-8 h-[2px] bg-[#1687df]'
-                      : 'w-1.5 h-1.5 bg-gray-300 hover:bg-gray-400'
-                    }
-                  `}
-                  aria-label={`Go to testimonial ${index + 1}`}
-                />
-              ))}
+          {/* Loading State */}
+          {loading && (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1687df]"></div>
             </div>
+          )}
 
-            {/* Testimonial Card */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentTestimonial}
-                initial={{ opacity: 0, x: 50 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -50 }}
-                transition={{ duration: 0.5 }}
-                className="bg-[#f8f9fa] rounded-xl p-8 md:p-10 shadow-sm border border-gray-100"
-              >
-                <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+          {/* No Testimonials State */}
+          {!loading && !hasTestimonials && (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">🌟</div>
+              <p className="text-[#777] text-[15px]">
+                No testimonials yet. Be the first to share your experience!
+              </p>
+            </div>
+          )}
 
-                  {/* Avatar - African images */}
-                  <div className="flex-shrink-0">
-                    <img
-                      src={TESTIMONIALS[currentTestimonial].image}
-                      alt={TESTIMONIALS[currentTestimonial].name}
-                      className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-2 border-[#1687df]"
-                    />
+          {/* Testimonial Carousel */}
+          {hasTestimonials && (
+            <div
+              className="relative"
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => setIsPaused(false)}
+            >
+
+              {/* Dots indicator - ABOVE the testimonials */}
+              <div className="flex justify-center items-center gap-2 mb-8">
+                {testimonials.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => goToTestimonial(index)}
+                    className={`
+                      transition-all duration-300 rounded-full
+                      ${index === currentTestimonial
+                        ? 'w-8 h-[2px] bg-[#1687df]'
+                        : 'w-1.5 h-1.5 bg-gray-300 hover:bg-gray-400'
+                      }
+                    `}
+                    aria-label={`Go to testimonial ${index + 1}`}
+                  />
+                ))}
+              </div>
+
+              {/* Testimonial Card */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentTestimonial}
+                  initial={{ opacity: 0, x: 50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -50 }}
+                  transition={{ duration: 0.5 }}
+                  className="bg-[#f8f9fa] rounded-xl p-8 md:p-10 shadow-sm border border-gray-100"
+                >
+                  <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+
+                    {/* Avatar - Name Abbreviation with Color */}
+                    <div className="flex-shrink-0">
+                      <div
+                        className={`
+                          w-16 h-16 md:w-20 md:h-20 rounded-full 
+                          ${getAvatarColor(testimonials[currentTestimonial].name || "Student")}
+                          flex items-center justify-center text-white font-bold text-xl md:text-2xl
+                          border-2 border-[#1687df]
+                        `}
+                      >
+                        {getInitials(testimonials[currentTestimonial].name || "Student")}
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 text-center md:text-left">
+
+                      {/* Quote icons */}
+                      <div className="text-[#1687df] opacity-30 mb-2">
+                        <FaQuoteLeft className="inline text-xl" />
+                      </div>
+
+                      <p className="text-[13px] md:text-[15px] leading-relaxed text-[#555] italic mb-4">
+                        "{testimonials[currentTestimonial].feedback || testimonials[currentTestimonial].quote}"
+                      </p>
+
+                      <div className="text-[#1687df] opacity-30 mb-3">
+                        <FaQuoteRight className="inline text-xl" />
+                      </div>
+
+                      {/* Rating stars */}
+                      <div className="flex justify-center md:justify-start gap-1 mb-2">
+                        {[...Array(5)].map((_, i) => (
+                          <FaStar
+                            key={i}
+                            className={`text-[12px] ${
+                              i < (testimonials[currentTestimonial].rating || 5)
+                                ? 'text-[#f7c928]'
+                                : 'text-gray-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      <h4 className="text-[14px] font-semibold text-[#333]">
+                        {testimonials[currentTestimonial].name || "Anonymous Student"}
+                      </h4>
+
+                      <p className="text-[10px] text-[#777]">
+                        {testimonials[currentTestimonial].course || "Student"}
+                      </p>
+
+                    </div>
                   </div>
 
-                  {/* Content */}
-                  <div className="flex-1 text-center md:text-left">
+                  {/* Navigation arrows */}
+                  <div className="flex justify-center gap-4 mt-6">
+                    <button
+                      onClick={prevTestimonial}
+                      className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-[#1687df] hover:text-white hover:border-[#1687df] flex items-center justify-center transition-colors text-[#333] text-xs"
+                      aria-label="Previous testimonial"
+                    >
+                      <FaChevronLeft />
+                    </button>
 
-                    {/* Quote icons */}
-                    <div className="text-[#1687df] opacity-30 mb-2">
-                      <FaQuoteLeft className="inline text-xl" />
-                    </div>
-
-                    <p className="text-[13px] md:text-[15px] leading-relaxed text-[#555] italic mb-4">
-                      "{TESTIMONIALS[currentTestimonial].quote}"
-                    </p>
-
-                    <div className="text-[#1687df] opacity-30 mb-3">
-                      <FaQuoteRight className="inline text-xl" />
-                    </div>
-
-                    {/* Rating stars */}
-                    <div className="flex justify-center md:justify-start gap-1 mb-2">
-                      {[...Array(5)].map((_, i) => (
-                        <FaStar
-                          key={i}
-                          className={`text-[12px] ${
-                            i < TESTIMONIALS[currentTestimonial].rating
-                              ? 'text-[#f7c928]'
-                              : 'text-gray-300'
-                          }`}
-                        />
-                      ))}
-                    </div>
-
-                    <h4 className="text-[14px] font-semibold text-[#333]">
-                      {TESTIMONIALS[currentTestimonial].name}
-                    </h4>
-
-                    <p className="text-[10px] text-[#777]">
-                      {TESTIMONIALS[currentTestimonial].role}
-                    </p>
-
+                    <button
+                      onClick={nextTestimonial}
+                      className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-[#1687df] hover:text-white hover:border-[#1687df] flex items-center justify-center transition-colors text-[#333] text-xs"
+                      aria-label="Next testimonial"
+                    >
+                      <FaChevronRight />
+                    </button>
                   </div>
-                </div>
+                </motion.div>
+              </AnimatePresence>
 
-                {/* Navigation arrows */}
-                <div className="flex justify-center gap-4 mt-6">
-                  <button
-                    onClick={prevTestimonial}
-                    className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-[#1687df] hover:text-white hover:border-[#1687df] flex items-center justify-center transition-colors text-[#333] text-xs"
-                    aria-label="Previous testimonial"
-                  >
-                    <FaChevronLeft />
-                  </button>
-
-                  <button
-                    onClick={nextTestimonial}
-                    className="w-8 h-8 rounded-full bg-white border border-gray-200 hover:bg-[#1687df] hover:text-white hover:border-[#1687df] flex items-center justify-center transition-colors text-[#333] text-xs"
-                    aria-label="Next testimonial"
-                  >
-                    <FaChevronRight />
-                  </button>
-                </div>
-              </motion.div>
-            </AnimatePresence>
-
-          </div>
-
+            </div>
+          )}
         </div>
       </section>
 
