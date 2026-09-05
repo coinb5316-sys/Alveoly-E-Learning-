@@ -1,4 +1,4 @@
-// src/pages/Login.jsx - WITH PROFESSIONAL DARK BACKGROUND
+// src/pages/Login.jsx - UPDATED WITH PLAN REDIRECT
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -41,6 +41,14 @@ const LoginPage = () => {
         navigate(redirectUrl);
         return;
       }
+      
+      // Check if user needs to select plan (non-alveoly students)
+      if (result.requiresPlan) {
+        navigate("/student/plans");
+        toast.info("Please select a plan to continue");
+        return;
+      }
+      
       if (result.user?.role === "admin") {
         navigate("/admin");
       } else if (result.user?.role === "lecturer") {
@@ -52,7 +60,12 @@ const LoginPage = () => {
       }
       toast.success("Login successful!");
     } catch (err) {
-      toast.error(err.response?.data?.message || "Login failed");
+      if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
+        toast.error("Your account is pending approval. Please wait for admin approval.");
+        navigate("/login", { state: { approvalPending: true } });
+      } else {
+        toast.error(err.response?.data?.message || "Login failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -77,6 +90,21 @@ const LoginPage = () => {
           return;
         }
         
+        // Check if user needs to select plan (non-alveoly students)
+        if (result.requiresPlan) {
+          navigate("/student/plans");
+          toast.info("Please select a plan to continue");
+          setPendingGoogleCredential(null);
+          return;
+        }
+        
+        if (result.requiresApproval) {
+          toast.info("Your account is pending approval. Please wait for admin approval.");
+          navigate("/login", { state: { approvalPending: true } });
+          setPendingGoogleCredential(null);
+          return;
+        }
+        
         if (result.user?.role === "admin") {
           navigate("/admin");
         } else if (result.user?.role === "lecturer") {
@@ -89,10 +117,12 @@ const LoginPage = () => {
         toast.success("Login successful!");
         setPendingGoogleCredential(null);
       } catch (err) {
-        if (err.response?.status === 404 || 
-            err.response?.data?.message?.includes("not found") ||
-            err.response?.data?.message?.includes("User not found")) {
+        if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
           setShowUserTypeModal(true);
+          setGoogleLoading(false);
+        } else if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
+          toast.info("Your account is pending approval. Please wait for admin approval.");
+          navigate("/login", { state: { approvalPending: true } });
           setGoogleLoading(false);
         } else {
           throw err;
@@ -125,6 +155,19 @@ const LoginPage = () => {
       if (redirectUrl) {
         localStorage.removeItem("redirectAfterLogin");
         navigate(redirectUrl);
+        return;
+      }
+      
+      // Check if user needs to select plan (non-alveoly students)
+      if (result.requiresPlan) {
+        navigate("/student/plans");
+        toast.info("Please select a plan to continue");
+        return;
+      }
+      
+      if (result.requiresApproval) {
+        toast.info("Your account is pending approval. Please wait for admin approval.");
+        navigate("/login", { state: { approvalPending: true } });
         return;
       }
       

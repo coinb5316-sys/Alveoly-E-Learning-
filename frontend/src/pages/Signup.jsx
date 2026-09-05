@@ -1,4 +1,4 @@
-// SignupPage.jsx - Updated with full registration flow
+// src/pages/SignupPage.jsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,7 +18,6 @@ import {
   FaCheck,
   FaTimes,
   FaExclamationTriangle,
-  FaCheckCircle,
   FaClock,
 } from "react-icons/fa";
 import { GoogleLogin } from "@react-oauth/google";
@@ -52,10 +51,8 @@ const SignupPage = () => {
     courseId: "",
     userType: "",
   });
-  const [registrationComplete, setRegistrationComplete] = useState(false);
   const [approvalMessage, setApprovalMessage] = useState("");
   const [showApprovalModal, setShowApprovalModal] = useState(false);
-  const [registeredUser, setRegisteredUser] = useState(null);
 
   // Fetch programs
   useEffect(() => {
@@ -103,72 +100,54 @@ const SignupPage = () => {
     setForm({ ...form, [name]: value });
   };
 
-  const handleUserTypeSelect = (type) => {
-    setSelectedUserType(type);
-    setForm({ ...form, userType: type });
-    
-    if (type === "alveoly_student") {
-      setShowUserTypeModal(false);
-      setShowRegistrationSourceModal(true);
-    } else if (type === "non_alveoly_student") {
-      setShowUserTypeModal(false);
-      // Non-alveoly students go directly to registration
-      handleNonAlveolyRegistration();
-    }
-  };
-
-  // ================= REGISTRATION SOURCE MODAL =================
-  const handleRegistrationSourceSelect = async (source) => {
-    setRegistrationSource(source);
-    
-    if (source === "phone") {
-      // User registered through phone
-      setShowRegistrationSourceModal(false);
-      
-      // Proceed with registration for Alveoly student
-      await handleAlveolyRegistration("phone", "");
-    } else {
-      // User registered through other means - show details textbox
-      setShowRegistrationSourceModal(false);
-      // Open a prompt for details
-      const details = prompt("Please provide details about how you registered with Alveoly (e.g., through a friend, social media, event, etc.):");
-      if (details) {
-        await handleAlveolyRegistration("other", details);
-      } else {
-        toast.error("Registration details are required");
-        // Reopen the modal
-        setShowRegistrationSourceModal(true);
-      }
-    }
-  };
-
   // ================= ALVEOLY STUDENT REGISTRATION =================
   const handleAlveolyRegistration = async (source, details) => {
     try {
       setLoading(true);
       
+      // Validate all required fields
+      if (!form.name || !form.email || !form.password) {
+        toast.error("Please fill in all required fields");
+        setLoading(false);
+        return;
+      }
+      
       const payload = {
-        name: form.name,
-        email: form.email,
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
         password: form.password,
-        registrationSource: source,
+        registrationSource: source || "other",
         registrationDetails: details || "",
         userType: "alveoly_student"
       };
       
+      console.log("Sending Alveoly registration payload:", payload);
+      
       const response = await API.post("/auth/register/alveoly", payload);
       
+      console.log("Alveoly registration response:", response.data);
+      
       if (response.data.success) {
-        setRegisteredUser({ email: response.data.email, userId: response.data.userId });
-        setApprovalMessage(response.data.message);
+        setApprovalMessage(response.data.message || "Registration submitted for approval!");
         setShowApprovalModal(true);
+        setShowRegistrationSourceModal(false);
         toast.success("Registration submitted for approval!");
+        // Reset form
+        setForm({
+          name: "",
+          email: "",
+          password: "",
+          programId: "",
+          courseId: "",
+          userType: "",
+        });
       } else {
         toast.error(response.data.message || "Registration failed");
       }
     } catch (err) {
-      console.error("Registration error:", err);
-      toast.error(err.response?.data?.message || "Registration failed");
+      console.error("Alveoly Registration error:", err);
+      console.error("Error response:", err.response?.data);
+      toast.error(err.response?.data?.message || "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -179,34 +158,90 @@ const SignupPage = () => {
     try {
       setLoading(true);
       
+      // Validate all required fields
+      if (!form.name || !form.email || !form.password) {
+        toast.error("Please fill in all required fields");
+        setLoading(false);
+        return;
+      }
+      
       const payload = {
-        name: form.name,
-        email: form.email,
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
         password: form.password,
         userType: "non_alveoly_student"
       };
       
+      console.log("Sending Non-Alveoly registration payload:", payload);
+      
       const response = await API.post("/auth/register/non-alveoly", payload);
       
+      console.log("Non-Alveoly registration response:", response.data);
+      
       if (response.data.success) {
-        setRegisteredUser({ email: response.data.email, userId: response.data.userId });
-        toast.success("Registration successful! Please login and select a plan.");
+        toast.success("Registration successful! Please login to continue.");
         
-        // Navigate to login
+        // Store the email for login page
         navigate("/login", { 
           state: { 
             message: "Registration successful! Please login to continue.",
             email: response.data.email 
           } 
         });
+        
+        // Reset form
+        setForm({
+          name: "",
+          email: "",
+          password: "",
+          programId: "",
+          courseId: "",
+          userType: "",
+        });
       } else {
         toast.error(response.data.message || "Registration failed");
       }
     } catch (err) {
-      console.error("Registration error:", err);
-      toast.error(err.response?.data?.message || "Registration failed");
+      console.error("Non-Alveoly Registration error:", err);
+      console.error("Error response:", err.response?.data);
+      toast.error(err.response?.data?.message || "Registration failed. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ================= USER TYPE SELECTION =================
+  const handleUserTypeSelect = (type) => {
+    setSelectedUserType(type);
+    setForm({ ...form, userType: type });
+    
+    if (type === "alveoly_student") {
+      setShowUserTypeModal(false);
+      // Show registration source modal for Alveoly students
+      setShowRegistrationSourceModal(true);
+    } else if (type === "non_alveoly_student") {
+      setShowUserTypeModal(false);
+      // Direct registration for Non-Alveoly students
+      handleNonAlveolyRegistration();
+    }
+  };
+
+  // ================= REGISTRATION SOURCE HANDLER =================
+  const handleRegistrationSourceSelect = (source) => {
+    setRegistrationSource(source);
+    
+    if (source === "phone") {
+      setShowRegistrationSourceModal(false);
+      handleAlveolyRegistration("phone", "");
+    } else {
+      setShowRegistrationSourceModal(false);
+      const details = prompt("Please provide details about how you registered with Alveoly (e.g., through a friend, social media, event, etc.):");
+      if (details && details.trim()) {
+        handleAlveolyRegistration("other", details.trim());
+      } else {
+        toast.error("Registration details are required");
+        setShowRegistrationSourceModal(true);
+      }
     }
   };
 
@@ -228,8 +263,8 @@ const SignupPage = () => {
         } else if (result.user?.role === "lecturer") {
           navigate("/lecturer");
         } else if (result.requiresApproval) {
-          setShowApprovalModal(true);
           setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
+          setShowApprovalModal(true);
         } else if (result.requiresProgram) {
           navigate("/select-program");
         } else if (result.requiresPlan) {
@@ -244,8 +279,8 @@ const SignupPage = () => {
           setShowUserTypeModal(true);
           setGoogleLoading(false);
         } else if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
-          setShowApprovalModal(true);
           setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+          setShowApprovalModal(true);
           setGoogleLoading(false);
         } else {
           throw err;
@@ -269,10 +304,8 @@ const SignupPage = () => {
     setShowUserTypeModal(false);
     
     if (selectedUserType === "alveoly_student") {
-      // Show registration source modal
       setShowRegistrationSourceModal(true);
     } else {
-      // Non-alveoly - proceed with signup
       await handleGoogleSignupComplete(selectedUserType, "none", "");
     }
   };
@@ -298,8 +331,8 @@ const SignupPage = () => {
       setSelectedUserType("");
       
       if (result.requiresApproval) {
-        setShowApprovalModal(true);
         setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
+        setShowApprovalModal(true);
         setGoogleLoading(false);
         return;
       }
@@ -324,25 +357,15 @@ const SignupPage = () => {
     }
   };
 
-  // ================= HANDLE REGISTRATION SOURCE SUBMISSION =================
-  const handleRegistrationSourceSubmit = (source) => {
-    if (source === "phone") {
-      handleRegistrationSourceSelect("phone");
-    } else {
-      setShowRegistrationSourceModal(false);
-      const details = prompt("Please provide details about how you registered with Alveoly:");
-      if (details && details.trim()) {
-        handleRegistrationSourceSelect("other", details);
-      } else {
-        toast.error("Registration details are required");
-        setShowRegistrationSourceModal(true);
-      }
-    }
-  };
-
   // ================= HANDLE SUBMIT =================
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!form.name || !form.email || !form.password) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
     
     if (!form.userType) {
       toast.error("Please select your user type");
@@ -359,16 +382,14 @@ const SignupPage = () => {
       return;
     }
     
-    setLoading(true);
-    try {
-      const result = await register(form);
-      toast.success("Account created successfully!");
-      navigate("/student/dashboard");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Signup failed");
-    } finally {
-      setLoading(false);
+    // If Alveoly student, show registration source modal
+    if (form.userType === "alveoly_student") {
+      setShowRegistrationSourceModal(true);
+      return;
     }
+    
+    // Non-Alveoly student - direct registration
+    await handleNonAlveolyRegistration();
   };
 
   return (
@@ -730,7 +751,7 @@ const SignupPage = () => {
                     setShowRegistrationSourceModal(false);
                     const details = prompt("Please provide details about how you registered with Alveoly (e.g., through a friend, social media, event, etc.):");
                     if (details && details.trim()) {
-                      handleRegistrationSourceSelect("other", details);
+                      handleRegistrationSourceSelect("other");
                     } else {
                       toast.error("Registration details are required");
                       setShowRegistrationSourceModal(true);
