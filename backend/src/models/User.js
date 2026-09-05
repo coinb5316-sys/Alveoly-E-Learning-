@@ -1,4 +1,4 @@
-// models/User.js - Updated with registration tracking fields
+// models/User.js
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -232,42 +232,6 @@ userSchema.statics.getActiveUsersCount = async function(days = 30) {
   return await this.countDocuments({
     lastLoginAt: { $gte: cutoffDate }
   });
-};
-
-// ================= STATIC: Get user growth =================
-userSchema.statics.getUserGrowth = async function(startDate, endDate, groupBy = "day") {
-  let groupFormat;
-  switch (groupBy) {
-    case "day":
-      groupFormat = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
-      break;
-    case "week":
-      groupFormat = { $week: "$createdAt" };
-      break;
-    case "month":
-      groupFormat = { $dateToString: { format: "%Y-%m", date: "$createdAt" } };
-      break;
-    case "year":
-      groupFormat = { $dateToString: { format: "%Y", date: "$createdAt" } };
-      break;
-    default:
-      groupFormat = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
-  }
-  
-  return await this.aggregate([
-    {
-      $match: {
-        createdAt: { $gte: startDate, $lte: endDate }
-      }
-    },
-    {
-      $group: {
-        _id: groupFormat,
-        count: { $sum: 1 }
-      }
-    },
-    { $sort: { "_id": 1 } }
-  ]);
 };
 
 export default mongoose.model("User", userSchema);

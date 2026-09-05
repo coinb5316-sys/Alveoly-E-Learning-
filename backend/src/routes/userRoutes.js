@@ -1,4 +1,4 @@
-// routes/userRoutes.js - Add approve endpoint
+// routes/userRoutes.js
 import express from "express";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 import {
@@ -8,7 +8,7 @@ import {
   deleteUser,
   updateUser,
   getUserStats,
-  approveUser, // Add this
+  approveUser,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -20,9 +20,9 @@ router.get("/:id", protect, adminOnly, getUserById);
 router.put("/:id/role", protect, adminOnly, updateUserRole);
 router.delete("/:id", protect, adminOnly, deleteUser);
 router.put("/:id", protect, adminOnly, updateUser);
-router.patch("/:id/approve", protect, adminOnly, approveUser); // Add this
+router.patch("/:id/approve", protect, adminOnly, approveUser); // <-- APPROVAL ENDPOINT
 
-// ================= STUDENTS ROUTE - ALLOW LECTURERS AND ADMINS =================
+// ================= STUDENTS ROUTE =================
 router.get("/me", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -71,7 +71,6 @@ router.get("/students", protect, async (req, res) => {
       return res.json(students);
     }
     
-    console.log("User has no program or course assigned");
     res.json([]);
     
   } catch (err) {

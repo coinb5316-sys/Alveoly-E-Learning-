@@ -1,4 +1,4 @@
-// controllers/authController.js - COMPLETE FIXED VERSION WITH ALL FUNCTIONS
+// controllers/authController.js - COMPLETE FIXED VERSION
 import User from "../models/User.js";
 import Program from "../models/Program.js";
 import Course from "../models/Course.js"; 
@@ -325,6 +325,185 @@ export const verifyApprovalToken = async (req, res) => {
   }
 };
 
+// ================= EMAIL/PASSWORD LOGIN =================
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email & password required" });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    if (!user.password) {
+      return res.status(400).json({ message: "Please login with Google" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    // Check if Alveoly student needs approval
+    if (user.userType === "alveoly_student" && !user.isApproved) {
+      return res.status(403).json({ 
+        message: "Your account is pending approval. Please wait for admin approval.",
+        requiresApproval: true
+      });
+    }
+
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+    const deviceInfo = req.headers['user-agent'];
+    
+    user.lastLoginAt = new Date();
+    user.lastActivityAt = new Date();
+    user.loginCount += 1;
+    user.lastLoginIP = ip;
+    user.deviceInfo = deviceInfo;
+    user.activeSession = crypto.randomBytes(16).toString("hex");
+
+    await user.save();
+
+    const populatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name")
+      .populate("planId", "title duration price");
+
+    const token = generateToken(user, user.activeSession);
+    const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
+    
+    // Check if non-alveoly student needs a plan
+    const requiresPlan = populatedUser.userType === "non_alveoly_student" && !populatedUser.planId;
+
+    res.json({ 
+      token, 
+      user: populatedUser, 
+      requiresProgram,
+      requiresPlan
+    });
+
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= ASSIGN PLAN TO USER =================
+export const assignPlanToUser = async (req, res) => {
+  try {
+    const { userId, planId } = req.body;
+
+    if (!userId || !planId) {
+      return res.status(400).json({ message: "User ID and Plan ID are required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const plan = await Plan.findById(planId);
+    if (!plan) {
+      return res.status(404).json({ message: "Plan not found" });
+    }
+
+    const startDate = new Date();
+    const expiryDate = new Date(startDate);
+    
+    switch (plan.durationUnit) {
+      case "day":
+        expiryDate.setDate(expiryDate.getDate() + plan.duration);
+        break;
+      case "week":
+        expiryDate.setDate(expiryDate.getDate() + (plan.duration * 7));
+        break;
+      case "month":
+        expiryDate.setMonth(expiryDate.getMonth() + plan.duration);
+        break;
+      case "year":
+        expiryDate.setFullYear(expiryDate.getFullYear() + plan.duration);
+        break;
+      default:
+        expiryDate.setDate(expiryDate.getDate() + plan.duration);
+    }
+
+    user.planId = planId;
+    user.planStartDate = startDate;
+    user.planExpiryDate = expiryDate;
+    user.isPlanActive = true;
+    user.manuallyAssignedPlan = true;
+    user.subscriptionStatus = "active";
+    user.subscriptionExpiry = expiryDate;
+
+    await user.save();
+
+    await createNotification(
+      user._id,
+      "student",
+      "success",
+      "Plan Assigned! 📋",
+      `You have been assigned the "${plan.title}" plan.`,
+      "/student/dashboard",
+      { planId, action: "plan_assigned" }
+    );
+
+    const populatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("planId", "title duration price durationUnit");
+
+    res.json({
+      success: true,
+      message: `Plan "${plan.title}" assigned to ${user.name}`,
+      user: populatedUser
+    });
+
+  } catch (err) {
+    console.error("ASSIGN PLAN ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= GET USER INFO =================
+export const getMyInfo = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate("programId", "name code isActive")
+      .populate("courseId", "_id name")
+      .populate("planId", "title duration price durationUnit")
+      .populate({
+        path: 'lecturerInfo.assignedSubjects',
+        populate: { path: 'courseId', select: 'name code' }
+      });
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    user.lastActivityAt = new Date();
+    await user.save();
+
+    const planStatus = {
+      hasPlan: !!user.planId,
+      isActive: user.hasActivePlan ? user.hasActivePlan() : false,
+      expiryDate: user.planExpiryDate,
+      planName: user.planId?.title || null
+    };
+    
+    res.json({
+      ...user._doc,
+      planStatus
+    });
+  } catch (err) {
+    console.error("GET USER ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 // ================= GOOGLE LOGIN =================
 export const googleLogin = async (req, res) => {
   try {
@@ -485,178 +664,62 @@ export const googleLogin = async (req, res) => {
   }
 };
 
-// ================= EMAIL/PASSWORD LOGIN =================
-export const login = async (req, res) => {
+// ================= FORGOT PASSWORD =================
+export const forgotPassword = async (req, res) => {
   try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email & password required" });
-    }
-
+    const { email } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+    if (!user) return res.status(404).json({ message: "No user found" });
 
-    if (!user.password) {
-      return res.status(400).json({ message: "Please login with Google" });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
-
-    if (user.userType === "alveoly_student" && !user.isApproved) {
-      return res.status(403).json({ 
-        message: "Your account is pending approval. Please wait for admin approval.",
-        requiresApproval: true
-      });
-    }
-
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
-    const deviceInfo = req.headers['user-agent'];
-    
-    user.lastLoginAt = new Date();
-    user.lastActivityAt = new Date();
-    user.loginCount += 1;
-    user.lastLoginIP = ip;
-    user.deviceInfo = deviceInfo;
-    user.activeSession = crypto.randomBytes(16).toString("hex");
-
+    const token = crypto.randomBytes(32).toString("hex");
+    user.resetToken = token;
+    user.resetTokenExpire = Date.now() + 1000 * 60 * 15;
     await user.save();
 
-    const populatedUser = await User.findById(user._id)
-      .select("-password")
-      .populate("programId", "name code isActive")
-      .populate("courseId", "name")
-      .populate("planId", "title duration price");
+    await sendPasswordResetEmail(user.email, user.name, token);
 
-    const token = generateToken(user, user.activeSession);
-    const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
-    const requiresPlan = populatedUser.userType === "non_alveoly_student" && !populatedUser.planId;
-
-    res.json({ 
-      token, 
-      user: populatedUser, 
-      requiresProgram,
-      requiresPlan
+    res.json({
+      message: "Password reset email sent successfully",
+      email: user.email,
+      name: user.name,
     });
-
   } catch (err) {
-    console.error("LOGIN ERROR:", err);
+    console.error("FORGOT PASSWORD ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ================= ASSIGN PLAN TO USER =================
-export const assignPlanToUser = async (req, res) => {
+// ================= RESET PASSWORD =================
+export const resetPassword = async (req, res) => {
   try {
-    const { userId, planId } = req.body;
+    const { token } = req.params;
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ message: "Password required" });
 
-    if (!userId || !planId) {
-      return res.status(400).json({ message: "User ID and Plan ID are required" });
-    }
+    const user = await User.findOne({ 
+      resetToken: token, 
+      resetTokenExpire: { $gt: Date.now() } 
+    });
+    if (!user) return res.status(400).json({ message: "Invalid or expired token" });
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const plan = await Plan.findById(planId);
-    if (!plan) {
-      return res.status(404).json({ message: "Plan not found" });
-    }
-
-    const startDate = new Date();
-    const expiryDate = new Date(startDate);
-    
-    switch (plan.durationUnit) {
-      case "day":
-        expiryDate.setDate(expiryDate.getDate() + plan.duration);
-        break;
-      case "week":
-        expiryDate.setDate(expiryDate.getDate() + (plan.duration * 7));
-        break;
-      case "month":
-        expiryDate.setMonth(expiryDate.getMonth() + plan.duration);
-        break;
-      case "year":
-        expiryDate.setFullYear(expiryDate.getFullYear() + plan.duration);
-        break;
-      default:
-        expiryDate.setDate(expiryDate.getDate() + plan.duration);
-    }
-
-    user.planId = planId;
-    user.planStartDate = startDate;
-    user.planExpiryDate = expiryDate;
-    user.isPlanActive = true;
-    user.manuallyAssignedPlan = true;
-    user.subscriptionStatus = "active";
-    user.subscriptionExpiry = expiryDate;
-
+    user.password = await bcrypt.hash(password, 10);
+    user.resetToken = undefined;
+    user.resetTokenExpire = undefined;
     await user.save();
 
     await createNotification(
       user._id,
-      "student",
-      "success",
-      "Plan Assigned! 📋",
-      `You have been assigned the "${plan.title}" plan.`,
-      "/student/dashboard",
-      { planId, action: "plan_assigned" }
+      user.role === "admin" ? "admin" : "student",
+      "info",
+      "Password Changed 🔐",
+      "Your password has been successfully changed.",
+      "/login",
+      { action: "password_reset" }
     );
 
-    const populatedUser = await User.findById(user._id)
-      .select("-password")
-      .populate("planId", "title duration price durationUnit");
-
-    res.json({
-      success: true,
-      message: `Plan "${plan.title}" assigned to ${user.name}`,
-      user: populatedUser
-    });
-
+    res.json({ message: "Password reset successful" });
   } catch (err) {
-    console.error("ASSIGN PLAN ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ================= GET USER INFO =================
-export const getMyInfo = async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id)
-      .populate("programId", "name code isActive")
-      .populate("courseId", "_id name")
-      .populate("planId", "title duration price durationUnit")
-      .populate({
-        path: 'lecturerInfo.assignedSubjects',
-        populate: { path: 'courseId', select: 'name code' }
-      });
-    
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    
-    user.lastActivityAt = new Date();
-    await user.save();
-
-    const planStatus = {
-      hasPlan: !!user.planId,
-      isActive: user.hasActivePlan ? user.hasActivePlan() : false,
-      expiryDate: user.planExpiryDate,
-      planName: user.planId?.title || null
-    };
-    
-    res.json({
-      ...user._doc,
-      planStatus
-    });
-  } catch (err) {
-    console.error("GET USER ERROR:", err);
+    console.error("RESET PASSWORD ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -802,66 +865,6 @@ export const registerLecturer = async (req, res) => {
   }
 };
 
-// ================= FORGOT PASSWORD =================
-export const forgotPassword = async (req, res) => {
-  try {
-    const { email } = req.body;
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) return res.status(404).json({ message: "No user found" });
-
-    const token = crypto.randomBytes(32).toString("hex");
-    user.resetToken = token;
-    user.resetTokenExpire = Date.now() + 1000 * 60 * 15;
-    await user.save();
-
-    await sendPasswordResetEmail(user.email, user.name, token);
-
-    res.json({
-      message: "Password reset email sent successfully",
-      email: user.email,
-      name: user.name,
-    });
-  } catch (err) {
-    console.error("FORGOT PASSWORD ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ================= RESET PASSWORD =================
-export const resetPassword = async (req, res) => {
-  try {
-    const { token } = req.params;
-    const { password } = req.body;
-    if (!password) return res.status(400).json({ message: "Password required" });
-
-    const user = await User.findOne({ 
-      resetToken: token, 
-      resetTokenExpire: { $gt: Date.now() } 
-    });
-    if (!user) return res.status(400).json({ message: "Invalid or expired token" });
-
-    user.password = await bcrypt.hash(password, 10);
-    user.resetToken = undefined;
-    user.resetTokenExpire = undefined;
-    await user.save();
-
-    await createNotification(
-      user._id,
-      user.role === "admin" ? "admin" : "student",
-      "info",
-      "Password Changed 🔐",
-      "Your password has been successfully changed.",
-      "/login",
-      { action: "password_reset" }
-    );
-
-    res.json({ message: "Password reset successful" });
-  } catch (err) {
-    console.error("RESET PASSWORD ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
 // ================= UPDATE ACTIVITY =================
 export const updateActivity = async (req, res) => {
   try {
@@ -914,66 +917,6 @@ export const assignProgram = async (req, res) => {
     res.json(user);
   } catch (err) {
     console.error("ASSIGN PROGRAM ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ================= ASSIGN COURSE =================
-export const assignCourse = async (req, res) => {
-  try {
-    const { courseId } = req.body;
-    if (!courseId) return res.status(400).json({ message: "Course required" });
-
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      { courseId },
-      { new: true }
-    ).populate("courseId", "_id name");
-
-    await createNotification(
-      user._id,
-      "student",
-      "success",
-      "Course Assigned! 📚",
-      `You have been enrolled in ${user.courseId?.name || "a new course"}.`,
-      "/student/courses",
-      { courseId, action: "course_assigned" }
-    );
-
-    res.json(user);
-  } catch (err) {
-    console.error("ASSIGN COURSE ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ================= SEND PLAN EXPIRY NOTIFICATION =================
-export const sendPlanExpiryNotification = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    const user = await User.findById(userId).populate("planId");
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    
-    if (!user.planId) {
-      return res.status(400).json({ message: "User has no plan assigned" });
-    }
-    
-    await sendPlanExpiryEmail(
-      user.email,
-      user.name,
-      user.planId.title,
-      user.planExpiryDate
-    );
-    
-    res.json({
-      success: true,
-      message: "Plan expiry notification sent"
-    });
-  } catch (err) {
-    console.error("SEND PLAN EXPIRY NOTIFICATION ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

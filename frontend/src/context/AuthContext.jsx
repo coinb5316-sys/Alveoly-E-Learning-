@@ -1,4 +1,4 @@
-// src/context/AuthContext.jsx - COMPLETE FIXED VERSION
+// src/context/AuthContext.jsx
 import { createContext, useContext, useState, useEffect } from "react";
 import API from "../api/axios";
 import { initializeSocket } from "../config/socket.js";
@@ -117,7 +117,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= GOOGLE LOGIN - FIXED =================
+  // ================= GOOGLE LOGIN =================
   const googleLogin = async (idToken, userType = null, registrationSource = null, registrationDetails = null) => {
     try {
       const payload = { idToken };

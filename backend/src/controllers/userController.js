@@ -1,9 +1,8 @@
-// controllers/userController.js - FULLY UPDATED with programId population
+// controllers/userController.js - UPDATED
 import User from "../models/User.js";
 import { createNotification } from "./notificationController.js";
 
 // ================= GET ALL USERS =================
-// controllers/userController.js - Make sure getAllUsers has proper population
 export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find()
@@ -22,12 +21,6 @@ export const getAllUsers = async (req, res) => {
       })
       .populate('lecturerInfo.assignedCourses', 'name code');
 
-    console.log("Fetched users with subjects:", users.map(u => ({
-      name: u.name,
-      role: u.role,
-      subjects: u.lecturerInfo?.assignedSubjects?.length || 0
-    })));
-
     res.json(users);
   } catch (err) {
     console.error(err);
@@ -40,7 +33,7 @@ export const getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
       .select("-password")
-      .populate("programId", "name code isActive")  // ✅ ADD THIS
+      .populate("programId", "name code isActive")
       .populate("courseId", "name")
       .populate({
         path: 'lecturerInfo.assignedSubjects',
@@ -108,7 +101,6 @@ export const updateUserRole = async (req, res) => {
       { action: "role_change", oldRole: user.role, newRole: role }
     );
 
-    // Fetch updated user with populated fields
     const updatedUser = await User.findById(user._id)
       .select("-password")
       .populate("programId", "name code isActive")
@@ -126,9 +118,7 @@ export const updateUserRole = async (req, res) => {
   }
 };
 
-
-// controllers/userController.js - Add userType to updateUser
-
+// ================= UPDATE USER =================
 export const updateUser = async (req, res) => {
   try {
     const { name, email, role, userType, programId, courseId, lecturerInfo } = req.body;
@@ -192,7 +182,6 @@ export const updateUser = async (req, res) => {
           : [];
         
         user.lecturerInfo.assignedSubjects = validSubjects;
-        console.log("✅ Saving assigned subjects to user:", validSubjects);
       }
       
       if (!user.lecturerInfo.isActive) user.lecturerInfo.isActive = true;
@@ -202,7 +191,6 @@ export const updateUser = async (req, res) => {
     }
     
     await user.save();
-    console.log("✅ User saved successfully with userType:", user.userType);
     
     await createNotification(
       user._id,

@@ -1,4 +1,4 @@
-// routes/authRoutes.js - COMPLETE FIXED VERSION
+// routes/authRoutes.js
 import express from "express";
 import {
   registerAlveolyStudent,
@@ -47,35 +47,5 @@ router.post("/register-lecturer", protect, adminOnly, registerLecturer);
 
 // ================= PLAN ASSIGNMENT (Admin only) =================
 router.post("/assign-plan", protect, adminOnly, assignPlanToUser);
-
-// ================= DEBUG ENDPOINTS =================
-router.get("/debug-subjects", protect, adminOnly, async (req, res) => {
-  try {
-    const Subject = (await import("../models/Subject.js")).default;
-    const subjects = await Subject.find()
-      .populate("programId", "name")
-      .populate("courseId", "name");
-    
-    res.json({
-      count: subjects.length,
-      subjects: subjects.map(s => ({
-        _id: s._id,
-        name: s.name,
-        courseId: s.courseId,
-        courseName: s.courseId?.name,
-        programId: s.programId,
-        programName: s.programId?.name
-      }))
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Add a test route to verify the router is working
-router.get("/test", (req, res) => {
-  res.json({ message: "Auth routes are working!" });
-});
 
 export default router;
