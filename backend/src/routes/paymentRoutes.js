@@ -8,7 +8,8 @@ import {
   getAllPayments,
   deletePayment,
   getPaymentByReference,
-  getPublicPlans
+  getPublicPlans,
+  getUserPurchasedContent
 } from "../controllers/paymentController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
@@ -19,6 +20,7 @@ router.get("/plans/public", getPublicPlans);
 
 // ================= PROTECTED ROUTES =================
 router.get("/mine", protect, getMyPayments);
+router.get("/purchased", protect, getUserPurchasedContent);
 
 // ================= PLAN PAYMENT =================
 router.post("/initiate-plan", protect, initiatePlanPayment);

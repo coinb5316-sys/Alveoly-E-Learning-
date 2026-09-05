@@ -1,4 +1,4 @@
-// controllers/paymentController.js - Updated with plan purchase for non-alveoly students
+// controllers/paymentController.js - COMPLETE FIXED VERSION
 import axios from "axios";
 import Payment from "../models/Payment.js";
 import Subject from "../models/Subject.js";
@@ -39,6 +39,75 @@ const calculateExpiry = (duration, unit) => {
   }
 
   return expiry;
+};
+
+// ================= INITIATE SUBJECT PAYMENT =================
+export const initiatePayment = async (req, res) => {
+  try {
+    const { subjectId } = req.body;
+    const user = req.user;
+
+    const subject = await Subject.findById(subjectId);
+
+    if (!subject) {
+      return res.status(404).json({ message: "Subject not found" });
+    }
+
+    // Prevent buying active subject again
+    const existing = await Payment.findOne({
+      userId: user._id,
+      subjectId,
+      status: "success",
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        message: "You already have access to this subject",
+      });
+    }
+
+    const reference = `subject_${Date.now()}_${user._id}_${subjectId}`;
+
+    await Payment.create({
+      userId: user._id,
+      subjectId,
+      amount: subject.price,
+      reference,
+      status: "pending",
+      accessType: "subject",
+    });
+
+    const callbackUrl = `${process.env.CLIENT_URL}/subject-payment-success?reference=${reference}&courseId=${subject.courseId}&subjectId=${subjectId}`;
+    
+    const response = await axios.post(
+      "https://api.paystack.co/transaction/initialize",
+      {
+        email: user.email,
+        amount: subject.price * 100,
+        reference,
+        callback_url: callbackUrl,
+        metadata: {
+          subjectId: subject._id.toString(),
+          userId: user._id.toString(),
+          type: "subject",
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    );
+
+    res.json({
+      authorizationUrl: response.data.data.authorization_url,
+      reference,
+    });
+  } catch (err) {
+    console.error("Payment Init Error:", err.response?.data || err.message);
+    res.status(500).json({ message: "Payment initialization failed: " + err.message });
+  }
 };
 
 // ================= PLAN PAYMENT =================
@@ -258,6 +327,20 @@ export const verifyPayment = async (req, res) => {
         { subjectId: subject._id, subjectName: subject.name, amount: payment.amount }
       );
 
+      // Notify admins about subject purchase
+      const adminUsers = await User.find({ role: "admin" });
+      for (const admin of adminUsers) {
+        await createNotification(
+          admin._id,
+          "admin",
+          "info",
+          "📖 New Subject Purchase",
+          `${payment.userId?.name || "A student"} purchased ${subject.name} for ₵${payment.amount}.`,
+          "/admin/payments",
+          { paymentId: payment._id, userId: payment.userId, subjectId: subject._id }
+        );
+      }
+
       return res.json({
         success: true,
         message: "Subject unlocked successfully",
@@ -395,5 +478,30 @@ export const getPaymentByReference = async (req, res) => {
   } catch (err) {
     console.error("Get payment by reference error:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= GET USER PURCHASED CONTENT =================
+export const getUserPurchasedContent = async (req, res) => {
+  try {
+    const payments = await Payment.find({ 
+      userId: req.user._id, 
+      status: "success",
+      subjectId: { $ne: null }
+    }).populate("subjectId", "name price");
+    
+    const purchasedContent = payments.map(p => ({
+      _id: p.subjectId?._id,
+      title: p.subjectId?.name,
+      price: p.subjectId?.price,
+      purchasedAt: p.paidAt || p.createdAt,
+      paymentStatus: p.status,
+      expiresAt: p.expiresAt
+    })).filter(c => c.title);
+    
+    res.json(purchasedContent);
+  } catch (err) {
+    console.error("Get purchased content error:", err);
+    res.status(500).json({ message: "Server error: " + err.message });
   }
 };
