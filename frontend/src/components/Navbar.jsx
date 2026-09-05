@@ -29,6 +29,7 @@ import {
   FaTimes as FaTimesIcon,
   FaExclamationTriangle,
   FaClock,
+  FaGraduationCap,
 } from "react-icons/fa";
 import { GoogleLogin } from "@react-oauth/google";
 import logo from "../assets/logo.png";
