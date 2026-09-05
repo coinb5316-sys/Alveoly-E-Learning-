@@ -164,9 +164,9 @@ const Navbar = () => {
         return;
       }
       
-      // Check if user needs to select plan (non-alveoly students)
+      // Check if user needs to select plan (non-alveoly students) - REDIRECT TO PRICING
       if (result.requiresPlan) {
-        navigate("/student/plans");
+        navigate("/pricing");
         toast.info("Please select a plan to continue");
         setShowLoginModal(false);
         setLoginForm({ email: "", password: "" });
@@ -191,7 +191,7 @@ const Navbar = () => {
         setShowApprovalModal(true);
         setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
       } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
-        navigate("/student/plans");
+        navigate("/pricing");
         toast.info(err.response?.data?.message || "Please select a plan to continue");
       } else {
         toast.error(err.response?.data?.message || "Login failed");
@@ -294,8 +294,8 @@ const Navbar = () => {
           courseId: "",
           userType: ""
         });
-        // Navigate to plans page
-        navigate("/student/plans", { 
+        // Navigate to PRICING page (not student/plans)
+        navigate("/pricing", { 
           state: { 
             message: "Please subscribe to a plan to activate your account.",
             userId: response.data.userId,
@@ -405,9 +405,9 @@ const Navbar = () => {
           return;
         }
         
-        // Check if user needs to select plan (non-alveoly students)
+        // Check if user needs to select plan (non-alveoly students) - REDIRECT TO PRICING
         if (result.requiresPlan) {
-          navigate("/student/plans");
+          navigate("/pricing");
           toast.info("Please select a plan to continue");
           setShowLoginModal(false);
           setGoogleLoading(false);
@@ -437,7 +437,7 @@ const Navbar = () => {
           setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
           setGoogleLoading(false);
         } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
-          navigate("/student/plans");
+          navigate("/pricing");
           toast.info(err.response?.data?.message || "Please select a plan to continue");
           setGoogleLoading(false);
         } else {
@@ -510,7 +510,7 @@ const Navbar = () => {
       return;
     }
     
-    // Non-Alveoly student - complete signup directly (they'll be redirected to plans)
+    // Non-Alveoly student - complete signup directly (they'll be redirected to pricing)
     await handleGoogleSignupComplete("non_alveoly_student", "none", "");
   };
 
@@ -583,9 +583,9 @@ const Navbar = () => {
         return;
       }
       
-      // Check if user needs to select plan (non-alveoly students)
+      // Check if user needs to select plan (non-alveoly students) - REDIRECT TO PRICING
       if (result.requiresPlan) {
-        navigate("/student/plans", { 
+        navigate("/pricing", { 
           state: { 
             message: "Please subscribe to a plan to activate your account.",
             userId: result.user?._id || result.user?.id,
