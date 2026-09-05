@@ -1,4 +1,4 @@
-// controllers/authController.js - COMPLETE FIXED VERSION
+// controllers/authController.js - COMPLETE FIXED VERSION WITH ALL FUNCTIONS
 import User from "../models/User.js";
 import Program from "../models/Program.js";
 import Course from "../models/Course.js"; 
@@ -194,7 +194,7 @@ export const registerNonAlveolyStudent = async (req, res) => {
       message: "Registration successful. Please login and select a plan.",
       userId: user._id,
       email: user.email,
-      requiresPlan: true // Add this flag
+      requiresPlan: true
     });
 
   } catch (err) {
@@ -203,6 +203,74 @@ export const registerNonAlveolyStudent = async (req, res) => {
       success: false,
       message: err.message || "Server error" 
     });
+  }
+};
+
+// ================= COMPLETE REGISTRATION - SELECT PROGRAM =================
+export const completeRegistration = async (req, res) => {
+  try {
+    const { userId, programId, courseId } = req.body;
+
+    if (!userId || !programId) {
+      return res.status(400).json({ message: "User ID and Program are required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.userType === "alveoly_student" && !user.isApproved) {
+      return res.status(403).json({ 
+        message: "Your account is pending approval. Please wait for admin approval." 
+      });
+    }
+
+    const program = await Program.findById(programId);
+    if (!program || program.isActive === false) {
+      return res.status(400).json({ message: "Invalid or inactive program selected" });
+    }
+
+    let validCourseId = courseId;
+    if (!validCourseId) {
+      const firstCourse = await Course.findOne({ programId: programId });
+      if (firstCourse) {
+        validCourseId = firstCourse._id;
+      }
+    }
+
+    user.programId = programId;
+    user.courseId = validCourseId || null;
+    user.registrationCompleted = true;
+    await user.save();
+
+    const needsPlan = user.userType === "non_alveoly_student";
+
+    await createNotification(
+      user._id,
+      "student",
+      "success",
+      "Program Selected! 📚",
+      `You have been enrolled in ${program.name}${validCourseId ? ' with course' : ''}.`,
+      needsPlan ? "/student/plans" : "/student/dashboard",
+      { programId, courseId: validCourseId, action: "program_selected" }
+    );
+
+    const populatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name");
+
+    res.json({
+      success: true,
+      message: "Registration completed successfully",
+      user: populatedUser,
+      needsPlan
+    });
+
+  } catch (err) {
+    console.error("COMPLETE REGISTRATION ERROR:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -229,7 +297,6 @@ export const verifyApprovalToken = async (req, res) => {
     user.registrationCompleted = true;
     await user.save();
 
-    // Send approval confirmation email
     try {
       await sendApprovalConfirmationEmail(user.email, user.name);
     } catch (emailErr) {
@@ -310,7 +377,6 @@ export const googleLogin = async (req, res) => {
       });
     }
 
-    // NEW USER - Check if userType is provided
     if (!userType) {
       return res.status(404).json({ 
         message: "Please select your user type to create an account.",
@@ -343,7 +409,6 @@ export const googleLogin = async (req, res) => {
         registrationCompleted: false
       };
 
-      // Send approval email for Alveoly students
       try {
         await sendApprovalEmail(email, name || email.split('@')[0], approvalToken);
         await sendWelcomeEmail(email, name || email.split('@')[0], "alveoly_student");
@@ -352,7 +417,6 @@ export const googleLogin = async (req, res) => {
       }
       
     } else {
-      // Non-alveoly student - auto-approved
       newUserData = {
         ...newUserData,
         registrationSource: "none",
@@ -360,7 +424,6 @@ export const googleLogin = async (req, res) => {
         isApproved: true
       };
       
-      // Send welcome email for Non-alveoly students
       try {
         await sendWelcomeEmail(email, name || email.split('@')[0], "non_alveoly_student");
       } catch (emailErr) {
@@ -436,7 +499,6 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // Check if user has password
     if (!user.password) {
       return res.status(400).json({ message: "Please login with Google" });
     }
@@ -446,7 +508,6 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // Check if user is approved (for alveoly students)
     if (user.userType === "alveoly_student" && !user.isApproved) {
       return res.status(403).json({ 
         message: "Your account is pending approval. Please wait for admin approval.",
