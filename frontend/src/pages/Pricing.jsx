@@ -1,4 +1,4 @@
-// src/pages/Pricing.jsx - Public Pricing Page with Plan Selection
+// src/pages/Pricing.jsx - Public Pricing Page with Plan Selection (FIXED)
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,7 +29,7 @@ import toast from "react-hot-toast";
 const Pricing = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, setUser, token } = useAuth();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hoveredPlan, setHoveredPlan] = useState(null);
@@ -70,8 +70,8 @@ const Pricing = () => {
 
   // Handle plan purchase
   const handlePurchasePlan = async (plan) => {
-    // Check if user is logged in
-    if (!user) {
+    // Check if user is logged in (or has a valid token)
+    if (!user && !token) {
       setPendingPlanId(plan._id);
       setShowLoginPrompt(true);
       return;
@@ -81,7 +81,13 @@ const Pricing = () => {
       setProcessingPayment(true);
       
       // If user is a non-alveoly student who just registered, use their userId
-      const userId = pendingUserId || user._id;
+      const userId = pendingUserId || user?._id;
+      
+      if (!userId) {
+        toast.error("User information not found. Please login again.");
+        setProcessingPayment(false);
+        return;
+      }
       
       // Initiate payment directly
       const response = await API.post("/payments/initiate-plan", {
@@ -97,7 +103,12 @@ const Pricing = () => {
       }
     } catch (err) {
       console.error("Payment initiation error:", err);
-      toast.error(err.response?.data?.message || "Failed to initiate payment");
+      if (err.response?.status === 401) {
+        toast.error("Session expired. Please login again.");
+        setShowLoginPrompt(true);
+      } else {
+        toast.error(err.response?.data?.message || "Failed to initiate payment");
+      }
       setProcessingPayment(false);
     }
   };

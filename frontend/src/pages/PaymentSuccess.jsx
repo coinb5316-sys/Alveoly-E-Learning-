@@ -1,19 +1,21 @@
-// pages/PaymentSuccess.jsx - Updated to handle plan activation
+// pages/PaymentSuccess.jsx - Updated to handle program selection redirect
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import API from "../api/axios";
 import { Loader2, CheckCircle, XCircle, Crown } from "lucide-react";
+import toast from "react-hot-toast";
 
 const PaymentSuccess = () => {
   const { search } = useLocation();
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { setUser, user } = useAuth();
   const [verifying, setVerifying] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
   const [countdown, setCountdown] = useState(5);
   const [planTitle, setPlanTitle] = useState("");
+  const [requiresProgram, setRequiresProgram] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -35,6 +37,10 @@ const PaymentSuccess = () => {
         const userRes = await API.get("/auth/me");
         setUser(userRes.data);
         
+        // Check if user has program selected
+        const hasProgram = userRes.data?.programId && userRes.data?.courseId;
+        setRequiresProgram(!hasProgram);
+        
         if (res.data.success === true || 
             res.data.message === "Plan activated successfully" || 
             res.data.message === "Subject unlocked successfully") {
@@ -46,7 +52,13 @@ const PaymentSuccess = () => {
             setCountdown((prev) => {
               if (prev <= 1) {
                 clearInterval(interval);
-                navigate("/student/dashboard");
+                // Redirect based on whether user has a program
+                if (!hasProgram) {
+                  navigate("/select-program");
+                  toast.info("Please select your program to continue");
+                } else {
+                  navigate("/student/dashboard");
+                }
                 return 0;
               }
               return prev - 1;
@@ -89,15 +101,24 @@ const PaymentSuccess = () => {
         <p className="text-gray-700 text-lg mb-2 text-center max-w-md">
           Your {planTitle || "plan"} has been activated!
         </p>
-        <p className="text-gray-500 mb-8 text-center max-w-md">
-          You now have full access to all learning materials in your plan.
+        <p className="text-gray-500 mb-4 text-center max-w-md">
+          {requiresProgram 
+            ? "Please select your program to start learning." 
+            : "You now have full access to all learning materials in your plan."}
         </p>
         <p className="text-sm text-gray-400">Redirecting in {countdown} seconds...</p>
         <button
-          onClick={() => navigate("/student/dashboard")}
+          onClick={() => {
+            if (requiresProgram) {
+              navigate("/select-program");
+              toast.info("Please select your program to continue");
+            } else {
+              navigate("/student/dashboard");
+            }
+          }}
           className="mt-4 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all"
         >
-          Go to Dashboard Now
+          {requiresProgram ? "Select Program Now" : "Go to Dashboard"}
         </button>
       </div>
     );

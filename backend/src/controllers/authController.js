@@ -1,4 +1,4 @@
-// controllers/authController.js - COMPLETE FIXED VERSION
+// controllers/authController.js - COMPLETE FIXED VERSION (Updated registerNonAlveolyStudent)
 import User from "../models/User.js";
 import Program from "../models/Program.js";
 import Course from "../models/Course.js"; 
@@ -153,14 +153,16 @@ export const registerAlveolyStudent = async (req, res) => {
   }
 };
 
-// ================= REGISTER - NON-ALVEOLY STUDENT =================
+// ================= REGISTER - NON-ALVEOLY STUDENT (FIXED) =================
 export const registerNonAlveolyStudent = async (req, res) => {
   try {
     const { 
       name, 
       email, 
       password, 
-      userType 
+      userType,
+      programId,
+      courseId
     } = req.body;
 
     console.log("📝 Register Non-Alveoly Student - Request body:", req.body);
@@ -182,6 +184,24 @@ export const registerNonAlveolyStudent = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Validate program and course if provided
+    let validProgramId = null;
+    let validCourseId = null;
+    
+    if (programId && programId !== "undefined" && programId !== "null" && programId !== "") {
+      const program = await Program.findById(programId);
+      if (program && program.isActive !== false) {
+        validProgramId = programId;
+      }
+    }
+    
+    if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
+      const course = await Course.findById(courseId);
+      if (course) {
+        validCourseId = courseId;
+      }
+    }
+
     // Create user with pending status - they must subscribe to a plan
     const user = await User.create({
       name: name.trim(),
@@ -193,6 +213,8 @@ export const registerNonAlveolyStudent = async (req, res) => {
       registrationCompleted: false,
       isApproved: false, // Not approved until they subscribe to a plan
       isPlanActive: false,
+      programId: validProgramId,
+      courseId: validCourseId,
       subscriptionStatus: "pending",
       lastLoginAt: new Date(),
       lastActivityAt: new Date()
@@ -221,13 +243,29 @@ export const registerNonAlveolyStudent = async (req, res) => {
       );
     }
 
+    // Generate token for the user so they can make authenticated requests
+    const activeSession = crypto.randomBytes(16).toString("hex");
+    const token = generateToken(user, activeSession);
+
     res.status(201).json({
       success: true,
       message: "Registration successful. Please subscribe to a plan to activate your account.",
       userId: user._id,
       email: user.email,
+      token: token, // RETURN TOKEN SO USER IS AUTHENTICATED
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        userType: user.userType,
+        role: user.role,
+        isApproved: user.isApproved,
+        isPlanActive: user.isPlanActive,
+        programId: user.programId,
+        courseId: user.courseId
+      },
       requiresPlan: true,
-      redirectTo: "/pricing" // Redirect to pricing page
+      redirectTo: "/pricing"
     });
 
   } catch (err) {
@@ -239,7 +277,7 @@ export const registerNonAlveolyStudent = async (req, res) => {
   }
 };
 
-// ================= ASSIGN PLAN TO USER (After Payment) =================
+// ================= ASSIGN PLAN TO USER (After Payment) - FIXED =================
 export const assignPlanAfterPayment = async (req, res) => {
   try {
     const { userId, planId } = req.body;
@@ -292,14 +330,17 @@ export const assignPlanAfterPayment = async (req, res) => {
 
     await user.save();
 
+    // Check if user has a program selected
+    const hasProgram = user.programId && user.courseId;
+
     // Create notification for user
     await createNotification(
       user._id,
       "student",
       "success",
       "Plan Activated! 🎉",
-      `Your "${plan.title}" plan has been activated. You can now select your program.`,
-      "/select-program",
+      `Your "${plan.title}" plan has been activated.${hasProgram ? '' : ' Please select your program.'}`,
+      hasProgram ? "/student/dashboard" : "/select-program",
       { planId, action: "plan_activated_after_payment" }
     );
 
@@ -311,7 +352,7 @@ export const assignPlanAfterPayment = async (req, res) => {
         "admin",
         "success",
         "Non-Alveoly Student Activated Plan",
-        `${user.name} (${user.email}) has subscribed to "${plan.title}" plan and is now active.`,
+        `${user.name} (${user.email}) has subscribed to "${plan.title}" plan and is now active.${hasProgram ? '' : ' They need to select a program.'}`,
         "/admin/users",
         { userId: user._id, planId: plan._id, action: "plan_activated" }
       );
@@ -325,239 +366,13 @@ export const assignPlanAfterPayment = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Plan "${plan.title}" activated successfully! Please select your program.`,
+      message: `Plan "${plan.title}" activated successfully!${hasProgram ? '' : ' Please select your program.'}`,
       user: populatedUser,
       requiresProgram: !populatedUser.programId
     });
 
   } catch (err) {
     console.error("ASSIGN PLAN AFTER PAYMENT ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ================= COMPLETE REGISTRATION - SELECT PROGRAM =================
-export const completeRegistration = async (req, res) => {
-  try {
-    const { userId, programId, courseId } = req.body;
-
-    if (!userId || !programId) {
-      return res.status(400).json({ message: "User ID and Program are required" });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // For Alveoly students - must be approved
-    if (user.userType === "alveoly_student" && !user.isApproved) {
-      return res.status(403).json({ 
-        message: "Your account is pending approval. Please wait for admin approval." 
-      });
-    }
-
-    // For Non-Alveoly students - must have an active plan
-    if (user.userType === "non_alveoly_student") {
-      if (!user.isPlanActive || !user.planId) {
-        return res.status(403).json({ 
-          message: "You need an active plan to continue. Please subscribe to a plan.",
-          requiresPlan: true
-        });
-      }
-      
-      // Check if plan is expired
-      if (user.planExpiryDate && new Date(user.planExpiryDate) < new Date()) {
-        user.isPlanActive = false;
-        user.subscriptionStatus = "expired";
-        await user.save();
-        return res.status(403).json({ 
-          message: "Your plan has expired. Please renew your subscription.",
-          requiresPlan: true
-        });
-      }
-    }
-
-    const program = await Program.findById(programId);
-    if (!program || program.isActive === false) {
-      return res.status(400).json({ message: "Invalid or inactive program selected" });
-    }
-
-    let validCourseId = courseId;
-    if (!validCourseId) {
-      const firstCourse = await Course.findOne({ programId: programId });
-      if (firstCourse) {
-        validCourseId = firstCourse._id;
-      }
-    }
-
-    user.programId = programId;
-    user.courseId = validCourseId || null;
-    user.registrationCompleted = true;
-    await user.save();
-
-    await createNotification(
-      user._id,
-      "student",
-      "success",
-      "Program Selected! 📚",
-      `You have been enrolled in ${program.name}${validCourseId ? ' with course' : ''}.`,
-      "/student/dashboard",
-      { programId, courseId: validCourseId, action: "program_selected" }
-    );
-
-    const populatedUser = await User.findById(user._id)
-      .select("-password")
-      .populate("programId", "name code isActive")
-      .populate("courseId", "name")
-      .populate("planId", "title duration price");
-
-    res.json({
-      success: true,
-      message: "Registration completed successfully",
-      user: populatedUser
-    });
-
-  } catch (err) {
-    console.error("COMPLETE REGISTRATION ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ================= VERIFY APPROVAL TOKEN =================
-export const verifyApprovalToken = async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    const user = await User.findOne({
-      approvalToken: token,
-      tokenExpiresAt: { $gt: new Date() },
-      isApproved: false
-    });
-
-    if (!user) {
-      return res.status(400).json({ 
-        message: "Invalid or expired approval token. Please contact admin." 
-      });
-    }
-
-    user.isApproved = true;
-    user.approvalToken = null;
-    user.tokenExpiresAt = null;
-    user.registrationCompleted = true;
-    await user.save();
-
-    try {
-      await sendApprovalConfirmationEmail(user.email, user.name);
-    } catch (emailErr) {
-      console.error("Approval email error:", emailErr.message);
-    }
-
-    await createNotification(
-      user._id,
-      "student",
-      "success",
-      "Account Approved! 🎉",
-      "Your account has been approved. Please login and select your program.",
-      "/login",
-      { action: "account_approved" }
-    );
-
-    res.json({
-      success: true,
-      message: "Account approved successfully. You can now login.",
-      email: user.email
-    });
-
-  } catch (err) {
-    console.error("VERIFY APPROVAL ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ================= LOGIN =================
-export const login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email & password required" });
-    }
-
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
-
-    if (!user.password) {
-      return res.status(400).json({ message: "Please login with Google" });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
-
-    // Check if Alveoly student needs approval
-    if (user.userType === "alveoly_student" && !user.isApproved) {
-      return res.status(403).json({ 
-        message: "Your account is pending approval. Please wait for admin approval.",
-        requiresApproval: true
-      });
-    }
-
-    // Check if Non-Alveoly student has active plan
-    if (user.userType === "non_alveoly_student") {
-      if (!user.isPlanActive || !user.planId) {
-        return res.status(403).json({ 
-          message: "You need an active plan to access your account. Please subscribe to a plan.",
-          requiresPlan: true,
-          redirectTo: "/pricing"
-        });
-      }
-      
-      // Check if plan is expired
-      if (user.planExpiryDate && new Date(user.planExpiryDate) < new Date()) {
-        user.isPlanActive = false;
-        user.subscriptionStatus = "expired";
-        await user.save();
-        return res.status(403).json({ 
-          message: "Your plan has expired. Please renew your subscription.",
-          requiresPlan: true,
-          redirectTo: "/pricing"
-        });
-      }
-    }
-
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
-    const deviceInfo = req.headers['user-agent'];
-    
-    user.lastLoginAt = new Date();
-    user.lastActivityAt = new Date();
-    user.loginCount += 1;
-    user.lastLoginIP = ip;
-    user.deviceInfo = deviceInfo;
-    user.activeSession = crypto.randomBytes(16).toString("hex");
-
-    await user.save();
-
-    const populatedUser = await User.findById(user._id)
-      .select("-password")
-      .populate("programId", "name code isActive")
-      .populate("courseId", "name")
-      .populate("planId", "title duration price");
-
-    const token = generateToken(user, user.activeSession);
-    const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
-
-    res.json({ 
-      token, 
-      user: populatedUser, 
-      requiresProgram
-    });
-
-  } catch (err) {
-    console.error("LOGIN ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -787,6 +602,232 @@ export const googleLogin = async (req, res) => {
     res.status(401).json({ 
       message: "Google authentication failed: " + err.message
     });
+  }
+};
+
+// ================= LOGIN =================
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email & password required" });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    if (!user.password) {
+      return res.status(400).json({ message: "Please login with Google" });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    // Check if Alveoly student needs approval
+    if (user.userType === "alveoly_student" && !user.isApproved) {
+      return res.status(403).json({ 
+        message: "Your account is pending approval. Please wait for admin approval.",
+        requiresApproval: true
+      });
+    }
+
+    // Check if Non-Alveoly student has active plan
+    if (user.userType === "non_alveoly_student") {
+      if (!user.isPlanActive || !user.planId) {
+        return res.status(403).json({ 
+          message: "You need an active plan to access your account. Please subscribe to a plan.",
+          requiresPlan: true,
+          redirectTo: "/pricing"
+        });
+      }
+      
+      // Check if plan is expired
+      if (user.planExpiryDate && new Date(user.planExpiryDate) < new Date()) {
+        user.isPlanActive = false;
+        user.subscriptionStatus = "expired";
+        await user.save();
+        return res.status(403).json({ 
+          message: "Your plan has expired. Please renew your subscription.",
+          requiresPlan: true,
+          redirectTo: "/pricing"
+        });
+      }
+    }
+
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+    const deviceInfo = req.headers['user-agent'];
+    
+    user.lastLoginAt = new Date();
+    user.lastActivityAt = new Date();
+    user.loginCount += 1;
+    user.lastLoginIP = ip;
+    user.deviceInfo = deviceInfo;
+    user.activeSession = crypto.randomBytes(16).toString("hex");
+
+    await user.save();
+
+    const populatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name")
+      .populate("planId", "title duration price");
+
+    const token = generateToken(user, user.activeSession);
+    const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
+
+    res.json({ 
+      token, 
+      user: populatedUser, 
+      requiresProgram
+    });
+
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= COMPLETE REGISTRATION - SELECT PROGRAM =================
+export const completeRegistration = async (req, res) => {
+  try {
+    const { userId, programId, courseId } = req.body;
+
+    if (!userId || !programId) {
+      return res.status(400).json({ message: "User ID and Program are required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // For Alveoly students - must be approved
+    if (user.userType === "alveoly_student" && !user.isApproved) {
+      return res.status(403).json({ 
+        message: "Your account is pending approval. Please wait for admin approval." 
+      });
+    }
+
+    // For Non-Alveoly students - must have an active plan
+    if (user.userType === "non_alveoly_student") {
+      if (!user.isPlanActive || !user.planId) {
+        return res.status(403).json({ 
+          message: "You need an active plan to continue. Please subscribe to a plan.",
+          requiresPlan: true
+        });
+      }
+      
+      // Check if plan is expired
+      if (user.planExpiryDate && new Date(user.planExpiryDate) < new Date()) {
+        user.isPlanActive = false;
+        user.subscriptionStatus = "expired";
+        await user.save();
+        return res.status(403).json({ 
+          message: "Your plan has expired. Please renew your subscription.",
+          requiresPlan: true
+        });
+      }
+    }
+
+    const program = await Program.findById(programId);
+    if (!program || program.isActive === false) {
+      return res.status(400).json({ message: "Invalid or inactive program selected" });
+    }
+
+    let validCourseId = courseId;
+    if (!validCourseId) {
+      const firstCourse = await Course.findOne({ programId: programId });
+      if (firstCourse) {
+        validCourseId = firstCourse._id;
+      }
+    }
+
+    user.programId = programId;
+    user.courseId = validCourseId || null;
+    user.registrationCompleted = true;
+    await user.save();
+
+    await createNotification(
+      user._id,
+      "student",
+      "success",
+      "Program Selected! 📚",
+      `You have been enrolled in ${program.name}${validCourseId ? ' with course' : ''}.`,
+      "/student/dashboard",
+      { programId, courseId: validCourseId, action: "program_selected" }
+    );
+
+    const populatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("programId", "name code isActive")
+      .populate("courseId", "name")
+      .populate("planId", "title duration price");
+
+    res.json({
+      success: true,
+      message: "Registration completed successfully",
+      user: populatedUser
+    });
+
+  } catch (err) {
+    console.error("COMPLETE REGISTRATION ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= VERIFY APPROVAL TOKEN =================
+export const verifyApprovalToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const user = await User.findOne({
+      approvalToken: token,
+      tokenExpiresAt: { $gt: new Date() },
+      isApproved: false
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        message: "Invalid or expired approval token. Please contact admin." 
+      });
+    }
+
+    user.isApproved = true;
+    user.approvalToken = null;
+    user.tokenExpiresAt = null;
+    user.registrationCompleted = true;
+    await user.save();
+
+    try {
+      await sendApprovalConfirmationEmail(user.email, user.name);
+    } catch (emailErr) {
+      console.error("Approval email error:", emailErr.message);
+    }
+
+    await createNotification(
+      user._id,
+      "student",
+      "success",
+      "Account Approved! 🎉",
+      "Your account has been approved. Please login and select your program.",
+      "/login",
+      { action: "account_approved" }
+    );
+
+    res.json({
+      success: true,
+      message: "Account approved successfully. You can now login.",
+      email: user.email
+    });
+
+  } catch (err) {
+    console.error("VERIFY APPROVAL ERROR:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
