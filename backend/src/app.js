@@ -1,3 +1,4 @@
+// src/app.js - UPDATED
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -36,7 +37,6 @@ import programRoutes from "./routes/programRoutes.js";
 import blogRoutes from "./routes/blogRoutes.js";
 import nursingGameRoutes from "./routes/nursingGameRoutes.js";
 
-
 const app = express();
 
 // ================= SECURITY (HELMET) =================
@@ -49,7 +49,6 @@ app.use(
 );
 
 // ================= CORS - FIXED =================
-// Find this section in your app.js
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
@@ -57,8 +56,10 @@ const allowedOrigins = [
   "https://www.alveolye-learning.academy",
   "https://alveoly-platform.onrender.com",
   "https://alveoly-platform-1.onrender.com",
+  "https://alveoly-e-learning-755w.onrender.com",
   process.env.CLIENT_URL,
 ].filter(Boolean);
+
 console.log("✅ CORS Allowed Origins:", allowedOrigins);
 
 app.use(
@@ -74,7 +75,7 @@ app.use(
       }
       
       console.warn(`❌ CORS blocked origin: ${origin}`);
-      // For now, allow it anyway to fix the issue
+      // For Render deployment, allow all origins temporarily
       return callback(null, true);
     },
     credentials: true,
@@ -89,8 +90,8 @@ app.use(
   })
 );
 
-// ================= ❌ REMOVE THIS LINE =================
-// app.options("*", cors());  // DELETE THIS - IT'S CAUSING THE ERROR!
+// ================= REMOVE THIS LINE IF IT EXISTS =================
+// DO NOT USE: app.options("*", cors()); - This causes issues
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
@@ -133,13 +134,38 @@ app.use("/api/nursing-games", nursingGameRoutes);
 
 // ================= HEALTH CHECK =================
 app.get("/", (req, res) => {
-  res.status(200).json({ status: "OK", message: "API is running 🚀" });
+  res.status(200).json({ 
+    status: "OK", 
+    message: "API is running 🚀",
+    routes: {
+      auth: "/api/auth",
+      registerAlveoly: "/api/auth/register/alveoly",
+      registerNonAlveoly: "/api/auth/register/non-alveoly"
+    }
+  });
 });
 
-// ================= 404 Handler - Use proper syntax =================
-// This is the CORRECT way to handle 404s - NOT using '*'
+// ================= TEST ROUTE =================
+app.get("/api/test", (req, res) => {
+  res.json({ 
+    message: "API is working!",
+    routes: {
+      registerAlveoly: "/api/auth/register/alveoly",
+      registerNonAlveoly: "/api/auth/register/non-alveoly"
+    }
+  });
+});
+
+// ================= 404 Handler =================
 app.use((req, res) => {
-  res.status(404).json({ message: `Route ${req.method} ${req.url} not found` });
+  res.status(404).json({ 
+    message: `Route ${req.method} ${req.url} not found`,
+    availableRoutes: {
+      auth: "/api/auth",
+      registerAlveoly: "/api/auth/register/alveoly",
+      registerNonAlveoly: "/api/auth/register/non-alveoly"
+    }
+  });
 });
 
 // ================= ERROR HANDLER =================

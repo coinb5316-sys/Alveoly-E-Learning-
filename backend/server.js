@@ -1,5 +1,4 @@
-// server.js - COMPLETE WITH VIDEO CONFERENCE SUPPORT AND SENDGRID (UPDATED PATHS)
-import express from "express";
+// server.js - COMPLETE WITH VIDEO CONFERENCE SUPPORT AND SENDGRID (FULLY UPDATED)
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import app from "./src/app.js";
@@ -8,7 +7,6 @@ import { Server } from "socket.io";
 import mongoose from "mongoose";
 import FAQ from "./src/models/FAQ.js";
 import cron from "node-cron";
-// FIXED: Import from src/utils instead of utils
 import { checkExpiredPlans, checkApproachingExpiry } from "./src/utils/planScheduler.js";
 import sgMail from "@sendgrid/mail";
 
@@ -58,6 +56,7 @@ export const io = new Server(httpServer, {
         callback(null, true);
       } else {
         console.warn(`⚠️ Socket.IO blocked origin: ${origin}`);
+        // Allow anyway for now
         callback(null, true);
       }
     },
@@ -462,71 +461,11 @@ export const emitToAll = (event, data) => {
   io.emit(event, data);
 };
 
-// ================= HEALTH CHECK =================
-app.get("/", (req, res) => {
-  res.status(200).json({ 
-    status: "OK", 
-    message: "API is running 🚀",
-    socket: "Socket.IO server is ready",
-    activeRooms: rooms.size,
-    email: SENDGRID_API_KEY ? "SendGrid enabled ✅" : "SendGrid disabled ❌"
-  });
-});
-
-// ================= SOCKET STATUS ENDPOINT =================
-app.get("/socket-status", (req, res) => {
-  const roomStats = {};
-  for (const [roomId, participants] of rooms.entries()) {
-    roomStats[roomId] = {
-      participantCount: participants.size,
-      participants: Array.from(participants.entries()).map(([userId, info]) => ({
-        userId,
-        userName: info.userName,
-        role: info.role
-      }))
-    };
-  }
-  
-  res.json({
-    status: "healthy",
-    connections: io.engine.clientsCount,
-    transports: ["polling", "websocket"],
-    activeRooms: rooms.size,
-    rooms: roomStats,
-    allowedOrigins: allowedOrigins,
-    emailStatus: SENDGRID_API_KEY ? "enabled" : "disabled"
-  });
-});
-
-// ================= CONNECTION STATS ENDPOINT =================
-app.get("/socket-stats", (req, res) => {
-  const connectedSockets = [];
-  const socketMap = io.sockets.sockets;
-  
-  for (const [id, socket] of socketMap) {
-    connectedSockets.push({
-      id: id,
-      rooms: Array.from(socket.rooms),
-      connected: socket.connected,
-      userId: socket.userId,
-      userName: socket.userName,
-      classId: socket.classId
-    });
-  }
-  
-  res.json({
-    totalConnections: io.engine.clientsCount,
-    socketCount: connectedSockets.length,
-    sockets: connectedSockets.slice(0, 50),
-  });
-});
-
-// ================= GLOBAL ERROR HANDLER =================
-app.use((err, req, res, next) => {
-  console.error("🔥 Server Error:", err.message);
-  console.error(err.stack);
-  res.status(500).json({ message: err.message || "Internal Server Error" });
-});
+// ================= NOTE: ROUTES ARE ALREADY REGISTERED IN app.js =================
+// app.js already has all routes registered:
+// app.use("/api/auth", authRoutes);
+// app.use("/api/users", userRoutes);
+// etc.
 
 // ================= PLAN EXPIRY SCHEDULER =================
 // Run every day at midnight
@@ -559,16 +498,18 @@ httpServer.listen(PORT, () => {
   console.log(`\n📢 Notification rooms ready:`);
   console.log(`   - User rooms: user_{userId}`);
   console.log(`   - Admin rooms: admin, admin_notifications`);
-  console.log(`\n🌐 API endpoints:`);
+  console.log(`\n🌐 API endpoints (from app.js):`);
   console.log(`   - GET  /                Health check`);
-  console.log(`   - GET  /socket-status   Socket.IO status`);
-  console.log(`   - GET  /socket-stats    Detailed connection stats`);
-  console.log(`   - POST /auth/register/alveoly  Alveoly student registration`);
-  console.log(`   - POST /auth/register/non-alveoly  Non-Alveoly student registration`);
-  console.log(`   - GET  /auth/verify-approval/:token  Verify approval token`);
+  console.log(`   - POST /api/auth/register/alveoly  Alveoly student registration`);
+  console.log(`   - POST /api/auth/register/non-alveoly  Non-Alveoly student registration`);
+  console.log(`   - GET  /api/auth/verify-approval/:token  Verify approval token`);
+  console.log(`   - POST /api/auth/login  User login`);
+  console.log(`   - POST /api/auth/google-login  Google login`);
+  console.log(`   - GET  /api/auth/me  Get current user`);
   console.log(`\n📧 Email endpoints:`);
-  console.log(`   - POST /auth/forgot-password  Send password reset email`);
-  console.log(`   - POST /auth/assign-plan  Admin assign plan to user`);
+  console.log(`   - POST /api/auth/forgot-password  Send password reset email`);
+  console.log(`   - POST /api/auth/assign-plan  Admin assign plan to user`);
+  console.log(`\n🗺️ All routes are defined in src/app.js`);
 });
 
 export default httpServer;
