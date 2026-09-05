@@ -1,4 +1,4 @@
-// middleware/accessMiddleware.js - ADDED requireSubjectAccess
+// middleware/accessMiddleware.js - Updated with program access
 import User from "../models/User.js";
 import Plan from "../models/Plan.js";
 
@@ -54,14 +54,24 @@ export const checkPlanAccess = async (req, res, next) => {
       });
     }
 
-    // Check if plan unlocks all content
+    // Check if plan unlocks all content or has program access
     const plan = await Plan.findById(user.planId);
     if (plan.unlocksAllContent || plan.accessLevel === "full") {
       return next();
     }
 
-    // If plan has specific access, check if the requested resource is in the plan
-    const { resourceType, resourceId } = req.query;
+    // Check if the requested resource is in the plan
+    const { resourceType, resourceId, programId } = req.query;
+    
+    // Check program access
+    if (resourceType === "program") {
+      if (user.programAccess && user.programAccess.includes(resourceId)) {
+        return next();
+      }
+      if (plan.programs && plan.programs.includes(resourceId)) {
+        return next();
+      }
+    }
     
     if (resourceType === "subject" && plan.subjects.includes(resourceId)) {
       return next();
@@ -71,14 +81,16 @@ export const checkPlanAccess = async (req, res, next) => {
       return next();
     }
     
-    if (resourceType === "program" && plan.programs.includes(resourceId)) {
-      return next();
+    // If user has program access, check if the subject/course belongs to that program
+    if (user.programAccess && user.programAccess.length > 0) {
+      // This will be handled by the specific route handlers
+      next();
+    } else {
+      return res.status(403).json({
+        message: "Your plan does not include access to this content.",
+        requiresUpgrade: true
+      });
     }
-
-    return res.status(403).json({
-      message: "Your plan does not include access to this content.",
-      requiresUpgrade: true
-    });
 
   } catch (error) {
     console.error("Check Plan Access Error:", error);
@@ -135,6 +147,12 @@ export const checkContentAccess = async (req, res, next) => {
       return next();
     }
 
+    // Check if user has program access
+    const { programId } = req.query;
+    if (programId && user.programAccess && user.programAccess.includes(programId)) {
+      return next();
+    }
+
     // For specific content access, check if the item is in the plan
     // This will be handled by the specific route handlers
     next();
@@ -145,7 +163,7 @@ export const checkContentAccess = async (req, res, next) => {
   }
 };
 
-// ================= NEW: REQUIRE SUBJECT ACCESS =================
+// ================= REQUIRE SUBJECT ACCESS =================
 export const requireSubjectAccess = async (req, res, next) => {
   try {
     const user = req.user;
@@ -208,11 +226,22 @@ export const requireSubjectAccess = async (req, res, next) => {
 
     // If plan has specific courses, check if the subject belongs to any of those courses
     if (plan.courses && plan.courses.length > 0) {
-      // Get the subject's course
       const Subject = (await import("../models/Subject.js")).default;
       const subject = await Subject.findById(subjectId);
       if (subject && plan.courses.includes(subject.courseId.toString())) {
         return next();
+      }
+    }
+
+    // Check if user has program access
+    if (userWithPlan.programAccess && userWithPlan.programAccess.length > 0) {
+      const Subject = (await import("../models/Subject.js")).default;
+      const subject = await Subject.findById(subjectId).populate("programId");
+      if (subject && subject.programId) {
+        const programId = subject.programId._id || subject.programId;
+        if (userWithPlan.programAccess.some(id => id.toString() === programId.toString())) {
+          return next();
+        }
       }
     }
 
@@ -227,8 +256,53 @@ export const requireSubjectAccess = async (req, res, next) => {
   }
 };
 
+// ================= CHECK PROGRAM ACCESS =================
+export const checkProgramAccess = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const programId = req.params.programId || req.query.programId || req.body.programId;
+
+    if (!programId) {
+      return next();
+    }
+
+    // Admins and lecturers have full access
+    if (user.role === "admin" || user.role === "lecturer") {
+      return next();
+    }
+
+    // Check if user has program access from their plan
+    const userWithPlan = await User.findById(user._id).populate("planId");
+    
+    if (userWithPlan.programAccess && userWithPlan.programAccess.includes(programId)) {
+      return next();
+    }
+
+    // Check if plan has program access
+    if (userWithPlan.planId) {
+      const plan = await Plan.findById(userWithPlan.planId);
+      if (plan && plan.programAccess && plan.programAccess.includes(programId)) {
+        return next();
+      }
+      if (plan && (plan.unlocksAllContent || plan.accessLevel === "full")) {
+        return next();
+      }
+    }
+
+    return res.status(403).json({
+      message: "Your plan does not include access to this program.",
+      requiresUpgrade: true
+    });
+
+  } catch (error) {
+    console.error("Check Program Access Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
 export default {
   checkPlanAccess,
   checkContentAccess,
-  requireSubjectAccess
+  requireSubjectAccess,
+  checkProgramAccess
 };

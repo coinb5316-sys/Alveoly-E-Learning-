@@ -1,4 +1,4 @@
-// models/User.js
+// models/User.js - Add programAccess field
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -106,6 +106,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    // ================= PROGRAM ACCESS (For plan unlocking) =================
+    programAccess: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Program"
+    }],
 
     // ================= PASSWORD RESET =================
     resetToken: String,
@@ -181,6 +186,7 @@ userSchema.index({ isApproved: 1 });
 userSchema.index({ planId: 1 });
 userSchema.index({ isPlanActive: 1 });
 userSchema.index({ planExpiryDate: 1 });
+userSchema.index({ programAccess: 1 });
 
 // ================= VIRTUAL: Check if user is active =================
 userSchema.virtual('isRecentlyActive').get(function() {
@@ -199,6 +205,12 @@ userSchema.methods.hasActivePlan = function() {
     return false;
   }
   return true;
+};
+
+// ================= METHOD: Check if user has program access =================
+userSchema.methods.hasProgramAccess = function(programId) {
+  if (!this.programAccess || this.programAccess.length === 0) return false;
+  return this.programAccess.some(id => id.toString() === programId.toString());
 };
 
 // ================= METHOD: Update last activity =================

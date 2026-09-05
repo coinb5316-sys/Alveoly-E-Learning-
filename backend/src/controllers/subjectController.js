@@ -1,10 +1,11 @@
-// controllers/subjectController.js - UPDATED with topic support
+// controllers/subjectController.js - Updated with program access
 import Subject from "../models/Subject.js";
 import Course from "../models/Course.js";
 import Program from "../models/Program.js";
 import Payment from "../models/Payment.js";
 import Plan from "../models/Plan.js";
 import ManualAccess from "../models/ManualAccess.js";
+import User from "../models/User.js";
 import { io } from "../../server.js";
 
 // ================= GET SUBJECTS =================
@@ -21,7 +22,7 @@ export const getSubjects = async (req, res) => {
       subjects = await Subject.find({ courseId: course })
         .populate("programId", "name code")
         .populate("courseId", "name")
-        .select("+topics"); // Include topics
+        .select("+topics");
     } else if (program && program !== "undefined" && program !== "null") {
       subjects = await Subject.find({ programId: program })
         .populate("programId", "name code")
@@ -34,13 +35,131 @@ export const getSubjects = async (req, res) => {
         .select("+topics");
     }
 
-    // ... rest of the function remains the same
+    // Check user's program access
+    let userWithPlan = null;
+    let userProgramAccess = [];
     let activePlanSubjects = [];
     let purchasedSubjects = [];
     let manualSubjects = [];
 
     if (userId) {
       const now = new Date();
+      
+      // Get user with plan and program access
+      userWithPlan = await User.findById(userId).populate("planId");
+      if (userWithPlan && userWithPlan.programAccess) {
+        userProgramAccess = userWithPlan.programAccess.map(id => id.toString());
+      }
+
+      // Check plan subjects
+      const planPayment = await Payment.findOne({
+        userId,
+        planId: { $ne: null },
+        status: "success",
+        expiresAt: { $gt: now },
+      }).populate({
+        path: "planId",
+        populate: { path: "subjects", select: "_id" },
+      });
+
+      if (planPayment?.planId) {
+        activePlanSubjects = planPayment.planId.subjects.map((s) =>
+          s._id.toString()
+        );
+      }
+
+      // Check subject payments
+      const subjectPayments = await Payment.find({
+        userId,
+        subjectId: { $ne: null },
+        status: "success",
+        expiresAt: { $gt: now },
+      });
+      purchasedSubjects = subjectPayments.map((p) =>
+        p.subjectId.toString()
+      );
+
+      // Check manual access
+      const manualAccess = await ManualAccess.find({
+        userId,
+        status: "active",
+        expiresAt: { $gt: now },
+      });
+      manualSubjects = manualAccess.map((m) =>
+        m.subjectId.toString()
+      );
+    }
+
+    const formatted = subjects.map((subj) => {
+      const subjectIdStr = subj._id.toString();
+      let isUnlocked = !subj.isPaid;
+
+      if (subj.isPaid && userId) {
+        const hasPlan = activePlanSubjects.includes(subjectIdStr);
+        const hasPurchase = purchasedSubjects.includes(subjectIdStr);
+        const hasManual = manualSubjects.includes(subjectIdStr);
+        // Check if user has program access
+        const hasProgramAccess = userProgramAccess.some(pid => 
+          pid === (subj.programId?._id?.toString() || subj.programId?.toString())
+        );
+        // If plan unlocks all content or user has program access
+        const planUnlocksAll = userWithPlan?.planId?.unlocksAllContent || 
+                               userWithPlan?.planId?.accessLevel === "full";
+        isUnlocked = hasPlan || hasPurchase || hasManual || hasProgramAccess || planUnlocksAll;
+      }
+
+      // Sort topics by order
+      const sortedTopics = subj.topics ? 
+        [...subj.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
+        [];
+
+      return {
+        ...subj._doc,
+        isUnlocked,
+        topics: sortedTopics,
+        topicCount: sortedTopics.length,
+      };
+    });
+
+    res.json(formatted);
+  } catch (error) {
+    console.error("Get Subjects Error:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= GET SUBJECTS PUBLIC =================
+export const getSubjectsPublic = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const course = req.query.course;
+
+    let subjects;
+    if (course && course !== "undefined" && course !== "null") {
+      subjects = await Subject.find({ courseId: course })
+        .populate("programId", "name code")
+        .populate("courseId", "name")
+        .select("+topics");
+    } else {
+      subjects = await Subject.find()
+        .populate("programId", "name code")
+        .populate("courseId", "name")
+        .select("+topics");
+    }
+
+    let userWithPlan = null;
+    let userProgramAccess = [];
+    let activePlanSubjects = [];
+    let purchasedSubjects = [];
+    let manualSubjects = [];
+
+    if (userId) {
+      const now = new Date();
+      
+      userWithPlan = await User.findById(userId).populate("planId");
+      if (userWithPlan && userWithPlan.programAccess) {
+        userProgramAccess = userWithPlan.programAccess.map(id => id.toString());
+      }
 
       const planPayment = await Payment.findOne({
         userId,
@@ -64,7 +183,6 @@ export const getSubjects = async (req, res) => {
         status: "success",
         expiresAt: { $gt: now },
       });
-
       purchasedSubjects = subjectPayments.map((p) =>
         p.subjectId.toString()
       );
@@ -87,10 +205,14 @@ export const getSubjects = async (req, res) => {
         const hasPlan = activePlanSubjects.includes(subjectIdStr);
         const hasPurchase = purchasedSubjects.includes(subjectIdStr);
         const hasManual = manualSubjects.includes(subjectIdStr);
-        isUnlocked = hasPlan || hasPurchase || hasManual;
+        const hasProgramAccess = userProgramAccess.some(pid => 
+          pid === (subj.programId?._id?.toString() || subj.programId?.toString())
+        );
+        const planUnlocksAll = userWithPlan?.planId?.unlocksAllContent || 
+                               userWithPlan?.planId?.accessLevel === "full";
+        isUnlocked = hasPlan || hasPurchase || hasManual || hasProgramAccess || planUnlocksAll;
       }
 
-      // Sort topics by order
       const sortedTopics = subj.topics ? 
         [...subj.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
         [];
@@ -105,8 +227,94 @@ export const getSubjects = async (req, res) => {
 
     res.json(formatted);
   } catch (error) {
-    console.error("Get Subjects Error:", error);
+    console.error("Get Subjects Public Error:", error);
     res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// ================= GET SINGLE SUBJECT =================
+export const getSubjectById = async (req, res) => {
+  try {
+    const subjectId = req.params.subjectId;
+    const userId = req.user?._id;
+    
+    const subject = await Subject.findById(subjectId)
+      .populate("programId", "name code")
+      .populate("courseId", "name")
+      .select("+topics");
+
+    if (!subject) {
+      return res.status(404).json({ message: "Subject not found" });
+    }
+
+    // Check if user has access
+    let isUnlocked = !subject.isPaid;
+    let userWithPlan = null;
+    let userProgramAccess = [];
+
+    if (userId && subject.isPaid) {
+      const now = new Date();
+      userWithPlan = await User.findById(userId).populate("planId");
+      
+      if (userWithPlan && userWithPlan.programAccess) {
+        userProgramAccess = userWithPlan.programAccess.map(id => id.toString());
+      }
+
+      // Check payments
+      const payment = await Payment.findOne({
+        userId,
+        subjectId,
+        status: "success",
+        expiresAt: { $gt: now },
+      });
+
+      const manual = await ManualAccess.findOne({
+        userId,
+        subjectId,
+        status: "active",
+        expiresAt: { $gt: now },
+      });
+
+      const planPayment = await Payment.findOne({
+        userId,
+        planId: { $ne: null },
+        status: "success",
+        expiresAt: { $gt: now },
+      }).populate({
+        path: "planId",
+        populate: { path: "subjects", select: "_id" },
+      });
+
+      const hasPlanSubject = planPayment?.planId?.subjects?.some(
+        s => s._id.toString() === subjectId
+      );
+
+      const planUnlocksAll = userWithPlan?.planId?.unlocksAllContent || 
+                             userWithPlan?.planId?.accessLevel === "full";
+
+      const hasProgramAccess = userProgramAccess.some(pid => 
+        pid === (subject.programId?._id?.toString() || subject.programId?.toString())
+      );
+
+      isUnlocked = !!payment || !!manual || hasPlanSubject || hasProgramAccess || planUnlocksAll;
+    }
+
+    // Sort topics by order
+    const sortedTopics = subject.topics ? 
+      [...subject.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
+      [];
+
+    const response = {
+      ...subject._doc,
+      isUnlocked,
+      topics: sortedTopics,
+      topicCount: sortedTopics.length,
+    };
+
+    res.json(response);
+  } catch (err) {
+    console.error("Get Subject By ID Error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -227,7 +435,7 @@ export const updateSubject = async (req, res) => {
         description: topic.description || "",
         order: topic.order !== undefined ? topic.order : index,
         isActive: topic.isActive !== undefined ? topic.isActive : true,
-        _id: topic._id || new mongoose.Types.ObjectId(), // Preserve existing IDs if provided
+        _id: topic._id || new mongoose.Types.ObjectId(),
       }));
     }
 
@@ -247,37 +455,6 @@ export const updateSubject = async (req, res) => {
   }
 };
 
-// ================= GET SINGLE SUBJECT =================
-export const getSubjectById = async (req, res) => {
-  try {
-    const subjectId = req.params.subjectId;
-    const subject = await Subject.findById(subjectId)
-      .populate("programId", "name code")
-      .populate("courseId", "name")
-      .select("+topics");
-
-    if (!subject) {
-      return res.status(404).json({ message: "Subject not found" });
-    }
-
-    // Sort topics by order
-    const sortedTopics = subject.topics ? 
-      [...subject.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
-      [];
-
-    const response = {
-      ...subject._doc,
-      topics: sortedTopics,
-      topicCount: sortedTopics.length,
-    };
-
-    res.json(response);
-  } catch (err) {
-    console.error("Get Subject By ID Error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
 // ================= DELETE SUBJECT =================
 export const deleteSubject = async (req, res) => {
   try {
@@ -291,99 +468,6 @@ export const deleteSubject = async (req, res) => {
     res.json({ message: "Subject deleted successfully" });
   } catch (error) {
     console.error("Delete Subject Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-// ================= GET SUBJECTS PUBLIC =================
-export const getSubjectsPublic = async (req, res) => {
-  try {
-    const userId = req.user?._id;
-    const course = req.query.course;
-
-    let subjects;
-    if (course && course !== "undefined" && course !== "null") {
-      subjects = await Subject.find({ courseId: course })
-        .populate("programId", "name code")
-        .populate("courseId", "name")
-        .select("+topics");
-    } else {
-      subjects = await Subject.find()
-        .populate("programId", "name code")
-        .populate("courseId", "name")
-        .select("+topics");
-    }
-
-    // ... rest of the function remains the same
-    let activePlanSubjects = [];
-    let purchasedSubjects = [];
-    let manualSubjects = [];
-
-    if (userId) {
-      const now = new Date();
-      const planPayment = await Payment.findOne({
-        userId,
-        planId: { $ne: null },
-        status: "success",
-        expiresAt: { $gt: now },
-      }).populate({
-        path: "planId",
-        populate: { path: "subjects", select: "_id" },
-      });
-
-      if (planPayment?.planId) {
-        activePlanSubjects = planPayment.planId.subjects.map((s) =>
-          s._id.toString()
-        );
-      }
-
-      const subjectPayments = await Payment.find({
-        userId,
-        subjectId: { $ne: null },
-        status: "success",
-        expiresAt: { $gt: now },
-      });
-      purchasedSubjects = subjectPayments.map((p) =>
-        p.subjectId.toString()
-      );
-
-      const manualAccess = await ManualAccess.find({
-        userId,
-        status: "active",
-        expiresAt: { $gt: now },
-      });
-      manualSubjects = manualAccess.map((m) =>
-        m.subjectId.toString()
-      );
-    }
-
-    const formatted = subjects.map((subj) => {
-      const subjectIdStr = subj._id.toString();
-      let isUnlocked = !subj.isPaid;
-
-      if (subj.isPaid && userId) {
-        const hasPlan = activePlanSubjects.includes(subjectIdStr);
-        const hasPurchase = purchasedSubjects.includes(subjectIdStr);
-        const hasManual = manualSubjects.includes(subjectIdStr);
-        isUnlocked = hasPlan || hasPurchase || hasManual;
-      }
-
-      // Sort topics by order
-      const sortedTopics = subj.topics ? 
-        [...subj.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
-        [];
-
-      return {
-        ...subj._doc,
-        isUnlocked,
-        topics: sortedTopics,
-        topicCount: sortedTopics.length,
-      };
-    });
-
-    res.json(formatted);
-  } catch (error) {
-    console.error("Get Subjects Public Error:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
@@ -493,11 +577,7 @@ export const updateTopic = async (req, res) => {
   }
 };
 
-// controllers/subjectController.js - Add this new function
-
-/**
- * ================= GET SUBJECT TOPICS FOR ADMIN (Bypasses access check) =================
- */
+// ================= GET SUBJECT TOPICS FOR ADMIN =================
 export const getAdminSubjectTopics = async (req, res) => {
   try {
     const { subjectId } = req.params;
@@ -511,7 +591,6 @@ export const getAdminSubjectTopics = async (req, res) => {
       return res.status(404).json({ message: "Subject not found" });
     }
 
-    // Sort topics by order
     const sortedTopics = subject.topics ? 
       [...subject.topics].sort((a, b) => (a.order || 0) - (b.order || 0)) : 
       [];
@@ -542,7 +621,6 @@ export const getAdminSubjects = async (req, res) => {
       .populate("courseId", "name")
       .select("+topics");
     
-    // Sort topics by order
     const formattedSubjects = subjects.map(subj => ({
       ...subj._doc,
       topics: subj.topics ? 

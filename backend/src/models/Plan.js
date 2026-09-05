@@ -41,7 +41,7 @@ const planSchema = new mongoose.Schema(
     // Full access control - unlock ALL content
     unlocksAllContent: {
       type: Boolean,
-      default: false
+      default: true  // CHANGE: Default to true for full program access
     },
     // Specific access control (if not unlocking all)
     subjects: [{
@@ -70,7 +70,12 @@ const planSchema = new mongoose.Schema(
     freeAccess: {
       type: Boolean,
       default: false
-    }
+    },
+    // Program access - if set, unlocks all content for these programs
+    programAccess: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Program"
+    }]
   },
   { timestamps: true }
 );
@@ -80,5 +85,6 @@ planSchema.index({ isActive: 1 });
 planSchema.index({ isFree: 1 });
 planSchema.index({ price: 1 });
 planSchema.index({ accessLevel: 1 });
+planSchema.index({ programAccess: 1 });
 
 export default mongoose.model("Plan", planSchema);
