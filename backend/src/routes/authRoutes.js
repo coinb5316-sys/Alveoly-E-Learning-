@@ -1,4 +1,4 @@
-// routes/authRoutes.js - Updated with registration flow
+// routes/authRoutes.js - COMPLETE FIXED VERSION
 import express from "express";
 import {
   registerAlveolyStudent,
@@ -71,6 +71,11 @@ router.get("/debug-subjects", protect, adminOnly, async (req, res) => {
     console.error(err);
     res.status(500).json({ message: err.message });
   }
+});
+
+// Add a test route to verify the router is working
+router.get("/test", (req, res) => {
+  res.json({ message: "Auth routes are working!" });
 });
 
 export default router;

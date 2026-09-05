@@ -1,4 +1,4 @@
-// controllers/authController.js - Updated with SendGrid email support
+// controllers/authController.js - COMPLETE FIXED VERSION
 import User from "../models/User.js";
 import Program from "../models/Program.js";
 import Course from "../models/Course.js"; 
@@ -38,23 +38,34 @@ export const registerAlveolyStudent = async (req, res) => {
       userType 
     } = req.body;
 
+    console.log("📝 Register Alveoly Student - Request body:", req.body);
+
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "All fields required" });
+      return res.status(400).json({ 
+        success: false,
+        message: "All fields required (name, email, password)" 
+      });
     }
 
+    // Check if user exists
     const userExists = await User.findOne({ email });
-    if (userExists) return res.status(400).json({ message: "User already exists" });
+    if (userExists) {
+      return res.status(400).json({ 
+        success: false,
+        message: "User already exists with this email" 
+      });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Generate approval token
     const approvalToken = generateApprovalToken();
     const tokenExpiresAt = new Date();
-    tokenExpiresAt.setHours(tokenExpiresAt.getHours() + 24); // 24 hours expiry
+    tokenExpiresAt.setHours(tokenExpiresAt.getHours() + 24);
 
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
       password: hashedPassword,
       userType: userType || "alveoly_student",
       registrationSource: registrationSource || "other",
@@ -67,13 +78,23 @@ export const registerAlveolyStudent = async (req, res) => {
       lastActivityAt: new Date()
     });
 
-    // Send approval email with SendGrid
-    await sendApprovalEmail(user.email, user.name, approvalToken);
+    console.log("✅ Alveoly student created:", user._id);
+
+    // Send approval email
+    try {
+      await sendApprovalEmail(user.email, user.name, approvalToken);
+    } catch (emailErr) {
+      console.error("Email error:", emailErr.message);
+    }
     
     // Send welcome email
-    await sendWelcomeEmail(user.email, user.name, "alveoly_student");
+    try {
+      await sendWelcomeEmail(user.email, user.name, "alveoly_student");
+    } catch (emailErr) {
+      console.error("Welcome email error:", emailErr.message);
+    }
 
-    // Notify admins about new registration
+    // Notify admins
     const adminUsers = await User.find({ role: "admin" });
     for (const admin of adminUsers) {
       await createNotification(
@@ -81,13 +102,13 @@ export const registerAlveolyStudent = async (req, res) => {
         "admin",
         "info",
         "New Student Registration Pending Approval",
-        `${name} (${email}) has registered and is awaiting approval. Source: ${registrationSource}`,
+        `${name} (${email}) has registered and is awaiting approval.`,
         "/admin/users",
         { userId: user._id, action: "new_user_pending" }
       );
     }
 
-    // Return success with pending status
+    // Return success
     res.status(201).json({
       success: true,
       message: "Registration successful. Please wait for admin approval. An email will be sent with your approval token.",
@@ -97,58 +118,11 @@ export const registerAlveolyStudent = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("REGISTER ALVEOLY STUDENT ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// ================= VERIFY APPROVAL TOKEN =================
-export const verifyApprovalToken = async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    const user = await User.findOne({
-      approvalToken: token,
-      tokenExpiresAt: { $gt: new Date() },
-      isApproved: false
+    console.error("❌ REGISTER ALVEOLY STUDENT ERROR:", err);
+    res.status(500).json({ 
+      success: false,
+      message: err.message || "Server error" 
     });
-
-    if (!user) {
-      return res.status(400).json({ 
-        message: "Invalid or expired approval token. Please contact admin." 
-      });
-    }
-
-    // Mark user as approved
-    user.isApproved = true;
-    user.approvalToken = null;
-    user.tokenExpiresAt = null;
-    user.registrationCompleted = true;
-    await user.save();
-
-    // Send approval confirmation email
-    await sendApprovalConfirmationEmail(user.email, user.name);
-
-    // Notify user via notification system
-    await createNotification(
-      user._id,
-      "student",
-      "success",
-      "Account Approved! 🎉",
-      "Your account has been approved. Please login and select your program to get started.",
-      "/login",
-      { action: "account_approved" }
-    );
-
-    res.json({
-      success: true,
-      message: "Account approved successfully. You can now login.",
-      email: user.email
-    });
-
-  } catch (err) {
-    console.error("VERIFY APPROVAL ERROR:", err);
-    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -162,18 +136,29 @@ export const registerNonAlveolyStudent = async (req, res) => {
       userType 
     } = req.body;
 
+    console.log("📝 Register Non-Alveoly Student - Request body:", req.body);
+
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "All fields required" });
+      return res.status(400).json({ 
+        success: false,
+        message: "All fields required (name, email, password)" 
+      });
     }
 
+    // Check if user exists
     const userExists = await User.findOne({ email });
-    if (userExists) return res.status(400).json({ message: "User already exists" });
+    if (userExists) {
+      return res.status(400).json({ 
+        success: false,
+        message: "User already exists with this email" 
+      });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
       password: hashedPassword,
       userType: userType || "non_alveoly_student",
       registrationSource: "none",
@@ -183,8 +168,14 @@ export const registerNonAlveolyStudent = async (req, res) => {
       lastActivityAt: new Date()
     });
 
+    console.log("✅ Non-Alveoly student created:", user._id);
+
     // Send welcome email
-    await sendWelcomeEmail(user.email, user.name, "non_alveoly_student");
+    try {
+      await sendWelcomeEmail(user.email, user.name, "non_alveoly_student");
+    } catch (emailErr) {
+      console.error("Welcome email error:", emailErr.message);
+    }
 
     // Notify admins
     const adminUsers = await User.find({ role: "admin" });
@@ -208,7 +199,62 @@ export const registerNonAlveolyStudent = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("REGISTER NON-ALVEOLY STUDENT ERROR:", err);
+    console.error("❌ REGISTER NON-ALVEOLY STUDENT ERROR:", err);
+    res.status(500).json({ 
+      success: false,
+      message: err.message || "Server error" 
+    });
+  }
+};
+
+// ================= VERIFY APPROVAL TOKEN =================
+export const verifyApprovalToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const user = await User.findOne({
+      approvalToken: token,
+      tokenExpiresAt: { $gt: new Date() },
+      isApproved: false
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        message: "Invalid or expired approval token. Please contact admin." 
+      });
+    }
+
+    user.isApproved = true;
+    user.approvalToken = null;
+    user.tokenExpiresAt = null;
+    user.registrationCompleted = true;
+    await user.save();
+
+    // Send approval confirmation email
+    try {
+      await sendApprovalConfirmationEmail(user.email, user.name);
+    } catch (emailErr) {
+      console.error("Approval email error:", emailErr.message);
+    }
+
+    await createNotification(
+      user._id,
+      "student",
+      "success",
+      "Account Approved! 🎉",
+      "Your account has been approved. Please login and select your program.",
+      "/login",
+      { action: "account_approved" }
+    );
+
+    res.json({
+      success: true,
+      message: "Account approved successfully. You can now login.",
+      email: user.email
+    });
+
+  } catch (err) {
+    console.error("VERIFY APPROVAL ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -227,20 +273,17 @@ export const completeRegistration = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Check if user is approved (for alveoly students)
     if (user.userType === "alveoly_student" && !user.isApproved) {
       return res.status(403).json({ 
         message: "Your account is pending approval. Please wait for admin approval." 
       });
     }
 
-    // Verify program exists
     const program = await Program.findById(programId);
     if (!program || program.isActive === false) {
       return res.status(400).json({ message: "Invalid or inactive program selected" });
     }
 
-    // Find first course in this program
     let validCourseId = courseId;
     if (!validCourseId) {
       const firstCourse = await Course.findOne({ programId: programId });
@@ -249,16 +292,13 @@ export const completeRegistration = async (req, res) => {
       }
     }
 
-    // Update user
     user.programId = programId;
     user.courseId = validCourseId || null;
     user.registrationCompleted = true;
     await user.save();
 
-    // If user is non-alveoly, redirect to plans
     const needsPlan = user.userType === "non_alveoly_student";
 
-    // Send notification
     await createNotification(
       user._id,
       "student",
@@ -287,7 +327,7 @@ export const completeRegistration = async (req, res) => {
   }
 };
 
-// ================= GOOGLE LOGIN WITH REGISTRATION FLOW =================
+// ================= GOOGLE LOGIN =================
 export const googleLogin = async (req, res) => {
   try {
     const { idToken, userType, registrationSource, registrationDetails } = req.body;
@@ -306,7 +346,6 @@ export const googleLogin = async (req, res) => {
 
     let user = await User.findOne({ email });
 
-    // CASE 1: USER EXISTS
     if (user) {
       const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
       const deviceInfo = req.headers['user-agent'];
@@ -338,7 +377,6 @@ export const googleLogin = async (req, res) => {
       });
     }
 
-    // CASE 2: NEW USER - Create based on userType
     if (!userType) {
       return res.status(404).json({ 
         message: "Please select your user type to create an account.",
@@ -346,7 +384,6 @@ export const googleLogin = async (req, res) => {
       });
     }
 
-    // Create new user
     let newUserData = {
       name,
       email,
@@ -372,12 +409,14 @@ export const googleLogin = async (req, res) => {
         registrationCompleted: false
       };
 
-      // Send approval email
-      await sendApprovalEmail(email, name, approvalToken);
-      await sendWelcomeEmail(email, name, "alveoly_student");
+      try {
+        await sendApprovalEmail(email, name, approvalToken);
+        await sendWelcomeEmail(email, name, "alveoly_student");
+      } catch (emailErr) {
+        console.error("Email error:", emailErr.message);
+      }
       
     } else {
-      // Non-alveoly student - auto-approved
       newUserData = {
         ...newUserData,
         registrationSource: "none",
@@ -385,13 +424,15 @@ export const googleLogin = async (req, res) => {
         isApproved: true
       };
       
-      // Send welcome email
-      await sendWelcomeEmail(email, name, "non_alveoly_student");
+      try {
+        await sendWelcomeEmail(email, name, "non_alveoly_student");
+      } catch (emailErr) {
+        console.error("Email error:", emailErr.message);
+      }
     }
 
     const newUser = await User.create(newUserData);
 
-    // Notify admins
     const adminUsers = await User.find({ role: "admin" });
     for (const admin of adminUsers) {
       await createNotification(
@@ -399,13 +440,12 @@ export const googleLogin = async (req, res) => {
         "admin",
         "info",
         `New ${userType === "alveoly_student" ? "Alveoly Student (Pending)" : "Non-Alveoly Student"}`,
-        `${name} (${email}) has registered as a ${userType === "alveoly_student" ? "Alveoly student awaiting approval" : "Non-Alveoly student"}.`,
+        `${name} (${email}) has registered.`,
         "/admin/users",
         { userId: newUser._id, action: "new_user" }
       );
     }
 
-    // Record login
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
     const deviceInfo = req.headers['user-agent'];
     
@@ -440,13 +480,12 @@ export const googleLogin = async (req, res) => {
   } catch (err) {
     console.error("GOOGLE LOGIN ERROR:", err);
     res.status(401).json({ 
-      message: "Google authentication failed: " + err.message,
-      error: err.toString()
+      message: "Google authentication failed: " + err.message
     });
   }
 };
 
-// ================= EMAIL/PASSWORD LOGIN (Updated) =================
+// ================= EMAIL/PASSWORD LOGIN =================
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -460,7 +499,6 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // Check if user has password (for Google users)
     if (!user.password) {
       return res.status(400).json({ message: "Please login with Google" });
     }
@@ -470,7 +508,6 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // Check if user is approved (for alveoly students)
     if (user.userType === "alveoly_student" && !user.isApproved) {
       return res.status(403).json({ 
         message: "Your account is pending approval. Please wait for admin approval.",
@@ -513,7 +550,7 @@ export const login = async (req, res) => {
   }
 };
 
-// ================= ASSIGN PLAN TO USER (Admin) =================
+// ================= ASSIGN PLAN TO USER =================
 export const assignPlanToUser = async (req, res) => {
   try {
     const { userId, planId } = req.body;
@@ -532,7 +569,6 @@ export const assignPlanToUser = async (req, res) => {
       return res.status(404).json({ message: "Plan not found" });
     }
 
-    // Calculate expiry date based on plan duration
     const startDate = new Date();
     const expiryDate = new Date(startDate);
     
@@ -563,13 +599,12 @@ export const assignPlanToUser = async (req, res) => {
 
     await user.save();
 
-    // Notify user
     await createNotification(
       user._id,
       "student",
       "success",
       "Plan Assigned! 📋",
-      `You have been assigned the "${plan.title}" plan by an administrator.`,
+      `You have been assigned the "${plan.title}" plan.`,
       "/student/dashboard",
       { planId, action: "plan_assigned" }
     );
@@ -590,7 +625,7 @@ export const assignPlanToUser = async (req, res) => {
   }
 };
 
-// ================= GET USER WITH PLAN STATUS =================
+// ================= GET USER INFO =================
 export const getMyInfo = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -609,7 +644,6 @@ export const getMyInfo = async (req, res) => {
     user.lastActivityAt = new Date();
     await user.save();
 
-    // Check plan status
     const planStatus = {
       hasPlan: !!user.planId,
       isActive: user.hasActivePlan ? user.hasActivePlan() : false,
@@ -640,24 +674,15 @@ export const registerLecturer = async (req, res) => {
       assignedSubjects
     } = req.body;
     
-    console.log("========== REGISTER LECTURER ==========");
-    console.log("Name:", name);
-    console.log("Email:", email);
-    console.log("Program ID:", programId);
-    console.log("Course ID:", courseId);
-    
-    // Validation
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Name, email, and password are required" });
     }
     
-    // Check existing user
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ message: "User already exists with this email" });
     }
     
-    // Validate program
     let validProgramId = null;
     if (programId && programId !== "undefined" && programId !== "null" && programId !== "") {
       const programExists = await Program.findById(programId);
@@ -667,7 +692,6 @@ export const registerLecturer = async (req, res) => {
       validProgramId = programId;
     }
     
-    // Validate course
     let validCourseId = null;
     if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
       const courseExists = await Course.findById(courseId);
@@ -679,7 +703,6 @@ export const registerLecturer = async (req, res) => {
     
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Process assignedSubjects
     let validSubjectIds = [];
     if (assignedSubjects) {
       let subjectsArray = [];
@@ -699,16 +722,14 @@ export const registerLecturer = async (req, res) => {
             const subject = await Subject.findById(subjectId);
             if (subject) {
               validSubjectIds.push(subject._id);
-              console.log(`✅ Subject added: ${subject.name}`);
             }
           } catch (err) {
-            console.log(`❌ Error finding subject:`, err.message);
+            console.log(`Error finding subject:`, err.message);
           }
         }
       }
     }
     
-    // Create the lecturer
     const user = new User({
       name,
       email,
@@ -733,10 +754,6 @@ export const registerLecturer = async (req, res) => {
     
     await user.save();
     
-    console.log(`✅ Lecturer created: ${user._id}`);
-    console.log(`✅ Assigned ${validSubjectIds.length} subjects to lecturer`);
-    
-    // Send notifications
     await createNotification(
       user._id,
       "lecturer",
@@ -747,7 +764,6 @@ export const registerLecturer = async (req, res) => {
       { action: "welcome" }
     );
     
-    // Notify admins
     const adminUsers = await User.find({ role: "admin" });
     for (const admin of adminUsers) {
       await createNotification(
@@ -755,7 +771,7 @@ export const registerLecturer = async (req, res) => {
         "admin",
         "info",
         "New Lecturer Added",
-        `${name} (${email}) has been added as a new lecturer with ${validSubjectIds.length} subject(s).`,
+        `${name} (${email}) has been added as a new lecturer.`,
         "/admin/users",
         { userId: user._id, action: "new_lecturer" }
       );
@@ -798,7 +814,6 @@ export const forgotPassword = async (req, res) => {
     user.resetTokenExpire = Date.now() + 1000 * 60 * 15;
     await user.save();
 
-    // Send password reset email via SendGrid
     await sendPasswordResetEmail(user.email, user.name, token);
 
     res.json({
@@ -858,7 +873,7 @@ export const updateActivity = async (req, res) => {
   }
 };
 
-// ================= ASSIGN PROGRAM (Updated) =================
+// ================= ASSIGN PROGRAM =================
 export const assignProgram = async (req, res) => {
   try {
     const { programId } = req.body;
