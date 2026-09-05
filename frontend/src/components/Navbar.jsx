@@ -69,6 +69,20 @@ const Navbar = () => {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalMessage, setApprovalMessage] = useState("");
   const [registeredUser, setRegisteredUser] = useState(null);
+  
+  // ================= GOOGLE SIGNUP FORM STATE =================
+  const [googleSignupForm, setGoogleSignupForm] = useState({
+    name: "",
+    email: "",
+    programId: "",
+    courseId: "",
+    userType: ""
+  });
+  const [showGoogleSignupForm, setShowGoogleSignupForm] = useState(false);
+  const [googleSignupPrograms, setGoogleSignupPrograms] = useState([]);
+  const [googleSignupCourses, setGoogleSignupCourses] = useState([]);
+  const [loadingGoogleSignupPrograms, setLoadingGoogleSignupPrograms] = useState(false);
+  const [loadingGoogleSignupCourses, setLoadingGoogleSignupCourses] = useState(false);
 
   // ========== Define isAuthPage ==========
   const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
@@ -93,6 +107,26 @@ const Navbar = () => {
       fetchPrograms();
     }
   }, [isSignup]);
+
+  // Fetch programs for Google signup
+  useEffect(() => {
+    if (showGoogleSignupForm) {
+      const fetchPrograms = async () => {
+        try {
+          setLoadingGoogleSignupPrograms(true);
+          const res = await API.get("/programs/public");
+          const activePrograms = (res.data || []).filter(p => p.isActive !== false);
+          setGoogleSignupPrograms(activePrograms);
+        } catch (err) {
+          console.error("Error fetching programs:", err);
+          toast.error("Failed to load programs");
+        } finally {
+          setLoadingGoogleSignupPrograms(false);
+        }
+      };
+      fetchPrograms();
+    }
+  }, [showGoogleSignupForm]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -301,12 +335,21 @@ const Navbar = () => {
     
     if (source === "phone") {
       setShowRegistrationSourceModal(false);
-      handleAlveolyRegistration("phone", "");
+      // Check if this is from Google signup or regular signup
+      if (pendingGoogleCredential) {
+        handleGoogleSignupComplete("alveoly_student", "phone", "");
+      } else {
+        handleAlveolyRegistration("phone", "");
+      }
     } else {
       setShowRegistrationSourceModal(false);
       const details = prompt("Please provide details about how you registered with Alveoly (e.g., through a friend, social media, event, etc.):");
       if (details && details.trim()) {
-        handleAlveolyRegistration("other", details.trim());
+        if (pendingGoogleCredential) {
+          handleGoogleSignupComplete("alveoly_student", "other", details.trim());
+        } else {
+          handleAlveolyRegistration("other", details.trim());
+        }
       } else {
         toast.error("Registration details are required");
         setShowRegistrationSourceModal(true);
@@ -323,6 +366,7 @@ const Navbar = () => {
       
       setPendingGoogleCredential(idToken);
       
+      // First, try to login with Google
       try {
         const result = await googleLogin(idToken);
         
@@ -359,6 +403,7 @@ const Navbar = () => {
         setShowLoginModal(false);
         setPendingGoogleCredential(null);
       } catch (err) {
+        // If user doesn't exist, show user type selection
         if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
           setShowUserTypeModal(true);
           setGoogleLoading(false);
@@ -388,15 +433,72 @@ const Navbar = () => {
     setShowUserTypeModal(false);
     
     if (selectedUserType === "alveoly_student") {
-      setShowRegistrationSourceModal(true);
+      // For Alveoly students, show the Google signup form to collect program and course
+      setShowGoogleSignupForm(true);
+      setGoogleSignupForm({
+        name: "",
+        email: "",
+        programId: "",
+        courseId: "",
+        userType: "alveoly_student"
+      });
     } else {
-      await handleGoogleSignupComplete(selectedUserType, "none", "");
+      // For Non-Alveoly students, complete signup directly
+      await handleGoogleSignupComplete("non_alveoly_student", "none", "");
     }
   };
 
+  // ================= HANDLE GOOGLE SIGNUP FORM SUBMIT =================
+  const handleGoogleSignupFormSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!googleSignupForm.name) {
+      toast.error("Please enter your full name");
+      return;
+    }
+    
+    if (!googleSignupForm.programId) {
+      toast.error("Please select a program");
+      return;
+    }
+    
+    if (!googleSignupForm.courseId) {
+      toast.error("Please select a course");
+      return;
+    }
+    
+    // Show registration source modal for Alveoly students
+    setShowGoogleSignupForm(false);
+    setShowRegistrationSourceModal(true);
+  };
+
+  // ================= HANDLE GOOGLE SIGNUP PROGRAM CHANGE =================
+  const handleGoogleSignupProgramChange = async (programId) => {
+    setGoogleSignupForm({ ...googleSignupForm, programId, courseId: "" });
+    setGoogleSignupCourses([]);
+    
+    if (programId && programId !== "") {
+      try {
+        setLoadingGoogleSignupCourses(true);
+        const res = await API.get(`/courses/public/program/${programId}`);
+        const coursesData = Array.isArray(res.data) ? res.data : [];
+        setGoogleSignupCourses(coursesData);
+      } catch (err) {
+        console.error("Error fetching courses:", err);
+        toast.error("Failed to load courses");
+      } finally {
+        setLoadingGoogleSignupCourses(false);
+      }
+    }
+  };
+
+  // ================= COMPLETE GOOGLE SIGNUP =================
   const handleGoogleSignupComplete = async (userType, source, details) => {
     try {
       setGoogleLoading(true);
+      
+      // Get the name from the form or from Google
+      let name = googleSignupForm.name || "";
       
       const payload = {
         idToken: pendingGoogleCredential,
@@ -406,11 +508,26 @@ const Navbar = () => {
       if (userType === "alveoly_student") {
         payload.registrationSource = source;
         payload.registrationDetails = details || "";
+        // Use name from the form
+        if (googleSignupForm.name) {
+          payload.name = googleSignupForm.name.trim();
+        }
+      } else {
+        payload.registrationSource = "none";
+        payload.registrationDetails = "";
       }
       
-      const result = await googleLogin(payload.idToken, payload.userType, payload.registrationSource, payload.registrationDetails);
+      console.log("Google signup payload:", payload);
+      
+      const result = await googleLogin(
+        payload.idToken, 
+        payload.userType, 
+        payload.registrationSource, 
+        payload.registrationDetails
+      );
       
       setShowRegistrationSourceModal(false);
+      setShowGoogleSignupForm(false);
       setPendingGoogleCredential(null);
       setSelectedUserType("");
       setShowLoginModal(false);
@@ -441,7 +558,7 @@ const Navbar = () => {
       }
       toast.success("Account created successfully!");
     } catch (err) {
-      console.error("Google signup with user type error:", err);
+      console.error("Google signup complete error:", err);
       toast.error(err.response?.data?.message || "Failed to complete signup");
     } finally {
       setGoogleLoading(false);
@@ -669,7 +786,7 @@ const Navbar = () => {
         )}
       </nav>
 
-      {/* ==================== LOGIN/SIGNUP MODAL - UWORLD STYLE ==================== */}
+      {/* ==================== LOGIN/SIGNUP MODAL ==================== */}
       {showLoginModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
@@ -1113,6 +1230,99 @@ const Navbar = () => {
                 "Continue"
               )}
             </button>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ==================== GOOGLE SIGNUP FORM MODAL ==================== */}
+      {showGoogleSignupForm && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-8 max-h-[90vh] overflow-y-auto"
+          >
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center mx-auto mb-4">
+                <FaUserGraduate className="text-3xl text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Complete Your Profile</h2>
+              <p className="text-gray-500 dark:text-gray-400 mt-2">
+                Please provide your details to complete registration
+              </p>
+            </div>
+
+            <form onSubmit={handleGoogleSignupFormSubmit} className="space-y-4">
+              <div className="relative">
+                <FaUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+                <input
+                  type="text"
+                  placeholder="Full Name"
+                  value={googleSignupForm.name}
+                  onChange={(e) => setGoogleSignupForm({ ...googleSignupForm, name: e.target.value })}
+                  required
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm transition-all"
+                />
+              </div>
+
+              <div className="relative">
+                <FaBook className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+                <select
+                  value={googleSignupForm.programId}
+                  onChange={(e) => handleGoogleSignupProgramChange(e.target.value)}
+                  required
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white appearance-none cursor-pointer text-sm transition-all"
+                  disabled={loadingGoogleSignupPrograms}
+                >
+                  <option value="">
+                    {loadingGoogleSignupPrograms ? "Loading programs..." : "Select Your Program"}
+                  </option>
+                  {googleSignupPrograms.map((program) => (
+                    <option key={program._id} value={program._id}>
+                      {program.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {googleSignupForm.programId && (
+                <div className="relative">
+                  <FaGraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
+                  <select
+                    value={googleSignupForm.courseId}
+                    onChange={(e) => setGoogleSignupForm({ ...googleSignupForm, courseId: e.target.value })}
+                    required
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white appearance-none cursor-pointer text-sm transition-all"
+                    disabled={loadingGoogleSignupCourses}
+                  >
+                    <option value="">
+                      {loadingGoogleSignupCourses ? "Loading courses..." : "Select Your Course"}
+                    </option>
+                    {googleSignupCourses.map((course) => (
+                      <option key={course._id} value={course._id}>
+                        {course.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={googleLoading || loadingGoogleSignupPrograms || !googleSignupForm.courseId}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 shadow-lg shadow-indigo-500/25"
+              >
+                {googleLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <FaSpinner className="animate-spin" />
+                    Processing...
+                  </span>
+                ) : (
+                  "Continue"
+                )}
+              </button>
+            </form>
           </motion.div>
         </div>
       )}
