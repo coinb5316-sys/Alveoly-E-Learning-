@@ -316,67 +316,67 @@ const Navbar = () => {
 
   // ================= HANDLE GOOGLE AUTH =================
   const handleGoogleAuth = async (credentialResponse) => {
+  try {
+    setGoogleLoading(true);
+    const idToken = credentialResponse?.credential;
+    if (!idToken) throw new Error("No Google credential received");
+    
+    setPendingGoogleCredential(idToken);
+    
     try {
-      setGoogleLoading(true);
-      const idToken = credentialResponse?.credential;
-      if (!idToken) throw new Error("No Google credential received");
+      const result = await googleLogin(idToken);
       
-      setPendingGoogleCredential(idToken);
-      
-      try {
-        const result = await googleLogin(idToken);
-        
-        // Check if user needs approval
-        if (result.requiresApproval) {
-          setShowApprovalModal(true);
-          setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
-          setShowLoginModal(false);
-          setGoogleLoading(false);
-          setPendingGoogleCredential(null);
-          return;
-        }
-        
-        // Check if user needs to select plan (non-alveoly students)
-        if (result.requiresPlan) {
-          navigate("/student/plans");
-          toast.info("Please select a plan to continue");
-          setShowLoginModal(false);
-          setGoogleLoading(false);
-          setPendingGoogleCredential(null);
-          return;
-        }
-        
-        if (result.user?.role === "admin") {
-          navigate("/admin");
-        } else if (result.user?.role === "lecturer") {
-          navigate("/lecturer");
-        } else if (result.requiresProgram) {
-          navigate("/select-program");
-        } else {
-          navigate("/student/dashboard");
-        }
-        toast.success("Login successful!");
+      // Check if user needs approval
+      if (result.requiresApproval) {
+        setShowApprovalModal(true);
+        setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
         setShowLoginModal(false);
+        setGoogleLoading(false);
         setPendingGoogleCredential(null);
-      } catch (err) {
-        if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
-          setShowUserTypeModal(true);
-          setGoogleLoading(false);
-        } else if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
-          setShowApprovalModal(true);
-          setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
-          setGoogleLoading(false);
-        } else {
-          throw err;
-        }
+        return;
       }
-    } catch (err) {
-      console.error("Google auth error:", err);
-      toast.error(err.response?.data?.message || "Google authentication failed");
-      setGoogleLoading(false);
+      
+      // Check if user needs to select plan (non-alveoly students)
+      if (result.requiresPlan) {
+        navigate("/student/plans");
+        toast.info("Please select a plan to continue");
+        setShowLoginModal(false);
+        setGoogleLoading(false);
+        setPendingGoogleCredential(null);
+        return;
+      }
+      
+      if (result.user?.role === "admin") {
+        navigate("/admin");
+      } else if (result.user?.role === "lecturer") {
+        navigate("/lecturer");
+      } else if (result.requiresProgram) {
+        navigate("/select-program");
+      } else {
+        navigate("/student/dashboard");
+      }
+      toast.success("Login successful!");
+      setShowLoginModal(false);
       setPendingGoogleCredential(null);
+    } catch (err) {
+      if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
+        setShowUserTypeModal(true);
+        setGoogleLoading(false);
+      } else if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
+        setShowApprovalModal(true);
+        setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+        setGoogleLoading(false);
+      } else {
+        throw err;
+      }
     }
-  };
+  } catch (err) {
+    console.error("Google auth error:", err);
+    toast.error(err.response?.data?.message || "Google authentication failed");
+    setGoogleLoading(false);
+    setPendingGoogleCredential(null);
+  }
+};
 
   // ================= COMPLETE GOOGLE SIGNUP WITH USER TYPE =================
   const handleGoogleSignupWithType = async () => {

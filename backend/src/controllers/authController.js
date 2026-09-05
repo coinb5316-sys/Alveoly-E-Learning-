@@ -47,8 +47,7 @@ export const registerAlveolyStudent = async (req, res) => {
       });
     }
 
-    // Check if user exists
-    const userExists = await User.findOne({ email });
+    const userExists = await User.findOne({ email: email.toLowerCase() });
     if (userExists) {
       return res.status(400).json({ 
         success: false,
@@ -65,7 +64,7 @@ export const registerAlveolyStudent = async (req, res) => {
 
     const user = await User.create({
       name: name.trim(),
-      email: email.trim().toLowerCase(),
+      email: email.toLowerCase(),
       password: hashedPassword,
       userType: userType || "alveoly_student",
       registrationSource: registrationSource || "other",
@@ -82,7 +81,8 @@ export const registerAlveolyStudent = async (req, res) => {
 
     // Send approval email
     try {
-      await sendApprovalEmail(user.email, user.name, approvalToken);
+      const emailSent = await sendApprovalEmail(user.email, user.name, approvalToken);
+      console.log("📧 Approval email sent:", emailSent);
     } catch (emailErr) {
       console.error("Email error:", emailErr.message);
     }
@@ -108,7 +108,6 @@ export const registerAlveolyStudent = async (req, res) => {
       );
     }
 
-    // Return success
     res.status(201).json({
       success: true,
       message: "Registration successful. Please wait for admin approval. An email will be sent with your approval token.",
@@ -145,8 +144,7 @@ export const registerNonAlveolyStudent = async (req, res) => {
       });
     }
 
-    // Check if user exists
-    const userExists = await User.findOne({ email });
+    const userExists = await User.findOne({ email: email.toLowerCase() });
     if (userExists) {
       return res.status(400).json({ 
         success: false,
@@ -158,7 +156,7 @@ export const registerNonAlveolyStudent = async (req, res) => {
 
     const user = await User.create({
       name: name.trim(),
-      email: email.trim().toLowerCase(),
+      email: email.toLowerCase(),
       password: hashedPassword,
       userType: userType || "non_alveoly_student",
       registrationSource: "none",
@@ -195,7 +193,8 @@ export const registerNonAlveolyStudent = async (req, res) => {
       success: true,
       message: "Registration successful. Please login and select a plan.",
       userId: user._id,
-      email: user.email
+      email: user.email,
+      requiresPlan: true // Add this flag
     });
 
   } catch (err) {
@@ -259,74 +258,6 @@ export const verifyApprovalToken = async (req, res) => {
   }
 };
 
-// ================= COMPLETE REGISTRATION - SELECT PROGRAM =================
-export const completeRegistration = async (req, res) => {
-  try {
-    const { userId, programId, courseId } = req.body;
-
-    if (!userId || !programId) {
-      return res.status(400).json({ message: "User ID and Program are required" });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    if (user.userType === "alveoly_student" && !user.isApproved) {
-      return res.status(403).json({ 
-        message: "Your account is pending approval. Please wait for admin approval." 
-      });
-    }
-
-    const program = await Program.findById(programId);
-    if (!program || program.isActive === false) {
-      return res.status(400).json({ message: "Invalid or inactive program selected" });
-    }
-
-    let validCourseId = courseId;
-    if (!validCourseId) {
-      const firstCourse = await Course.findOne({ programId: programId });
-      if (firstCourse) {
-        validCourseId = firstCourse._id;
-      }
-    }
-
-    user.programId = programId;
-    user.courseId = validCourseId || null;
-    user.registrationCompleted = true;
-    await user.save();
-
-    const needsPlan = user.userType === "non_alveoly_student";
-
-    await createNotification(
-      user._id,
-      "student",
-      "success",
-      "Program Selected! 📚",
-      `You have been enrolled in ${program.name}${validCourseId ? ' with course' : ''}.`,
-      needsPlan ? "/student/plans" : "/student/dashboard",
-      { programId, courseId: validCourseId, action: "program_selected" }
-    );
-
-    const populatedUser = await User.findById(user._id)
-      .select("-password")
-      .populate("programId", "name code isActive")
-      .populate("courseId", "name");
-
-    res.json({
-      success: true,
-      message: "Registration completed successfully",
-      user: populatedUser,
-      needsPlan
-    });
-
-  } catch (err) {
-    console.error("COMPLETE REGISTRATION ERROR:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
 // ================= GOOGLE LOGIN =================
 export const googleLogin = async (req, res) => {
   try {
@@ -344,7 +275,7 @@ export const googleLogin = async (req, res) => {
     const payload = ticket.getPayload();
     const { email, name, picture } = payload;
 
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: email.toLowerCase() });
 
     if (user) {
       const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
@@ -368,15 +299,18 @@ export const googleLogin = async (req, res) => {
       const token = generateToken(user, user.activeSession);
       const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
       const requiresApproval = !populatedUser.isApproved && populatedUser.userType === "alveoly_student";
+      const requiresPlan = populatedUser.userType === "non_alveoly_student" && !populatedUser.planId;
 
       return res.json({ 
         token, 
         user: populatedUser, 
         requiresProgram,
-        requiresApproval
+        requiresApproval,
+        requiresPlan
       });
     }
 
+    // NEW USER - Check if userType is provided
     if (!userType) {
       return res.status(404).json({ 
         message: "Please select your user type to create an account.",
@@ -385,9 +319,9 @@ export const googleLogin = async (req, res) => {
     }
 
     let newUserData = {
-      name,
-      email,
-      avatar: picture,
+      name: name || email.split('@')[0],
+      email: email.toLowerCase(),
+      avatar: picture || "",
       userType: userType,
       registrationCompleted: false,
       lastLoginAt: new Date(),
@@ -409,14 +343,16 @@ export const googleLogin = async (req, res) => {
         registrationCompleted: false
       };
 
+      // Send approval email for Alveoly students
       try {
-        await sendApprovalEmail(email, name, approvalToken);
-        await sendWelcomeEmail(email, name, "alveoly_student");
+        await sendApprovalEmail(email, name || email.split('@')[0], approvalToken);
+        await sendWelcomeEmail(email, name || email.split('@')[0], "alveoly_student");
       } catch (emailErr) {
         console.error("Email error:", emailErr.message);
       }
       
     } else {
+      // Non-alveoly student - auto-approved
       newUserData = {
         ...newUserData,
         registrationSource: "none",
@@ -424,8 +360,9 @@ export const googleLogin = async (req, res) => {
         isApproved: true
       };
       
+      // Send welcome email for Non-alveoly students
       try {
-        await sendWelcomeEmail(email, name, "non_alveoly_student");
+        await sendWelcomeEmail(email, name || email.split('@')[0], "non_alveoly_student");
       } catch (emailErr) {
         console.error("Email error:", emailErr.message);
       }
@@ -440,7 +377,7 @@ export const googleLogin = async (req, res) => {
         "admin",
         "info",
         `New ${userType === "alveoly_student" ? "Alveoly Student (Pending)" : "Non-Alveoly Student"}`,
-        `${name} (${email}) has registered.`,
+        `${name || email} (${email}) has registered.`,
         "/admin/users",
         { userId: newUser._id, action: "new_user" }
       );
@@ -467,7 +404,7 @@ export const googleLogin = async (req, res) => {
     const token = generateToken(newUser, newUser.activeSession);
     const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
     const requiresApproval = !populatedUser.isApproved && populatedUser.userType === "alveoly_student";
-    const requiresPlan = populatedUser.userType === "non_alveoly_student";
+    const requiresPlan = populatedUser.userType === "non_alveoly_student" && !populatedUser.planId;
 
     return res.json({ 
       token, 
@@ -494,11 +431,12 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Email & password required" });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    // Check if user has password
     if (!user.password) {
       return res.status(400).json({ message: "Please login with Google" });
     }
@@ -508,6 +446,7 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    // Check if user is approved (for alveoly students)
     if (user.userType === "alveoly_student" && !user.isApproved) {
       return res.status(403).json({ 
         message: "Your account is pending approval. Please wait for admin approval.",
@@ -678,7 +617,7 @@ export const registerLecturer = async (req, res) => {
       return res.status(400).json({ message: "Name, email, and password are required" });
     }
     
-    const userExists = await User.findOne({ email });
+    const userExists = await User.findOne({ email: email.toLowerCase() });
     if (userExists) {
       return res.status(400).json({ message: "User already exists with this email" });
     }
@@ -732,7 +671,7 @@ export const registerLecturer = async (req, res) => {
     
     const user = new User({
       name,
-      email,
+      email: email.toLowerCase(),
       password: hashedPassword,
       role: "lecturer",
       programId: validProgramId,
@@ -806,7 +745,7 @@ export const registerLecturer = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ message: "No user found" });
 
     const token = crypto.randomBytes(32).toString("hex");
