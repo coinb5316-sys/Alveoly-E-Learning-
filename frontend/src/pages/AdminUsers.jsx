@@ -1,4 +1,4 @@
-// AdminUsers.jsx - Updated with Plan Assignment feature
+// AdminUsers.jsx - Updated with Registration Details Display
 import { useEffect, useState } from "react";
 import { 
   FaTrash, 
@@ -35,6 +35,9 @@ import {
   FaExclamationTriangle,
   FaCalendar,
   FaRocket,
+  FaInfoCircle,
+  FaClipboardList,
+  FaEye,
 } from "react-icons/fa";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -53,6 +56,7 @@ const AdminUsers = () => {
   const [showAddLecturerModal, setShowAddLecturerModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [showAssignPlanModal, setShowAssignPlanModal] = useState(false);
+  const [showRegistrationDetailsModal, setShowRegistrationDetailsModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [expandedLecturer, setExpandedLecturer] = useState(null);
   const [selectedPlanForUser, setSelectedPlanForUser] = useState("");
@@ -95,7 +99,11 @@ const AdminUsers = () => {
         planName: user.planId?.title || "No Plan",
         planStatus: user.isPlanActive ? "Active" : 
                     user.planId ? "Expired" : "None",
-        isApprovedDisplay: user.isApproved ? "✅ Approved" : "⏳ Pending"
+        isApprovedDisplay: user.isApproved ? "✅ Approved" : "⏳ Pending",
+        registrationSourceDisplay: user.registrationSource === "phone" ? "📱 Phone (0549556116)" :
+                                   user.registrationSource === "other" ? "📝 Other" :
+                                   "❌ Not specified",
+        registrationDetailsDisplay: user.registrationDetails || "No details provided"
       }));
       
       setUsers(formattedUsers);
@@ -239,7 +247,7 @@ const AdminUsers = () => {
   const handleApproveUser = async (userId) => {
     try {
       setLoading(true);
-      const response = await axios.patch(`/users/${userId}/approve`);
+      const response = await axios.patch(`/auth/admin/approve/${userId}`);
       
       if (response.data.success) {
         toast.success("User approved successfully!");
@@ -253,6 +261,12 @@ const AdminUsers = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ================= VIEW REGISTRATION DETAILS =================
+  const viewRegistrationDetails = (user) => {
+    setSelectedUser(user);
+    setShowRegistrationDetailsModal(true);
   };
 
   // ================= UPDATE USER =================
@@ -723,189 +737,163 @@ const AdminUsers = () => {
                   <th className="px-6 py-4 text-left font-medium">Email</th>
                   <th className="px-6 py-4 text-left font-medium">User Type</th>
                   <th className="px-6 py-4 text-left font-medium">Status</th>
+                  <th className="px-6 py-4 text-left font-medium">Registration Source</th>
                   <th className="px-6 py-4 text-left font-medium">Program</th>
                   <th className="px-6 py-4 text-left font-medium">Course</th>
                   <th className="px-6 py-4 text-left font-medium">Plan</th>
-                  <th className="px-6 py-4 text-left font-medium">Assigned Subjects</th>
                   <th className="px-6 py-4 text-left font-medium">Role</th>
                   <th className="px-6 py-4 text-left font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {filteredUsers.map((user) => {
-                  const assignedSubjects = getAssignedSubjectsList(user);
-                  const isExpanded = expandedLecturer === user._id;
                   const isPending = user.userType === "alveoly_student" && !user.isApproved;
+                  const hasRegistrationDetails = user.registrationSource === "other" && user.registrationDetails;
                   
                   return (
-                    <>
-                      <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${
-                              isPending ? "from-amber-500 to-amber-600" :
-                              user.role === "admin" ? "from-purple-500 to-purple-600" :
-                              user.role === "lecturer" ? "from-blue-500 to-blue-600" : "from-green-500 to-green-600"
-                            }`}>
-                              <span className="text-white font-semibold text-sm">{user.name?.charAt(0).toUpperCase()}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
-                              {isPending && (
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  <FaClock className="h-3 w-3 text-amber-500" />
-                                  <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending Approval</span>
-                                </div>
-                              )}
-                            </div>
+                    <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${
+                            isPending ? "from-amber-500 to-amber-600" :
+                            user.role === "admin" ? "from-purple-500 to-purple-600" :
+                            user.role === "lecturer" ? "from-blue-500 to-blue-600" : "from-green-500 to-green-600"
+                          }`}>
+                            <span className="text-white font-semibold text-sm">{user.name?.charAt(0).toUpperCase()}</span>
                           </div>
-                        </td>
-                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                          <div>
+                            <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
+                            {isPending && (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <FaClock className="h-3 w-3 text-amber-500" />
+                                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending Approval</span>
+                              </div>
+                            )}
+                            {hasRegistrationDetails && (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <FaInfoCircle className="h-3 w-3 text-blue-500" />
+                                <span className="text-xs text-blue-600 dark:text-blue-400">Has registration details</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-2">
+                          <FaEnvelope className="h-3.5 w-3.5 text-gray-400" />
+                          <span>{user.email}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${getUserTypeBadgeStyle(user.userType)}`}>
+                          {getUserTypeIcon(user.userType)}
+                          {user.userTypeDisplay}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {isPending ? (
                           <div className="flex items-center gap-2">
-                            <FaEnvelope className="h-3.5 w-3.5 text-gray-400" />
-                            <span>{user.email}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${getUserTypeBadgeStyle(user.userType)}`}>
-                            {getUserTypeIcon(user.userType)}
-                            {user.userTypeDisplay}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {isPending ? (
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-                                <FaClock className="h-3 w-3" />
-                                Pending
-                              </span>
-                              <button
-                                onClick={() => handleApproveUser(user._id)}
-                                className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium"
-                              >
-                                Approve
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800">
-                              <FaCheckCircle className="h-3 w-3" />
-                              Approved
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                              <FaClock className="h-3 w-3" />
+                              Pending
                             </span>
+                            <button
+                              onClick={() => handleApproveUser(user._id)}
+                              className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 text-sm font-medium"
+                            >
+                              Approve
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800">
+                            <FaCheckCircle className="h-3 w-3" />
+                            Approved
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs">{user.registrationSourceDisplay}</span>
+                          {user.registrationSource === "other" && user.registrationDetails && (
+                            <button
+                              onClick={() => viewRegistrationDetails(user)}
+                              className="text-blue-500 hover:text-blue-700 transition-colors"
+                              title="View registration details"
+                            >
+                              <FaEye className="h-3.5 w-3.5" />
+                            </button>
                           )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <FaBuilding className="h-3.5 w-3.5 text-gray-400" />
-                            <span className="text-gray-600 dark:text-gray-400">{user.programId?.name || "—"}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <FaGraduationCap className="h-3.5 w-3.5 text-gray-400" />
-                            <span className="text-gray-600 dark:text-gray-400">{user.courseId?.name || "—"}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            {user.planId ? (
-                              <>
-                                <FaCrown className="h-3.5 w-3.5 text-yellow-500" />
-                                <span className="text-gray-600 dark:text-gray-400">{user.planId.title}</span>
-                                {user.isPlanActive ? (
-                                  <span className="text-xs text-green-600 dark:text-green-400 font-medium">Active</span>
-                                ) : (
-                                  <span className="text-xs text-red-600 dark:text-red-400 font-medium">Expired</span>
-                                )}
-                              </>
-                            ) : (
-                              <span className="text-gray-400 dark:text-gray-500">No Plan</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {user.role === "lecturer" ? (
-                            <div>
-                              <button
-                                onClick={() => toggleLecturerExpanded(user._id)}
-                                className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                              >
-                                <FaBook className="h-3.5 w-3.5" />
-                                <span className="text-sm font-medium">
-                                  {assignedSubjects.length} subject{assignedSubjects.length !== 1 ? 's' : ''}
-                                </span>
-                                <svg className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                            </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <FaBuilding className="h-3.5 w-3.5 text-gray-400" />
+                          <span className="text-gray-600 dark:text-gray-400">{user.programId?.name || "—"}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <FaGraduationCap className="h-3.5 w-3.5 text-gray-400" />
+                          <span className="text-gray-600 dark:text-gray-400">{user.courseId?.name || "—"}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {user.planId ? (
+                            <>
+                              <FaCrown className="h-3.5 w-3.5 text-yellow-500" />
+                              <span className="text-gray-600 dark:text-gray-400">{user.planId.title}</span>
+                              {user.isPlanActive ? (
+                                <span className="text-xs text-green-600 dark:text-green-400 font-medium">Active</span>
+                              ) : (
+                                <span className="text-xs text-red-600 dark:text-red-400 font-medium">Expired</span>
+                              )}
+                            </>
                           ) : (
-                            <span className="text-gray-400 dark:text-gray-500">—</span>
+                            <span className="text-gray-400 dark:text-gray-500">No Plan</span>
                           )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            {getRoleIcon(user.role)}
-                            <select 
-                              value={user.role} 
-                              onChange={(e) => handleRoleChange(user._id, e.target.value)} 
-                              className={`px-3 py-1.5 rounded-lg text-sm font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${getRoleBadgeStyle(user.role)}`}
-                            >
-                              <option value="student">Student</option>
-                              <option value="lecturer">Lecturer</option>
-                              <option value="admin">Administrator</option>
-                            </select>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {!isPending && user.role === "student" && (
-                              <button 
-                                onClick={() => openAssignPlanModal(user)} 
-                                className="flex items-center gap-1 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-950/50 transition-colors text-sm font-medium"
-                                title="Assign Plan"
-                              >
-                                <FaCrown className="h-3 w-3" />
-                              </button>
-                            )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          {getRoleIcon(user.role)}
+                          <select 
+                            value={user.role} 
+                            onChange={(e) => handleRoleChange(user._id, e.target.value)} 
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${getRoleBadgeStyle(user.role)}`}
+                          >
+                            <option value="student">Student</option>
+                            <option value="lecturer">Lecturer</option>
+                            <option value="admin">Administrator</option>
+                          </select>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {user.role === "student" && (
                             <button 
-                              onClick={() => openEditModal(user)} 
-                              className="flex items-center gap-1 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
+                              onClick={() => openAssignPlanModal(user)} 
+                              className="flex items-center gap-1 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-950/50 transition-colors text-sm font-medium"
+                              title="Assign Plan"
                             >
-                              <FaEdit className="h-3 w-3" />
+                              <FaCrown className="h-3 w-3" />
                             </button>
-                            <button 
-                              onClick={() => handleDelete(user._id)} 
-                              className="flex items-center gap-1 px-2 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
-                            >
-                              <FaTrash className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      
-                      {isExpanded && user.role === "lecturer" && assignedSubjects.length > 0 && (
-                        <tr className="bg-gray-50 dark:bg-gray-800/30">
-                          <td colSpan="10" className="px-6 py-4">
-                            <div className="ml-12">
-                              <div className="flex items-center gap-2 mb-3">
-                                <FaBook className="h-4 w-4 text-blue-500" />
-                                <h4 className="font-medium text-gray-900 dark:text-gray-100">Assigned Subjects</h4>
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                {assignedSubjects.map((subject, idx) => (
-                                  <div key={idx} className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                                    <FaCheckCircle className="h-3.5 w-3.5 text-green-500" />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                                      {subject.name || subject._id}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
+                          )}
+                          <button 
+                            onClick={() => openEditModal(user)} 
+                            className="flex items-center gap-1 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
+                          >
+                            <FaEdit className="h-3 w-3" />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(user._id)} 
+                            className="flex items-center gap-1 px-2 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
+                          >
+                            <FaTrash className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -919,6 +907,64 @@ const AdminUsers = () => {
         <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
           <FaUsers className="h-12 w-12 text-gray-300 dark:text-gray-700 mb-3" />
           <p className="text-gray-500 dark:text-gray-400">No users found</p>
+        </div>
+      )}
+
+      {/* ================= REGISTRATION DETAILS MODAL ================= */}
+      {showRegistrationDetailsModal && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-md w-full p-6 shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                  <FaClipboardList className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Registration Details</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{selectedUser.name} - {selectedUser.email}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowRegistrationDetailsModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Registration Source</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{selectedUser.registrationSourceDisplay}</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Registration Details</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                  {selectedUser.registrationDetails || "No details provided"}
+                </p>
+              </div>
+
+              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">User Information</p>
+                <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                  <p><span className="font-medium">Name:</span> {selectedUser.name}</p>
+                  <p><span className="font-medium">Email:</span> {selectedUser.email}</p>
+                  <p><span className="font-medium">User Type:</span> {selectedUser.userTypeDisplay}</p>
+                  <p><span className="font-medium">Status:</span> {selectedUser.isApproved ? "Approved" : "Pending Approval"}</p>
+                  <p><span className="font-medium">Program:</span> {selectedUser.programName}</p>
+                  <p><span className="font-medium">Course:</span> {selectedUser.courseName}</p>
+                  <p><span className="font-medium">Plan:</span> {selectedUser.planName}</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowRegistrationDetailsModal(false)}
+                className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

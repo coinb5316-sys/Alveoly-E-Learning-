@@ -1,4 +1,4 @@
-// controllers/paymentController.js - FULLY UPDATED
+// controllers/paymentController.js - Updated with plan purchase for non-alveoly students
 import axios from "axios";
 import Payment from "../models/Payment.js";
 import Subject from "../models/Subject.js";
@@ -42,11 +42,14 @@ const calculateExpiry = (duration, unit) => {
 };
 
 // ================= PLAN PAYMENT =================
-// controllers/paymentController.js - Update initiatePlanPayment
 export const initiatePlanPayment = async (req, res) => {
   try {
-    const { planId } = req.body;
-    const user = req.user;
+    const { planId, userId } = req.body;
+    const user = req.user || (userId ? await User.findById(userId) : null);
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found. Please login first." });
+    }
 
     const plan = await Plan.findById(planId);
 
@@ -54,6 +57,7 @@ export const initiatePlanPayment = async (req, res) => {
       return res.status(404).json({ message: "Plan not found" });
     }
 
+    // Check if user already has an active plan
     const existingActivePlan = await Payment.findOne({
       userId: user._id,
       planId,
@@ -78,7 +82,6 @@ export const initiatePlanPayment = async (req, res) => {
       accessType: "plan",
     });
 
-    // ✅ CRITICAL: Use a single callback URL that definitely works
     const callbackUrl = `${process.env.CLIENT_URL}/payment-success?reference=${reference}`;
     
     console.log("Callback URL:", callbackUrl);
@@ -90,6 +93,11 @@ export const initiatePlanPayment = async (req, res) => {
         amount: plan.price * 100,
         reference,
         callback_url: callbackUrl,
+        metadata: {
+          planId: plan._id.toString(),
+          userId: user._id.toString(),
+          type: "plan"
+        }
       },
       {
         headers: {
@@ -105,75 +113,6 @@ export const initiatePlanPayment = async (req, res) => {
   } catch (err) {
     console.error("Plan payment initiation error:", err);
     res.status(500).json({ message: "Plan payment failed: " + err.message });
-  }
-};
-
-// ================= SUBJECT PAYMENT =================
-export const initiatePayment = async (req, res) => {
-  try {
-    const { subjectId } = req.body;
-    const user = req.user;
-
-    const subject = await Subject.findById(subjectId);
-
-    if (!subject) {
-      return res.status(404).json({ message: "Subject not found" });
-    }
-
-    // Prevent buying active subject again
-    const existing = await Payment.findOne({
-      userId: user._id,
-      subjectId,
-      status: "success",
-      expiresAt: { $gt: new Date() },
-    });
-
-    if (existing) {
-      return res.status(400).json({
-        message: "You already have access to this subject",
-      });
-    }
-
-    const reference = `subject_${Date.now()}_${user._id}_${subjectId}`;
-
-    await Payment.create({
-      userId: user._id,
-      subjectId,
-      amount: subject.price,
-      reference,
-      status: "pending",
-      accessType: "subject",
-    });
-
-    const callbackUrl = `${process.env.CLIENT_URL}/subject-payment-success?reference=${reference}&courseId=${subject.courseId}&subjectId=${subjectId}`;
-    
-    const response = await axios.post(
-      "https://api.paystack.co/transaction/initialize",
-      {
-        email: user.email,
-        amount: subject.price * 100,
-        reference,
-        callback_url: callbackUrl,
-        metadata: {
-          subjectId: subject._id.toString(),
-          userId: user._id.toString(),
-          type: "subject",
-        },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        },
-      }
-    );
-
-    res.json({
-      authorizationUrl: response.data.data.authorization_url,
-      reference,
-    });
-  } catch (err) {
-    console.error("Payment Init Error:", err.response?.data || err.message);
-    res.status(500).json({ message: "Payment initialization failed: " + err.message });
   }
 };
 
@@ -202,7 +141,8 @@ export const verifyPayment = async (req, res) => {
     }
 
     const payment = await Payment.findOne({ reference })
-      .populate("userId", "name email");
+      .populate("userId", "name email")
+      .populate("planId", "title duration durationUnit price");
 
     if (!payment) {
       return res.status(404).json({ message: "Payment record not found" });
@@ -217,7 +157,7 @@ export const verifyPayment = async (req, res) => {
 
     // ================= PLAN =================
     if (payment.planId) {
-      const plan = await Plan.findById(payment.planId).populate("subjects");
+      const plan = await Plan.findById(payment.planId);
 
       if (!plan) {
         return res.status(404).json({ message: "Plan not found" });
@@ -227,14 +167,33 @@ export const verifyPayment = async (req, res) => {
       payment.expiresAt = expiresAt;
       await payment.save();
 
+      // Update user with plan
+      const user = await User.findById(payment.userId);
+      if (user) {
+        user.planId = plan._id;
+        user.planStartDate = new Date();
+        user.planExpiryDate = expiresAt;
+        user.isPlanActive = true;
+        user.subscriptionStatus = "active";
+        user.subscriptionExpiry = expiresAt;
+        
+        // If non-alveoly student, auto-approve
+        if (user.userType === "non_alveoly_student") {
+          user.isApproved = true;
+          user.registrationCompleted = true;
+        }
+        
+        await user.save();
+      }
+
       // Send notification to student
       await createNotification(
         payment.userId,
         "student",
         "success",
         "🎉 Plan Activated!",
-        `Your ${plan.title} plan has been activated successfully. You now have access to ${plan.subjects.length} subjects.`,
-        "/student/plans",
+        `Your ${plan.title} plan has been activated successfully.`,
+        "/student/dashboard",
         { planId: plan._id, planTitle: plan.title, amount: payment.amount, expiresAt }
       );
 
@@ -256,6 +215,7 @@ export const verifyPayment = async (req, res) => {
         success: true,
         message: "Plan activated successfully",
         expiresAt,
+        planTitle: plan.title
       });
     }
 
@@ -298,20 +258,6 @@ export const verifyPayment = async (req, res) => {
         { subjectId: subject._id, subjectName: subject.name, amount: payment.amount }
       );
 
-      // Notify admins about subject purchase
-      const adminUsers = await User.find({ role: "admin" });
-      for (const admin of adminUsers) {
-        await createNotification(
-          admin._id,
-          "admin",
-          "info",
-          "📖 New Subject Purchase",
-          `${payment.userId?.name || "A student"} purchased ${subject.name} for ₵${payment.amount}.`,
-          "/admin/payments",
-          { paymentId: payment._id, userId: payment.userId, subjectId: subject._id }
-        );
-      }
-
       return res.json({
         success: true,
         message: "Subject unlocked successfully",
@@ -326,7 +272,35 @@ export const verifyPayment = async (req, res) => {
   }
 };
 
-// ================= USER PAYMENTS =================
+// ================= GET PUBLIC PLANS (No Auth Required) =================
+export const getPublicPlans = async (req, res) => {
+  try {
+    const plans = await Plan.find({ isActive: true })
+      .populate("subjects", "name isPaid price")
+      .sort({ price: 1, createdAt: -1 });
+    
+    // Format plans for public display
+    const formattedPlans = plans.map(plan => ({
+      _id: plan._id,
+      title: plan.title,
+      price: plan.price,
+      duration: plan.duration,
+      durationUnit: plan.durationUnit,
+      subjects: plan.subjects || [],
+      subjectCount: plan.subjects?.length || 0,
+      isPopular: plan.isPopular || false,
+      features: plan.features || [],
+      description: plan.description || ""
+    }));
+    
+    res.json(formattedPlans);
+  } catch (err) {
+    console.error("Get Public Plans Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= GET MY PAYMENTS =================
 export const getMyPayments = async (req, res) => {
   try {
     const payments = await Payment.find({ userId: req.user._id })
@@ -355,7 +329,7 @@ export const getMyPayments = async (req, res) => {
   }
 };
 
-// ================= ADMIN PAYMENTS =================
+// ================= GET ALL PAYMENTS (Admin) =================
 export const getAllPayments = async (req, res) => {
   try {
     const payments = await Payment.find()
@@ -420,34 +394,6 @@ export const getPaymentByReference = async (req, res) => {
     res.json(payment);
   } catch (err) {
     console.error("Get payment by reference error:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// controllers/paymentController.js - Add this new function
-
-// ================= GET PUBLIC PLANS (No Auth Required) =================
-export const getPublicPlans = async (req, res) => {
-  try {
-    const plans = await Plan.find()
-      .populate("subjects", "name isPaid price")
-      .sort({ createdAt: -1 });
-    
-    // Format plans for public display
-    const formattedPlans = plans.map(plan => ({
-      _id: plan._id,
-      title: plan.title,
-      price: plan.price,
-      duration: plan.duration,
-      durationUnit: plan.durationUnit,
-      subjects: plan.subjects || [],
-      subjectCount: plan.subjects?.length || 0,
-      isPopular: plan.isPopular || false,
-    }));
-    
-    res.json(formattedPlans);
-  } catch (err) {
-    console.error("Get Public Plans Error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

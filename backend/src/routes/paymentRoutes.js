@@ -1,46 +1,39 @@
+// routes/paymentRoutes.js
 import express from "express";
 import {
-  deletePayment,
-  getAllPayments,
-  getMyPayments,
-  getPaymentByReference,
-  getPublicPlans,
   initiatePayment,
   initiatePlanPayment,
   verifyPayment,
+  getMyPayments,
+  getAllPayments,
+  deletePayment,
+  getPaymentByReference,
+  getPublicPlans
 } from "../controllers/paymentController.js";
-
-import { protect } from "../middleware/authMiddleware.js";
-import { requireActivePlan } from "../middleware/planMiddleware.js"; // ✅ NEW
+import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // ================= PUBLIC ROUTES =================
-router.get("/plans/public", getPublicPlans); // <-- ADD THIS ROUTE
+router.get("/plans/public", getPublicPlans);
 
-
-/**
- * ================= PAYMENT ROUTES =================
- */
-
-// Subject payment
-router.post("/initiate", protect, initiatePayment);
-
-// Plan payment
-router.post("/initiate-plan", protect, initiatePlanPayment);
-
-// Verify payment (public callback from Paystack)
-router.get("/verify", verifyPayment);
-
-// User payments history
+// ================= PROTECTED ROUTES =================
 router.get("/mine", protect, getMyPayments);
 
-// Admin payments (you can later restrict with role middleware)
-router.get("/", protect, getAllPayments);
+// ================= PLAN PAYMENT =================
+router.post("/initiate-plan", protect, initiatePlanPayment);
 
-router.delete("/:id", protect, deletePayment);
+// ================= SUBJECT PAYMENT =================
+router.post("/initiate", protect, initiatePayment);
 
-// In paymentRoutes.js, add:
+// ================= VERIFY PAYMENT =================
+router.get("/verify", verifyPayment);
+
+// ================= ADMIN ROUTES =================
+router.get("/all", protect, adminOnly, getAllPayments);
+router.delete("/:id", protect, adminOnly, deletePayment);
+
+// ================= GET BY REFERENCE =================
 router.get("/reference/:reference", protect, getPaymentByReference);
 
 export default router;

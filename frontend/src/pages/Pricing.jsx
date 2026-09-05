@@ -1,6 +1,6 @@
-// src/pages/Pricing.jsx - Public Pricing Page (No Cart)
+// src/pages/Pricing.jsx - Public Pricing Page with Plan Selection
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Crown,
@@ -28,6 +28,7 @@ import toast from "react-hot-toast";
 
 const Pricing = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +37,18 @@ const Pricing = () => {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [pendingPlanId, setPendingPlanId] = useState(null);
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [pendingUserId, setPendingUserId] = useState(null);
+
+  // Check if user came from registration
+  useEffect(() => {
+    const state = location.state;
+    if (state?.userId) {
+      setPendingUserId(state.userId);
+      if (state.message) {
+        toast.success(state.message);
+      }
+    }
+  }, [location]);
 
   // Fetch plans
   useEffect(() => {
@@ -55,7 +68,7 @@ const Pricing = () => {
     fetchPlans();
   }, []);
 
-  // Handle direct plan purchase (no cart)
+  // Handle plan purchase
   const handlePurchasePlan = async (plan) => {
     // Check if user is logged in
     if (!user) {
@@ -67,9 +80,13 @@ const Pricing = () => {
     try {
       setProcessingPayment(true);
       
+      // If user is a non-alveoly student who just registered, use their userId
+      const userId = pendingUserId || user._id;
+      
       // Initiate payment directly
       const response = await API.post("/payments/initiate-plan", {
         planId: plan._id,
+        userId: userId
       });
 
       // Redirect to payment gateway
@@ -111,6 +128,13 @@ const Pricing = () => {
           <p className="text-gray-500 dark:text-gray-400 mt-4 max-w-2xl mx-auto">
             Select the perfect plan to unlock premium content and accelerate your learning journey
           </p>
+          {pendingUserId && (
+            <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 max-w-md mx-auto">
+              <p className="text-sm text-green-700 dark:text-green-400">
+                ✅ Account created! Please select a plan to activate your account.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Loading State */}

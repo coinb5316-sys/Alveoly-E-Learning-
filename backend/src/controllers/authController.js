@@ -226,7 +226,8 @@ export const registerNonAlveolyStudent = async (req, res) => {
       message: "Registration successful. Please subscribe to a plan to activate your account.",
       userId: user._id,
       email: user.email,
-      requiresPlan: true
+      requiresPlan: true,
+      redirectTo: "/pricing" // Redirect to pricing page
     });
 
   } catch (err) {
@@ -291,6 +292,7 @@ export const assignPlanAfterPayment = async (req, res) => {
 
     await user.save();
 
+    // Create notification for user
     await createNotification(
       user._id,
       "student",
@@ -509,7 +511,8 @@ export const login = async (req, res) => {
       if (!user.isPlanActive || !user.planId) {
         return res.status(403).json({ 
           message: "You need an active plan to access your account. Please subscribe to a plan.",
-          requiresPlan: true
+          requiresPlan: true,
+          redirectTo: "/pricing"
         });
       }
       
@@ -520,7 +523,8 @@ export const login = async (req, res) => {
         await user.save();
         return res.status(403).json({ 
           message: "Your plan has expired. Please renew your subscription.",
-          requiresPlan: true
+          requiresPlan: true,
+          redirectTo: "/pricing"
         });
       }
     }
@@ -591,7 +595,8 @@ export const googleLogin = async (req, res) => {
         if (!user.isPlanActive || !user.planId) {
           return res.status(403).json({ 
             message: "You need an active plan to access your account. Please subscribe to a plan.",
-            requiresPlan: true
+            requiresPlan: true,
+            redirectTo: "/pricing"
           });
         }
         
@@ -601,7 +606,8 @@ export const googleLogin = async (req, res) => {
           await user.save();
           return res.status(403).json({ 
             message: "Your plan has expired. Please renew your subscription.",
-            requiresPlan: true
+            requiresPlan: true,
+            redirectTo: "/pricing"
           });
         }
       }
@@ -772,7 +778,8 @@ export const googleLogin = async (req, res) => {
       user: populatedUser, 
       requiresProgram,
       requiresApproval,
-      requiresPlan
+      requiresPlan,
+      redirectTo: requiresPlan ? "/pricing" : undefined
     });
 
   } catch (err) {
@@ -865,7 +872,8 @@ export const adminApproveUser = async (req, res) => {
     const updatedUser = await User.findById(user._id)
       .select("-password")
       .populate("programId", "name code isActive")
-      .populate("courseId", "name");
+      .populate("courseId", "name")
+      .populate("planId", "title duration price durationUnit");
     
     res.json({
       success: true,
