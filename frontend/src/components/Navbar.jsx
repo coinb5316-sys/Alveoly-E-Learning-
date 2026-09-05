@@ -85,6 +85,12 @@ const Navbar = () => {
   const [loadingGoogleSignupPrograms, setLoadingGoogleSignupPrograms] = useState(false);
   const [loadingGoogleSignupCourses, setLoadingGoogleSignupCourses] = useState(false);
 
+  // ================= REGISTRATION SOURCE DETAILS STATE =================
+  const [showRegistrationDetailsModal, setShowRegistrationDetailsModal] = useState(false);
+  const [registrationSourceInput, setRegistrationSourceInput] = useState("");
+  const [tempRegistrationSource, setTempRegistrationSource] = useState("");
+  const [pendingRegistrationData, setPendingRegistrationData] = useState(null);
+
   // ========== Define isAuthPage ==========
   const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
   // =======================================
@@ -184,6 +190,9 @@ const Navbar = () => {
       if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
         setShowApprovalModal(true);
         setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+      } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
+        navigate("/student/plans");
+        toast.info(err.response?.data?.message || "Please select a plan to continue");
       } else {
         toast.error(err.response?.data?.message || "Login failed");
       }
@@ -210,7 +219,9 @@ const Navbar = () => {
         password: signupForm.password,
         registrationSource: source || "other",
         registrationDetails: details || "",
-        userType: "alveoly_student"
+        userType: "alveoly_student",
+        programId: signupForm.programId,
+        courseId: signupForm.courseId
       };
       
       console.log("Sending Alveoly registration payload:", payload);
@@ -222,6 +233,7 @@ const Navbar = () => {
         setApprovalMessage(response.data.message || "Registration submitted for approval!");
         setShowApprovalModal(true);
         setShowLoginModal(false);
+        setShowRegistrationDetailsModal(false);
         toast.success("Registration submitted for approval!");
         // Reset form
         setSignupForm({
@@ -232,6 +244,9 @@ const Navbar = () => {
           courseId: "",
           userType: ""
         });
+        setRegistrationSourceInput("");
+        setTempRegistrationSource("");
+        setPendingRegistrationData(null);
       } else {
         toast.error(response.data.message || "Registration failed");
       }
@@ -259,7 +274,9 @@ const Navbar = () => {
         name: signupForm.name.trim(),
         email: signupForm.email.trim().toLowerCase(),
         password: signupForm.password,
-        userType: "non_alveoly_student"
+        userType: "non_alveoly_student",
+        programId: signupForm.programId,
+        courseId: signupForm.courseId
       };
       
       console.log("Sending Non-Alveoly registration payload:", payload);
@@ -267,7 +284,7 @@ const Navbar = () => {
       const response = await API.post("/auth/register/non-alveoly", payload);
       
       if (response.data.success) {
-        toast.success("Registration successful! Please login and select a plan.");
+        toast.success("Registration successful! Please subscribe to a plan to activate your account.");
         setShowLoginModal(false);
         setSignupForm({
           name: "",
@@ -277,11 +294,12 @@ const Navbar = () => {
           courseId: "",
           userType: ""
         });
-        // Navigate to login
-        navigate("/login", { 
+        // Navigate to plans page
+        navigate("/student/plans", { 
           state: { 
-            message: "Registration successful! Please login to continue.",
-            email: response.data.email 
+            message: "Please subscribe to a plan to activate your account.",
+            userId: response.data.userId,
+            email: response.data.email
           } 
         });
       } else {
@@ -332,30 +350,36 @@ const Navbar = () => {
 
   // ================= REGISTRATION SOURCE HANDLER =================
   const handleRegistrationSourceSelect = (source) => {
-    setRegistrationSource(source);
+    setTempRegistrationSource(source);
     
     if (source === "phone") {
-      setShowRegistrationSourceModal(false);
-      // Check if this is from Google signup or regular signup
+      // If "Yes" - register directly with "phone" source
       if (pendingGoogleCredential) {
         handleGoogleSignupComplete("alveoly_student", "phone", "");
       } else {
         handleAlveolyRegistration("phone", "");
       }
-    } else {
       setShowRegistrationSourceModal(false);
-      const details = prompt("Please provide details about how you registered with Alveoly (e.g., through a friend, social media, event, etc.):");
-      if (details && details.trim()) {
-        if (pendingGoogleCredential) {
-          handleGoogleSignupComplete("alveoly_student", "other", details.trim());
-        } else {
-          handleAlveolyRegistration("other", details.trim());
-        }
-      } else {
-        toast.error("Registration details are required");
-        setShowRegistrationSourceModal(true);
-      }
+    } else {
+      // If "No" - show details modal
+      setShowRegistrationSourceModal(false);
+      setShowRegistrationDetailsModal(true);
     }
+  };
+
+  // ================= HANDLE REGISTRATION DETAILS SUBMIT =================
+  const handleRegistrationDetailsSubmit = () => {
+    if (!registrationSourceInput.trim()) {
+      toast.error("Please provide details about how you registered with Alveoly");
+      return;
+    }
+    
+    if (pendingGoogleCredential) {
+      handleGoogleSignupComplete("alveoly_student", "other", registrationSourceInput.trim());
+    } else {
+      handleAlveolyRegistration("other", registrationSourceInput.trim());
+    }
+    setShowRegistrationDetailsModal(false);
   };
 
   // ================= HANDLE GOOGLE AUTH =================
@@ -412,6 +436,10 @@ const Navbar = () => {
           setShowApprovalModal(true);
           setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
           setGoogleLoading(false);
+        } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
+          navigate("/student/plans");
+          toast.info(err.response?.data?.message || "Please select a plan to continue");
+          setGoogleLoading(false);
         } else {
           throw err;
         }
@@ -444,8 +472,15 @@ const Navbar = () => {
         userType: "alveoly_student"
       });
     } else {
-      // For Non-Alveoly students, complete signup directly
-      await handleGoogleSignupComplete("non_alveoly_student", "none", "");
+      // For Non-Alveoly students, show the Google signup form
+      setShowGoogleSignupForm(true);
+      setGoogleSignupForm({
+        name: "",
+        email: "",
+        programId: "",
+        courseId: "",
+        userType: "non_alveoly_student"
+      });
     }
   };
 
@@ -468,9 +503,15 @@ const Navbar = () => {
       return;
     }
     
-    // Show registration source modal for Alveoly students
-    setShowGoogleSignupForm(false);
-    setShowRegistrationSourceModal(true);
+    // If Alveoly student, show registration source modal
+    if (googleSignupForm.userType === "alveoly_student") {
+      setShowGoogleSignupForm(false);
+      setShowRegistrationSourceModal(true);
+      return;
+    }
+    
+    // Non-Alveoly student - complete signup directly (they'll be redirected to plans)
+    await handleGoogleSignupComplete("non_alveoly_student", "none", "");
   };
 
   // ================= HANDLE GOOGLE SIGNUP PROGRAM CHANGE =================
@@ -498,18 +539,16 @@ const Navbar = () => {
     try {
       setGoogleLoading(true);
       
-      // Get the name from the form or from Google
-      let name = googleSignupForm.name || "";
-      
       const payload = {
         idToken: pendingGoogleCredential,
-        userType: userType
+        userType: userType,
+        programId: googleSignupForm.programId || null,
+        courseId: googleSignupForm.courseId || null
       };
       
       if (userType === "alveoly_student") {
-        payload.registrationSource = source;
+        payload.registrationSource = source || "other";
         payload.registrationDetails = details || "";
-        // Use name from the form
         if (googleSignupForm.name) {
           payload.name = googleSignupForm.name.trim();
         }
@@ -528,10 +567,14 @@ const Navbar = () => {
       );
       
       setShowRegistrationSourceModal(false);
+      setShowRegistrationDetailsModal(false);
       setShowGoogleSignupForm(false);
       setPendingGoogleCredential(null);
       setSelectedUserType("");
       setShowLoginModal(false);
+      setRegistrationSourceInput("");
+      setTempRegistrationSource("");
+      setPendingRegistrationData(null);
       
       if (result.requiresApproval) {
         setShowApprovalModal(true);
@@ -542,7 +585,13 @@ const Navbar = () => {
       
       // Check if user needs to select plan (non-alveoly students)
       if (result.requiresPlan) {
-        navigate("/student/plans");
+        navigate("/student/plans", { 
+          state: { 
+            message: "Please subscribe to a plan to activate your account.",
+            userId: result.user?._id || result.user?.id,
+            email: result.user?.email
+          } 
+        });
         toast.info("Please select a plan to continue");
         setGoogleLoading(false);
         return;
@@ -1364,13 +1413,7 @@ const Navbar = () => {
               <button
                 onClick={() => {
                   setShowRegistrationSourceModal(false);
-                  const details = prompt("Please provide details about how you registered with Alveoly (e.g., through a friend, social media, event, etc.):");
-                  if (details && details.trim()) {
-                    handleRegistrationSourceSelect("other");
-                  } else {
-                    toast.error("Registration details are required");
-                    setShowRegistrationSourceModal(true);
-                  }
+                  setShowRegistrationDetailsModal(true);
                 }}
                 className="w-full p-4 rounded-xl border-2 border-red-500 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all duration-300 flex items-center gap-4"
               >
@@ -1387,6 +1430,65 @@ const Navbar = () => {
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-4 text-center">
               This helps us verify your student status and streamline your registration.
             </p>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ==================== REGISTRATION DETAILS MODAL ==================== */}
+      {showRegistrationDetailsModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-8"
+          >
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 flex items-center justify-center mx-auto mb-4">
+                <FaBook className="text-3xl text-blue-600 dark:text-blue-400" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Registration Details</h2>
+              <p className="text-gray-500 dark:text-gray-400 mt-2">
+                Please tell us how you registered with Alveoly
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  How did you hear about or register with Alveoly?
+                </label>
+                <textarea
+                  value={registrationSourceInput}
+                  onChange={(e) => setRegistrationSourceInput(e.target.value)}
+                  placeholder="e.g., Through a friend, social media, school event, workshop, etc."
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm transition-all resize-none"
+                />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                  This information helps us understand how students discover Alveoly.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowRegistrationDetailsModal(false);
+                    setRegistrationSourceInput("");
+                  }}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRegistrationDetailsSubmit}
+                  disabled={!registrationSourceInput.trim()}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Submit
+                </button>
+              </div>
+            </div>
           </motion.div>
         </div>
       )}

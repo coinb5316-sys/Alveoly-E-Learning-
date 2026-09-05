@@ -9,6 +9,7 @@ export const getAllUsers = async (req, res) => {
       .select("-password")
       .populate("programId", "name code isActive")
       .populate("courseId", "name")
+      .populate("planId", "title duration price durationUnit")
       .populate({
         path: 'lecturerInfo.assignedSubjects',
         model: 'Subject',
@@ -35,6 +36,7 @@ export const getUserById = async (req, res) => {
       .select("-password")
       .populate("programId", "name code isActive")
       .populate("courseId", "name")
+      .populate("planId", "title duration price durationUnit")
       .populate({
         path: 'lecturerInfo.assignedSubjects',
         populate: { path: 'courseId', select: 'name code' }
@@ -104,7 +106,8 @@ export const updateUserRole = async (req, res) => {
     const updatedUser = await User.findById(user._id)
       .select("-password")
       .populate("programId", "name code isActive")
-      .populate("courseId", "name");
+      .populate("courseId", "name")
+      .populate("planId", "title duration price durationUnit");
 
     res.json({ 
       success: true,
@@ -121,7 +124,7 @@ export const updateUserRole = async (req, res) => {
 // ================= UPDATE USER =================
 export const updateUser = async (req, res) => {
   try {
-    const { name, email, role, userType, programId, courseId, lecturerInfo } = req.body;
+    const { name, email, role, userType, programId, courseId, lecturerInfo, isApproved } = req.body;
     const userId = req.params.id;
     
     if (req.user._id.toString() === userId) {
@@ -146,6 +149,15 @@ export const updateUser = async (req, res) => {
         user.userType = null;
       } else if (userType === "alveoly_student" || userType === "non_alveoly_student") {
         user.userType = userType;
+      }
+    }
+    
+    // Update approval status
+    if (isApproved !== undefined) {
+      user.isApproved = isApproved;
+      if (isApproved) {
+        user.approvalToken = null;
+        user.tokenExpiresAt = null;
       }
     }
     
@@ -206,6 +218,7 @@ export const updateUser = async (req, res) => {
       .select("-password")
       .populate("programId", "name code isActive")
       .populate("courseId", "name")
+      .populate("planId", "title duration price durationUnit")
       .populate({
         path: 'lecturerInfo.assignedSubjects',
         model: 'Subject',
@@ -273,12 +286,27 @@ export const getUserStats = async (req, res) => {
       { $project: { programName: "$program.name", count: 1 } }
     ]);
     
+    // Get pending approval count
+    const pendingApproval = await User.countDocuments({
+      userType: "alveoly_student",
+      isApproved: false
+    });
+    
+    // Get users awaiting plan
+    const awaitingPlan = await User.countDocuments({
+      userType: "non_alveoly_student",
+      isApproved: false,
+      isPlanActive: false
+    });
+    
     res.json({
       totalUsers,
       totalStudents,
       totalAdmins,
       totalLecturers,
       activeToday,
+      pendingApproval,
+      awaitingPlan,
       usersByProgram
     });
   } catch (err) {
@@ -287,7 +315,7 @@ export const getUserStats = async (req, res) => {
   }
 };
 
-// ================= APPROVE USER =================
+// ================= APPROVE USER (Admin) =================
 export const approveUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -298,6 +326,13 @@ export const approveUser = async (req, res) => {
     
     if (user.isApproved) {
       return res.status(400).json({ message: "User is already approved" });
+    }
+    
+    // Only Alveoly students need admin approval
+    if (user.userType !== "alveoly_student") {
+      return res.status(400).json({ 
+        message: "Only Alveoly students require admin approval. Non-Alveoly students are approved via plan subscription." 
+      });
     }
     
     user.isApproved = true;
@@ -317,10 +352,19 @@ export const approveUser = async (req, res) => {
       { action: "account_approved" }
     );
     
+    // Send email
+    try {
+      const { sendApprovalConfirmationEmail } = await import("../utils/emailService.js");
+      await sendApprovalConfirmationEmail(user.email, user.name);
+    } catch (emailErr) {
+      console.error("Approval email error:", emailErr.message);
+    }
+    
     const updatedUser = await User.findById(user._id)
       .select("-password")
       .populate("programId", "name code isActive")
-      .populate("courseId", "name");
+      .populate("courseId", "name")
+      .populate("planId", "title duration price durationUnit");
     
     res.json({
       success: true,

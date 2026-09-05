@@ -1,4 +1,4 @@
-// routes/authRoutes.js - COMPLETE FIXED VERSION
+// routes/authRoutes.js
 import express from "express";
 import {
   registerAlveolyStudent,
@@ -15,6 +15,8 @@ import {
   registerLecturer,
   updateActivity,
   assignPlanToUser,
+  assignPlanAfterPayment,
+  adminApproveUser,
   sendPlanExpiryNotification,
 } from "../controllers/authController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
@@ -26,6 +28,13 @@ router.post("/register/alveoly", registerAlveolyStudent);
 router.post("/register/non-alveoly", registerNonAlveolyStudent);
 router.get("/verify-approval/:token", verifyApprovalToken);
 router.post("/complete-registration", protect, completeRegistration);
+
+// ================= PLAN MANAGEMENT =================
+router.post("/assign-plan", protect, adminOnly, assignPlanToUser);
+router.post("/assign-plan-after-payment", protect, assignPlanAfterPayment);
+
+// ================= USER APPROVAL =================
+router.patch("/admin/approve/:userId", protect, adminOnly, adminApproveUser);
 
 // ================= EMAIL AUTH =================
 router.post("/login", login);
@@ -43,11 +52,8 @@ router.put("/me/activity", protect, updateActivity);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
 
-// ================= LECTURER MANAGEMENT (Admin only) =================
+// ================= LECTURER MANAGEMENT =================
 router.post("/register-lecturer", protect, adminOnly, registerLecturer);
-
-// ================= PLAN ASSIGNMENT (Admin only) =================
-router.post("/assign-plan", protect, adminOnly, assignPlanToUser);
 
 // ================= PLAN EXPIRY NOTIFICATION =================
 router.post("/plan-expiry/:userId", protect, adminOnly, sendPlanExpiryNotification);
