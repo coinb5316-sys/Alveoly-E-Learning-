@@ -1,4 +1,4 @@
-// controllers/authController.js - Updated plan assignment
+// controllers/authController.js - COMPLETE FIXED VERSION
 import User from "../models/User.js";
 import Program from "../models/Program.js";
 import Course from "../models/Course.js"; 
@@ -484,6 +484,57 @@ export const completeRegistration = async (req, res) => {
 
   } catch (err) {
     console.error("COMPLETE REGISTRATION ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= VERIFY APPROVAL TOKEN - ADD THIS FUNCTION =================
+export const verifyApprovalToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const user = await User.findOne({
+      approvalToken: token,
+      tokenExpiresAt: { $gt: new Date() },
+      isApproved: false
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        message: "Invalid or expired approval token. Please contact admin." 
+      });
+    }
+
+    user.isApproved = true;
+    user.approvalToken = null;
+    user.tokenExpiresAt = null;
+    user.registrationCompleted = true;
+    await user.save();
+
+    try {
+      await sendApprovalConfirmationEmail(user.email, user.name);
+    } catch (emailErr) {
+      console.error("Approval email error:", emailErr.message);
+    }
+
+    await createNotification(
+      user._id,
+      "student",
+      "success",
+      "Account Approved! 🎉",
+      "Your account has been approved. Please login and select your program.",
+      "/login",
+      { action: "account_approved" }
+    );
+
+    res.json({
+      success: true,
+      message: "Account approved successfully. You can now login.",
+      email: user.email
+    });
+
+  } catch (err) {
+    console.error("VERIFY APPROVAL ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
