@@ -1,4 +1,4 @@
-// routes/authRoutes.js
+// routes/authRoutes.js - COMPLETE FIXED VERSION
 import express from "express";
 import {
   registerAlveolyStudent,
@@ -15,6 +15,7 @@ import {
   registerLecturer,
   updateActivity,
   assignPlanToUser,
+  sendPlanExpiryNotification,
 } from "../controllers/authController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
@@ -47,5 +48,8 @@ router.post("/register-lecturer", protect, adminOnly, registerLecturer);
 
 // ================= PLAN ASSIGNMENT (Admin only) =================
 router.post("/assign-plan", protect, adminOnly, assignPlanToUser);
+
+// ================= PLAN EXPIRY NOTIFICATION =================
+router.post("/plan-expiry/:userId", protect, adminOnly, sendPlanExpiryNotification);
 
 export default router;
