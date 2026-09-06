@@ -1,4 +1,4 @@
-// App.js - WITH PRICING (NO CART)
+// src/App.js - Updated with Blog Routes
 import React, { useEffect } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
@@ -45,8 +45,6 @@ import StudentContentPayments from "./pages/StudentContentPayments";
 import AdminContentPayments from "./pages/AdminContentPayments";
 import PlanPaymentSuccess from "./pages/PlanPaymentSuccess";
 import SubjectPaymentSuccess from "./pages/SubjectPaymentSuccess";
-
-// Lecturer Imports
 import LecturerLayout from "./pages/LecturerLayout";
 import LecturerDashboard from "./pages/LecturerDashboard";
 import LecturerContentList from "./pages/LecturerContentList";
@@ -81,22 +79,12 @@ import AIGenerator from "./pages/AdminAIGeneratorU";
 import AIChat from "./pages/AIChat";
 import AdminPrograms from "./pages/AdminPrograms";
 import SelectProgramPage from "./pages/SelectProgramPage";
-import AdminBlog from "./pages/AdminBlog";
-import AdminBlogCreate from "./pages/AdminBlogCreate";
-import AdminBlogEdit from "./pages/AdminBlogEdit";
-import AdminSubscribers from "./pages/AdminSubscribers";
-import AdminComments from "./pages/AdminComments";
-import AdminBlogQuizResults from "./pages/AdminBlogQuizResults";
 import NursingGames from "./pages/lecturer/NursingGames";
 import NursingGamesHub from "./pages/student/NursingGamesHub";
 import GameMatch from "./pages/student/GameMatch";
 import GameMatchResults from "./pages/student/GameMatchResults";
 import AdminTopics from "./pages/AdminTopics";
-
-// Import Pricing Page
 import Pricing from "./pages/Pricing";
-
-// Import CookieBanner component
 import CookieBanner from "./components/CookieBanner";
 import StudentExamResults from "./pages/StudentExamResults";
 import CareerPage from "./pages/CareerPage";
@@ -114,8 +102,13 @@ import HighSchoolPage from "./pages/HighSchoolPage";
 import GradSchoolPage from "./pages/GradSchoolPage";
 import LegalPage from "./pages/LegalPage";
 import PharmacyPage from "./pages/PharmacyPage";
-import BlogPost from "./pages/BlogPost";
 
+// Blog Imports
+import BlogPage from "./pages/BlogPage";
+import BlogPostPage from "./pages/BlogPostPage";
+import BlogCategory from "./pages/BlogCategory";
+import BlogAuthor from "./pages/BlogAuthor";
+import BlogSearch from "./pages/BlogSearch";
 
 function App() {
   useEffect(() => {
@@ -159,32 +152,36 @@ function App() {
           <Route path="/programs/:id" element={<ProgramDetail />} />
           <Route path="/admissions" element={<Admissions />} />
           <Route path="/contact_us" element={<Contact />} />
-          <Route path="/blog" element={<BlogPost />} />
+          
+          {/* ==================== BLOG ROUTES ==================== */}
+          <Route path="/blog" element={<BlogPage />} />
+          <Route path="/blog/post/:id" element={<BlogPostPage />} />
+          <Route path="/blog/category/:category" element={<BlogCategory />} />
+          <Route path="/blog/author/:authorId" element={<BlogAuthor />} />
+          <Route path="/blog/search" element={<BlogSearch />} />
+          
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/disclaimer" element={<Disclaimer />} />
           <Route path="/cookies" element={<CookiePolicy />} />
-          <Route path="/pricing" element={<Pricing />} /> {/* <-- ADDED PRICING ROUTE */}
+          <Route path="/pricing" element={<Pricing />} />
           <Route path="/careers" element={<CareerPage />} />
           <Route path="/careers/what-we-do" element={<CareerWhatWeDo />} />
           <Route path="/careers/life-at-alveoly" element={<LiveAtAlveoly />} />
           <Route path="/careers/benefits" element={<CareerBenefits />} />
           <Route path="/careers/jobs" element={<CareerJobs />} />
           <Route path="/careers/jobs/:slug" element={<JobDetails />} />
-          <Route
-  path="/careers/jobs/apply"
-  element={<JobApplication />}
-/>
-<Route path="/medical" element={<MedicalPage />} />
-<Route path="/nursing" element={<NursingPage />} />
-<Route path="/accounting" element={<AccountingPage />} />
-<Route path="/finance" element={<FinancePage />} />
-<Route path="/high-school" element={<HighSchoolPage />} />
-<Route path="/grad-school" element={<GradSchoolPage />} />
-<Route path="/legal" element={<LegalPage />} />
-<Route path="/pharmacy" element={<PharmacyPage />} />
+          <Route path="/careers/jobs/apply" element={<JobApplication />} />
+          <Route path="/medical" element={<MedicalPage />} />
+          <Route path="/nursing" element={<NursingPage />} />
+          <Route path="/accounting" element={<AccountingPage />} />
+          <Route path="/finance" element={<FinancePage />} />
+          <Route path="/high-school" element={<HighSchoolPage />} />
+          <Route path="/grad-school" element={<GradSchoolPage />} />
+          <Route path="/legal" element={<LegalPage />} />
+          <Route path="/pharmacy" element={<PharmacyPage />} />
           
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
@@ -268,12 +265,6 @@ function App() {
             <Route path="ai" element={<AIAdmin />} />
             <Route path="ai-plans" element={<AIPlansAdmin />} />
             <Route path="ai-generator" element={<AIGenerator />} />
-            <Route path="blog" element={<AdminBlog />} />
-            <Route path="blog/create" element={<AdminBlogCreate />} />
-            <Route path="blog/edit/:id" element={<AdminBlogEdit />} />
-            <Route path="blog-quiz-results" element={<AdminBlogQuizResults />} />
-            <Route path="subscribers" element={<AdminSubscribers />} />
-            <Route path="comments" element={<AdminComments />} />
           </Route>
 
           {/* ==================== LECTURER ROUTES ==================== */}
