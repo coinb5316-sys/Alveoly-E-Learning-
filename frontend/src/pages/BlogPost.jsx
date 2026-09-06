@@ -1,5 +1,5 @@
-// src/components/BlogPost.jsx
-import React, { useState, useEffect } from 'react';
+// src/components/BlogPost.jsx - Updated with safe imports
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaHeart,
@@ -51,13 +51,13 @@ import {
   FaBell
 } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
-import ReactPlayer from 'react-player';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/navigation';
-import 'swiper/css/pagination';
-import 'swiper/css/effect-fade';
+
+// Lazy load ReactPlayer to avoid build issues if not installed
+const ReactPlayer = lazy(() => import('react-player'));
+
+// Lazy load Swiper components
+const Swiper = lazy(() => import('swiper/react').then(module => ({ default: module.Swiper })));
+const SwiperSlide = lazy(() => import('swiper/react').then(module => ({ default: module.SwiperSlide })));
 
 // Sample blog post data
 const blogData = {
@@ -203,17 +203,6 @@ const BlogPost = () => {
   ]);
   const [activeTab, setActiveTab] = useState('content');
 
-  // Animation variants
-  const fadeInUp = {
-    initial: { opacity: 0, y: 30 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.6 }
-  };
-
-  const staggerContainer = {
-    animate: { transition: { staggerChildren: 0.1 } }
-  };
-
   // Scroll to top on mount
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -249,6 +238,13 @@ const BlogPost = () => {
       alert('Link copied to clipboard!');
     }
   };
+
+  // Loading fallback for lazy components
+  const LoadingFallback = () => (
+    <div className="flex items-center justify-center p-8">
+      <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
@@ -445,23 +441,25 @@ const BlogPost = () => {
                 {/* Featured Video */}
                 <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
                   <div className="relative aspect-video bg-black">
-                    <ReactPlayer
-                      url={blogData.videoUrl}
-                      width="100%"
-                      height="100%"
-                      playing={isPlaying}
-                      muted={isMuted}
-                      controls
-                      config={{
-                        youtube: {
-                          playerVars: {
-                            modestbranding: 1,
-                            rel: 0,
-                            showinfo: 0
+                    <Suspense fallback={<LoadingFallback />}>
+                      <ReactPlayer
+                        url={blogData.videoUrl}
+                        width="100%"
+                        height="100%"
+                        playing={isPlaying}
+                        muted={isMuted}
+                        controls
+                        config={{
+                          youtube: {
+                            playerVars: {
+                              modestbranding: 1,
+                              rel: 0,
+                              showinfo: 0
+                            }
                           }
-                        }
-                      }}
-                    />
+                        }}
+                      />
+                    </Suspense>
                     {/* Custom controls overlay */}
                     <div className="absolute bottom-4 left-4 right-4 flex items-center gap-4">
                       <button
