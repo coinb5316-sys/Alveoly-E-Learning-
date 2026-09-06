@@ -1,8 +1,20 @@
-// src/pages/Login.jsx - UPDATED WITH PLAN REDIRECT
+// src/pages/Login.jsx - COMPLETE UPDATED
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaEnvelope, FaLock, FaEye, FaEyeSlash, FaGraduationCap, FaSpinner, FaUserGraduate, FaUserPlus } from "react-icons/fa";
+import { 
+  FaEnvelope, 
+  FaLock, 
+  FaEye, 
+  FaEyeSlash, 
+  FaGraduationCap, 
+  FaSpinner, 
+  FaUserGraduate, 
+  FaUserPlus,
+  FaTimes,
+  FaExclamationTriangle,
+  FaClock
+} from "react-icons/fa";
 import { GoogleLogin } from "@react-oauth/google";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -15,6 +27,8 @@ const LoginPage = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showUserTypeModal, setShowUserTypeModal] = useState(false);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [approvalMessage, setApprovalMessage] = useState("");
   const [pendingGoogleCredential, setPendingGoogleCredential] = useState(null);
   const [selectedUserType, setSelectedUserType] = useState("");
   const { login, googleLogin } = useAuth();
@@ -30,22 +44,35 @@ const LoginPage = () => {
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
+  // ================= LOGIN HANDLER - MATCHES NAVBAR LOGIC =================
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const result = await login(form);
-      const redirectUrl = localStorage.getItem("redirectAfterLogin");
-      if (redirectUrl) {
-        localStorage.removeItem("redirectAfterLogin");
-        navigate(redirectUrl);
+      console.log("Login result:", result);
+      
+      // Check if user needs approval
+      if (result.requiresApproval) {
+        setApprovalMessage("Your account is pending approval. Please wait for admin approval.");
+        setShowApprovalModal(true);
+        setLoading(false);
         return;
       }
       
       // Check if user needs to select plan (non-alveoly students)
       if (result.requiresPlan) {
-        navigate("/student/plans");
-        toast.info("Please select a plan to continue");
+        console.log("User requires plan - redirecting to pricing");
+        navigate("/pricing", {
+          state: {
+            message: "Please select a plan to continue",
+            userId: result.user?._id,
+            email: result.user?.email,
+            user: result.user
+          }
+        });
+        toast("Please select a plan to continue", { icon: 'ℹ️' });
+        setLoading(false);
         return;
       }
       
@@ -60,17 +87,35 @@ const LoginPage = () => {
       }
       toast.success("Login successful!");
     } catch (err) {
-      if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
-        toast.error("Your account is pending approval. Please wait for admin approval.");
-        navigate("/login", { state: { approvalPending: true } });
-      } else {
-        toast.error(err.response?.data?.message || "Login failed");
+      console.error("Login error:", err);
+      // Check if this is a plan requirement error from the backend
+      if (err.response?.status === 403) {
+        if (err.response?.data?.requiresPlan) {
+          console.log("Server requires plan - redirecting to pricing");
+          navigate("/pricing", {
+            state: {
+              message: err.response?.data?.message || "Please select a plan to continue",
+              userId: err.response?.data?.userId
+            }
+          });
+          toast(err.response?.data?.message || "Please select a plan to continue", { icon: 'ℹ️' });
+          setLoading(false);
+          return;
+        }
+        if (err.response?.data?.requiresApproval) {
+          setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+          setShowApprovalModal(true);
+          setLoading(false);
+          return;
+        }
       }
+      toast.error(err.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
     }
   };
 
+  // ================= GOOGLE AUTH HANDLER - MATCHES NAVBAR LOGIC =================
   const handleGoogleAuth = async (credentialResponse) => {
     try {
       setGoogleLoading(true);
@@ -83,24 +128,25 @@ const LoginPage = () => {
         const result = await googleLogin(idToken);
         console.log("Google login result:", result);
         
-        const redirectUrl = localStorage.getItem("redirectAfterLogin");
-        if (redirectUrl) {
-          localStorage.removeItem("redirectAfterLogin");
-          navigate(redirectUrl);
-          return;
-        }
-        
-        // Check if user needs to select plan (non-alveoly students)
-        if (result.requiresPlan) {
-          navigate("/student/plans");
-          toast.info("Please select a plan to continue");
+        if (result.requiresApproval) {
+          setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
+          setShowApprovalModal(true);
+          setGoogleLoading(false);
           setPendingGoogleCredential(null);
           return;
         }
         
-        if (result.requiresApproval) {
-          toast.info("Your account is pending approval. Please wait for admin approval.");
-          navigate("/login", { state: { approvalPending: true } });
+        if (result.requiresPlan) {
+          navigate("/pricing", {
+            state: {
+              message: "Please select a plan to continue",
+              userId: result.user?._id,
+              email: result.user?.email,
+              user: result.user
+            }
+          });
+          toast("Please select a plan to continue", { icon: 'ℹ️' });
+          setGoogleLoading(false);
           setPendingGoogleCredential(null);
           return;
         }
@@ -115,28 +161,40 @@ const LoginPage = () => {
           navigate("/student/dashboard");
         }
         toast.success("Login successful!");
+        setGoogleLoading(false);
         setPendingGoogleCredential(null);
       } catch (err) {
         if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
           setShowUserTypeModal(true);
           setGoogleLoading(false);
         } else if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
-          toast.info("Your account is pending approval. Please wait for admin approval.");
-          navigate("/login", { state: { approvalPending: true } });
+          setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+          setShowApprovalModal(true);
+          setGoogleLoading(false);
+        } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
+          navigate("/pricing", {
+            state: {
+              message: "Please select a plan to continue",
+              userId: err.response?.data?.userId,
+              email: err.response?.data?.email
+            }
+          });
+          toast(err.response?.data?.message || "Please select a plan to continue", { icon: 'ℹ️' });
           setGoogleLoading(false);
         } else {
           throw err;
         }
       }
     } catch (err) {
-      console.error("Google login error:", err);
-      toast.error(err.response?.data?.message || "Google login failed");
+      console.error("Google auth error:", err);
+      toast.error(err.response?.data?.message || "Google authentication failed");
       setGoogleLoading(false);
       setPendingGoogleCredential(null);
     }
   };
 
-  const handleUserTypeSelection = async () => {
+  // ================= COMPLETE GOOGLE SIGNUP WITH USER TYPE =================
+  const handleGoogleSignupWithType = async () => {
     if (!selectedUserType) {
       toast.error("Please select your user type");
       return;
@@ -151,23 +209,24 @@ const LoginPage = () => {
       setPendingGoogleCredential(null);
       setSelectedUserType("");
       
-      const redirectUrl = localStorage.getItem("redirectAfterLogin");
-      if (redirectUrl) {
-        localStorage.removeItem("redirectAfterLogin");
-        navigate(redirectUrl);
-        return;
-      }
-      
-      // Check if user needs to select plan (non-alveoly students)
-      if (result.requiresPlan) {
-        navigate("/student/plans");
-        toast.info("Please select a plan to continue");
-        return;
-      }
-      
       if (result.requiresApproval) {
-        toast.info("Your account is pending approval. Please wait for admin approval.");
-        navigate("/login", { state: { approvalPending: true } });
+        setApprovalMessage(result.message || "Your account is pending approval. You will receive an email once approved.");
+        setShowApprovalModal(true);
+        setGoogleLoading(false);
+        return;
+      }
+      
+      if (result.requiresPlan) {
+        navigate("/pricing", {
+          state: {
+            message: "Please select a plan to continue",
+            userId: result.user?._id,
+            email: result.user?.email,
+            user: result.user
+          }
+        });
+        toast("Please select a plan to continue", { icon: 'ℹ️' });
+        setGoogleLoading(false);
         return;
       }
       
@@ -239,7 +298,6 @@ const LoginPage = () => {
                       <GoogleLogin
                         onSuccess={handleGoogleAuth}
                         onError={() => toast.error("Google login failed")}
-                        useOneTap
                         theme="outline"
                         size="large"
                         text="signin_with"
@@ -310,7 +368,14 @@ const LoginPage = () => {
                     disabled={loading}
                     className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-2 md:py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 shadow-lg shadow-indigo-500/25"
                   >
-                    {loading ? "Logging in..." : "Login"}
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <FaSpinner className="animate-spin" />
+                        Logging in...
+                      </span>
+                    ) : (
+                      "Login"
+                    )}
                   </button>
                 </form>
 
@@ -326,7 +391,7 @@ const LoginPage = () => {
         </div>
       </section>
 
-      {/* User Type Selection Modal - For New Google Users */}
+      {/* ================= USER TYPE SELECTION MODAL ================= */}
       <AnimatePresence>
         {showUserTypeModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -336,14 +401,19 @@ const LoginPage = () => {
               exit={{ opacity: 0, scale: 0.95 }}
               className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-8"
             >
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center mx-auto mb-4">
-                  <FaUserGraduate className="text-3xl text-indigo-600 dark:text-indigo-400" />
+              <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                    <FaUserGraduate className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Welcome to Alveoly!</h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Please select your user type</p>
+                  </div>
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome to Alveoly!</h2>
-                <p className="text-slate-500 dark:text-slate-400 mt-2">
-                  Please select your user type to continue
-                </p>
+                <button onClick={() => setShowUserTypeModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                  <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                </button>
               </div>
 
               <div className="space-y-4">
@@ -389,7 +459,7 @@ const LoginPage = () => {
               </div>
 
               <button
-                onClick={handleUserTypeSelection}
+                onClick={handleGoogleSignupWithType}
                 disabled={!selectedUserType || googleLoading}
                 className="w-full mt-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
               >
@@ -402,6 +472,56 @@ const LoginPage = () => {
                   "Continue"
                 )}
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ================= APPROVAL MODAL ================= */}
+      <AnimatePresence>
+        {showApprovalModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-8"
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-100 to-amber-100 dark:from-yellow-900/50 dark:to-amber-900/50 flex items-center justify-center mx-auto mb-4">
+                  <FaClock className="text-3xl text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Account Pending Approval</h2>
+                <p className="text-gray-500 dark:text-gray-400 mt-2">
+                  {approvalMessage || "Your account is pending admin approval."}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <FaExclamationTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
+                    <div className="text-left">
+                      <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
+                        What happens next?
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                        An admin will review your account. You will receive an email with your approval token once approved.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setShowApprovalModal(false);
+                    navigate("/login");
+                  }}
+                  className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center gap-2"
+                >
+                  Go to Login
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
