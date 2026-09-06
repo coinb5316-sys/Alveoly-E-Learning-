@@ -35,6 +35,7 @@ const Pricing = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [pendingUserId, setPendingUserId] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
 
   // Check if user came from registration
   useEffect(() => {
@@ -59,7 +60,11 @@ const Pricing = () => {
     const storedToken = localStorage.getItem("token");
     if (storedToken && !user && !authChecked) {
       console.log("🔄 Token exists but no user, refreshing...");
-      refreshUser?.();
+      refreshUser?.().then(() => {
+        setAuthReady(true);
+      });
+    } else if (user) {
+      setAuthReady(true);
     }
     
     setAuthChecked(true);
@@ -124,7 +129,6 @@ const Pricing = () => {
       console.log("✅ Initiating payment for user:", userId);
       
       // Make sure the token is in the headers
-      // The axios interceptor already does this, but we double-check
       if (storedToken) {
         API.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
       }
@@ -328,7 +332,6 @@ const Pricing = () => {
                       ) : (
                         <>
                           <CreditCard className="h-4 w-4" />
-                          {/* Check localStorage directly for button text */}
                           {isAuthenticated || localStorage.getItem("token") ? "Subscribe Now" : "Choose Plan"}
                         </>
                       )}

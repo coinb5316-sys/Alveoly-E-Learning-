@@ -302,12 +302,14 @@ const handleNonAlveolyRegistration = async () => {
     console.log("Sending Non-Alveoly registration payload:", payload);
     
     // Use the AuthContext's registerNonAlveoly method
+    // This now works EXACTLY like googleLogin
     const result = await registerNonAlveoly(payload);
     console.log("Registration result:", result);
-    console.log("🔐 Current auth state after registration:", { 
+    console.log("🔐 Auth state after registration:", { 
       isAuthenticated, 
       user: user?._id,
-      token: !!token 
+      token: !!token,
+      localStorageToken: !!localStorage.getItem("token")
     });
     
     if (result.user) {
@@ -323,7 +325,7 @@ const handleNonAlveolyRegistration = async () => {
       });
       
       // Navigate to PRICING page with user data
-      // The user is already authenticated at this point (setAuth was called)
+      // The user is already authenticated (setAuth was called)
       navigate("/pricing", { 
         state: { 
           message: "Please subscribe to a plan to activate your account.",
