@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE WITH ALL FEATURES
+// src/pages/admin/blog/AdminCreateBlogPost.jsx - FIXED (removed duplicate CheckCircle)
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,7 +17,7 @@ import {
   User,
   FileText,
   AlertCircle,
-  CheckCircle,
+  CheckCircle, // <-- Keep this import
   Video,
   Music,
   Link as LinkIcon,
@@ -77,6 +77,20 @@ const mockTags = [
   'Diversity', 'Evidence-Based Practice', 'Clinical Care', 'Education',
   'Digital Health', 'Medical', 'Science', 'Public Health', 'Nursing Education'
 ];
+
+// Custom GraduationCap icon (not in lucide-react)
+const GraduationCap = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422M12 14l-6.16-3.422M12 14v6m-6 0h12" />
+  </svg>
+);
+
+// Custom Checkmark icon (use a different name to avoid conflict)
+const CheckmarkIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
 
 const AdminCreateBlogPost = () => {
   const { id } = useParams();
@@ -827,7 +841,7 @@ const AdminCreateBlogPost = () => {
             <ul className="space-y-2 mt-3">
               {formData.learningObjectives.map((obj, index) => (
                 <li key={index} className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <span className="text-green-500">✓</span>
+                  <CheckmarkIcon className="h-4 w-4 text-green-500 flex-shrink-0" />
                   <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">{obj}</span>
                   <button
                     onClick={() => handleRemoveObjective(index)}
@@ -1257,7 +1271,7 @@ const AdminCreateBlogPost = () => {
                     <ul className="space-y-2">
                       {formData.learningObjectives.map((obj, index) => (
                         <li key={index} className="flex items-start gap-3 text-gray-700 dark:text-gray-300">
-                          <CheckCircle className="text-green-500 mt-1 flex-shrink-0 h-4 w-4" />
+                          <CheckmarkIcon className="h-5 w-5 text-green-500 flex-shrink-0" />
                           <span>{obj}</span>
                         </li>
                       ))}
@@ -1298,18 +1312,5 @@ const AdminCreateBlogPost = () => {
     </div>
   );
 };
-
-// Add missing icons
-const GraduationCap = ({ className }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422M12 14l-6.16-3.422M12 14v6m-6 0h12" />
-  </svg>
-);
-
-const CheckCircle = ({ className }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
 
 export default AdminCreateBlogPost;
