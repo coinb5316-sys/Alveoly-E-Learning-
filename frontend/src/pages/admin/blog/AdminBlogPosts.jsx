@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminBlogPosts.jsx
+// src/pages/admin/blog/AdminBlogPosts.jsx - FIXED
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,7 +20,8 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  MessageSquare // <-- ADD THIS IMPORT
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
