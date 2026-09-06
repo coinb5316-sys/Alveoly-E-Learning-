@@ -1,6 +1,6 @@
 // src/pages/Pricing.jsx - COMPLETE FIXED
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Crown,
@@ -14,11 +14,8 @@ import {
   Shield,
   TrendingUp,
   BookOpen,
-  ChevronRight,
-  X,
   User,
   Lock,
-  ArrowRight
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -29,11 +26,10 @@ import toast from "react-hot-toast";
 const Pricing = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, setUser, token, isAuthenticated, refreshUser } = useAuth();
+  const { user, token, isAuthenticated, refreshUser } = useAuth();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hoveredPlan, setHoveredPlan] = useState(null);
-  const [selectedPlan, setSelectedPlan] = useState(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [pendingPlanId, setPendingPlanId] = useState(null);
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -202,7 +198,6 @@ const Pricing = () => {
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {plans.map((plan, index) => {
               const isPopular = plan.isPopular || index === 1;
-              const isHovered = hoveredPlan === plan._id;
 
               return (
                 <motion.div
@@ -218,7 +213,6 @@ const Pricing = () => {
                       : "border border-gray-200 dark:border-gray-800 hover:shadow-xl hover:-translate-y-1 bg-white dark:bg-gray-900"
                   }`}
                 >
-                  {/* Popular Badge */}
                   {isPopular && (
                     <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-20">
                       <span className="flex items-center gap-1 px-4 py-1.5 text-xs font-semibold bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full shadow-lg">
@@ -229,7 +223,6 @@ const Pricing = () => {
                   )}
 
                   <div className="p-6">
-                    {/* Plan Header */}
                     <div className="flex items-center gap-3 mb-4">
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
                         isPopular
@@ -257,19 +250,16 @@ const Pricing = () => {
                       </div>
                     </div>
 
-                    {/* Duration */}
                     <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
                       <Clock className="h-4 w-4" />
                       <span>{plan.duration} {plan.durationUnit} access</span>
                     </div>
 
-                    {/* Subjects Count */}
                     <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
                       <BookOpen className="h-4 w-4" />
                       <span>{plan.subjectCount || 0} subjects included</span>
                     </div>
 
-                    {/* Subjects List */}
                     {plan.subjects && plan.subjects.length > 0 && (
                       <div className="mb-4 max-h-32 overflow-y-auto">
                         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
@@ -293,7 +283,6 @@ const Pricing = () => {
                       </div>
                     )}
 
-                    {/* Action Button - Direct Purchase */}
                     <button
                       onClick={() => handlePurchasePlan(plan)}
                       disabled={processingPayment}
@@ -316,7 +305,6 @@ const Pricing = () => {
                       )}
                     </button>
 
-                    {/* Features */}
                     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                       <div className="grid grid-cols-2 gap-2">
                         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -344,7 +332,6 @@ const Pricing = () => {
           </div>
         )}
 
-        {/* Footer Info */}
         <div className="mt-16 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             All plans include full access to selected subjects. Cancel anytime.

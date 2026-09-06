@@ -47,6 +47,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("token", newToken);
       setToken(newToken);
       setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
     }
     setUser(userData);
     if (userData) {
@@ -101,7 +103,10 @@ export const AuthProvider = ({ children }) => {
   // ================= LOGIN =================
   const login = async (form) => {
     try {
+      console.log("🔑 Logging in with:", form.email);
       const res = await API.post("/auth/login", form);
+      console.log("🔑 Login response:", res.data);
+      
       const { token: newToken, user: userData, requiresProgram, requiresPlan } = res.data;
       
       setAuth(newToken, userData);
@@ -126,7 +131,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= NON-ALVEOLY REGISTER - FIXED TO MATCH GOOGLE FLOW =================
+  // ================= NON-ALVEOLY REGISTER =================
   const registerNonAlveoly = async (form) => {
     try {
       console.log("📝 Registering non-alveoly student with form:", form);
@@ -134,17 +139,16 @@ export const AuthProvider = ({ children }) => {
       const res = await API.post("/auth/register/non-alveoly", form);
       console.log("📝 Registration response:", res.data);
       
-      const { token: newToken, user: userData, requiresPlan, userId, redirectTo } = res.data;
+      const { token: newToken, user: userData, requiresPlan, userId } = res.data;
       
       // CRITICAL: Set auth with the token so user is authenticated
       setAuth(newToken, userData);
       
-      // Return exactly like googleLogin does
       return { 
         user: userData, 
         requiresPlan, 
         userId: userId || userData?._id,
-        redirectTo: redirectTo || "/pricing"
+        message: res.data.message 
       };
     } catch (err) {
       console.error("Non-Alveoly register error:", err);
@@ -167,13 +171,13 @@ export const AuthProvider = ({ children }) => {
       }
       
       const res = await API.post("/auth/google-login", payload);
-      const { token: newToken, user: userData, requiresProgram, requiresApproval, requiresPlan, redirectTo } = res.data;
+      const { token: newToken, user: userData, requiresProgram, requiresApproval, requiresPlan } = res.data;
       
-      console.log("Google login response:", { userData, requiresProgram, requiresApproval, requiresPlan, redirectTo });
+      console.log("Google login response:", { userData, requiresProgram, requiresApproval, requiresPlan });
       
       setAuth(newToken, userData);
       
-      return { user: userData, requiresProgram, requiresApproval, requiresPlan, redirectTo };
+      return { user: userData, requiresProgram, requiresApproval, requiresPlan };
     } catch (err) {
       console.error("Google login error:", err);
       if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
@@ -232,7 +236,7 @@ export const AuthProvider = ({ children }) => {
         isStudent,
         getDashboardPath,
         userRole: user?.role,
-        refreshUser: fetchUser, // Add refreshUser method
+        refreshUser: fetchUser,
       }}
     >
       {children}

@@ -110,18 +110,26 @@ export const initiatePayment = async (req, res) => {
   }
 };
 
-// ================= PLAN PAYMENT =================
+// ================= PLAN PAYMENT - FIXED =================
 export const initiatePlanPayment = async (req, res) => {
   try {
     const { planId, userId } = req.body;
-    const user = req.user || (userId ? await User.findById(userId) : null);
+    console.log("💰 Initiating plan payment:", { planId, userId });
+    
+    // Get user - either from req.user or from userId parameter
+    let user = req.user;
+    if (userId && !user) {
+      user = await User.findById(userId);
+    }
 
     if (!user) {
+      console.log("❌ User not found:", { userId, reqUser: req.user?._id });
       return res.status(401).json({ message: "User not found. Please login first." });
     }
 
-    const plan = await Plan.findById(planId);
+    console.log("✅ User found:", { userId: user._id, email: user.email, name: user.name });
 
+    const plan = await Plan.findById(planId);
     if (!plan) {
       return res.status(404).json({ message: "Plan not found" });
     }
@@ -175,13 +183,18 @@ export const initiatePlanPayment = async (req, res) => {
       }
     );
 
+    console.log("✅ Paystack response:", {
+      status: response.data.status,
+      hasAuthUrl: !!response.data.data?.authorization_url
+    });
+
     res.json({
       authorizationUrl: response.data.data.authorization_url,
       reference,
     });
   } catch (err) {
-    console.error("Plan payment initiation error:", err);
-    res.status(500).json({ message: "Plan payment failed: " + err.message });
+    console.error("Plan payment initiation error:", err.response?.data || err.message);
+    res.status(500).json({ message: "Plan payment failed: " + (err.response?.data?.message || err.message) });
   }
 };
 

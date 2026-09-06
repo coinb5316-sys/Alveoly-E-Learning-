@@ -864,7 +864,7 @@ export const googleLogin = async (req, res) => {
   }
 };
 
-// ================= LOGIN =================
+// ================= LOGIN - FIXED =================
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -891,31 +891,49 @@ export const login = async (req, res) => {
     if (user.userType === "alveoly_student" && !user.isApproved) {
       return res.status(403).json({ 
         message: "Your account is pending approval. Please wait for admin approval.",
-        requiresApproval: true
+        requiresApproval: true,
+        userId: user._id
       });
     }
 
     // Check if Non-Alveoly student has active plan
     if (user.userType === "non_alveoly_student") {
+      console.log("🔍 Non-Alveoly student login check:", {
+        userId: user._id,
+        isPlanActive: user.isPlanActive,
+        hasPlanId: !!user.planId,
+        planExpiryDate: user.planExpiryDate,
+        isApproved: user.isApproved
+      });
+      
+      // Check if user has an active plan
       if (!user.isPlanActive || !user.planId) {
+        console.log("❌ Non-Alveoly student has no active plan - requires plan");
         return res.status(403).json({ 
           message: "You need an active plan to access your account. Please subscribe to a plan.",
           requiresPlan: true,
-          redirectTo: "/pricing"
+          redirectTo: "/pricing",
+          userId: user._id,
+          email: user.email
         });
       }
       
       // Check if plan is expired
       if (user.planExpiryDate && new Date(user.planExpiryDate) < new Date()) {
+        console.log("❌ Non-Alveoly student plan expired");
         user.isPlanActive = false;
         user.subscriptionStatus = "expired";
         await user.save();
         return res.status(403).json({ 
           message: "Your plan has expired. Please renew your subscription.",
           requiresPlan: true,
-          redirectTo: "/pricing"
+          redirectTo: "/pricing",
+          userId: user._id,
+          email: user.email
         });
       }
+      
+      console.log("✅ Non-Alveoly student has active plan, allowing login");
     }
 
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
@@ -934,10 +952,19 @@ export const login = async (req, res) => {
       .select("-password")
       .populate("programId", "name code isActive")
       .populate("courseId", "name")
-      .populate("planId", "title duration price");
+      .populate("planId", "title duration price durationUnit");
 
     const token = generateToken(user, user.activeSession);
     const requiresProgram = !populatedUser.programId && !populatedUser.courseId;
+
+    console.log("✅ Login successful for:", {
+      userId: user._id,
+      email: user.email,
+      userType: user.userType,
+      isPlanActive: user.isPlanActive,
+      planId: user.planId,
+      requiresProgram
+    });
 
     res.json({ 
       token, 

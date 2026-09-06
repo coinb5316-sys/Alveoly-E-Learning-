@@ -151,51 +151,56 @@ const Navbar = () => {
 
   // ================= LOGIN HANDLER =================
   const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const result = await login(loginForm);
-      
-      if (result.requiresApproval) {
-        setShowApprovalModal(true);
-        setApprovalMessage("Your account is pending approval. Please wait for admin approval.");
-        setLoading(false);
-        return;
-      }
-      
-      if (result.requiresPlan) {
-        navigate("/pricing", {
-          state: {
-            message: "Please select a plan to continue",
-            userId: result.user?._id,
-            email: result.user?.email,
-            user: result.user
-          }
-        });
-        toast.info("Please select a plan to continue");
-        setShowLoginModal(false);
-        setLoginForm({ email: "", password: "" });
-        setLoading(false);
-        return;
-      }
-      
-      if (result.user?.role === "admin") {
-        navigate("/admin");
-      } else if (result.user?.role === "lecturer") {
-        navigate("/lecturer");
-      } else if (result.requiresProgram) {
-        navigate("/select-program");
-      } else {
-        navigate("/student/dashboard");
-      }
-      toast.success("Login successful!");
+  e.preventDefault();
+  setLoading(true);
+  try {
+    const result = await login(loginForm);
+    console.log("Login result:", result);
+    
+    // Check if user needs approval
+    if (result.requiresApproval) {
+      setShowApprovalModal(true);
+      setApprovalMessage("Your account is pending approval. Please wait for admin approval.");
+      setLoading(false);
+      return;
+    }
+    
+    // Check if user needs to select plan (non-alveoly students)
+    if (result.requiresPlan) {
+      console.log("User requires plan - redirecting to pricing");
+      navigate("/pricing", {
+        state: {
+          message: "Please select a plan to continue",
+          userId: result.user?._id,
+          email: result.user?.email,
+          user: result.user
+        }
+      });
+      toast.info("Please select a plan to continue");
       setShowLoginModal(false);
       setLoginForm({ email: "", password: "" });
-    } catch (err) {
-      if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
-        setShowApprovalModal(true);
-        setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
-      } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
+      setLoading(false);
+      return;
+    }
+    
+    if (result.user?.role === "admin") {
+      navigate("/admin");
+    } else if (result.user?.role === "lecturer") {
+      navigate("/lecturer");
+    } else if (result.requiresProgram) {
+      navigate("/select-program");
+    } else {
+      navigate("/student/dashboard");
+    }
+    toast.success("Login successful!");
+    setShowLoginModal(false);
+    setLoginForm({ email: "", password: "" });
+  } catch (err) {
+    console.error("Login error:", err);
+    // Check if this is a plan requirement error from the backend
+    if (err.response?.status === 403) {
+      if (err.response?.data?.requiresPlan) {
+        console.log("Server requires plan - redirecting to pricing");
         navigate("/pricing", {
           state: {
             message: err.response?.data?.message || "Please select a plan to continue",
@@ -203,14 +208,22 @@ const Navbar = () => {
           }
         });
         toast.info(err.response?.data?.message || "Please select a plan to continue");
-      } else {
-        toast.error(err.response?.data?.message || "Login failed");
+        setShowLoginModal(false);
+        setLoading(false);
+        return;
       }
-    } finally {
-      setLoading(false);
+      if (err.response?.data?.requiresApproval) {
+        setShowApprovalModal(true);
+        setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+        setLoading(false);
+        return;
+      }
     }
-  };
-
+    toast.error(err.response?.data?.message || "Login failed");
+  } finally {
+    setLoading(false);
+  }
+};
   // ================= ALVEOLY STUDENT REGISTRATION =================
   const handleAlveolyRegistration = async (source, details) => {
     try {
@@ -268,61 +281,62 @@ const Navbar = () => {
 
   // ================= NON-ALVEOLY STUDENT REGISTRATION - MIRRORS GOOGLE FLOW =================
   const handleNonAlveolyRegistration = async () => {
-    try {
-      setLoading(true);
-      
-      if (!signupForm.name || !signupForm.email || !signupForm.password) {
-        toast.error("Please fill in all required fields");
-        setLoading(false);
-        return;
-      }
-      
-      const payload = {
-        name: signupForm.name.trim(),
-        email: signupForm.email.trim().toLowerCase(),
-        password: signupForm.password,
-        userType: "non_alveoly_student",
-        programId: signupForm.programId,
-        courseId: signupForm.courseId
-      };
-      
-      console.log("Sending Non-Alveoly registration payload:", payload);
-      
-      // Use the AuthContext's registerNonAlveoly method (which now mirrors googleLogin)
-      const result = await registerNonAlveoly(payload);
-      console.log("Registration result:", result);
-      
-      if (result.user) {
-        toast.success("Registration successful! Please subscribe to a plan to activate your account.");
-        setShowLoginModal(false);
-        setSignupForm({
-          name: "",
-          email: "",
-          password: "",
-          programId: "",
-          courseId: "",
-          userType: ""
-        });
-        
-        // Navigate to PRICING page with user data - EXACTLY LIKE GOOGLE FLOW
-        navigate("/pricing", { 
-          state: { 
-            message: "Please subscribe to a plan to activate your account.",
-            userId: result.user._id || result.userId,
-            email: result.user.email,
-            user: result.user
-          } 
-        });
-      } else {
-        toast.error(result.message || "Registration failed");
-      }
-    } catch (err) {
-      console.error("Non-Alveoly Registration error:", err);
-      toast.error(err.response?.data?.message || "Registration failed. Please try again.");
-    } finally {
+  try {
+    setLoading(true);
+    
+    if (!signupForm.name || !signupForm.email || !signupForm.password) {
+      toast.error("Please fill in all required fields");
       setLoading(false);
+      return;
     }
-  };
+    
+    const payload = {
+      name: signupForm.name.trim(),
+      email: signupForm.email.trim().toLowerCase(),
+      password: signupForm.password,
+      userType: "non_alveoly_student",
+      programId: signupForm.programId,
+      courseId: signupForm.courseId
+    };
+    
+    console.log("Sending Non-Alveoly registration payload:", payload);
+    
+    // Use the AuthContext's registerNonAlveoly method
+    const result = await registerNonAlveoly(payload);
+    console.log("Registration result:", result);
+    
+    if (result.user) {
+      toast.success("Registration successful! Please subscribe to a plan to activate your account.");
+      setShowLoginModal(false);
+      setSignupForm({
+        name: "",
+        email: "",
+        password: "",
+        programId: "",
+        courseId: "",
+        userType: ""
+      });
+      
+      // Navigate to PRICING page with user data
+      navigate("/pricing", { 
+        state: { 
+          message: "Please subscribe to a plan to activate your account.",
+          userId: result.user._id || result.userId,
+          email: result.user.email,
+          user: result.user
+        } 
+      });
+    } else {
+      toast.error(result.message || "Registration failed");
+    }
+  } catch (err) {
+    console.error("Non-Alveoly Registration error:", err);
+    toast.error(err.response?.data?.message || "Registration failed. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // ================= HANDLE SIGNUP SUBMIT =================
   const handleSignupSubmit = async (e) => {
