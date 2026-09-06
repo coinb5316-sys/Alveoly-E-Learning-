@@ -1,7 +1,7 @@
-// src/pages/admin/blog/AdminCreateBlogPost.jsx
-import React, { useState, useEffect } from 'react';
+// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE WITH ALL FEATURES
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   Save,
@@ -17,7 +17,46 @@ import {
   User,
   FileText,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Video,
+  Music,
+  Link as LinkIcon,
+  Quote,
+  List,
+  Heading1,
+  Heading2,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Code,
+  Minus,
+  Maximize2,
+  Minimize2,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Expand,
+  Compress,
+  Download,
+  Share2,
+  Heart,
+  MessageCircle,
+  Eye as EyeIcon,
+  Star,
+  Bookmark,
+  Send,
+  Paperclip,
+  Smile,
+  Image,
+  Film,
+  File,
+  Music2,
+  Mic,
+  Camera
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -35,13 +74,15 @@ const mockTags = [
   'AI', 'Nursing', 'Healthcare', 'Technology', 'Patient Care',
   'Innovation', 'Research', 'Mental Health', 'Wellness', 'Self-Care',
   'Telehealth', 'Virtual Care', 'Leadership', 'Management', 'Culture',
-  'Diversity', 'Evidence-Based Practice', 'Clinical Care'
+  'Diversity', 'Evidence-Based Practice', 'Clinical Care', 'Education',
+  'Digital Health', 'Medical', 'Science', 'Public Health', 'Nursing Education'
 ];
 
 const AdminCreateBlogPost = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditing = Boolean(id);
+  const contentEditorRef = useRef(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -50,19 +91,44 @@ const AdminCreateBlogPost = () => {
     category: '',
     tags: [],
     featuredImage: null,
+    galleryImages: [],
+    videoUrl: '',
+    videoEmbed: '',
+    audioUrl: '',
     status: 'draft',
     featured: false,
     publishDate: null,
     metaDescription: '',
-    metaKeywords: ''
+    metaKeywords: '',
+    author: '',
+    authorBio: '',
+    authorImage: null,
+    references: [],
+    learningObjectives: [],
+    statistics: [],
+    relatedPosts: [],
+    readingTime: 5,
+    allowComments: true,
+    showAuthor: true,
+    showShareButtons: true
   });
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [galleryPreviews, setGalleryPreviews] = useState([]);
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [errors, setErrors] = useState({});
+  const [activeTab, setActiveTab] = useState('editor');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [refInput, setRefInput] = useState('');
+  const [objectiveInput, setObjectiveInput] = useState('');
+  const [statLabel, setStatLabel] = useState('');
+  const [statValue, setStatValue] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     if (isEditing) {
@@ -73,26 +139,78 @@ const AdminCreateBlogPost = () => {
   const fetchPost = async () => {
     try {
       setLoading(true);
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Mock data for editing
+      // Mock data for editing with all features
       const mockPost = {
         title: "The Future of Nursing: AI-Powered Patient Care in 2026",
-        subtitle: "How artificial intelligence is revolutionizing healthcare delivery",
-        content: `<p>Artificial intelligence is no longer a concept of the future...</p>`,
+        subtitle: "How artificial intelligence is revolutionizing healthcare delivery and nursing practice",
+        content: `<p>Artificial intelligence is no longer a concept of the future—it's transforming the way nurses deliver care today. From predictive analytics that identify patient deterioration early, to smart monitoring systems that free up valuable nursing time, AI is reshaping the healthcare landscape.</p>
+        
+        <h2>The Rise of Smart Patient Monitoring</h2>
+        <p>Modern healthcare facilities are increasingly adopting AI-powered monitoring systems that can predict patient deterioration up to 24 hours before traditional methods would detect it. This early warning capability is saving lives and reducing ICU admissions by up to 30% in hospitals that have implemented these systems.</p>
+        
+        <figure>
+          <img src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80" alt="AI patient monitoring" />
+          <figcaption>AI-powered monitoring systems are revolutionizing patient care</figcaption>
+        </figure>
+        
+        <blockquote>
+          "AI is not replacing nurses—it's empowering them to focus on what matters most: direct patient care and compassion."
+          <cite>— Dr. Sarah Mitchell</cite>
+        </blockquote>
+        
+        <h2>AI-Assisted Clinical Decision Making</h2>
+        <p>Nurses are now using AI tools that analyze vast amounts of patient data to provide real-time insights and recommendations. These systems help identify potential drug interactions, suggest evidence-based interventions, and flag unusual patterns in vital signs.</p>
+        
+        <h3>Key Benefits for Nursing Practice</h3>
+        <ul>
+          <li>Reduced documentation time by 40%</li>
+          <li>Improved patient outcomes and safety</li>
+          <li>Enhanced clinical decision support</li>
+          <li>More time for direct patient interaction</li>
+        </ul>`,
         category: "Healthcare Technology",
-        tags: ["AI", "Nursing", "Healthcare", "Technology"],
+        tags: ["AI", "Nursing", "Healthcare", "Technology", "Innovation"],
         featuredImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80",
+        galleryImages: [
+          "https://images.unsplash.com/photo-1584982751601-97dcc096659c?w=800&q=80",
+          "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=800&q=80"
+        ],
+        videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
+        videoEmbed: '<iframe width="560" height="315" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allowfullscreen></iframe>',
+        audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
         status: "published",
         featured: true,
         publishDate: "2026-01-15",
         metaDescription: "Explore how AI is transforming nursing practice",
-        metaKeywords: "AI, nursing, healthcare, technology"
+        metaKeywords: "AI, nursing, healthcare, technology, patient care",
+        author: "Dr. Sarah Mitchell",
+        authorBio: "Dr. Mitchell is a leading expert in nursing informatics with over 20 years of experience in healthcare innovation.",
+        authorImage: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&h=150&fit=crop&crop=face",
+        references: [
+          "Smith, J. et al. (2025). AI in Healthcare: A Systematic Review. Journal of Medical Informatics.",
+          "Johnson, M. (2024). The Future of Nursing: AI Integration. Healthcare Technology Review."
+        ],
+        learningObjectives: [
+          "Understand the role of AI in modern nursing practice",
+          "Identify key applications of AI in patient monitoring",
+          "Evaluate the impact of AI on nursing workflow and patient outcomes"
+        ],
+        statistics: [
+          { value: "40%", label: "Reduced Documentation Time" },
+          { value: "85%", label: "Accuracy in Patient Monitoring" }
+        ],
+        relatedPosts: [1, 2, 3],
+        readingTime: 8,
+        allowComments: true,
+        showAuthor: true,
+        showShareButtons: true
       };
       
       setFormData(mockPost);
       setImagePreview(mockPost.featuredImage);
+      setGalleryPreviews(mockPost.galleryImages);
     } catch (error) {
       console.error('Error fetching post:', error);
       toast.error('Failed to load post');
@@ -107,7 +225,6 @@ const AdminCreateBlogPost = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
-    // Clear error for this field
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
@@ -123,6 +240,29 @@ const AdminCreateBlogPost = () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleGalleryUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setGalleryPreviews(prev => [...prev, reader.result]);
+        setFormData(prev => ({
+          ...prev,
+          galleryImages: [...prev.galleryImages, file]
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeGalleryImage = (index) => {
+    setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
+    setFormData(prev => ({
+      ...prev,
+      galleryImages: prev.galleryImages.filter((_, i) => i !== index)
+    }));
   };
 
   const handleAddTag = (tag) => {
@@ -153,6 +293,55 @@ const AdminCreateBlogPost = () => {
     }
   };
 
+  const handleAddReference = () => {
+    if (!refInput.trim()) return;
+    setFormData(prev => ({
+      ...prev,
+      references: [...prev.references, refInput.trim()]
+    }));
+    setRefInput('');
+  };
+
+  const handleRemoveReference = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      references: prev.references.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleAddObjective = () => {
+    if (!objectiveInput.trim()) return;
+    setFormData(prev => ({
+      ...prev,
+      learningObjectives: [...prev.learningObjectives, objectiveInput.trim()]
+    }));
+    setObjectiveInput('');
+  };
+
+  const handleRemoveObjective = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      learningObjectives: prev.learningObjectives.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleAddStatistic = () => {
+    if (!statLabel.trim() || !statValue.trim()) return;
+    setFormData(prev => ({
+      ...prev,
+      statistics: [...prev.statistics, { value: statValue.trim(), label: statLabel.trim() }]
+    }));
+    setStatLabel('');
+    setStatValue('');
+  };
+
+  const handleRemoveStatistic = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      statistics: prev.statistics.filter((_, i) => i !== index)
+    }));
+  };
+
   const validateForm = () => {
     const newErrors = {};
     if (!formData.title.trim()) newErrors.title = 'Title is required';
@@ -171,7 +360,6 @@ const AdminCreateBlogPost = () => {
 
     try {
       setSaving(true);
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       toast.success(isEditing ? 'Post updated successfully!' : 'Post created successfully!');
@@ -179,7 +367,6 @@ const AdminCreateBlogPost = () => {
       if (status === 'published') {
         navigate('/admin/blog/posts');
       } else {
-        // Stay on page for draft
         toast.info('Draft saved successfully');
       }
     } catch (error) {
@@ -193,6 +380,52 @@ const AdminCreateBlogPost = () => {
   const handlePublish = () => {
     handleSave('published');
   };
+
+  const insertText = (before, after = '') => {
+    const textarea = contentEditorRef.current;
+    if (!textarea) return;
+    
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    const newText = before + selectedText + after;
+    
+    setFormData(prev => ({
+      ...prev,
+      content: prev.content.substring(0, start) + newText + prev.content.substring(end)
+    }));
+  };
+
+  const toolbarButtons = [
+    { icon: Bold, action: () => insertText('<strong>', '</strong>'), label: 'Bold' },
+    { icon: Italic, action: () => insertText('<em>', '</em>'), label: 'Italic' },
+    { icon: Underline, action: () => insertText('<u>', '</u>'), label: 'Underline' },
+    { type: 'divider' },
+    { icon: Heading1, action: () => insertText('<h1>', '</h1>'), label: 'Heading 1' },
+    { icon: Heading2, action: () => insertText('<h2>', '</h2>'), label: 'Heading 2' },
+    { icon: List, action: () => insertText('<ul>\n  <li>', '</li>\n</ul>'), label: 'List' },
+    { type: 'divider' },
+    { icon: Quote, action: () => insertText('<blockquote>\n  ', '\n</blockquote>'), label: 'Quote' },
+    { icon: LinkIcon, action: () => {
+      const url = prompt('Enter URL:');
+      if (url) insertText(`<a href="${url}">`, '</a>');
+    }, label: 'Link' },
+    { icon: Image, action: () => {
+      const url = prompt('Enter image URL:');
+      if (url) insertText(`<img src="${url}" alt="Image" />`, '');
+    }, label: 'Image' },
+    { icon: Video, action: () => {
+      const url = prompt('Enter video URL (YouTube/Vimeo):');
+      if (url) insertText(`<figure>\n  <iframe src="${url}" allowfullscreen></iframe>\n  <figcaption>Video caption</figcaption>\n</figure>`, '');
+    }, label: 'Video' },
+    { type: 'divider' },
+    { icon: AlignLeft, action: () => insertText('<p style="text-align: left;">', '</p>'), label: 'Align Left' },
+    { icon: AlignCenter, action: () => insertText('<p style="text-align: center;">', '</p>'), label: 'Align Center' },
+    { icon: AlignRight, action: () => insertText('<p style="text-align: right;">', '</p>'), label: 'Align Right' },
+    { type: 'divider' },
+    { icon: Minus, action: () => insertText('<hr />', ''), label: 'Divider' },
+    { icon: Code, action: () => insertText('<code>', '</code>'), label: 'Code' },
+  ];
 
   if (loading) {
     return (
@@ -208,7 +441,7 @@ const AdminCreateBlogPost = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 sticky top-0 z-20 bg-gray-50 dark:bg-gray-950/95 backdrop-blur-sm -mx-4 px-4 py-4 md:-mx-6 md:px-6 border-b border-gray-200/50 dark:border-gray-800/50">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/admin/blog/posts')}
@@ -227,10 +460,18 @@ const AdminCreateBlogPost = () => {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button
+            onClick={() => setShowPreview(!showPreview)}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition flex items-center gap-2"
+          >
+            {showPreview ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            {showPreview ? 'Hide Preview' : 'Preview'}
+          </button>
+          <button
             onClick={() => handleSave('draft')}
             disabled={saving}
-            className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition disabled:opacity-50"
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition disabled:opacity-50 flex items-center gap-2"
           >
+            <Save className="h-4 w-4" />
             Save Draft
           </button>
           <button
@@ -253,7 +494,7 @@ const AdminCreateBlogPost = () => {
       {/* Main Form */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className={`lg:col-span-2 space-y-6 ${showPreview ? 'lg:col-span-3' : ''}`}>
           {/* Title */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -273,6 +514,9 @@ const AdminCreateBlogPost = () => {
                 {errors.title}
               </p>
             )}
+            <p className="mt-2 text-xs text-gray-400">
+              {formData.title.length}/150 characters
+            </p>
           </div>
 
           {/* Subtitle */}
@@ -288,30 +532,175 @@ const AdminCreateBlogPost = () => {
               placeholder="Enter post subtitle..."
               className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             />
+            <p className="mt-2 text-xs text-gray-400">
+              A brief subtitle that appears below the title
+            </p>
           </div>
 
-          {/* Content */}
+          {/* Content Editor */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div className="border-b border-gray-200 dark:border-gray-800 p-2 flex flex-wrap gap-1 bg-gray-50 dark:bg-gray-800/50">
+              {toolbarButtons.map((btn, index) => {
+                if (btn.type === 'divider') {
+                  return <div key={index} className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1" />;
+                }
+                const Icon = btn.icon;
+                return (
+                  <button
+                    key={index}
+                    onClick={btn.action}
+                    title={btn.label}
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition text-gray-600 dark:text-gray-400"
+                  >
+                    <Icon className="h-4 w-4" />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="relative">
+              <textarea
+                ref={contentEditorRef}
+                name="content"
+                value={formData.content}
+                onChange={handleChange}
+                rows={20}
+                placeholder="Write your post content here... Use the toolbar above for formatting."
+                className={`w-full px-4 py-3 bg-white dark:bg-gray-900 border-0 focus:ring-0 outline-none transition resize-y font-mono text-sm ${errors.content ? 'border-red-500' : ''}`}
+              />
+              {errors.content && (
+                <p className="absolute bottom-2 left-4 text-sm text-red-500 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  {errors.content}
+                </p>
+              )}
+            </div>
+            <div className="border-t border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/50 flex justify-between text-xs text-gray-400">
+              <span>HTML content supported</span>
+              <span>{formData.content.length} characters</span>
+            </div>
+          </div>
+
+          {/* Gallery Images */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Content *
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Gallery Images
             </label>
-            <textarea
-              name="content"
-              value={formData.content}
-              onChange={handleChange}
-              rows={15}
-              placeholder="Write your post content here..."
-              className={`w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border ${errors.content ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-y font-mono text-sm`}
-            />
-            {errors.content && (
-              <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
-                <AlertCircle className="h-4 w-4" />
-                {errors.content}
-              </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {galleryPreviews.map((preview, index) => (
+                <div key={index} className="relative group">
+                  <img
+                    src={preview}
+                    alt={`Gallery ${index + 1}`}
+                    className="w-full h-32 object-cover rounded-lg"
+                  />
+                  <button
+                    onClick={() => removeGalleryImage(index)}
+                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition opacity-0 group-hover:opacity-100"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition">
+                <div className="flex flex-col items-center gap-1">
+                  <Plus className="h-8 w-8 text-gray-400" />
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Add images</span>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleGalleryUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Video Section */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <Video className="h-4 w-4" />
+              Video Content
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                  YouTube/Vimeo URL
+                </label>
+                <input
+                  type="text"
+                  name="videoUrl"
+                  value={formData.videoUrl}
+                  onChange={handleChange}
+                  placeholder="https://www.youtube.com/embed/..."
+                  className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                  Embed Code
+                </label>
+                <input
+                  type="text"
+                  name="videoEmbed"
+                  value={formData.videoEmbed}
+                  onChange={handleChange}
+                  placeholder="<iframe ...>"
+                  className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+                />
+              </div>
+            </div>
+            {formData.videoUrl && (
+              <div className="mt-4">
+                <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+                  <iframe
+                    src={formData.videoUrl}
+                    className="w-full h-full"
+                    allowFullScreen
+                    title="Video preview"
+                  />
+                </div>
+                <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                  <button className="flex items-center gap-1 hover:text-gray-700 transition">
+                    <Play className="h-4 w-4" />
+                    Play
+                  </button>
+                  <button className="flex items-center gap-1 hover:text-gray-700 transition">
+                    <Volume2 className="h-4 w-4" />
+                    Volume
+                  </button>
+                  <button className="flex items-center gap-1 hover:text-gray-700 transition">
+                    <Expand className="h-4 w-4" />
+                    Expand
+                  </button>
+                </div>
+              </div>
             )}
-            <p className="mt-2 text-xs text-gray-400">
-              You can use HTML tags for formatting. Supported: &lt;p&gt;, &lt;h2&gt;, &lt;h3&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;blockquote&gt;, &lt;figure&gt;, &lt;figcaption&gt;
-            </p>
+          </div>
+
+          {/* Audio Section */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-3">
+              <Music className="h-4 w-4" />
+              Audio / Podcast
+            </h3>
+            <input
+              type="text"
+              name="audioUrl"
+              value={formData.audioUrl}
+              onChange={handleChange}
+              placeholder="https://example.com/podcast.mp3"
+              className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+            />
+            {formData.audioUrl && (
+              <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <audio controls className="w-full">
+                  <source src={formData.audioUrl} type="audio/mpeg" />
+                  Your browser does not support the audio element.
+                </audio>
+              </div>
+            )}
           </div>
 
           {/* Tags */}
@@ -340,7 +729,6 @@ const AdminCreateBlogPost = () => {
                 </button>
               </div>
               
-              {/* Tag suggestions */}
               {showTagSuggestions && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
                   {mockTags
@@ -360,7 +748,6 @@ const AdminCreateBlogPost = () => {
               )}
             </div>
             
-            {/* Selected tags */}
             <div className="flex flex-wrap gap-2 mt-3">
               {formData.tags.map(tag => (
                 <span
@@ -375,6 +762,124 @@ const AdminCreateBlogPost = () => {
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </span>
+              ))}
+            </div>
+          </div>
+
+          {/* References */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              References
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={refInput}
+                onChange={(e) => setRefInput(e.target.value)}
+                placeholder="Add reference..."
+                className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddReference()}
+              />
+              <button
+                onClick={handleAddReference}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            <ul className="space-y-2 mt-3">
+              {formData.references.map((ref, index) => (
+                <li key={index} className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <span className="text-sm font-medium text-gray-500">[{index + 1}]</span>
+                  <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">{ref}</span>
+                  <button
+                    onClick={() => handleRemoveReference(index)}
+                    className="text-gray-400 hover:text-red-500 transition"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Learning Objectives */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Learning Objectives
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={objectiveInput}
+                onChange={(e) => setObjectiveInput(e.target.value)}
+                placeholder="Add learning objective..."
+                className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddObjective()}
+              />
+              <button
+                onClick={handleAddObjective}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            <ul className="space-y-2 mt-3">
+              {formData.learningObjectives.map((obj, index) => (
+                <li key={index} className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <span className="text-green-500">✓</span>
+                  <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">{obj}</span>
+                  <button
+                    onClick={() => handleRemoveObjective(index)}
+                    className="text-gray-400 hover:text-red-500 transition"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Statistics */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Statistics / Key Metrics
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={statValue}
+                onChange={(e) => setStatValue(e.target.value)}
+                placeholder="Value (e.g., 40%)"
+                className="w-32 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+              />
+              <input
+                type="text"
+                value={statLabel}
+                onChange={(e) => setStatLabel(e.target.value)}
+                placeholder="Label (e.g., Reduced Time)"
+                className="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && handleAddStatistic()}
+              />
+              <button
+                onClick={handleAddStatistic}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+              {formData.statistics.map((stat, index) => (
+                <div key={index} className="relative p-3 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-lg border border-blue-100 dark:border-blue-800/50">
+                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stat.value}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{stat.label}</p>
+                  <button
+                    onClick={() => handleRemoveStatistic(index)}
+                    className="absolute top-1 right-1 text-gray-400 hover:text-red-500 transition"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -425,6 +930,53 @@ const AdminCreateBlogPost = () => {
             )}
           </div>
 
+          {/* Author Info */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Author Information</h3>
+            
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Author Name
+              </label>
+              <input
+                type="text"
+                name="author"
+                value={formData.author}
+                onChange={handleChange}
+                placeholder="Author name..."
+                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Author Bio
+              </label>
+              <textarea
+                name="authorBio"
+                value={formData.authorBio}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Author biography..."
+                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm resize-y"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Author Image URL
+              </label>
+              <input
+                type="text"
+                name="authorImage"
+                value={formData.authorImage || ''}
+                onChange={handleChange}
+                placeholder="https://example.com/avatar.jpg"
+                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+              />
+            </div>
+          </div>
+
           {/* Category */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -449,6 +1001,21 @@ const AdminCreateBlogPost = () => {
             )}
           </div>
 
+          {/* Reading Time */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Reading Time (minutes)
+            </label>
+            <input
+              type="number"
+              name="readingTime"
+              value={formData.readingTime}
+              onChange={handleChange}
+              min="1"
+              className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            />
+          </div>
+
           {/* Status Options */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
             <label className="flex items-center gap-2">
@@ -459,8 +1026,51 @@ const AdminCreateBlogPost = () => {
                 onChange={handleChange}
                 className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-sm text-gray-700 dark:text-gray-300">
+              <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                <Star className="h-4 w-4 text-yellow-500" />
                 Feature this post
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="allowComments"
+                checked={formData.allowComments}
+                onChange={handleChange}
+                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                <MessageCircle className="h-4 w-4" />
+                Allow comments
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="showAuthor"
+                checked={formData.showAuthor}
+                onChange={handleChange}
+                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                <User className="h-4 w-4" />
+                Show author
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="showShareButtons"
+                checked={formData.showShareButtons}
+                onChange={handleChange}
+                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                <Share2 className="h-4 w-4" />
+                Show share buttons
               </span>
             </label>
 
@@ -513,6 +1123,9 @@ const AdminCreateBlogPost = () => {
                 placeholder="Brief description for search engines..."
                 className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
               />
+              <p className="mt-1 text-xs text-gray-400">
+                {formData.metaDescription?.length || 0}/160 characters
+              </p>
             </div>
 
             <div>
@@ -531,7 +1144,7 @@ const AdminCreateBlogPost = () => {
           </div>
 
           {/* Save Actions */}
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-3">
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-3 sticky top-20">
             <button
               onClick={() => handleSave('draft')}
               disabled={saving}
@@ -548,11 +1161,155 @@ const AdminCreateBlogPost = () => {
               {isEditing ? 'Update Post' : 'Publish Post'}
               <CheckCircle className="h-4 w-4" />
             </button>
+            <button
+              onClick={() => setShowPreview(!showPreview)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+            >
+              <EyeIcon className="h-4 w-4" />
+              {showPreview ? 'Hide Preview' : 'Preview Post'}
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Live Preview Modal */}
+      <AnimatePresence>
+        {showPreview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+            onClick={() => setShowPreview(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Post Preview</h2>
+                <button
+                  onClick={() => setShowPreview(false)}
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="p-6 space-y-6">
+                {/* Featured Image */}
+                {imagePreview && (
+                  <img src={imagePreview} alt={formData.title} className="w-full h-64 object-cover rounded-xl" />
+                )}
+                
+                {/* Title */}
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{formData.title}</h1>
+                
+                {/* Subtitle */}
+                {formData.subtitle && (
+                  <p className="text-xl text-gray-600 dark:text-gray-400">{formData.subtitle}</p>
+                )}
+                
+                {/* Author Info */}
+                <div className="flex items-center gap-3">
+                  {formData.authorImage ? (
+                    <img src={formData.authorImage} alt={formData.author} className="w-12 h-12 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
+                      {formData.author?.charAt(0) || 'A'}
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{formData.author || 'Author'}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{formData.authorBio || 'Author bio'}</p>
+                  </div>
+                </div>
+                
+                {/* Content */}
+                <div
+                  className="prose prose-lg prose-blue max-w-none dark:prose-invert"
+                  dangerouslySetInnerHTML={{ __html: formData.content }}
+                />
+                
+                {/* Statistics */}
+                {formData.statistics.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-8">
+                    {formData.statistics.map((stat, index) => (
+                      <div key={index} className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-6 text-center border border-blue-100 dark:border-blue-800/50">
+                        <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                          {stat.value}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{stat.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Learning Objectives */}
+                {formData.learningObjectives.length > 0 && (
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-6 border border-blue-100 dark:border-blue-800/50">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
+                      <GraduationCap className="text-blue-600" />
+                      Learning Objectives
+                    </h3>
+                    <ul className="space-y-2">
+                      {formData.learningObjectives.map((obj, index) => (
+                        <li key={index} className="flex items-start gap-3 text-gray-700 dark:text-gray-300">
+                          <CheckCircle className="text-green-500 mt-1 flex-shrink-0 h-4 w-4" />
+                          <span>{obj}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {/* References */}
+                {formData.references.length > 0 && (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">References</h3>
+                    <ul className="space-y-2">
+                      {formData.references.map((ref, index) => (
+                        <li key={index} className="flex items-start gap-3 text-gray-700 dark:text-gray-300">
+                          <span className="text-blue-600 font-bold text-sm">[{index + 1}]</span>
+                          <span>{ref}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {/* Tags */}
+                {formData.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200 dark:border-gray-800">
+                    {formData.tags.map((tag) => (
+                      <span key={tag} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-700 dark:text-gray-300 text-sm font-medium">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
+
+// Add missing icons
+const GraduationCap = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422M12 14l-6.16-3.422M12 14v6m-6 0h12" />
+  </svg>
+);
+
+const CheckCircle = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
 
 export default AdminCreateBlogPost;
