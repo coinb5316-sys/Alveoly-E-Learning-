@@ -116,6 +116,7 @@ import HighSchoolPage from "./pages/HighSchoolPage";
 import GradSchoolPage from "./pages/GradSchoolPage";
 import LegalPage from "./pages/LegalPage";
 import PharmacyPage from "./pages/PharmacyPage";
+import NursingBlogPost from "./pages/NursingBlogPost";
 
 function App() {
   useEffect(() => {
@@ -167,6 +168,7 @@ function App() {
           <Route path="/cookies" element={<CookiePolicy />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/nursing-blog/:slug" element={<NursingBlogPost />} />
           <Route path="/pricing" element={<Pricing />} /> {/* <-- ADDED PRICING ROUTE */}
           <Route path="/careers" element={<CareerPage />} />
           <Route path="/careers/what-we-do" element={<CareerWhatWeDo />} />
