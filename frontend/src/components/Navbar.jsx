@@ -1,4 +1,5 @@
-// src/components/Navbar.jsx - COMPLETE FIXED VERSION
+// src/components/Navbar.jsx - UPDATED VERSION (Only showing changed parts)
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -40,7 +41,8 @@ import toast from "react-hot-toast";
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, googleLogin, user, logout, register } = useAuth();
+  // ADD registerNonAlveoly to the destructuring
+  const { login, googleLogin, user, logout, register, registerNonAlveoly } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -258,7 +260,7 @@ const Navbar = () => {
     }
   };
 
-  // ================= NON-ALVEOLY STUDENT REGISTRATION =================
+  // ================= NON-ALVEOLY STUDENT REGISTRATION - UPDATED =================
   const handleNonAlveolyRegistration = async () => {
     try {
       setLoading(true);
@@ -281,9 +283,10 @@ const Navbar = () => {
       
       console.log("Sending Non-Alveoly registration payload:", payload);
       
-      const response = await API.post("/auth/register/non-alveoly", payload);
+      // Use the AuthContext's registerNonAlveoly method which handles setting the token
+      const result = await registerNonAlveoly(payload);
       
-      if (response.data.success) {
+      if (result.user) {
         toast.success("Registration successful! Please subscribe to a plan to activate your account.");
         setShowLoginModal(false);
         setSignupForm({
@@ -294,16 +297,18 @@ const Navbar = () => {
           courseId: "",
           userType: ""
         });
-        // Navigate to PRICING page (not student/plans)
+        // Navigate to PRICING page with user data
         navigate("/pricing", { 
           state: { 
             message: "Please subscribe to a plan to activate your account.",
-            userId: response.data.userId,
-            email: response.data.email
+            userId: result.user._id || result.userId,
+            email: result.user.email,
+            // Pass the user data so Pricing page can use it
+            user: result.user
           } 
         });
       } else {
-        toast.error(response.data.message || "Registration failed");
+        toast.error(result.message || "Registration failed");
       }
     } catch (err) {
       console.error("Non-Alveoly Registration error:", err);
@@ -344,7 +349,7 @@ const Navbar = () => {
       return;
     }
     
-    // Non-Alveoly student - direct registration
+    // Non-Alveoly student - direct registration using the updated method
     await handleNonAlveolyRegistration();
   };
 
@@ -407,7 +412,14 @@ const Navbar = () => {
         
         // Check if user needs to select plan (non-alveoly students) - REDIRECT TO PRICING
         if (result.requiresPlan) {
-          navigate("/pricing");
+          navigate("/pricing", {
+            state: {
+              message: "Please select a plan to continue",
+              userId: result.user?._id,
+              email: result.user?.email,
+              user: result.user
+            }
+          });
           toast.info("Please select a plan to continue");
           setShowLoginModal(false);
           setGoogleLoading(false);
@@ -437,7 +449,13 @@ const Navbar = () => {
           setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
           setGoogleLoading(false);
         } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
-          navigate("/pricing");
+          navigate("/pricing", {
+            state: {
+              message: "Please select a plan to continue",
+              userId: err.response?.data?.userId,
+              email: err.response?.data?.email
+            }
+          });
           toast.info(err.response?.data?.message || "Please select a plan to continue");
           setGoogleLoading(false);
         } else {
@@ -589,7 +607,8 @@ const Navbar = () => {
           state: { 
             message: "Please subscribe to a plan to activate your account.",
             userId: result.user?._id || result.user?.id,
-            email: result.user?.email
+            email: result.user?.email,
+            user: result.user
           } 
         });
         toast.info("Please select a plan to continue");

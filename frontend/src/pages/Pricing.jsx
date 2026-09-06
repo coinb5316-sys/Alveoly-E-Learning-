@@ -1,4 +1,5 @@
-// src/pages/Pricing.jsx - Public Pricing Page with Plan Selection (FIXED)
+// src/pages/Pricing.jsx - UPDATED VERSION
+
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,7 +30,7 @@ import toast from "react-hot-toast";
 const Pricing = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, setUser, token } = useAuth();
+  const { user, setUser, token, isAuthenticated } = useAuth();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hoveredPlan, setHoveredPlan] = useState(null);
@@ -68,10 +69,11 @@ const Pricing = () => {
     fetchPlans();
   }, []);
 
-  // Handle plan purchase
+  // Handle plan purchase - UPDATED
   const handlePurchasePlan = async (plan) => {
-    // Check if user is logged in (or has a valid token)
-    if (!user && !token) {
+    // Check if user is logged in using the auth context
+    // Use isAuthenticated from context or check token directly
+    if (!isAuthenticated && !token) {
       setPendingPlanId(plan._id);
       setShowLoginPrompt(true);
       return;
@@ -80,14 +82,16 @@ const Pricing = () => {
     try {
       setProcessingPayment(true);
       
-      // If user is a non-alveoly student who just registered, use their userId
-      const userId = pendingUserId || user?._id;
+      // Get userId from various sources
+      const userId = pendingUserId || user?._id || location.state?.userId;
       
       if (!userId) {
         toast.error("User information not found. Please login again.");
         setProcessingPayment(false);
         return;
       }
+      
+      console.log("Initiating payment for user:", userId, "with token:", token);
       
       // Initiate payment directly
       const response = await API.post("/payments/initiate-plan", {
@@ -105,6 +109,9 @@ const Pricing = () => {
       console.error("Payment initiation error:", err);
       if (err.response?.status === 401) {
         toast.error("Session expired. Please login again.");
+        setShowLoginPrompt(true);
+      } else if (err.response?.status === 403) {
+        toast.error(err.response?.data?.message || "Please login to continue");
         setShowLoginPrompt(true);
       } else {
         toast.error(err.response?.data?.message || "Failed to initiate payment");
@@ -139,7 +146,17 @@ const Pricing = () => {
           <p className="text-gray-500 dark:text-gray-400 mt-4 max-w-2xl mx-auto">
             Select the perfect plan to unlock premium content and accelerate your learning journey
           </p>
-          {pendingUserId && (
+          
+          {/* Show user info if authenticated */}
+          {isAuthenticated && user && (
+            <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 max-w-md mx-auto">
+              <p className="text-sm text-green-700 dark:text-green-400">
+                ✅ Logged in as <strong>{user.name}</strong> ({user.email})
+              </p>
+            </div>
+          )}
+          
+          {pendingUserId && !isAuthenticated && (
             <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 max-w-md mx-auto">
               <p className="text-sm text-green-700 dark:text-green-400">
                 ✅ Account created! Please select a plan to activate your account.
@@ -280,7 +297,7 @@ const Pricing = () => {
                       ) : (
                         <>
                           <CreditCard className="h-4 w-4" />
-                          Choose Plan
+                          {isAuthenticated ? "Subscribe Now" : "Choose Plan"}
                         </>
                       )}
                     </button>

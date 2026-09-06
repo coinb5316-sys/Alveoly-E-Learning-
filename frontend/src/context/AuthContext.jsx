@@ -117,6 +117,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ================= NON-ALVEOLY REGISTER =================
+  const registerNonAlveoly = async (form) => {
+    try {
+      const res = await API.post("/auth/register/non-alveoly", form);
+      const { token: newToken, user: userData, requiresPlan, userId } = res.data;
+      
+      // Set auth with the token so user is authenticated
+      setAuth(newToken, userData);
+      
+      return { 
+        user: userData, 
+        requiresPlan, 
+        userId,
+        message: res.data.message 
+      };
+    } catch (err) {
+      console.error("Non-Alveoly register error:", err);
+      throw err;
+    }
+  };
+
   // ================= GOOGLE LOGIN =================
   const googleLogin = async (idToken, userType = null, registrationSource = null, registrationDetails = null) => {
     try {
@@ -185,9 +206,11 @@ export const AuthProvider = ({ children }) => {
         token,
         login,
         register,
+        registerNonAlveoly,  // ADD THIS
         googleLogin,
         logout,
         setUser,
+        setAuth,  // ADD THIS
         assignProgram,
         isAdmin,
         isLecturer,
