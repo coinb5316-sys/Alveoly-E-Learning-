@@ -81,8 +81,6 @@ import AIGenerator from "./pages/AdminAIGeneratorU";
 import AIChat from "./pages/AIChat";
 import AdminPrograms from "./pages/AdminPrograms";
 import SelectProgramPage from "./pages/SelectProgramPage";
-import Blog from "./pages/Blog";
-import BlogPost from "./pages/BlogPost";
 import AdminBlog from "./pages/AdminBlog";
 import AdminBlogCreate from "./pages/AdminBlogCreate";
 import AdminBlogEdit from "./pages/AdminBlogEdit";
@@ -116,7 +114,8 @@ import HighSchoolPage from "./pages/HighSchoolPage";
 import GradSchoolPage from "./pages/GradSchoolPage";
 import LegalPage from "./pages/LegalPage";
 import PharmacyPage from "./pages/PharmacyPage";
-import NursingBlogPost from "./pages/NursingBlogPost";
+import BlogPost from "./pages/BlogPost";
+
 
 function App() {
   useEffect(() => {
@@ -160,15 +159,13 @@ function App() {
           <Route path="/programs/:id" element={<ProgramDetail />} />
           <Route path="/admissions" element={<Admissions />} />
           <Route path="/contact_us" element={<Contact />} />
+          <Route path="/blog" element={<BlogPost />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/disclaimer" element={<Disclaimer />} />
           <Route path="/cookies" element={<CookiePolicy />} />
-          <Route path="/blog" element={<Blog />} />
-          <Route path="/blog/:slug" element={<BlogPost />} />
-          <Route path="/nursing-blog/:slug" element={<NursingBlogPost />} />
           <Route path="/pricing" element={<Pricing />} /> {/* <-- ADDED PRICING ROUTE */}
           <Route path="/careers" element={<CareerPage />} />
           <Route path="/careers/what-we-do" element={<CareerWhatWeDo />} />

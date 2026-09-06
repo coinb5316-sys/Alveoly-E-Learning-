@@ -683,7 +683,7 @@ const handleNonAlveolyRegistration = async () => {
   const navLinks = [
     { name: "About", path: "/about" },
     { name: "Programs", path: "/programs" },
-    { name: "Blog", path: "/nursing-blog/:slug" },
+    { name: "Blog", path: "/blog" },
     { name: "Admissions", path: "/admissions" },
     { name: "Contact", path: "/contact_us" },
     { name: "Pricing", path: "/pricing" },
