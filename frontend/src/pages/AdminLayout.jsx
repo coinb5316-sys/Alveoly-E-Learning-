@@ -1,4 +1,4 @@
-// AdminLayout.jsx - Fixed to fetch and display actual logged-in user WITH BLOG SECTION (FULLY SCROLLABLE)
+// AdminLayout.jsx - Updated with BLOG section
 import { useState, useEffect } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
 import {
@@ -30,11 +30,15 @@ import {
   Zap,
   GraduationCap,
   Video,
-  Newspaper,
-  Edit,
-  PlusCircle,
   FolderTree,
-  ChevronDown
+  ChevronDown,
+  Newspaper,
+  Tag,
+  PenTool,
+  Image,
+  Calendar,
+  Eye,
+  Star
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationPanel from "../components/NotificationPanel";
@@ -127,7 +131,7 @@ const AdminLayout = () => {
       { to: "/admin/programs", label: "Programs", icon: BookOpen, color: "text-teal-500" },
       { to: "/admin/courses", label: "Courses", icon: Layers, color: "text-light-blue-500" },
       { to: "/admin/subjects", label: "Subjects", icon: BookOpen, color: "text-orange-500" },
-      { to: "/admin/topics", label: "Topics", icon: FolderTree, color: "text-indigo-500" }, 
+      { to: "/admin/topics", label: "Topics", icon: FolderTree, color: "text-indigo-500" },
       { to: "/admin/users", label: "Users", icon: Users, color: "text-cyan-500" },
       { to: "/admin/payments", label: "Revenue", icon: DollarSign, color: "text-yellow-500" },
       { to: "/admin/ai", label: "AI Manager", icon: FaRobot, color: "text-purple-500" },
@@ -140,17 +144,18 @@ const AdminLayout = () => {
       { to: "/admin/plans", label: "Plans", icon: Zap, color: "text-red-500" },
       { to: "/admin/content", label: "Content Library", icon: FileText, color: "text-emerald-500" },
     ]},
-    { section: "Blog Management", items: [
-      { to: "/admin/blog", label: "All Posts", icon: Newspaper, color: "text-emerald-500" },
-      { to: "/admin/blog/create", label: "Create New Post", icon: PlusCircle, color: "text-green-500" },
+    { section: "Blog", items: [
+      { to: "/admin/blog/posts", label: "All Posts", icon: Newspaper, color: "text-blue-500" },
+      { to: "/admin/blog/create", label: "Create Post", icon: PenTool, color: "text-green-500" },
+      { to: "/admin/blog/categories", label: "Categories", icon: Tag, color: "text-purple-500" },
+      { to: "/admin/blog/authors", label: "Authors", icon: UserCircle, color: "text-cyan-500" },
+      { to: "/admin/blog/tags", label: "Tags", icon: Tag, color: "text-yellow-500" },
+      { to: "/admin/blog/comments", label: "Comments", icon: MessageSquare, color: "text-pink-500" },
     ]},
     { section: "Engagement", items: [
       { to: "/admin/results", label: "Student Results", icon: TrendingUp, color: "text-violet-500" },
       { to: "/admin/testimonials", label: "Testimonials", icon: Award, color: "text-amber-500" },
       { to: "/admin/in-box", label: "Feedback", icon: MessageSquare, color: "text-rose-500" },
-      { to: "/admin/comments", label: "Comments", icon: FaCommentDots, color: "text-yellow-500" },
-      { to: "/admin/subscribers", label: "Subscribers", icon: FaEnvelope, color: "text-green-500" },
-      { to: "/admin/blog-quiz-results", label: "Blog Quiz Results", icon: FaBrain, color: "text-purple-500" },
     ]},
     { section: "System", items: [
       { to: "/admin/settings", label: "Settings", icon: Settings, color: "text-gray-500" },
@@ -222,7 +227,7 @@ const AdminLayout = () => {
                 <div className={`space-y-0.5 overflow-hidden transition-all duration-300 ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[1000px] opacity-100'}`}>
                   {section.items.map((item) => {
                     const Icon = item.icon;
-                    const isActive = location.pathname === item.to;
+                    const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
                     return (
                       <NavLink
                         key={item.to}

@@ -109,6 +109,12 @@ import BlogPostPage from "./pages/BlogPostPage";
 import BlogCategory from "./pages/BlogCategory";
 import BlogAuthor from "./pages/BlogAuthor";
 import BlogSearch from "./pages/BlogSearch";
+import AdminCreateBlogPost from "./pages/admin/blog/AdminCreateBlogPost";
+import AdminBlogCategories from "./pages/admin/blog/AdminBlogCategories";
+import AdminBlogAuthors from "./pages/admin/blog/AdminBlogAuthors";
+import AdminBlogTags from "./pages/admin/blog/AdminBlogTags";
+import AdminBlogComments from "./pages/admin/AdminBlogComments";
+import AdminBlogPosts from "./pages/admin/blog/AdminBlogPosts";
 
 function App() {
   useEffect(() => {
@@ -265,6 +271,13 @@ function App() {
             <Route path="ai" element={<AIAdmin />} />
             <Route path="ai-plans" element={<AIPlansAdmin />} />
             <Route path="ai-generator" element={<AIGenerator />} />
+            <Route path="blog/posts" element={<AdminBlogPosts />} />
+<Route path="blog/create" element={<AdminCreateBlogPost />} />
+<Route path="blog/edit/:id" element={<AdminCreateBlogPost />} />
+<Route path="blog/categories" element={<AdminBlogCategories />} />
+<Route path="blog/authors" element={<AdminBlogAuthors />} />
+<Route path="blog/tags" element={<AdminBlogTags />} />
+<Route path="blog/comments" element={<AdminBlogComments />} />
           </Route>
 
           {/* ==================== LECTURER ROUTES ==================== */}
