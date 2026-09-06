@@ -137,7 +137,11 @@ export const AuthProvider = ({ children }) => {
       const { token: newToken, user: userData, requiresPlan, userId } = res.data;
       
       // CRITICAL: Set auth with the token so user is authenticated
+      // This is the same as googleLogin does
       setAuth(newToken, userData);
+      
+      // Force a re-fetch to ensure user data is fully loaded
+      await fetchUser();
       
       return { 
         user: userData, 
@@ -225,6 +229,7 @@ export const AuthProvider = ({ children }) => {
         logout,
         setUser,
         setAuth,
+        fetchUser,
         assignProgram,
         isAdmin,
         isLecturer,

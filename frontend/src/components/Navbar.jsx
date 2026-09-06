@@ -1,4 +1,4 @@
-// src/components/Navbar.jsx - COMPLETE UPDATED
+// src/components/Navbar.jsx - COMPLETE
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -40,7 +40,7 @@ import toast from "react-hot-toast";
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, googleLogin, user, logout, register, registerNonAlveoly, setAuth } = useAuth();
+  const { login, googleLogin, user, logout, register, registerNonAlveoly, setAuth, fetchUser } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -290,7 +290,7 @@ const Navbar = () => {
       
       console.log("Sending Non-Alveoly registration payload:", payload);
       
-      // Use the AuthContext's registerNonAlveoly method
+      // Use the AuthContext's registerNonAlveoly method - this sets auth
       const result = await registerNonAlveoly(payload);
       console.log("Registration result:", result);
       
@@ -307,8 +307,9 @@ const Navbar = () => {
         });
         
         // Navigate to PRICING page with user data
-        // Wait a moment for the auth state to update
+        // Use a longer timeout to ensure auth state is fully updated
         setTimeout(() => {
+          console.log("🔄 Navigating to pricing with user:", result.user);
           navigate("/pricing", { 
             state: { 
               message: "Please subscribe to a plan to activate your account.",
@@ -317,7 +318,7 @@ const Navbar = () => {
               user: result.user
             } 
           });
-        }, 500);
+        }, 800);
       } else {
         toast.error(result.message || "Registration failed");
       }
