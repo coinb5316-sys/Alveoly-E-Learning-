@@ -1,4 +1,4 @@
-// StudentLessons.jsx - Complete with FULL title display (FIXED)
+// StudentLessons.jsx - Complete with FULL title display and Plan Deactivation Support
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -44,7 +44,8 @@ import {
   Share2,
   Layers,
   Palette,
-  Grid3x3
+  Grid3x3,
+  Ban,
 } from "lucide-react";
 
 const StudentLessons = () => {
@@ -66,6 +67,8 @@ const StudentLessons = () => {
   const [isPdfLoading, setIsPdfLoading] = useState(true);
   const [pdfError, setPdfError] = useState(false);
   const [showPdfControls, setShowPdfControls] = useState(true);
+  const [planDeactivated, setPlanDeactivated] = useState(false);
+  const [userPlanStatus, setUserPlanStatus] = useState(null);
   const pdfContainerRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
 
@@ -102,6 +105,23 @@ const StudentLessons = () => {
   ];
 
   const [viewerGradientIndex, setViewerGradientIndex] = useState(0);
+
+  // ================= CHECK PLAN STATUS =================
+  useEffect(() => {
+    const checkPlanStatus = async () => {
+      try {
+        const res = await axios.get("/auth/me");
+        setUserPlanStatus(res.data);
+        if (res.data.planDeactivatedByAdmin) {
+          setPlanDeactivated(true);
+          toast.error("Your plan has been deactivated by an administrator. Premium content is locked.");
+        }
+      } catch (err) {
+        console.error("Error checking plan status:", err);
+      }
+    };
+    checkPlanStatus();
+  }, []);
 
   // Rotate viewer background gradient every few seconds
   useEffect(() => {
@@ -158,9 +178,10 @@ const StudentLessons = () => {
       }
       setUnlockedContents(unlockedIds);
       
+      // If plan is deactivated, lock all paid content
       const contentsWithUnlockStatus = contentsData.map(content => ({
         ...content,
-        isUnlocked: !content.isPaid || unlockedIds.includes(content._id)
+        isUnlocked: planDeactivated ? false : (!content.isPaid || unlockedIds.includes(content._id))
       }));
       
       setContents(contentsWithUnlockStatus);
@@ -197,7 +218,7 @@ const StudentLessons = () => {
       setError("No subject selected");
       setLoading(false);
     }
-  }, [subjectId]);
+  }, [subjectId, planDeactivated]);
 
   const toggleTopics = () => {
     setExpandedTopics(prev => ({
@@ -330,6 +351,12 @@ const StudentLessons = () => {
   }, [viewer.open]);
 
   const handleUnlock = async (c) => {
+    // Don't allow unlocking if plan is deactivated
+    if (planDeactivated) {
+      toast.error("Your plan has been deactivated. Please contact support.");
+      return;
+    }
+    
     try {
       localStorage.setItem('current_subject_id', subjectId);
       localStorage.setItem('current_content_id', c._id);
@@ -356,6 +383,12 @@ const StudentLessons = () => {
   };
 
   const openViewer = async (c) => {
+    // Check if content is locked due to plan deactivation
+    if (planDeactivated && c.isPaid) {
+      toast.error("Your plan has been deactivated. Premium content is locked.");
+      return;
+    }
+    
     if (c.isPaid && !c.isUnlocked) {
       toast.error("This content is locked. Please purchase to unlock.");
       return;
@@ -468,6 +501,7 @@ const StudentLessons = () => {
     }
   };
 
+  // Calculate counts with plan deactivation taken into account
   const unlockedCount = contents.filter(c => c.isUnlocked).length;
   const lockedCount = contents.filter(c => c.isPaid && !c.isUnlocked).length;
   const freeCount = contents.filter(c => !c.isPaid).length;
@@ -556,6 +590,26 @@ const StudentLessons = () => {
               {subject?.name || "Lessons"}
             </span>
           </nav>
+
+          {/* Plan Deactivated Banner */}
+          {planDeactivated && (
+            <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20 p-6 mb-6 text-center">
+              <Ban className="h-12 w-12 text-red-500 mx-auto mb-3" />
+              <h3 className="text-lg font-semibold text-red-800 dark:text-red-400 mb-2">
+                Plan Deactivated
+              </h3>
+              <p className="text-red-700 dark:text-red-500 text-sm max-w-md mx-auto">
+                Your subscription plan has been deactivated. Premium content is locked. 
+                Please contact support for assistance.
+              </p>
+              <button
+                onClick={() => navigate("/student/dashboard")}
+                className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          )}
 
           {/* Page Header */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
@@ -780,7 +834,8 @@ const StudentLessons = () => {
               {filteredContents.map((content) => {
                 const isHovered = hoveredContent === content._id;
                 const hasQuiz = lessonQuizzes[content._id];
-                const isUnlocked = content.isUnlocked;
+                // If plan is deactivated, lock all paid content
+                const isUnlocked = planDeactivated ? false : content.isUnlocked;
                 const isPaid = content.isPaid;
                 const topicName = topics.find(t => t._id === content.topicId)?.name;
                 
@@ -858,9 +913,14 @@ const StudentLessons = () => {
                               e.stopPropagation();
                               handleUnlock(content);
                             }}
-                            className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl text-sm font-semibold transition-all shadow-xl shadow-purple-500/25 hover:shadow-2xl"
+                            disabled={planDeactivated}
+                            className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all shadow-xl hover:shadow-2xl ${
+                              planDeactivated 
+                                ? "bg-gray-500 cursor-not-allowed" 
+                                : "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-purple-500/25"
+                            }`}
                           >
-                            Unlock Now
+                            {planDeactivated ? "Locked" : "Unlock Now"}
                           </button>
                         </div>
                       )}
@@ -894,6 +954,12 @@ const StudentLessons = () => {
                           <>
                             <span className="text-gray-300 dark:text-gray-600">•</span>
                             <span className="text-green-600 dark:text-green-400 font-medium">Unlocked</span>
+                          </>
+                        )}
+                        {planDeactivated && isPaid && (
+                          <>
+                            <span className="text-gray-300 dark:text-gray-600">•</span>
+                            <span className="text-red-600 dark:text-red-400 font-medium">Locked (Plan Deactivated)</span>
                           </>
                         )}
                       </div>

@@ -1,4 +1,4 @@
-// StudentSubjects.jsx - Updated with topics support
+// StudentSubjects.jsx - Updated with plan deactivation check
 import { useEffect, useState } from "react"; 
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -24,7 +24,8 @@ import {
   Building,
   List,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Ban,
 } from "lucide-react";
 
 const StudentSubjects = () => {
@@ -44,6 +45,7 @@ const StudentSubjects = () => {
   const [userCourses, setUserCourses] = useState([]);
   const [showCourseSelector, setShowCourseSelector] = useState(false);
   const [expandedTopics, setExpandedTopics] = useState({});
+  const [planDeactivated, setPlanDeactivated] = useState(false);
 
   const [payments, setPayments] = useState([]);
   const [now, setNow] = useState(new Date());
@@ -55,6 +57,21 @@ const StudentSubjects = () => {
       setNow(new Date());
     }, 2000);
     return () => clearInterval(interval);
+  }, []);
+
+  // ================= FETCH USER PLAN STATUS =================
+  useEffect(() => {
+    const fetchUserStatus = async () => {
+      try {
+        const res = await axios.get("/auth/me");
+        if (res.data.planDeactivatedByAdmin) {
+          setPlanDeactivated(true);
+        }
+      } catch (err) {
+        console.error("Error fetching user status:", err);
+      }
+    };
+    fetchUserStatus();
   }, []);
 
   // ================= FETCH MANUAL ACCESS =================
@@ -143,6 +160,9 @@ const StudentSubjects = () => {
 
   // ================= ACCESS LOGIC =================
   const hasActivePlan = () => {
+    // Check if plan is deactivated by admin
+    if (planDeactivated) return false;
+    
     return payments.some(
       (p) =>
         p.status === "success" &&
@@ -153,6 +173,9 @@ const StudentSubjects = () => {
   };
 
   const isSubjectUnlocked = (subject) => {
+    // If plan is deactivated, everything is locked
+    if (planDeactivated) return false;
+    
     if (subject.isUnlocked !== undefined) {
       return subject.isUnlocked;
     }
@@ -191,7 +214,12 @@ const StudentSubjects = () => {
       try {
         setFetching(true);
         const res = await axios.get(`/subjects?course=${courseId}`);
-        setSubjects(res.data || []);
+        // Mark all subjects as locked if plan is deactivated
+        const subjectsData = res.data || [];
+        if (planDeactivated) {
+          subjectsData.forEach(s => s.isUnlocked = false);
+        }
+        setSubjects(subjectsData);
       } catch (err) {
         console.error("Error fetching subjects:", err);
         setSubjects([]);
@@ -205,6 +233,9 @@ const StudentSubjects = () => {
     if (newSocket) {
       newSocket.on("subject:created", (subj) => {
         if (subj.courseId?.toString() === courseId) {
+          if (planDeactivated) {
+            subj.isUnlocked = false;
+          }
           setSubjects((prev) => [subj, ...prev]);
         }
       });
@@ -224,7 +255,11 @@ const StudentSubjects = () => {
           setManualAccess(res.data || []);
         });
         axios.get(`/subjects?course=${courseId}`).then((res) => {
-          setSubjects(res.data || []);
+          const subjectsData = res.data || [];
+          if (planDeactivated) {
+            subjectsData.forEach(s => s.isUnlocked = false);
+          }
+          setSubjects(subjectsData);
         });
       });
     }
@@ -237,7 +272,7 @@ const StudentSubjects = () => {
         newSocket.off("manualAccess:updated");
       }
     };
-  }, [courseId]);
+  }, [courseId, planDeactivated]);
 
   // ================= TOGGLE TOPICS =================
   const toggleTopics = (subjectId) => {
@@ -249,6 +284,12 @@ const StudentSubjects = () => {
 
   // ================= PAYMENT =================
   const handleUnlock = async (subject) => {
+    // Don't allow unlocking if plan is deactivated
+    if (planDeactivated) {
+      alert("Your plan has been deactivated by an administrator. Please contact support.");
+      return;
+    }
+    
     try {
       setLoading(true);
       const res = await axios.post("/payments/initiate", {
@@ -278,13 +319,6 @@ const StudentSubjects = () => {
   const lockedCount = subjects.filter(s => !isSubjectUnlocked(s) && s.isPaid).length;
   const freeCount = subjects.filter(s => !s.isPaid).length;
   const totalTopics = subjects.reduce((acc, s) => acc + (s.topics?.length || 0), 0);
-
-  // Helper function to truncate text
-  const truncateText = (text, maxLength = 50) => {
-    if (!text) return "";
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
-  };
 
   // Show course selector when no course is selected
   if (showCourseSelector) {
@@ -356,6 +390,58 @@ const StudentSubjects = () => {
             ))}
           </div>
         )}
+      </div>
+    );
+  }
+
+  // Plan Deactivated Banner
+  if (planDeactivated) {
+    return (
+      <div className="space-y-6">
+        {/* Page Header */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1 flex-wrap">
+              {programName && (
+                <>
+                  <Building className="h-4 w-4" />
+                  <span>{programName}</span>
+                  <ChevronRight className="h-3 w-3" />
+                </>
+              )}
+              <GraduationCap className="h-4 w-4" />
+              <span>Course</span>
+              <ChevronRight className="h-3 w-3" />
+              <span className="font-medium text-gray-700 dark:text-gray-300 truncate max-w-[200px] md:max-w-none">
+                {courseName || "Loading..."}
+              </span>
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+              Subjects & Topics
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Your plan has been deactivated. Please contact support.
+            </p>
+          </div>
+        </div>
+
+        {/* Deactivated Banner */}
+        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20 p-8 text-center">
+          <Ban className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-red-800 dark:text-red-400 mb-2">
+            Plan Deactivated
+          </h2>
+          <p className="text-red-700 dark:text-red-500 max-w-md mx-auto">
+            Your subscription plan has been deactivated by an administrator. 
+            You no longer have access to premium content.
+          </p>
+          <button
+            onClick={() => navigate("/student/dashboard")}
+            className="mt-6 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+          >
+            Go to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -648,7 +734,7 @@ const StudentSubjects = () => {
                       <div className="space-y-2">
                         <button
                           onClick={() => handleUnlock(subject)}
-                          disabled={loading}
+                          disabled={loading || planDeactivated}
                           className="w-full py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 text-sm disabled:opacity-50"
                         >
                           {loading ? (
@@ -718,8 +804,8 @@ const StudentSubjects = () => {
         </div>
       )}
 
-      {/* Upgrade Banner */}
-      {lockedCount > 0 && !hasActivePlan() && (
+      {/* Upgrade Banner - Only show if not deactivated */}
+      {lockedCount > 0 && !hasActivePlan() && !planDeactivated && (
         <div className="mt-8 rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 p-6 text-white overflow-hidden relative">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24" />
