@@ -47,8 +47,6 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("token", newToken);
       setToken(newToken);
       setIsAuthenticated(true);
-    } else {
-      setIsAuthenticated(false);
     }
     setUser(userData);
     if (userData) {
@@ -133,7 +131,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= NON-ALVEOLY REGISTER =================
+  // ================= NON-ALVEOLY REGISTER - FIXED TO MATCH GOOGLE FLOW =================
   const registerNonAlveoly = async (form) => {
     try {
       console.log("📝 Registering non-alveoly student with form:", form);
@@ -143,14 +141,13 @@ export const AuthProvider = ({ children }) => {
       
       const { token: newToken, user: userData, requiresPlan, userId } = res.data;
       
-      // CRITICAL: Set auth with the token so user is authenticated
+      // IMPORTANT: Set auth EXACTLY like googleLogin does
+      // This sets localStorage, token state, user state, and isAuthenticated
       setAuth(newToken, userData);
       
-      // IMPORTANT: Also fetch the user to ensure we have full data
-      const fetchedUser = await fetchUser();
-      
+      // Return the user data immediately - no need to fetch again
       return { 
-        user: fetchedUser || userData, 
+        user: userData, 
         requiresPlan, 
         userId: userId || userData?._id,
         message: res.data.message 

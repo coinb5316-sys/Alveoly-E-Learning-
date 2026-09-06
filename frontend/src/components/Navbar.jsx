@@ -304,6 +304,11 @@ const handleNonAlveolyRegistration = async () => {
     // Use the AuthContext's registerNonAlveoly method
     const result = await registerNonAlveoly(payload);
     console.log("Registration result:", result);
+    console.log("🔐 Current auth state after registration:", { 
+      isAuthenticated, 
+      user: user?._id,
+      token: !!token 
+    });
     
     if (result.user) {
       toast.success("Registration successful! Please subscribe to a plan to activate your account.");
@@ -318,6 +323,7 @@ const handleNonAlveolyRegistration = async () => {
       });
       
       // Navigate to PRICING page with user data
+      // The user is already authenticated at this point (setAuth was called)
       navigate("/pricing", { 
         state: { 
           message: "Please subscribe to a plan to activate your account.",

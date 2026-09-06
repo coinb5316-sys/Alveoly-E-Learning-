@@ -1,4 +1,4 @@
-// src/pages/Pricing.jsx - COMPLETE FIXED
+// src/pages/Pricing.jsx - FIXED
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,7 +26,7 @@ import toast from "react-hot-toast";
 const Pricing = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, token, isAuthenticated, refreshUser, loading: authLoading } = useAuth();
+  const { user, token, isAuthenticated, refreshUser } = useAuth();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hoveredPlan, setHoveredPlan] = useState(null);
@@ -40,7 +40,12 @@ const Pricing = () => {
   useEffect(() => {
     const state = location.state;
     console.log("📍 Pricing page location state:", state);
-    console.log("🔐 Auth state:", { isAuthenticated, user: user?._id, token: !!token, authLoading });
+    console.log("🔐 Auth state:", { 
+      isAuthenticated, 
+      user: user?._id, 
+      userEmail: user?.email,
+      token: !!token 
+    });
     
     if (state?.userId) {
       setPendingUserId(state.userId);
@@ -50,13 +55,13 @@ const Pricing = () => {
     }
     
     // If we have a token but no user, try to refresh
-    if (token && !user && !authChecked && !authLoading) {
+    if (token && !user && !authChecked) {
       console.log("🔄 Token exists but no user, refreshing...");
       refreshUser?.();
     }
     
     setAuthChecked(true);
-  }, [location, isAuthenticated, user, token, refreshUser, authLoading]);
+  }, [location, isAuthenticated, user, token, refreshUser]);
 
   // Fetch plans
   useEffect(() => {
@@ -82,6 +87,7 @@ const Pricing = () => {
       plan: plan._id, 
       isAuthenticated, 
       user: user?._id, 
+      userEmail: user?.email,
       token: !!token,
       pendingUserId 
     });
@@ -147,15 +153,6 @@ const Pricing = () => {
     setShowLoginPrompt(false);
   };
 
-  // Show loading while auth is being checked
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
-        <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 font-['Inter',sans-serif]">
       <Navbar />
@@ -174,7 +171,7 @@ const Pricing = () => {
             Select the perfect plan to unlock premium content and accelerate your learning journey
           </p>
           
-          {/* Show user info if authenticated */}
+          {/* Show user info if authenticated - THIS IS WHAT YOU WANT TO SEE */}
           {isAuthenticated && user && (
             <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 max-w-md mx-auto">
               <p className="text-sm text-green-700 dark:text-green-400">
