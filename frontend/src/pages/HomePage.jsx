@@ -450,7 +450,7 @@ const HomePage = () => {
             </span>
 
             <button
-              onClick={() => navigate("/programs")}
+              onClick={() => navigate("/blog")}
               className="text-[#f7c928] font-semibold hover:underline ml-1"
             >
               Read More
