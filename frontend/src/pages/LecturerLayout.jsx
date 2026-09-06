@@ -1,4 +1,4 @@
-// LecturerLayout.jsx - FULLY UPDATED
+// LecturerLayout.jsx - FULLY UPDATED (Fully Scrollable)
 import { useState, useEffect, useRef } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
 import {
@@ -29,7 +29,8 @@ import {
   CheckCircle,
   AlertCircle,
   FileQuestion,
-  Video
+  Video,
+  Crown
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import LecturerNotificationPanel from "../components/LecturerNotificationPanel";
@@ -44,6 +45,7 @@ const LecturerLayout = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [pendingTasks, setPendingTasks] = useState({ submissions: 0, grading: 0 });
+  const [collapsedSections, setCollapsedSections] = useState({});
   const { logout, user } = useAuth();
   const location = useLocation();
   const userMenuRef = useRef(null);
@@ -58,7 +60,7 @@ const LecturerLayout = () => {
     }
   };
 
-  // Fetch pending tasks (submissions needing grading)
+  // Fetch pending tasks
   const fetchPendingTasks = async () => {
     try {
       const res = await axios.get("/lecturer/attempts/pending-count");
@@ -77,7 +79,6 @@ const LecturerLayout = () => {
     fetchUnreadCount();
     fetchPendingTasks();
     
-    // Refresh every 30 seconds
     const interval = setInterval(() => {
       fetchUnreadCount();
       fetchPendingTasks();
@@ -96,7 +97,6 @@ const LecturerLayout = () => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener("scroll", handleScroll);
     
-    // Close user menu when clicking outside
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setUserMenuOpen(false);
@@ -125,6 +125,13 @@ const LecturerLayout = () => {
     document.documentElement.classList.toggle("dark", newDarkMode);
   };
 
+  const toggleSection = (sectionName) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }));
+  };
+
   const handleLogout = async () => {
     await logout();
     window.location.href = "/login";
@@ -146,7 +153,7 @@ const LecturerLayout = () => {
     });
   };
 
-  const menuItems = [
+  const menuSections = [
     { 
       section: "Main", 
       icon: Sparkles,
@@ -176,6 +183,14 @@ const LecturerLayout = () => {
       ]
     },
     { 
+      section: "Teaching", 
+      icon: Video,
+      items: [
+        { to: "/lecturer/live-classes", label: "Live Classes", icon: Video, badge: null },
+        { to: "/lecturer/nursing-games", label: "Nursing Games", icon: Award, badge: null },
+      ]
+    },
+    { 
       section: "System", 
       icon: Settings,
       items: [
@@ -184,15 +199,6 @@ const LecturerLayout = () => {
         { to: "/lecturer/help", label: "Help & Support", icon: HelpCircle, badge: null },
       ]
     },
-    { 
-  section: "Teaching", 
-  icon: Video,
-  items: [
-    { to: "/lecturer/live-classes", label: "Live Classes", icon: Video, badge: null },
-    { to: "/lecturer/nursing-games", label: "Nursing Games", icon: Award, badge: null }, // Add this
-  ]
-},
-
   ];
 
   const getUserInitials = () => {
@@ -209,8 +215,12 @@ const LecturerLayout = () => {
     return user?.lecturerInfo?.title || "Lecturer";
   };
 
+  const getTotalBadgeCount = () => {
+    return (pendingTasks.submissions || 0) + (pendingTasks.grading || 0);
+  };
+
   return (
-    <div className="h-full flex bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="h-screen flex bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div 
@@ -219,16 +229,16 @@ const LecturerLayout = () => {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Fully Scrollable */}
       <aside 
         className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transform transition-transform duration-300 ease-out md:relative md:translate-x-0 flex flex-col h-full shadow-xl ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Logo Area */}
+        {/* Logo Area - Fixed */}
         <div className="flex-shrink-0 flex h-16 items-center justify-between px-6 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-blue-50/50 to-purple-50/50 dark:from-gray-800/50 dark:to-gray-800/50">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg animate-pulse-slow">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
               <GraduationCap className="h-4 w-4 text-white" />
             </div>
             <div>
@@ -244,68 +254,85 @@ const LecturerLayout = () => {
         </div>
 
         {/* Navigation - Scrollable */}
-        <div className="flex-1 overflow-y-auto py-6 px-3 custom-scrollbar">
-          {menuItems.map((section) => (
-            <div key={section.section} className="mb-6">
-              <div className="px-3 mb-2 flex items-center gap-2">
-                <section.icon className="h-3 w-3 text-gray-400" />
-                <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                  {section.section}
-                </span>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
+          {menuSections.map((section) => {
+            const isCollapsed = collapsedSections[section.section] || false;
+            const sectionBadge = section.items.reduce((sum, item) => sum + (item.badge || 0), 0);
+            
+            return (
+              <div key={section.section} className="mb-4">
+                <button
+                  onClick={() => toggleSection(section.section)}
+                  className="w-full flex items-center justify-between px-3 mb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <section.icon className="h-3 w-3" />
+                    <span>{section.section}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {sectionBadge > 0 && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full">
+                        {sectionBadge}
+                      </span>
+                    )}
+                    <ChevronDown className={`h-3 w-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                  </div>
+                </button>
+                <div className={`space-y-0.5 overflow-hidden transition-all duration-300 ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[1000px] opacity-100'}`}>
+                  {section.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location.pathname === item.to || 
+                      (item.to !== "/lecturer" && location.pathname.startsWith(item.to));
+                    return (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setSidebarOpen(false)}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group relative ${
+                            isActive
+                              ? "bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 text-blue-700 dark:text-blue-400 shadow-sm"
+                              : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200"
+                          }`
+                        }
+                      >
+                        <Icon className={`h-4 w-4 flex-shrink-0 transition-transform group-hover:scale-110 ${isActive ? "text-blue-600" : ""}`} />
+                        <span className="flex-1 truncate">{item.label}</span>
+                        {item.badge && (
+                          <span className="px-1.5 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full animate-pulse flex-shrink-0">
+                            {item.badge}
+                          </span>
+                        )}
+                        {isActive && <ChevronRight className="h-3 w-3 text-blue-500 flex-shrink-0" />}
+                      </NavLink>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="space-y-1">
-                {section.items.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.to || 
-                    (item.to !== "/lecturer" && location.pathname.startsWith(item.to));
-                  return (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setSidebarOpen(false)}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative ${
-                          isActive
-                            ? "bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 text-blue-700 dark:text-blue-400 shadow-sm"
-                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200"
-                        }`
-                      }
-                    >
-                      <Icon className={`h-4 w-4 transition-transform group-hover:scale-110 ${isActive ? "text-blue-600" : ""}`} />
-                      <span className="flex-1">{item.label}</span>
-                      {item.badge && (
-                        <span className="px-1.5 py-0.5 text-xs font-medium bg-red-500 text-white rounded-full animate-pulse">
-                          {item.badge}
-                        </span>
-                      )}
-                      {isActive && <ChevronRight className="h-3 w-3 text-blue-500" />}
-                    </NavLink>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* User Profile Section */}
+        {/* User Profile Section - Fixed */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 p-4 bg-gradient-to-t from-gray-50/50 to-transparent dark:from-gray-800/30">
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setUserMenuOpen(!userMenuOpen)}
               className="w-full flex items-center gap-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 p-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all group"
             >
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform flex-shrink-0">
                 <span className="text-white text-sm font-semibold">{getUserInitials()}</span>
               </div>
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                   {getFullName()}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1">
+                  <Crown className="h-3 w-3 text-yellow-500" />
                   {getLecturerTitle()}
                 </p>
               </div>
-              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform flex-shrink-0 ${userMenuOpen ? 'rotate-180' : ''}`} />
             </button>
             
             {/* User Dropdown Menu */}
@@ -344,7 +371,7 @@ const LecturerLayout = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header */}
+        {/* Header - Fixed */}
         <header 
           className={`flex-shrink-0 sticky top-0 z-30 transition-all duration-300 ${
             scrolled 
@@ -354,24 +381,26 @@ const LecturerLayout = () => {
         >
           <div className="flex h-16 items-center justify-between px-4 md:px-6">
             {/* Left Section */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 min-w-0">
               <button 
                 onClick={() => setSidebarOpen(true)} 
-                className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
               >
                 <Menu className="h-5 w-5 text-gray-600 dark:text-gray-400" />
               </button>
               
-              <div className="hidden md:block">
+              <div className="hidden md:block min-w-0">
                 <div className="flex items-center gap-2">
-                  <div className="flex flex-col">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{getGreeting()},</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  <div className="flex flex-col min-w-0">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{getGreeting()},</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate flex items-center gap-2">
                       {getFullName().split(" ")[0]} 
-                      <span className="text-xs text-gray-500 ml-1">({getLecturerTitle()})</span>
+                      <span className="text-xs font-normal text-gray-500 dark:text-gray-400 truncate">
+                        ({getLecturerTitle()})
+                      </span>
                     </p>
                   </div>
-                  <Sparkles className="h-4 w-4 text-yellow-500 animate-pulse" />
+                  <Sparkles className="h-4 w-4 text-yellow-500 flex-shrink-0" />
                 </div>
               </div>
             </div>
@@ -385,7 +414,7 @@ const LecturerLayout = () => {
             </div>
 
             {/* Right Section */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
               {/* Dark Mode Toggle */}
               <button 
                 onClick={toggleDarkMode} 
@@ -396,9 +425,6 @@ const LecturerLayout = () => {
                   <Sun className="h-4 w-4 text-yellow-500" /> : 
                   <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 }
-                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                  {darkMode ? "Light Mode" : "Dark Mode"}
-                </span>
               </button>
 
               {/* Quick Stats */}
@@ -412,15 +438,12 @@ const LecturerLayout = () => {
               {/* Notifications */}
               <button 
                 onClick={() => setNotificationsOpen(true)} 
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative group"
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
               >
                 <Bell className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 {unreadCount > 0 && (
                   <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-gray-900 animate-pulse" />
                 )}
-                <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-gray-900 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                  {unreadCount > 0 ? `${unreadCount} unread notifications` : "No new notifications"}
-                </span>
               </button>
 
               {/* Logout Button */}
@@ -438,13 +461,13 @@ const LecturerLayout = () => {
           {pendingTasks.grading > 0 && (
             <div className="md:hidden px-4 py-2 bg-yellow-50 dark:bg-yellow-950/20 border-t border-yellow-100 dark:border-yellow-900/30">
               <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-yellow-600" />
-                  <span className="text-yellow-700 dark:text-yellow-400">
-                    You have {pendingTasks.grading} pending {pendingTasks.grading === 1 ? 'submission' : 'submissions'} to grade
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertCircle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
+                  <span className="text-yellow-700 dark:text-yellow-400 truncate">
+                    {pendingTasks.grading} pending {pendingTasks.grading === 1 ? 'submission' : 'submissions'} to grade
                   </span>
                 </div>
-                <NavLink to="/lecturer/grading" className="text-yellow-600 font-medium text-xs">
+                <NavLink to="/lecturer/grading" className="text-yellow-600 font-medium text-xs flex-shrink-0">
                   Grade Now →
                 </NavLink>
               </div>
@@ -452,21 +475,22 @@ const LecturerLayout = () => {
           )}
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar">
-          <div className="container mx-auto px-4 md:px-6 py-6 md:py-8 max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+        {/* Page Content - Scrollable */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
+          <div className="container mx-auto px-4 md:px-6 py-4 md:py-6 max-w-7xl">
             <Outlet />
           </div>
+          <div className="h-4" />
         </main>
 
-        {/* Footer */}
-        <footer className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 py-4 px-6 bg-white/50 dark:bg-gray-900/50">
+        {/* Footer - Fixed */}
+        <footer className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 py-3 px-6 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <p>© {new Date().getFullYear()} Alveoly. All rights reserved.</p>
             <div className="flex items-center gap-4">
-              <a href="/privacy" className="hover:text-blue-600 transition-colors">Privacy Policy</a>
-              <a href="/terms" className="hover:text-blue-600 transition-colors">Terms of Service</a>
-              <a href="/lecturer/help" className="hover:text-blue-600 transition-colors">Help Center</a>
+              <a href="/privacy" className="hover:text-blue-600 transition-colors">Privacy</a>
+              <a href="/terms" className="hover:text-blue-600 transition-colors">Terms</a>
+              <a href="/lecturer/help" className="hover:text-blue-600 transition-colors">Help</a>
             </div>
           </div>
         </footer>

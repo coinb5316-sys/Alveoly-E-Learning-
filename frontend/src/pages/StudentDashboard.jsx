@@ -1,4 +1,4 @@
-// StudentDashboard.jsx - Updated to show plan status correctly
+// StudentDashboard.jsx - Fully Scrollable with Professional Design
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -26,6 +26,10 @@ import {
   GraduationCap,
   Ban,
   Lock,
+  RefreshCw,
+  Trophy,
+  Users,
+  MessageCircle,
 } from "lucide-react";
 import API from "../api/axios";
 import { useAuth } from "../context/AuthContext";
@@ -38,6 +42,7 @@ const StudentDashboard = () => {
 
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [plans, setPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -45,11 +50,14 @@ const StudentDashboard = () => {
     totalQuestions: 0,
     examsTaken: 0,
     averagePerformance: 0,
+    subjectsCompleted: 0,
   });
   const [myPlans, setMyPlans] = useState({});
   const [now, setNow] = useState(new Date());
   const [isPlanDeactivated, setIsPlanDeactivated] = useState(false);
   const [planStatusMessage, setPlanStatusMessage] = useState("");
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [upcomingExams, setUpcomingExams] = useState([]);
 
   // Timer for countdown
   useEffect(() => {
@@ -59,34 +67,37 @@ const StudentDashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch student data (includes program and course)
-  useEffect(() => {
-    const fetchStudent = async () => {
-      try {
-        const res = await API.get("/auth/me");
-        console.log("Student data:", res.data);
-        setStudent(res.data);
-        
-        // Check if plan is deactivated
-        if (res.data.planDeactivatedByAdmin) {
-          setIsPlanDeactivated(true);
-          setPlanStatusMessage("Your plan has been deactivated by an administrator.");
-        } else if (!res.data.isPlanActive && res.data.planId) {
-          setIsPlanDeactivated(false);
-          setPlanStatusMessage("Your plan has expired. Please renew to continue accessing premium content.");
-        } else if (!res.data.planId) {
-          setPlanStatusMessage("You don't have an active plan. Subscribe to unlock premium content.");
-        } else {
-          setIsPlanDeactivated(false);
-          setPlanStatusMessage("Your plan is active!");
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+  // Fetch student data
+  const fetchStudent = async () => {
+    try {
+      const res = await API.get("/auth/me");
+      console.log("Student data:", res.data);
+      setStudent(res.data);
+      
+      if (res.data.planDeactivatedByAdmin) {
+        setIsPlanDeactivated(true);
+        setPlanStatusMessage("Your plan has been deactivated by an administrator.");
+      } else if (!res.data.isPlanActive && res.data.planId) {
+        setIsPlanDeactivated(false);
+        setPlanStatusMessage("Your plan has expired. Please renew to continue accessing premium content.");
+      } else if (!res.data.planId) {
+        setPlanStatusMessage("You don't have an active plan. Subscribe to unlock premium content.");
+      } else {
+        setIsPlanDeactivated(false);
+        setPlanStatusMessage("Your plan is active!");
       }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      await fetchStudent();
+      setLoading(false);
     };
-    fetchStudent();
+    loadData();
   }, []);
 
   // Fetch stats
@@ -138,6 +149,13 @@ const StudentDashboard = () => {
     };
     fetchMyPayments();
   }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchStudent();
+    setRefreshing(false);
+    toast.success("Dashboard refreshed!");
+  };
 
   if (loading) {
     return (
@@ -193,12 +211,12 @@ const StudentDashboard = () => {
       value: stats.totalQuestions,
       icon: ClipboardList,
       color: "green",
-      subtitle: "Practice questions",
+      subtitle: "Practice questions completed",
     },
     {
       title: "Exams Taken",
       value: stats.examsTaken,
-      icon: CheckCircle,
+      icon: Trophy,
       color: "purple",
       subtitle: "Completed exams",
     },
@@ -219,7 +237,7 @@ const StudentDashboard = () => {
       color: "blue",
       onClick: () => {
         if (!courseId) {
-          alert("No course assigned yet. Please contact admin.");
+          toast.error("No course assigned yet. Please contact admin.");
           return;
         }
         navigate(`/student/subjects?course=${courseId}`);
@@ -232,7 +250,7 @@ const StudentDashboard = () => {
       color: "green",
       onClick: () => {
         if (!courseId) {
-          alert("No course assigned yet. Please contact admin.");
+          toast.error("No course assigned yet. Please contact admin.");
           return;
         }
         navigate(`/student/subjects?course=${courseId}`);
@@ -254,13 +272,38 @@ const StudentDashboard = () => {
     },
   ];
 
-  // Check if user has premium access
   const hasPremiumAccess = student?.isPlanActive && !student?.planDeactivatedByAdmin;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
+      {/* Header with Refresh */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between sticky top-0 z-10 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm -mx-4 px-4 py-3 md:-mx-6 md:px-6 border-b border-gray-200/50 dark:border-gray-800/50">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            Dashboard
+            {hasPremiumAccess && (
+              <span className="text-xs font-normal bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Crown className="h-3 w-3" />
+                Premium
+              </span>
+            )}
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Welcome back! Here's your learning overview
+          </p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
       {/* Welcome Header - Premium */}
-      <div className={`relative overflow-hidden rounded-2xl p-8 text-white ${
+      <div className={`relative overflow-hidden rounded-2xl p-6 md:p-8 text-white ${
         isPlanDeactivated 
           ? "bg-gradient-to-r from-red-600 via-red-700 to-red-800"
           : student?.isPlanActive 
@@ -310,8 +353,8 @@ const StudentDashboard = () => {
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24" />
       </div>
 
-      {/* Stats Grid - Includes Program and Course */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+      {/* Stats Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {statCards.map((card, idx) => {
           const Icon = card.icon;
           const colorMap = {
@@ -324,23 +367,23 @@ const StudentDashboard = () => {
           return (
             <div
               key={idx}
-              className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 transition-all hover:shadow-lg hover:-translate-y-1 duration-300"
+              className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 md:p-6 transition-all hover:shadow-lg hover:-translate-y-1 duration-300"
             >
               <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-800/50 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-500" />
               <div className="relative flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                <div className="min-w-0">
+                  <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 truncate">
                     {card.title}
                   </p>
-                  <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">
+                  <p className="mt-1 md:mt-2 text-lg md:text-xl font-semibold text-gray-900 dark:text-gray-100 truncate">
                     {card.value}
                   </p>
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-0.5 text-xs text-gray-400 truncate">
                     {card.subtitle}
                   </p>
                 </div>
-                <div className={`rounded-lg p-3 ${colorMap[card.color]}`}>
-                  <Icon className="h-5 w-5" />
+                <div className={`rounded-lg p-2 md:p-3 flex-shrink-0 ${colorMap[card.color]}`}>
+                  <Icon className="h-4 w-4 md:h-5 md:w-5" />
                 </div>
               </div>
             </div>
@@ -396,18 +439,18 @@ const StudentDashboard = () => {
             My Enrollment
           </h2>
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-            <div className="p-6">
-              <div className="grid gap-6 md:grid-cols-2">
+            <div className="p-4 md:p-6">
+              <div className="grid gap-4 md:gap-6 md:grid-cols-2">
                 {/* Program Card */}
                 {programName && (
                   <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                         <Building className="h-5 w-5 text-white" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Program</p>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white truncate">
                           {programName}
                         </h3>
                       </div>
@@ -424,12 +467,12 @@ const StudentDashboard = () => {
                 {courseName && (
                   <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/30 dark:to-cyan-950/30">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
                         <GraduationCap className="h-5 w-5 text-white" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Course</p>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white truncate">
                           {courseName}
                         </h3>
                       </div>
@@ -456,13 +499,13 @@ const StudentDashboard = () => {
           <h3 className="text-lg font-semibold text-amber-800 dark:text-amber-400 mb-2">
             No Program Assigned Yet
           </h3>
-          <p className="text-amber-700 dark:text-amber-500 text-sm">
+          <p className="text-amber-700 dark:text-amber-500 text-sm max-w-md mx-auto">
             Please contact an administrator to assign you to a program and course.
           </p>
         </div>
       )}
 
-      {/* Subscription Plans - Only show if not deactivated */}
+      {/* Subscription Plans */}
       {!isPlanDeactivated && (
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
@@ -505,7 +548,7 @@ const StudentDashboard = () => {
                     )}
 
                     {status === "active" && isCurrentPlan && (
-                      <div className="absolute top-4 right-4">
+                      <div className="absolute top-3 right-3">
                         <span className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 rounded-full">
                           <CheckCircle className="h-3 w-3" />
                           Active
@@ -514,7 +557,7 @@ const StudentDashboard = () => {
                     )}
 
                     {status === "expired" && (
-                      <div className="absolute top-4 right-4">
+                      <div className="absolute top-3 right-3">
                         <span className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 rounded-full">
                           <AlertCircle className="h-3 w-3" />
                           Expired
@@ -548,16 +591,19 @@ const StudentDashboard = () => {
                         </div>
                       )}
 
-                      <div className="space-y-2 mb-6">
+                      <div className="space-y-2 mb-6 max-h-32 overflow-y-auto">
                         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                           Included Subjects:
                         </p>
-                        {plan.subjects?.map((subject) => (
+                        {plan.subjects?.slice(0, 4).map((subject) => (
                           <div key={subject._id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                            <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                            {subject.name}
+                            <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                            <span className="truncate">{subject.name}</span>
                           </div>
                         ))}
+                        {plan.subjects?.length > 4 && (
+                          <p className="text-xs text-gray-400">+{plan.subjects.length - 4} more</p>
+                        )}
                       </div>
 
                       <button
@@ -567,7 +613,7 @@ const StudentDashboard = () => {
                           status === "active" && isCurrentPlan
                             ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
                             : status === "expired"
-                            ? "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/25"
+                            ? "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white shadow-lg shadow-red-500/25"
                             : "bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-700 hover:from-gray-800 hover:to-gray-900 text-white shadow-lg"
                         }`}
                       >
@@ -593,7 +639,7 @@ const StudentDashboard = () => {
           <h3 className="text-lg font-semibold text-red-800 dark:text-red-400 mb-2">
             Plan Deactivated
           </h3>
-          <p className="text-red-700 dark:text-red-500 text-sm">
+          <p className="text-red-700 dark:text-red-500 text-sm max-w-md mx-auto">
             Your plan has been deactivated by an administrator. Please contact support for more information.
           </p>
           <button
@@ -608,8 +654,8 @@ const StudentDashboard = () => {
       {/* Payment Modal */}
       {selectedPlan && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md relative shadow-2xl animate-scaleIn">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-md relative shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                   {selectedPlan.title}
@@ -640,6 +686,9 @@ const StudentDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Bottom spacer */}
+      <div className="h-4" />
     </div>
   );
 };

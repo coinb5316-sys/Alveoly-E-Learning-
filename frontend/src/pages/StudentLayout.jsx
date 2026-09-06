@@ -1,4 +1,4 @@
-// StudentLayout.jsx - Updated with exam navigation blocking (Fixed for results)
+// StudentLayout.jsx - Fully Scrollable with Professional Design
 import { useState, useEffect, useRef } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -26,6 +26,10 @@ import {
   Award,
   Lock,
   Trophy,
+  ChevronDown,
+  Crown,
+  Shield,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import StudentNotificationPanel from "../components/StudentNotificationPanel";
@@ -38,6 +42,7 @@ const StudentLayout = () => {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationBadge, setNotificationBadge] = useState(3);
   const [isExamMode, setIsExamMode] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState({});
   const { logout, user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -46,15 +51,11 @@ const StudentLayout = () => {
   // Check if currently on exam page
   useEffect(() => {
     const checkExamMode = () => {
-      // Only block on actual exam pages, not results
       const isExam = location.pathname.includes('/student/exam/') && 
                      !location.pathname.includes('/exam-results');
       setIsExamMode(isExam);
       
-      // If on exam page, prevent navigation
       if (isExam) {
-        // The exam page itself handles blocking
-        // But we also prevent any click on layout elements
         document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
           if (!el.closest('#exam-container')) {
             el.style.pointerEvents = 'none';
@@ -62,7 +63,6 @@ const StudentLayout = () => {
           }
         });
       } else {
-        // Restore navigation - THIS IS CRUCIAL FOR EXAM RESULTS
         document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
           el.style.pointerEvents = '';
           el.style.opacity = '';
@@ -71,15 +71,12 @@ const StudentLayout = () => {
     };
 
     checkExamMode();
-    
-    // Check periodically
     examCheckInterval.current = setInterval(checkExamMode, 1000);
 
     return () => {
       if (examCheckInterval.current) {
         clearInterval(examCheckInterval.current);
       }
-      // Restore all elements
       document.querySelectorAll('a, button, .nav-link, .menu-item, .sidebar-link, .header-link, [role="button"]').forEach(el => {
         el.style.pointerEvents = '';
         el.style.opacity = '';
@@ -118,6 +115,13 @@ const StudentLayout = () => {
     }
   };
 
+  const toggleSection = (sectionName) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionName]: !prev[sectionName]
+    }));
+  };
+
   const handleNotificationClick = (notification) => {
     console.log("Notification clicked:", notification);
     if (notification.link) {
@@ -127,13 +131,10 @@ const StudentLayout = () => {
   };
 
   const handleNavigation = (to) => {
-    // Prevent navigation during exam
     if (isExamMode) {
-      // Check if we're on exam page
       const isOnExam = location.pathname.includes('/student/exam/') && 
                        !location.pathname.includes('/exam-results');
       if (isOnExam) {
-        // Show warning and stay on page
         alert("⚠️ You cannot navigate away from the exam page. Please complete your exam first.");
         return;
       }
@@ -141,23 +142,57 @@ const StudentLayout = () => {
     navigate(to);
   };
 
-  const menuItems = [
-    { to: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard, color: "text-blue-500" },
-    { to: "/student/courses", label: "My Courses", icon: BookOpen, color: "text-green-500" },
-    { to: "/student/nursing-games", label: "Nursing Games", icon: Award, color: "text-yellow-500" },
-    { to: "/student/subjects", label: "Subjects", icon: ClipboardList, color: "text-purple-500" },
-    { to: "/student/exam-results", label: "Exam Results", icon: Trophy, color: "text-amber-500" },
-    { to: "/student/progress", label: "Progress", icon: TrendingUp, color: "text-orange-500" },
-    { to: "/student/plans", label: "Plans", icon: Tags, color: "text-pink-500" },
-    { to: "/student/payments", label: "Payments", icon: Wallet, color: "text-yellow-500" },
-    { to: "/student/content-payment", label: "Content Payment", icon: DollarSign, color: "text-indigo-500" },
-    { to: "/student/testimonials", label: "Testimonials", icon: Star, color: "text-amber-500" },
-    { to: "/student/live-classes", label: "Live Classes", icon: Video, color: "text-red-500" },
-    { to: "/student/ai", label: "AI Assistant", icon: FaRobot, color: "text-pink-500" },
+  const menuSections = [
+    {
+      section: "Main",
+      items: [
+        { to: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard, color: "text-blue-500" },
+        { to: "/student/courses", label: "My Courses", icon: BookOpen, color: "text-green-500" },
+        { to: "/student/nursing-games", label: "Nursing Games", icon: Award, color: "text-yellow-500" },
+        { to: "/student/subjects", label: "Subjects", icon: ClipboardList, color: "text-purple-500" },
+      ]
+    },
+    {
+      section: "Progress",
+      items: [
+        { to: "/student/exam-results", label: "Exam Results", icon: Trophy, color: "text-amber-500" },
+        { to: "/student/progress", label: "Progress", icon: TrendingUp, color: "text-orange-500" },
+      ]
+    },
+    {
+      section: "Subscriptions",
+      items: [
+        { to: "/student/plans", label: "Plans", icon: Tags, color: "text-pink-500" },
+        { to: "/student/payments", label: "Payments", icon: Wallet, color: "text-yellow-500" },
+        { to: "/student/content-payment", label: "Content Payment", icon: DollarSign, color: "text-indigo-500" },
+      ]
+    },
+    {
+      section: "Community",
+      items: [
+        { to: "/student/testimonials", label: "Testimonials", icon: Star, color: "text-amber-500" },
+        { to: "/student/live-classes", label: "Live Classes", icon: Video, color: "text-red-500" },
+        { to: "/student/ai", label: "AI Assistant", icon: FaRobot, color: "text-pink-500" },
+      ]
+    },
   ];
 
+  // Get user initials
+  const getUserInitials = () => {
+    if (!user?.name) return "S";
+    return user.name
+      .split(" ")
+      .map(word => word[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Check plan status for badge
+  const hasActivePlan = user?.isPlanActive && !user?.planDeactivatedByAdmin;
+
   return (
-    <div className="h-full flex bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="h-screen flex bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -166,14 +201,14 @@ const StudentLayout = () => {
         />
       )}
 
-      {/* Sidebar - Fixed position */}
+      {/* Sidebar - Fully Scrollable */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transform transition-transform duration-300 ease-out flex flex-col h-full ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transform transition-transform duration-300 ease-out md:relative md:translate-x-0 flex flex-col h-full ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0 md:relative`}
+        }`}
       >
-        {/* Logo area */}
-        <div className="flex-shrink-0 flex h-16 items-center justify-between px-6 border-b border-gray-200 dark:border-gray-800">
+        {/* Logo area - Fixed */}
+        <div className="flex-shrink-0 flex h-16 items-center justify-between px-6 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
               <GraduationCap className="h-4 w-4 text-white" />
@@ -195,49 +230,66 @@ const StudentLayout = () => {
           </button>
         </div>
 
-        {/* Navigation */}
-        <div className="flex-1 overflow-y-auto py-6 px-3">
-          <div className="mb-6">
-            <div className="px-3 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-              Main Menu
-            </div>
-            <div className="space-y-1">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.to;
-                const isDisabled = isExamMode && location.pathname.includes('/student/exam/');
-                return (
-                  <button
-                    key={item.to}
-                    onClick={() => handleNavigation(item.to)}
-                    disabled={isDisabled}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${
-                      isActive
-                        ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400"
-                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200"
-                    } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <Icon className={`h-4 w-4 ${isActive ? item.color : ""}`} />
-                    <span className="flex-1 text-left">{item.label}</span>
-                    {isActive && <ChevronRight className="h-3 w-3" />}
-                    {isDisabled && <Lock className="h-3 w-3 text-red-500" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+        {/* Navigation - Scrollable */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
+          {menuSections.map((section) => {
+            const isCollapsed = collapsedSections[section.section] || false;
+            
+            return (
+              <div key={section.section} className="mb-4">
+                <button
+                  onClick={() => toggleSection(section.section)}
+                  className="w-full flex items-center justify-between px-3 mb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  <span>{section.section}</span>
+                  <ChevronDown className={`h-3 w-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                </button>
+                <div className={`space-y-0.5 overflow-hidden transition-all duration-300 ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[1000px] opacity-100'}`}>
+                  {section.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location.pathname === item.to;
+                    const isDisabled = isExamMode && location.pathname.includes('/student/exam/');
+                    return (
+                      <button
+                        key={item.to}
+                        onClick={() => handleNavigation(item.to)}
+                        disabled={isDisabled}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                          isActive
+                            ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 shadow-sm"
+                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-900 dark:hover:text-gray-200"
+                        } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? item.color : ""}`} />
+                        <span className="flex-1 truncate text-left">{item.label}</span>
+                        {isActive && <ChevronRight className="h-3 w-3 flex-shrink-0" />}
+                        {isDisabled && <Lock className="h-3 w-3 text-red-500 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        {/* User profile */}
-        <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 p-4">
-          <div className="flex items-center gap-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 p-3">
-            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <User className="h-5 w-5 text-white" />
+        {/* User profile - Fixed */}
+        <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900">
+          <div className="flex items-center gap-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 p-3 transition-all hover:bg-gray-100 dark:hover:bg-gray-800">
+            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
+              <span className="text-white text-sm font-semibold">
+                {getUserInitials()}
+              </span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                {user?.name || "Student"}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {user?.name || "Student"}
+                </p>
+                {hasActivePlan && (
+                  <span className="flex-shrink-0 w-2 h-2 rounded-full bg-green-500" title="Active Plan" />
+                )}
+              </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                 {user?.email || "student@alveoly.com"}
               </p>
@@ -245,11 +297,12 @@ const StudentLayout = () => {
             <button
               onClick={logout}
               disabled={isExamMode}
-              className={`p-1.5 rounded-lg transition-colors ${
+              className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
                 isExamMode 
                   ? 'opacity-50 cursor-not-allowed' 
                   : 'hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
+              title="Logout"
             >
               <LogOut className="h-4 w-4 text-gray-500 dark:text-gray-400" />
             </button>
@@ -257,38 +310,52 @@ const StudentLayout = () => {
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-h-screen w-full overflow-x-hidden">
-        {/* Header */}
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        {/* Header - Fixed */}
         <header
-          className={`sticky top-0 z-30 transition-all duration-200 ${
+          className={`flex-shrink-0 sticky top-0 z-30 transition-all duration-200 ${
             scrolled
               ? "bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800 shadow-sm"
               : "bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm"
           }`}
         >
           <div className="flex h-16 items-center justify-between px-4 md:px-6">
-            <div className="flex items-center gap-4 flex-1">
+            <div className="flex items-center gap-4 flex-1 min-w-0">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                className="md:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 flex-shrink-0"
                 disabled={isExamMode}
               >
                 <Menu className="h-5 w-5" />
               </button>
 
               {/* Welcome text */}
-              <div className="hidden md:block">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+              <div className="hidden md:block min-w-0">
+                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                   Welcome back,
                 </p>
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate flex items-center gap-2">
                   {user?.name?.split(" ")[0] || "Student"} 👋
+                  {hasActivePlan && (
+                    <span className="text-xs font-normal bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Zap className="h-3 w-3" />
+                      Active Plan
+                    </span>
+                  )}
                 </p>
+              </div>
+
+              {/* Page title */}
+              <div className="hidden lg:block ml-4">
+                <span className="text-xs text-gray-400 dark:text-gray-500">/</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 ml-1 capitalize">
+                  {location.pathname.split("/").pop() || "Dashboard"}
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
               <button
                 onClick={toggleDarkMode}
                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -314,7 +381,7 @@ const StudentLayout = () => {
               </button>
 
               {isExamMode && (
-                <span className="flex items-center gap-1 px-2 py-1 bg-red-500 text-white text-xs rounded-lg animate-pulse">
+                <span className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-lg shadow-lg shadow-red-500/25 animate-pulse">
                   <Lock className="h-3 w-3" />
                   Exam Mode
                 </span>
@@ -323,11 +390,12 @@ const StudentLayout = () => {
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="container mx-auto px-4 md:px-6 py-6 md:py-8 max-w-7xl">
+        {/* Page content - Scrollable */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+          <div className="container mx-auto px-4 md:px-6 py-4 md:py-6 max-w-7xl">
             <Outlet />
           </div>
+          <div className="h-4" />
         </main>
       </div>
 
