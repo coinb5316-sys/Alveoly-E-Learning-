@@ -279,8 +279,8 @@ const Navbar = () => {
     }
   };
 
-  // ================= NON-ALVEOLY STUDENT REGISTRATION - MIRRORS GOOGLE FLOW =================
-  const handleNonAlveolyRegistration = async () => {
+  // ================= NON-ALVEOLY STUDENT REGISTRATION - FIXED =================
+const handleNonAlveolyRegistration = async () => {
   try {
     setLoading(true);
     

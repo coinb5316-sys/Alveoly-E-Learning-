@@ -82,11 +82,13 @@ export const AuthProvider = ({ children }) => {
       setUser(res.data);
       setIsAuthenticated(true);
       connectSocket(res.data);
+      return res.data;
     } catch (err) {
       console.error("Fetch user error:", err);
       if (err.response?.status === 401) {
         clearAuth();
       }
+      return null;
     } finally {
       setLoading(false);
     }
@@ -144,8 +146,11 @@ export const AuthProvider = ({ children }) => {
       // CRITICAL: Set auth with the token so user is authenticated
       setAuth(newToken, userData);
       
+      // IMPORTANT: Also fetch the user to ensure we have full data
+      const fetchedUser = await fetchUser();
+      
       return { 
-        user: userData, 
+        user: fetchedUser || userData, 
         requiresPlan, 
         userId: userId || userData?._id,
         message: res.data.message 
@@ -231,6 +236,7 @@ export const AuthProvider = ({ children }) => {
         setUser,
         setAuth,
         assignProgram,
+        fetchUser,
         isAdmin,
         isLecturer,
         isStudent,

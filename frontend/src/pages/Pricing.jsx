@@ -26,7 +26,7 @@ import toast from "react-hot-toast";
 const Pricing = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, token, isAuthenticated, refreshUser } = useAuth();
+  const { user, token, isAuthenticated, refreshUser, loading: authLoading } = useAuth();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hoveredPlan, setHoveredPlan] = useState(null);
@@ -40,7 +40,7 @@ const Pricing = () => {
   useEffect(() => {
     const state = location.state;
     console.log("📍 Pricing page location state:", state);
-    console.log("🔐 Auth state:", { isAuthenticated, user: user?._id, token: !!token });
+    console.log("🔐 Auth state:", { isAuthenticated, user: user?._id, token: !!token, authLoading });
     
     if (state?.userId) {
       setPendingUserId(state.userId);
@@ -50,13 +50,13 @@ const Pricing = () => {
     }
     
     // If we have a token but no user, try to refresh
-    if (token && !user && !authChecked) {
+    if (token && !user && !authChecked && !authLoading) {
       console.log("🔄 Token exists but no user, refreshing...");
       refreshUser?.();
     }
     
     setAuthChecked(true);
-  }, [location, isAuthenticated, user, token, refreshUser]);
+  }, [location, isAuthenticated, user, token, refreshUser, authLoading]);
 
   // Fetch plans
   useEffect(() => {
@@ -78,7 +78,13 @@ const Pricing = () => {
 
   // Handle plan purchase
   const handlePurchasePlan = async (plan) => {
-    console.log("🛒 Purchase plan clicked:", { plan, isAuthenticated, user: user?._id, token: !!token });
+    console.log("🛒 Purchase plan clicked:", { 
+      plan: plan._id, 
+      isAuthenticated, 
+      user: user?._id, 
+      token: !!token,
+      pendingUserId 
+    });
     
     // Check if user is logged in
     if (!isAuthenticated && !token) {
@@ -109,6 +115,8 @@ const Pricing = () => {
         userId: userId
       });
 
+      console.log("✅ Payment initiation response:", response.data);
+
       // Redirect to payment gateway
       if (response.data.authorizationUrl) {
         window.location.href = response.data.authorizationUrl;
@@ -138,6 +146,15 @@ const Pricing = () => {
     navigate("/login");
     setShowLoginPrompt(false);
   };
+
+  // Show loading while auth is being checked
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+        <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 font-['Inter',sans-serif]">

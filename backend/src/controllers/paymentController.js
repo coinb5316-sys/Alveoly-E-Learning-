@@ -115,10 +115,11 @@ export const initiatePlanPayment = async (req, res) => {
   try {
     const { planId, userId } = req.body;
     console.log("💰 Initiating plan payment:", { planId, userId });
+    console.log("🔑 req.user:", req.user?._id);
     
-    // Get user - either from req.user or from userId parameter
+    // Get user - prioritize req.user (from auth middleware), then userId param
     let user = req.user;
-    if (userId && !user) {
+    if (!user && userId) {
       user = await User.findById(userId);
     }
 
@@ -135,6 +136,17 @@ export const initiatePlanPayment = async (req, res) => {
     }
 
     // Check if user already has an active plan
+    // First check User model
+    if (user.isPlanActive && user.planId) {
+      const existingPlan = await Plan.findById(user.planId);
+      if (existingPlan) {
+        return res.status(400).json({
+          message: `You already have an active plan: ${existingPlan.title}`,
+        });
+      }
+    }
+
+    // Then check Payment model
     const existingActivePlan = await Payment.findOne({
       userId: user._id,
       planId,
@@ -161,7 +173,7 @@ export const initiatePlanPayment = async (req, res) => {
 
     const callbackUrl = `${process.env.CLIENT_URL}/payment-success?reference=${reference}`;
     
-    console.log("Callback URL:", callbackUrl);
+    console.log("🔗 Callback URL:", callbackUrl);
     
     const response = await axios.post(
       "https://api.paystack.co/transaction/initialize",
