@@ -1,4 +1,4 @@
-// src/pages/Pricing.jsx - FIXED
+// src/pages/Pricing.jsx - COMPLETE FIXED
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -44,7 +44,8 @@ const Pricing = () => {
       isAuthenticated, 
       user: user?._id, 
       userEmail: user?.email,
-      token: !!token 
+      token: !!token,
+      localStorageToken: !!localStorage.getItem("token")
     });
     
     if (state?.userId) {
@@ -55,7 +56,8 @@ const Pricing = () => {
     }
     
     // If we have a token but no user, try to refresh
-    if (token && !user && !authChecked) {
+    const storedToken = localStorage.getItem("token");
+    if (storedToken && !user && !authChecked) {
       console.log("🔄 Token exists but no user, refreshing...");
       refreshUser?.();
     }
@@ -81,19 +83,25 @@ const Pricing = () => {
     fetchPlans();
   }, []);
 
-  // Handle plan purchase
+  // ================= HANDLE PLAN PURCHASE - FIXED =================
   const handlePurchasePlan = async (plan) => {
+    // CRITICAL: Check localStorage directly for the token
+    const storedToken = localStorage.getItem("token");
+    const isLoggedIn = isAuthenticated || !!storedToken || !!token;
+    
     console.log("🛒 Purchase plan clicked:", { 
       plan: plan._id, 
       isAuthenticated, 
+      isLoggedIn,
       user: user?._id, 
       userEmail: user?.email,
-      token: !!token,
+      tokenFromState: !!token,
+      tokenFromStorage: !!storedToken,
       pendingUserId 
     });
     
-    // Check if user is logged in
-    if (!isAuthenticated && !token) {
+    // Check if user is logged in - check both state and localStorage
+    if (!isLoggedIn) {
       console.log("❌ User not authenticated, showing login prompt");
       setPendingPlanId(plan._id);
       setShowLoginPrompt(true);
@@ -113,9 +121,15 @@ const Pricing = () => {
         return;
       }
       
-      console.log("✅ Initiating payment for user:", userId, "with token:", !!token);
+      console.log("✅ Initiating payment for user:", userId);
       
-      // Initiate payment directly
+      // Make sure the token is in the headers
+      // The axios interceptor already does this, but we double-check
+      if (storedToken) {
+        API.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+      }
+      
+      // Initiate payment
       const response = await API.post("/payments/initiate-plan", {
         planId: plan._id,
         userId: userId
@@ -171,7 +185,7 @@ const Pricing = () => {
             Select the perfect plan to unlock premium content and accelerate your learning journey
           </p>
           
-          {/* Show user info if authenticated - THIS IS WHAT YOU WANT TO SEE */}
+          {/* Show user info if authenticated */}
           {isAuthenticated && user && (
             <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 max-w-md mx-auto">
               <p className="text-sm text-green-700 dark:text-green-400">
@@ -314,7 +328,8 @@ const Pricing = () => {
                       ) : (
                         <>
                           <CreditCard className="h-4 w-4" />
-                          {isAuthenticated ? "Subscribe Now" : "Choose Plan"}
+                          {/* Check localStorage directly for button text */}
+                          {isAuthenticated || localStorage.getItem("token") ? "Subscribe Now" : "Choose Plan"}
                         </>
                       )}
                     </button>

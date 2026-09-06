@@ -131,7 +131,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= NON-ALVEOLY REGISTER - FIXED TO MATCH GOOGLE FLOW =================
+  // ================= NON-ALVEOLY REGISTER - FIXED =================
   const registerNonAlveoly = async (form) => {
     try {
       console.log("📝 Registering non-alveoly student with form:", form);
@@ -141,16 +141,15 @@ export const AuthProvider = ({ children }) => {
       
       const { token: newToken, user: userData, requiresPlan, userId } = res.data;
       
-      // IMPORTANT: Set auth EXACTLY like googleLogin does
-      // This sets localStorage, token state, user state, and isAuthenticated
+      // Set auth with the token
       setAuth(newToken, userData);
       
-      // Return the user data immediately - no need to fetch again
       return { 
         user: userData, 
         requiresPlan, 
         userId: userId || userData?._id,
-        message: res.data.message 
+        message: res.data.message,
+        token: newToken // Also return the token explicitly
       };
     } catch (err) {
       console.error("Non-Alveoly register error:", err);
