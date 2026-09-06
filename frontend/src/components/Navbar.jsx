@@ -1,5 +1,4 @@
-// src/components/Navbar.jsx - UPDATED VERSION (Only showing changed parts)
-
+// src/components/Navbar.jsx - COMPLETE UPDATED
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -41,8 +40,7 @@ import toast from "react-hot-toast";
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  // ADD registerNonAlveoly to the destructuring
-  const { login, googleLogin, user, logout, register, registerNonAlveoly } = useAuth();
+  const { login, googleLogin, user, logout, register, registerNonAlveoly, setAuth } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -168,7 +166,14 @@ const Navbar = () => {
       
       // Check if user needs to select plan (non-alveoly students) - REDIRECT TO PRICING
       if (result.requiresPlan) {
-        navigate("/pricing");
+        navigate("/pricing", {
+          state: {
+            message: "Please select a plan to continue",
+            userId: result.user?._id,
+            email: result.user?.email,
+            user: result.user
+          }
+        });
         toast.info("Please select a plan to continue");
         setShowLoginModal(false);
         setLoginForm({ email: "", password: "" });
@@ -193,7 +198,12 @@ const Navbar = () => {
         setShowApprovalModal(true);
         setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
       } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
-        navigate("/pricing");
+        navigate("/pricing", {
+          state: {
+            message: err.response?.data?.message || "Please select a plan to continue",
+            userId: err.response?.data?.userId
+          }
+        });
         toast.info(err.response?.data?.message || "Please select a plan to continue");
       } else {
         toast.error(err.response?.data?.message || "Login failed");
@@ -208,7 +218,6 @@ const Navbar = () => {
     try {
       setLoading(true);
       
-      // Validate required fields
       if (!signupForm.name || !signupForm.email || !signupForm.password) {
         toast.error("Please fill in all required fields");
         setLoading(false);
@@ -237,7 +246,6 @@ const Navbar = () => {
         setShowLoginModal(false);
         setShowRegistrationDetailsModal(false);
         toast.success("Registration submitted for approval!");
-        // Reset form
         setSignupForm({
           name: "",
           email: "",
@@ -265,7 +273,6 @@ const Navbar = () => {
     try {
       setLoading(true);
       
-      // Validate required fields
       if (!signupForm.name || !signupForm.email || !signupForm.password) {
         toast.error("Please fill in all required fields");
         setLoading(false);
@@ -283,8 +290,9 @@ const Navbar = () => {
       
       console.log("Sending Non-Alveoly registration payload:", payload);
       
-      // Use the AuthContext's registerNonAlveoly method which handles setting the token
+      // Use the AuthContext's registerNonAlveoly method
       const result = await registerNonAlveoly(payload);
+      console.log("Registration result:", result);
       
       if (result.user) {
         toast.success("Registration successful! Please subscribe to a plan to activate your account.");
@@ -297,16 +305,19 @@ const Navbar = () => {
           courseId: "",
           userType: ""
         });
+        
         // Navigate to PRICING page with user data
-        navigate("/pricing", { 
-          state: { 
-            message: "Please subscribe to a plan to activate your account.",
-            userId: result.user._id || result.userId,
-            email: result.user.email,
-            // Pass the user data so Pricing page can use it
-            user: result.user
-          } 
-        });
+        // Wait a moment for the auth state to update
+        setTimeout(() => {
+          navigate("/pricing", { 
+            state: { 
+              message: "Please subscribe to a plan to activate your account.",
+              userId: result.user._id || result.userId,
+              email: result.user.email,
+              user: result.user
+            } 
+          });
+        }, 500);
       } else {
         toast.error(result.message || "Registration failed");
       }
@@ -322,7 +333,6 @@ const Navbar = () => {
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
     
-    // Validate required fields
     if (!signupForm.name || !signupForm.email || !signupForm.password) {
       toast.error("Please fill in all required fields");
       return;
@@ -343,13 +353,11 @@ const Navbar = () => {
       return;
     }
     
-    // If Alveoly student, show registration source modal
     if (signupForm.userType === "alveoly_student") {
       setShowRegistrationSourceModal(true);
       return;
     }
     
-    // Non-Alveoly student - direct registration using the updated method
     await handleNonAlveolyRegistration();
   };
 
@@ -358,7 +366,6 @@ const Navbar = () => {
     setTempRegistrationSource(source);
     
     if (source === "phone") {
-      // If "Yes" - register directly with "phone" source
       if (pendingGoogleCredential) {
         handleGoogleSignupComplete("alveoly_student", "phone", "");
       } else {
@@ -366,7 +373,6 @@ const Navbar = () => {
       }
       setShowRegistrationSourceModal(false);
     } else {
-      // If "No" - show details modal
       setShowRegistrationSourceModal(false);
       setShowRegistrationDetailsModal(true);
     }
@@ -396,11 +402,9 @@ const Navbar = () => {
       
       setPendingGoogleCredential(idToken);
       
-      // First, try to login with Google
       try {
         const result = await googleLogin(idToken);
         
-        // Check if user needs approval
         if (result.requiresApproval) {
           setShowApprovalModal(true);
           setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
@@ -410,7 +414,6 @@ const Navbar = () => {
           return;
         }
         
-        // Check if user needs to select plan (non-alveoly students) - REDIRECT TO PRICING
         if (result.requiresPlan) {
           navigate("/pricing", {
             state: {
@@ -440,7 +443,6 @@ const Navbar = () => {
         setShowLoginModal(false);
         setPendingGoogleCredential(null);
       } catch (err) {
-        // If user doesn't exist, show user type selection
         if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
           setShowUserTypeModal(true);
           setGoogleLoading(false);
@@ -480,7 +482,6 @@ const Navbar = () => {
     setShowUserTypeModal(false);
     
     if (selectedUserType === "alveoly_student") {
-      // For Alveoly students, show the Google signup form to collect program and course
       setShowGoogleSignupForm(true);
       setGoogleSignupForm({
         name: "",
@@ -490,7 +491,6 @@ const Navbar = () => {
         userType: "alveoly_student"
       });
     } else {
-      // For Non-Alveoly students, show the Google signup form
       setShowGoogleSignupForm(true);
       setGoogleSignupForm({
         name: "",
@@ -521,14 +521,12 @@ const Navbar = () => {
       return;
     }
     
-    // If Alveoly student, show registration source modal
     if (googleSignupForm.userType === "alveoly_student") {
       setShowGoogleSignupForm(false);
       setShowRegistrationSourceModal(true);
       return;
     }
     
-    // Non-Alveoly student - complete signup directly (they'll be redirected to pricing)
     await handleGoogleSignupComplete("non_alveoly_student", "none", "");
   };
 
@@ -601,7 +599,6 @@ const Navbar = () => {
         return;
       }
       
-      // Check if user needs to select plan (non-alveoly students) - REDIRECT TO PRICING
       if (result.requiresPlan) {
         navigate("/pricing", { 
           state: { 
@@ -695,7 +692,6 @@ const Navbar = () => {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
-            {/* Logo */}
             <div
               onClick={() => handleNavigate("/")}
               className="cursor-pointer group flex items-center gap-3"
@@ -726,9 +722,7 @@ const Navbar = () => {
               </div>
             </div>
 
-            {/* Right Side - Icons */}
             <div className="flex items-center gap-3 md:gap-4">
-              {/* Help Icon */}
               <button
                 onClick={() => handleNavigate("/contact_us")}
                 className={`transition-colors duration-300 ${
@@ -739,7 +733,6 @@ const Navbar = () => {
                 <FaQuestionCircle className="text-xl md:text-2xl" />
               </button>
 
-              {/* User Icon - Opens Login Modal */}
               <button
                 onClick={() => {
                   setIsSignup(false);
@@ -753,7 +746,6 @@ const Navbar = () => {
                 <FaUser className="text-xl md:text-2xl" />
               </button>
 
-              {/* Pricing Icon - Direct link to pricing page */}
               <button
                 onClick={() => handleNavigate("/pricing")}
                 className={`transition-colors duration-300 ${
@@ -764,7 +756,6 @@ const Navbar = () => {
                 <FaDollarSign className="text-xl md:text-2xl" />
               </button>
 
-              {/* Hamburger Menu */}
               <button
                 className="relative w-10 h-10 focus:outline-none"
                 onClick={() => setMenuOpen(!menuOpen)}
@@ -807,7 +798,6 @@ const Navbar = () => {
                 </button>
               ))}
               
-              {/* Work with Us */}
               <div className="p-8 border-b border-gray-100">
                 <button
                   onClick={() => {
@@ -820,7 +810,6 @@ const Navbar = () => {
                 </button>
               </div>
 
-              {/* Social Media Links */}
               <div className="p-8">
                 <p className="text-sm font-semibold text-gray-600 mb-4">Connect With Us</p>
                 <div className="flex gap-4">
@@ -845,7 +834,6 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Overlay */}
         {menuOpen && (
           <div
             className="fixed inset-0 bg-black/50 z-30"
@@ -859,7 +847,6 @@ const Navbar = () => {
       {showLoginModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -889,10 +876,8 @@ const Navbar = () => {
               </button>
             </div>
 
-            {/* Modal Body */}
             <div className="p-6">
               {user ? (
-                // If user is already logged in
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
@@ -923,9 +908,7 @@ const Navbar = () => {
                   </button>
                 </div>
               ) : (
-                // Login/Signup Forms
                 <div className="space-y-6">
-                  {/* Toggle between Login and Signup */}
                   <div className="flex rounded-xl bg-gray-100 dark:bg-gray-800 p-1">
                     <button
                       onClick={() => setIsSignup(false)}
@@ -949,7 +932,6 @@ const Navbar = () => {
                     </button>
                   </div>
 
-                  {/* Google Auth */}
                   <div>
                     {!googleLoading ? (
                       <div className="w-full">
@@ -984,7 +966,6 @@ const Navbar = () => {
                   </div>
 
                   {isSignup ? (
-                    // SIGNUP FORM
                     <form onSubmit={handleSignupSubmit} className="space-y-4">
                       <div className="relative">
                         <FaUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
@@ -1032,7 +1013,6 @@ const Navbar = () => {
                         </button>
                       </div>
 
-                      {/* User Type Selection */}
                       <div className="space-y-2">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           Are you an Alveoly Student?
@@ -1069,7 +1049,6 @@ const Navbar = () => {
                         </div>
                       </div>
 
-                      {/* Program Selection */}
                       <div className="relative">
                         <FaBuilding className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
                         <select
@@ -1091,7 +1070,6 @@ const Navbar = () => {
                         </select>
                       </div>
 
-                      {/* Course Selection */}
                       {signupForm.programId && (
                         <div className="relative">
                           <FaBook className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
@@ -1131,7 +1109,6 @@ const Navbar = () => {
                       </button>
                     </form>
                   ) : (
-                    // LOGIN FORM
                     <form onSubmit={handleLoginSubmit} className="space-y-4">
                       <div className="relative">
                         <FaEnvelope className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
@@ -1224,7 +1201,7 @@ const Navbar = () => {
         </div>
       )}
 
-      {/* ==================== USER TYPE MODAL - FOR GOOGLE SIGNUP ==================== */}
+      {/* ==================== USER TYPE MODAL ==================== */}
       {showUserTypeModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <motion.div

@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import API from "../api/axios";
 import { initializeSocket } from "../config/socket.js";
+import toast from "react-hot-toast";
 
 const AuthContext = createContext();
 
@@ -10,6 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [socket, setSocket] = useState(null);
   const [token, setToken] = useState(localStorage.getItem("token"));
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem("token"));
 
   // ================= SOCKET =================
   const connectSocket = (userData) => {
@@ -39,9 +41,12 @@ export const AuthProvider = ({ children }) => {
 
   // ================= SET AUTH =================
   const setAuth = (newToken, userData) => {
+    console.log("🔐 Setting auth with token:", newToken ? "present" : "null", "user:", userData?.email);
+    
     if (newToken) {
       localStorage.setItem("token", newToken);
       setToken(newToken);
+      setIsAuthenticated(true);
     }
     setUser(userData);
     if (userData) {
@@ -53,6 +58,7 @@ export const AuthProvider = ({ children }) => {
   const clearAuth = () => {
     localStorage.removeItem("token");
     setToken(null);
+    setIsAuthenticated(false);
     disconnectSocket();
     setUser(null);
   };
@@ -60,9 +66,11 @@ export const AuthProvider = ({ children }) => {
   // ================= FETCH CURRENT USER =================
   const fetchUser = async () => {
     const storedToken = localStorage.getItem("token");
+    console.log("🔍 Fetching user, token exists:", !!storedToken);
     
     if (!storedToken) {
       setUser(null);
+      setIsAuthenticated(false);
       setLoading(false);
       return;
     }
@@ -70,6 +78,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await API.get("/auth/me");
       setUser(res.data);
+      setIsAuthenticated(true);
       connectSocket(res.data);
     } catch (err) {
       console.error("Fetch user error:", err);
@@ -120,16 +129,20 @@ export const AuthProvider = ({ children }) => {
   // ================= NON-ALVEOLY REGISTER =================
   const registerNonAlveoly = async (form) => {
     try {
+      console.log("📝 Registering non-alveoly student with form:", form);
+      
       const res = await API.post("/auth/register/non-alveoly", form);
+      console.log("📝 Registration response:", res.data);
+      
       const { token: newToken, user: userData, requiresPlan, userId } = res.data;
       
-      // Set auth with the token so user is authenticated
+      // CRITICAL: Set auth with the token so user is authenticated
       setAuth(newToken, userData);
       
       return { 
         user: userData, 
         requiresPlan, 
-        userId,
+        userId: userId || userData?._id,
         message: res.data.message 
       };
     } catch (err) {
@@ -204,19 +217,19 @@ export const AuthProvider = ({ children }) => {
         user,
         loading,
         token,
+        isAuthenticated,
         login,
         register,
-        registerNonAlveoly,  // ADD THIS
+        registerNonAlveoly,
         googleLogin,
         logout,
         setUser,
-        setAuth,  // ADD THIS
+        setAuth,
         assignProgram,
         isAdmin,
         isLecturer,
         isStudent,
         getDashboardPath,
-        isAuthenticated: !!user,
         userRole: user?.role,
       }}
     >

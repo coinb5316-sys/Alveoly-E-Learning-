@@ -1,5 +1,4 @@
 // src/pages/Pricing.jsx - UPDATED VERSION
-
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -39,17 +38,24 @@ const Pricing = () => {
   const [pendingPlanId, setPendingPlanId] = useState(null);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [pendingUserId, setPendingUserId] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // Check if user came from registration
   useEffect(() => {
     const state = location.state;
+    console.log("📍 Pricing page location state:", state);
+    console.log("🔐 Auth state:", { isAuthenticated, user, token: !!token });
+    
     if (state?.userId) {
       setPendingUserId(state.userId);
       if (state.message) {
         toast.success(state.message);
       }
     }
-  }, [location]);
+    
+    // Mark auth as checked
+    setAuthChecked(true);
+  }, [location, isAuthenticated, user, token]);
 
   // Fetch plans
   useEffect(() => {
@@ -71,9 +77,11 @@ const Pricing = () => {
 
   // Handle plan purchase - UPDATED
   const handlePurchasePlan = async (plan) => {
+    console.log("🛒 Purchase plan clicked:", { plan, isAuthenticated, user, token: !!token });
+    
     // Check if user is logged in using the auth context
-    // Use isAuthenticated from context or check token directly
     if (!isAuthenticated && !token) {
+      console.log("❌ User not authenticated, showing login prompt");
       setPendingPlanId(plan._id);
       setShowLoginPrompt(true);
       return;
@@ -86,12 +94,13 @@ const Pricing = () => {
       const userId = pendingUserId || user?._id || location.state?.userId;
       
       if (!userId) {
+        console.error("❌ No userId found:", { pendingUserId, user: user?._id, state: location.state });
         toast.error("User information not found. Please login again.");
         setProcessingPayment(false);
         return;
       }
       
-      console.log("Initiating payment for user:", userId, "with token:", token);
+      console.log("✅ Initiating payment for user:", userId, "with token:", !!token);
       
       // Initiate payment directly
       const response = await API.post("/payments/initiate-plan", {
