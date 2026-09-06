@@ -1,4 +1,4 @@
-// src/components/Navbar.jsx - COMPLETE
+// src/components/Navbar.jsx - COMPLETE FIXED
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -40,7 +40,7 @@ import toast from "react-hot-toast";
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, googleLogin, user, logout, register, registerNonAlveoly, setAuth, fetchUser } = useAuth();
+  const { login, googleLogin, user, logout, register, registerNonAlveoly, setAuth, isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -156,7 +156,6 @@ const Navbar = () => {
     try {
       const result = await login(loginForm);
       
-      // Check if user needs approval
       if (result.requiresApproval) {
         setShowApprovalModal(true);
         setApprovalMessage("Your account is pending approval. Please wait for admin approval.");
@@ -164,7 +163,6 @@ const Navbar = () => {
         return;
       }
       
-      // Check if user needs to select plan (non-alveoly students) - REDIRECT TO PRICING
       if (result.requiresPlan) {
         navigate("/pricing", {
           state: {
@@ -268,7 +266,7 @@ const Navbar = () => {
     }
   };
 
-  // ================= NON-ALVEOLY STUDENT REGISTRATION - UPDATED =================
+  // ================= NON-ALVEOLY STUDENT REGISTRATION - MIRRORS GOOGLE FLOW =================
   const handleNonAlveolyRegistration = async () => {
     try {
       setLoading(true);
@@ -290,7 +288,7 @@ const Navbar = () => {
       
       console.log("Sending Non-Alveoly registration payload:", payload);
       
-      // Use the AuthContext's registerNonAlveoly method - this sets auth
+      // Use the AuthContext's registerNonAlveoly method (which now mirrors googleLogin)
       const result = await registerNonAlveoly(payload);
       console.log("Registration result:", result);
       
@@ -306,19 +304,15 @@ const Navbar = () => {
           userType: ""
         });
         
-        // Navigate to PRICING page with user data
-        // Use a longer timeout to ensure auth state is fully updated
-        setTimeout(() => {
-          console.log("🔄 Navigating to pricing with user:", result.user);
-          navigate("/pricing", { 
-            state: { 
-              message: "Please subscribe to a plan to activate your account.",
-              userId: result.user._id || result.userId,
-              email: result.user.email,
-              user: result.user
-            } 
-          });
-        }, 800);
+        // Navigate to PRICING page with user data - EXACTLY LIKE GOOGLE FLOW
+        navigate("/pricing", { 
+          state: { 
+            message: "Please subscribe to a plan to activate your account.",
+            userId: result.user._id || result.userId,
+            email: result.user.email,
+            user: result.user
+          } 
+        });
       } else {
         toast.error(result.message || "Registration failed");
       }
@@ -682,6 +676,7 @@ const Navbar = () => {
     { icon: FaYoutube, href: "https://youtube.com/alveoly" },
   ];
 
+  // ================= RENDER =================
   return (
     <>
       <nav

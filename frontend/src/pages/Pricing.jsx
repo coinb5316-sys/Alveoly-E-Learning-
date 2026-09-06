@@ -1,4 +1,4 @@
-// src/pages/Pricing.jsx - COMPLETE
+// src/pages/Pricing.jsx - COMPLETE FIXED
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,7 +29,7 @@ import toast from "react-hot-toast";
 const Pricing = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, setUser, token, isAuthenticated, loading: authLoading } = useAuth();
+  const { user, setUser, token, isAuthenticated, refreshUser } = useAuth();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hoveredPlan, setHoveredPlan] = useState(null);
@@ -44,7 +44,7 @@ const Pricing = () => {
   useEffect(() => {
     const state = location.state;
     console.log("📍 Pricing page location state:", state);
-    console.log("🔐 Auth state:", { isAuthenticated, user, token: !!token, authLoading });
+    console.log("🔐 Auth state:", { isAuthenticated, user: user?._id, token: !!token });
     
     if (state?.userId) {
       setPendingUserId(state.userId);
@@ -53,14 +53,14 @@ const Pricing = () => {
       }
     }
     
-    // Mark auth as checked after a delay to ensure auth state is loaded
-    const timer = setTimeout(() => {
-      setAuthChecked(true);
-      console.log("✅ Auth checked:", { isAuthenticated, user: !!user, token: !!token });
-    }, 1000);
+    // If we have a token but no user, try to refresh
+    if (token && !user && !authChecked) {
+      console.log("🔄 Token exists but no user, refreshing...");
+      refreshUser?.();
+    }
     
-    return () => clearTimeout(timer);
-  }, [location, isAuthenticated, user, token, authLoading]);
+    setAuthChecked(true);
+  }, [location, isAuthenticated, user, token, refreshUser]);
 
   // Fetch plans
   useEffect(() => {
@@ -80,18 +80,11 @@ const Pricing = () => {
     fetchPlans();
   }, []);
 
-  // Handle plan purchase - UPDATED
+  // Handle plan purchase
   const handlePurchasePlan = async (plan) => {
-    console.log("🛒 Purchase plan clicked:", { 
-      plan, 
-      isAuthenticated, 
-      user, 
-      token: !!token,
-      pendingUserId,
-      authChecked 
-    });
+    console.log("🛒 Purchase plan clicked:", { plan, isAuthenticated, user: user?._id, token: !!token });
     
-    // Check if user is logged in using the auth context
+    // Check if user is logged in
     if (!isAuthenticated && !token) {
       console.log("❌ User not authenticated, showing login prompt");
       setPendingPlanId(plan._id);
@@ -177,27 +170,25 @@ const Pricing = () => {
             </div>
           )}
           
-          {pendingUserId && !isAuthenticated && !authLoading && (
-            <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg border border-yellow-200 dark:border-yellow-800 max-w-md mx-auto">
-              <p className="text-sm text-yellow-700 dark:text-yellow-400">
-                ⏳ Your account is being set up. Please wait a moment...
+          {pendingUserId && !isAuthenticated && (
+            <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 max-w-md mx-auto">
+              <p className="text-sm text-green-700 dark:text-green-400">
+                ✅ Account created! Please select a plan to activate your account.
               </p>
             </div>
           )}
         </div>
 
         {/* Loading State */}
-        {(loading || authLoading) && (
+        {loading && (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
-            <p className="text-gray-500 dark:text-gray-400 mt-4">
-              {authLoading ? "Verifying your account..." : "Loading plans..."}
-            </p>
+            <p className="text-gray-500 dark:text-gray-400 mt-4">Loading plans...</p>
           </div>
         )}
 
         {/* Plans Grid */}
-        {!loading && !authLoading && plans.length === 0 && (
+        {!loading && plans.length === 0 && (
           <div className="text-center py-20">
             <div className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
               <Crown className="h-12 w-12 text-gray-400" />
@@ -207,7 +198,7 @@ const Pricing = () => {
           </div>
         )}
 
-        {!loading && !authLoading && plans.length > 0 && (
+        {!loading && plans.length > 0 && (
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {plans.map((plan, index) => {
               const isPopular = plan.isPopular || index === 1;

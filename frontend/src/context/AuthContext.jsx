@@ -126,7 +126,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= NON-ALVEOLY REGISTER =================
+  // ================= NON-ALVEOLY REGISTER - FIXED TO MATCH GOOGLE FLOW =================
   const registerNonAlveoly = async (form) => {
     try {
       console.log("📝 Registering non-alveoly student with form:", form);
@@ -134,20 +134,17 @@ export const AuthProvider = ({ children }) => {
       const res = await API.post("/auth/register/non-alveoly", form);
       console.log("📝 Registration response:", res.data);
       
-      const { token: newToken, user: userData, requiresPlan, userId } = res.data;
+      const { token: newToken, user: userData, requiresPlan, userId, redirectTo } = res.data;
       
       // CRITICAL: Set auth with the token so user is authenticated
-      // This is the same as googleLogin does
       setAuth(newToken, userData);
       
-      // Force a re-fetch to ensure user data is fully loaded
-      await fetchUser();
-      
+      // Return exactly like googleLogin does
       return { 
         user: userData, 
         requiresPlan, 
         userId: userId || userData?._id,
-        message: res.data.message 
+        redirectTo: redirectTo || "/pricing"
       };
     } catch (err) {
       console.error("Non-Alveoly register error:", err);
@@ -170,13 +167,13 @@ export const AuthProvider = ({ children }) => {
       }
       
       const res = await API.post("/auth/google-login", payload);
-      const { token: newToken, user: userData, requiresProgram, requiresApproval, requiresPlan } = res.data;
+      const { token: newToken, user: userData, requiresProgram, requiresApproval, requiresPlan, redirectTo } = res.data;
       
-      console.log("Google login response:", { userData, requiresProgram, requiresApproval, requiresPlan });
+      console.log("Google login response:", { userData, requiresProgram, requiresApproval, requiresPlan, redirectTo });
       
       setAuth(newToken, userData);
       
-      return { user: userData, requiresProgram, requiresApproval, requiresPlan };
+      return { user: userData, requiresProgram, requiresApproval, requiresPlan, redirectTo };
     } catch (err) {
       console.error("Google login error:", err);
       if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
@@ -229,13 +226,13 @@ export const AuthProvider = ({ children }) => {
         logout,
         setUser,
         setAuth,
-        fetchUser,
         assignProgram,
         isAdmin,
         isLecturer,
         isStudent,
         getDashboardPath,
         userRole: user?.role,
+        refreshUser: fetchUser, // Add refreshUser method
       }}
     >
       {children}
