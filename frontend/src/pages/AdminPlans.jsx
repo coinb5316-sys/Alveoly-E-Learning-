@@ -1,4 +1,4 @@
-// pages/AdminPlans.jsx - COMPLETE UPDATED VERSION
+// pages/AdminPlans.jsx - COMPLETE FIXED VERSION (No FaWarning)
 import React, { useState, useEffect } from "react";
 import {
   FaPlus,
@@ -20,7 +20,6 @@ import {
   FaExclamationTriangle,
   FaUsers,
   FaSync,
-  FaWarning,
   FaUserTimes,
 } from "react-icons/fa";
 import API from "../api/axios";
@@ -785,7 +784,7 @@ const AdminPlans = () => {
               {editingPlan && (
                 <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
                   <div className="flex items-start gap-3">
-                    <FaWarning className="h-5 w-5 text-amber-500 mt-0.5" />
+                    <FaExclamationTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
                     <div>
                       <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
                         Editing this plan will affect all users assigned to it
