@@ -1,4 +1,4 @@
-// pages/AdminPlans.jsx
+// pages/AdminPlans.jsx - COMPLETE UPDATED VERSION
 import React, { useState, useEffect } from "react";
 import {
   FaPlus,
@@ -18,6 +18,10 @@ import {
   FaUnlock,
   FaCheckCircle,
   FaExclamationTriangle,
+  FaUsers,
+  FaSync,
+  FaWarning,
+  FaUserTimes,
 } from "react-icons/fa";
 import API from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -30,6 +34,8 @@ const AdminPlans = () => {
   const [subjects, setSubjects] = useState([]);
   const [courses, setCourses] = useState([]);
   const [programs, setPrograms] = useState([]);
+  const [updatingAll, setUpdatingAll] = useState(false);
+  const [deletingPlan, setDeletingPlan] = useState(null);
   
   const [formData, setFormData] = useState({
     title: "",
@@ -45,7 +51,8 @@ const AdminPlans = () => {
     courses: [],
     programs: [],
     accessLevel: "full",
-    freeAccess: false
+    freeAccess: false,
+    programAccess: []
   });
   
   const [featureInput, setFeatureInput] = useState("");
@@ -114,7 +121,8 @@ const AdminPlans = () => {
         courses: plan.courses?.map(c => c._id || c) || [],
         programs: plan.programs?.map(p => p._id || p) || [],
         accessLevel: plan.accessLevel || "full",
-        freeAccess: plan.freeAccess || false
+        freeAccess: plan.freeAccess || false,
+        programAccess: plan.programAccess?.map(p => p._id || p) || []
       });
     } else {
       setEditingPlan(null);
@@ -132,7 +140,8 @@ const AdminPlans = () => {
         courses: [],
         programs: [],
         accessLevel: "full",
-        freeAccess: false
+        freeAccess: false,
+        programAccess: []
       });
     }
     setFeatureInput("");
@@ -187,7 +196,6 @@ const AdminPlans = () => {
     try {
       setLoading(true);
       
-      // If free plan, set price to 0
       const submitData = {
         ...formData,
         price: formData.isFree || formData.freeAccess ? 0 : formData.price
@@ -197,6 +205,11 @@ const AdminPlans = () => {
       if (editingPlan) {
         response = await API.put(`/plans/${editingPlan._id}`, submitData);
         toast.success("Plan updated successfully!");
+        
+        // Ask if user wants to update all users with this plan
+        if (window.confirm("Do you want to update all users who have this plan with the new changes?")) {
+          await updateAllUsersWithPlan(editingPlan._id);
+        }
       } else {
         response = await API.post("/plans", submitData);
         toast.success("Plan created successfully!");
@@ -212,19 +225,50 @@ const AdminPlans = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this plan?")) return;
+  const updateAllUsersWithPlan = async (planId) => {
+    try {
+      setUpdatingAll(true);
+      const response = await API.put(`/auth/plan/update-all/${planId}`, {
+        duration: formData.duration,
+        durationUnit: formData.durationUnit,
+        price: formData.price,
+        isFree: formData.isFree,
+        unlocksAllContent: formData.unlocksAllContent,
+        accessLevel: formData.accessLevel,
+        programAccess: formData.programAccess
+      });
+      
+      if (response.data.success) {
+        toast.success(`Updated ${response.data.updatedCount} users`);
+      }
+    } catch (err) {
+      console.error("Error updating users:", err);
+      toast.error("Failed to update users with plan changes");
+    } finally {
+      setUpdatingAll(false);
+    }
+  };
+
+  const handleDeletePlan = async (plan) => {
+    if (!window.confirm(`Are you sure you want to delete the plan "${plan.title}"? This will remove the plan from all users and lock their content.`)) return;
+    
+    if (!window.confirm(`WARNING: ${plan.title} will be removed from all users. All premium content will be locked for them. Are you sure?`)) return;
     
     try {
-      setLoading(true);
-      await API.delete(`/plans/${id}`);
-      toast.success("Plan deleted successfully");
-      fetchPlans();
+      setDeletingPlan(plan._id);
+      const response = await API.delete(`/auth/plan/delete/${plan._id}`);
+      
+      if (response.data.success) {
+        toast.success(`Plan "${plan.title}" deleted. ${response.data.affectedUsers} users affected.`);
+        fetchPlans();
+      } else {
+        toast.error(response.data.message || "Failed to delete plan");
+      }
     } catch (err) {
       console.error("Error deleting plan:", err);
       toast.error(err.response?.data?.message || "Failed to delete plan");
     } finally {
-      setLoading(false);
+      setDeletingPlan(null);
     }
   };
 
@@ -236,6 +280,11 @@ const AdminPlans = () => {
       year: "Year"
     };
     return `${duration} ${units[unit] || unit}${duration > 1 ? 's' : ''}`;
+  };
+
+  const getUserCount = (planId) => {
+    // This would be fetched from the backend, but we'll show a placeholder
+    return "—";
   };
 
   return (
@@ -286,116 +335,131 @@ const AdminPlans = () => {
       {/* Plans Grid */}
       {!loading && plans.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {plans.map((plan) => (
-            <div
-              key={plan._id}
-              className={`rounded-xl border overflow-hidden transition-all hover:shadow-lg ${
-                plan.isActive
-                  ? "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900"
-                  : "border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-60"
-              }`}
-            >
-              {/* Plan Header */}
-              <div className={`p-4 ${plan.isFree ? "bg-gradient-to-r from-green-500 to-emerald-600" : "bg-gradient-to-r from-yellow-500 to-orange-600"} text-white`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {plan.isFree ? (
-                      <FaTag className="h-4 w-4" />
-                    ) : (
-                      <FaCrown className="h-4 w-4" />
-                    )}
-                    <h3 className="font-semibold">{plan.title}</h3>
-                  </div>
-                  <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                    {plan.isFree ? "Free" : "Paid"}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <span className="text-2xl font-bold">
-                    ${plan.price}
-                  </span>
-                  <span className="text-sm opacity-80 ml-1">
-                    /{getDurationLabel(plan.duration, plan.durationUnit)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Plan Body */}
-              <div className="p-4 space-y-3">
-                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                  {plan.description || "No description"}
-                </p>
-
-                {/* Features */}
-                {plan.features && plan.features.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Features
-                    </p>
-                    <ul className="space-y-1">
-                      {plan.features.slice(0, 3).map((feature, idx) => (
-                        <li key={idx} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                          <FaCheck className="h-3 w-3 text-green-500" />
-                          {feature}
-                        </li>
-                      ))}
-                      {plan.features.length > 3 && (
-                        <li className="text-xs text-gray-500">
-                          +{plan.features.length - 3} more
-                        </li>
+          {plans.map((plan) => {
+            const isDeleting = deletingPlan === plan._id;
+            
+            return (
+              <div
+                key={plan._id}
+                className={`rounded-xl border overflow-hidden transition-all hover:shadow-lg ${
+                  plan.isActive
+                    ? "border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900"
+                    : "border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 opacity-60"
+                }`}
+              >
+                {/* Plan Header */}
+                <div className={`p-4 ${plan.isFree ? "bg-gradient-to-r from-green-500 to-emerald-600" : "bg-gradient-to-r from-yellow-500 to-orange-600"} text-white`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {plan.isFree ? (
+                        <FaTag className="h-4 w-4" />
+                      ) : (
+                        <FaCrown className="h-4 w-4" />
                       )}
-                    </ul>
+                      <h3 className="font-semibold">{plan.title}</h3>
+                    </div>
+                    <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                      {plan.isFree ? "Free" : "Paid"}
+                    </span>
                   </div>
-                )}
-
-                {/* Access Level */}
-                <div className="flex items-center gap-2 text-xs">
-                  {plan.unlocksAllContent || plan.accessLevel === "full" ? (
-                    <>
-                      <FaUnlock className="h-3 w-3 text-green-500" />
-                      <span className="text-green-600 dark:text-green-400 font-medium">Unlocks All Content</span>
-                    </>
-                  ) : (
-                    <>
-                      <FaLock className="h-3 w-3 text-yellow-500" />
-                      <span className="text-yellow-600 dark:text-yellow-400 font-medium">Limited Access</span>
-                    </>
-                  )}
+                  <div className="mt-2">
+                    <span className="text-2xl font-bold">
+                      ${plan.price}
+                    </span>
+                    <span className="text-sm opacity-80 ml-1">
+                      /{getDurationLabel(plan.duration, plan.durationUnit)}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Subjects/Programs count */}
-                <div className="flex gap-4 text-xs text-gray-500">
-                  {plan.subjects?.length > 0 && (
-                    <span>{plan.subjects.length} Subjects</span>
-                  )}
-                  {plan.courses?.length > 0 && (
-                    <span>{plan.courses.length} Courses</span>
-                  )}
-                  {plan.programs?.length > 0 && (
-                    <span>{plan.programs.length} Programs</span>
-                  )}
-                </div>
+                {/* Plan Body */}
+                <div className="p-4 space-y-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                    {plan.description || "No description"}
+                  </p>
 
-                {/* Actions */}
-                <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    onClick={() => handleOpenModal(plan)}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
-                  >
-                    <FaEdit className="h-3.5 w-3.5" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(plan._id)}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
-                  >
-                    <FaTrash className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
+                  {/* Features */}
+                  {plan.features && plan.features.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Features
+                      </p>
+                      <ul className="space-y-1">
+                        {plan.features.slice(0, 3).map((feature, idx) => (
+                          <li key={idx} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <FaCheck className="h-3 w-3 text-green-500" />
+                            {feature}
+                          </li>
+                        ))}
+                        {plan.features.length > 3 && (
+                          <li className="text-xs text-gray-500">
+                            +{plan.features.length - 3} more
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Access Level */}
+                  <div className="flex items-center gap-2 text-xs">
+                    {plan.unlocksAllContent || plan.accessLevel === "full" ? (
+                      <>
+                        <FaUnlock className="h-3 w-3 text-green-500" />
+                        <span className="text-green-600 dark:text-green-400 font-medium">Unlocks All Content</span>
+                      </>
+                    ) : (
+                      <>
+                        <FaLock className="h-3 w-3 text-yellow-500" />
+                        <span className="text-yellow-600 dark:text-yellow-400 font-medium">Limited Access</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Subjects/Programs count */}
+                  <div className="flex gap-4 text-xs text-gray-500">
+                    {plan.subjects?.length > 0 && (
+                      <span>{plan.subjects.length} Subjects</span>
+                    )}
+                    {plan.courses?.length > 0 && (
+                      <span>{plan.courses.length} Courses</span>
+                    )}
+                    {plan.programs?.length > 0 && (
+                      <span>{plan.programs.length} Programs</span>
+                    )}
+                  </div>
+
+                  {/* User Count Info */}
+                  <div className="text-xs text-gray-400 dark:text-gray-500">
+                    <FaUsers className="inline h-3 w-3 mr-1" />
+                    Users: {getUserCount(plan._id)}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      onClick={() => handleOpenModal(plan)}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
+                    >
+                      <FaEdit className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeletePlan(plan)}
+                      disabled={isDeleting}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium disabled:opacity-50"
+                    >
+                      {isDeleting ? (
+                        <FaSpinner className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <FaTrash className="h-3.5 w-3.5" />
+                      )}
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -691,6 +755,46 @@ const AdminPlans = () => {
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple</p>
                     </div>
                   )}
+
+                  {/* Program Access for Full Access Plans */}
+                  {formData.unlocksAllContent && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                        Grant Program Access (Optional)
+                      </label>
+                      <select
+                        name="programAccess"
+                        multiple
+                        value={formData.programAccess}
+                        onChange={handleSelectChange}
+                        className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[100px] focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
+                      >
+                        {programs.map((program) => (
+                          <option key={program._id} value={program._id}>
+                            {program.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Select programs to grant full access to</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Warning about plan updates */}
+              {editingPlan && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-start gap-3">
+                    <FaWarning className="h-5 w-5 text-amber-500 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                        Editing this plan will affect all users assigned to it
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                        After saving, you'll have the option to update all users with these changes.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -705,11 +809,15 @@ const AdminPlans = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || updatingAll}
                   className="flex-1 px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {loading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaSave className="h-4 w-4" />}
-                  {editingPlan ? "Update Plan" : "Create Plan"}
+                  {loading || updatingAll ? (
+                    <FaSpinner className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FaSave className="h-4 w-4" />
+                  )}
+                  {updatingAll ? "Updating Users..." : (editingPlan ? "Update Plan" : "Create Plan")}
                 </button>
               </div>
             </form>

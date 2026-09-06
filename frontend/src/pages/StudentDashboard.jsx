@@ -1,4 +1,4 @@
-// StudentDashboard.jsx - Updated with Program support
+// StudentDashboard.jsx - Updated to show plan status correctly
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -24,10 +24,13 @@ import {
   X,
   Building,
   GraduationCap,
+  Ban,
+  Lock,
 } from "lucide-react";
 import API from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import PaystackPayment from "../pages/PaystackPayment";
+import toast from "react-hot-toast";
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -45,6 +48,8 @@ const StudentDashboard = () => {
   });
   const [myPlans, setMyPlans] = useState({});
   const [now, setNow] = useState(new Date());
+  const [isPlanDeactivated, setIsPlanDeactivated] = useState(false);
+  const [planStatusMessage, setPlanStatusMessage] = useState("");
 
   // Timer for countdown
   useEffect(() => {
@@ -59,8 +64,22 @@ const StudentDashboard = () => {
     const fetchStudent = async () => {
       try {
         const res = await API.get("/auth/me");
-        console.log("Student data:", res.data); // Debug log
+        console.log("Student data:", res.data);
         setStudent(res.data);
+        
+        // Check if plan is deactivated
+        if (res.data.planDeactivatedByAdmin) {
+          setIsPlanDeactivated(true);
+          setPlanStatusMessage("Your plan has been deactivated by an administrator.");
+        } else if (!res.data.isPlanActive && res.data.planId) {
+          setIsPlanDeactivated(false);
+          setPlanStatusMessage("Your plan has expired. Please renew to continue accessing premium content.");
+        } else if (!res.data.planId) {
+          setPlanStatusMessage("You don't have an active plan. Subscribe to unlock premium content.");
+        } else {
+          setIsPlanDeactivated(false);
+          setPlanStatusMessage("Your plan is active!");
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -235,10 +254,19 @@ const StudentDashboard = () => {
     },
   ];
 
+  // Check if user has premium access
+  const hasPremiumAccess = student?.isPlanActive && !student?.planDeactivatedByAdmin;
+
   return (
     <div className="space-y-6">
       {/* Welcome Header - Premium */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-8 text-white">
+      <div className={`relative overflow-hidden rounded-2xl p-8 text-white ${
+        isPlanDeactivated 
+          ? "bg-gradient-to-r from-red-600 via-red-700 to-red-800"
+          : student?.isPlanActive 
+            ? "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600"
+            : "bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800"
+      }`}>
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
             <Zap className="h-5 w-5 text-yellow-300" />
@@ -256,6 +284,26 @@ const StudentDashboard = () => {
             <p className="text-indigo-100 text-sm mt-1 opacity-80">
               Course: {courseName}
             </p>
+          )}
+          
+          {/* Plan Status Message */}
+          {planStatusMessage && (
+            <div className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${
+              isPlanDeactivated 
+                ? "bg-red-500/30 text-red-100"
+                : student?.isPlanActive 
+                  ? "bg-green-500/30 text-green-100"
+                  : "bg-yellow-500/30 text-yellow-100"
+            }`}>
+              {isPlanDeactivated ? (
+                <Ban className="h-4 w-4" />
+              ) : student?.isPlanActive ? (
+                <CheckCircle className="h-4 w-4" />
+              ) : (
+                <Lock className="h-4 w-4" />
+              )}
+              {planStatusMessage}
+            </div>
           )}
         </div>
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
@@ -414,126 +462,148 @@ const StudentDashboard = () => {
         </div>
       )}
 
-      {/* Subscription Plans */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-          <Crown className="h-5 w-5 text-yellow-500" />
-          Subscription Plans
-        </h2>
+      {/* Subscription Plans - Only show if not deactivated */}
+      {!isPlanDeactivated && (
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+            <Crown className="h-5 w-5 text-yellow-500" />
+            Subscription Plans
+          </h2>
 
-        {loadingPlans ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-          </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {plans.map((plan, index) => {
-              const status = getPlanStatus(plan._id);
-              const expiry = myPlans[plan._id];
-              const timeLeft = getTimeLeft(expiry);
-              const isPopular = index === 1;
+          {loadingPlans ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {plans.map((plan, index) => {
+                const status = getPlanStatus(plan._id);
+                const expiry = myPlans[plan._id];
+                const timeLeft = getTimeLeft(expiry);
+                const isPopular = index === 1;
+                const isCurrentPlan = student?.planId?._id === plan._id;
 
-              return (
-                <div
-                  key={plan._id}
-                  className={`relative rounded-xl border transition-all duration-300 bg-white dark:bg-gray-900 ${
-                    status === "active"
-                      ? "border-green-500 shadow-lg shadow-green-500/10"
-                      : status === "expired"
-                      ? "border-red-400"
-                      : isPopular
-                      ? "border-blue-500 shadow-lg"
-                      : "border-gray-200 dark:border-gray-800 hover:shadow-lg"
-                  }`}
-                >
-                  {isPopular && status !== "active" && (
-                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                      <span className="px-3 py-1 text-xs font-semibold bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full shadow-lg">
-                        Most Popular
-                      </span>
-                    </div>
-                  )}
-
-                  {status === "active" && (
-                    <div className="absolute top-4 right-4">
-                      <span className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 rounded-full">
-                        <CheckCircle className="h-3 w-3" />
-                        Active
-                      </span>
-                    </div>
-                  )}
-
-                  {status === "expired" && (
-                    <div className="absolute top-4 right-4">
-                      <span className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 rounded-full">
-                        <AlertCircle className="h-3 w-3" />
-                        Expired
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="p-6">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                      {plan.title}
-                    </h3>
-                    <div className="mb-4">
-                      <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-                        ₵{plan.price}
-                      </span>
-                      <span className="text-gray-500 dark:text-gray-400 text-sm">
-                        /{plan.duration} {plan.durationUnit}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
-                      <Clock className="h-4 w-4" />
-                      {plan.duration} {plan.durationUnit} access
-                    </div>
-
-                    {status === "active" && timeLeft && (
-                      <div className="mb-4 p-2 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-                        <p className="text-xs text-blue-600 dark:text-blue-400 text-center">
-                          ⏳ {timeLeft}
-                        </p>
+                return (
+                  <div
+                    key={plan._id}
+                    className={`relative rounded-xl border transition-all duration-300 bg-white dark:bg-gray-900 ${
+                      status === "active" && isCurrentPlan
+                        ? "border-green-500 shadow-lg shadow-green-500/10"
+                        : status === "expired"
+                        ? "border-red-400"
+                        : isPopular
+                        ? "border-blue-500 shadow-lg"
+                        : "border-gray-200 dark:border-gray-800 hover:shadow-lg"
+                    }`}
+                  >
+                    {isPopular && status !== "active" && (
+                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                        <span className="px-3 py-1 text-xs font-semibold bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full shadow-lg">
+                          Most Popular
+                        </span>
                       </div>
                     )}
 
-                    <div className="space-y-2 mb-6">
-                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Included Subjects:
-                      </p>
-                      {plan.subjects?.map((subject) => (
-                        <div key={subject._id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                          <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                          {subject.name}
-                        </div>
-                      ))}
-                    </div>
+                    {status === "active" && isCurrentPlan && (
+                      <div className="absolute top-4 right-4">
+                        <span className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 rounded-full">
+                          <CheckCircle className="h-3 w-3" />
+                          Active
+                        </span>
+                      </div>
+                    )}
 
-                    <button
-                      onClick={() => setSelectedPlan(plan)}
-                      disabled={status === "active"}
-                      className={`w-full py-2.5 rounded-lg font-medium transition-all ${
-                        status === "active"
-                          ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
+                    {status === "expired" && (
+                      <div className="absolute top-4 right-4">
+                        <span className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 rounded-full">
+                          <AlertCircle className="h-3 w-3" />
+                          Expired
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="p-6">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                        {plan.title}
+                      </h3>
+                      <div className="mb-4">
+                        <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
+                          ₵{plan.price}
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">
+                          /{plan.duration} {plan.durationUnit}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
+                        <Clock className="h-4 w-4" />
+                        {plan.duration} {plan.durationUnit} access
+                      </div>
+
+                      {status === "active" && timeLeft && isCurrentPlan && (
+                        <div className="mb-4 p-2 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                          <p className="text-xs text-blue-600 dark:text-blue-400 text-center">
+                            ⏳ {timeLeft}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="space-y-2 mb-6">
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Included Subjects:
+                        </p>
+                        {plan.subjects?.map((subject) => (
+                          <div key={subject._id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                            {subject.name}
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => setSelectedPlan(plan)}
+                        disabled={status === "active" && isCurrentPlan}
+                        className={`w-full py-2.5 rounded-lg font-medium transition-all ${
+                          status === "active" && isCurrentPlan
+                            ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
+                            : status === "expired"
+                            ? "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/25"
+                            : "bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-700 hover:from-gray-800 hover:to-gray-900 text-white shadow-lg"
+                        }`}
+                      >
+                        {status === "active" && isCurrentPlan
+                          ? "Currently Active"
                           : status === "expired"
-                          ? "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/25"
-                          : "bg-gradient-to-r from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-700 hover:from-gray-800 hover:to-gray-900 text-white shadow-lg"
-                      }`}
-                    >
-                      {status === "active"
-                        ? "Currently Active"
-                        : status === "expired"
-                        ? "Renew Plan"
-                        : "Choose Plan"}
-                    </button>
+                          ? "Renew Plan"
+                          : "Choose Plan"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Deactivated Plan Message */}
+      {isPlanDeactivated && (
+        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20 p-6 text-center">
+          <Ban className="h-12 w-12 text-red-500 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-red-800 dark:text-red-400 mb-2">
+            Plan Deactivated
+          </h3>
+          <p className="text-red-700 dark:text-red-500 text-sm">
+            Your plan has been deactivated by an administrator. Please contact support for more information.
+          </p>
+          <button
+            onClick={() => navigate("/student/payments")}
+            className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+          >
+            View Payment History
+          </button>
+        </div>
+      )}
 
       {/* Payment Modal */}
       {selectedPlan && (

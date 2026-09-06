@@ -1,4 +1,4 @@
-// routes/authRoutes.js
+// routes/authRoutes.js - Add plan management routes
 import express from "express";
 import {
   registerAlveolyStudent,
@@ -18,6 +18,10 @@ import {
   assignPlanAfterPayment,
   adminApproveUser,
   sendPlanExpiryNotification,
+  deactivateUserPlan,
+  reactivateUserPlan,
+  updatePlanForAllUsers,
+  deletePlanAndCleanup,
 } from "../controllers/authController.js";
 import { adminOnly, protect } from "../middleware/authMiddleware.js";
 
@@ -32,6 +36,10 @@ router.post("/complete-registration", protect, completeRegistration);
 // ================= PLAN MANAGEMENT =================
 router.post("/assign-plan", protect, adminOnly, assignPlanToUser);
 router.post("/assign-plan-after-payment", protect, assignPlanAfterPayment);
+router.post("/plan/deactivate/:userId", protect, adminOnly, deactivateUserPlan);
+router.post("/plan/reactivate/:userId", protect, adminOnly, reactivateUserPlan);
+router.put("/plan/update-all/:planId", protect, adminOnly, updatePlanForAllUsers);
+router.delete("/plan/delete/:planId", protect, adminOnly, deletePlanAndCleanup);
 
 // ================= USER APPROVAL =================
 router.patch("/admin/approve/:userId", protect, adminOnly, adminApproveUser);

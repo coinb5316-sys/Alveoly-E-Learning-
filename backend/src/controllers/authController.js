@@ -1385,3 +1385,297 @@ export const sendPlanExpiryNotification = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// controllers/authController.js - Add plan deactivation and management functions
+
+// ================= DEACTIVATE USER PLAN (Admin) =================
+export const deactivateUserPlan = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.planId) {
+      return res.status(400).json({ message: "User has no plan assigned" });
+    }
+
+    // Deactivate the plan
+    user.isPlanActive = false;
+    user.planDeactivatedByAdmin = true;
+    user.subscriptionStatus = "deactivated";
+    user.planDeactivatedAt = new Date();
+    user.programAccess = []; // Remove program access
+
+    await user.save();
+
+    // Send notification to user
+    await createNotification(
+      user._id,
+      "student",
+      "warning",
+      "Plan Deactivated ⚠️",
+      `Your plan "${user.planId?.title || 'Plan'}" has been deactivated by an administrator. Please contact support for more information.`,
+      "/student/plans",
+      { action: "plan_deactivated" }
+    );
+
+    // Notify admins
+    const adminUsers = await User.find({ role: "admin" });
+    for (const admin of adminUsers) {
+      await createNotification(
+        admin._id,
+        "admin",
+        "info",
+        "Plan Deactivated",
+        `${user.name}'s plan has been deactivated by an administrator.`,
+        "/admin/users",
+        { userId: user._id, action: "plan_deactivated" }
+      );
+    }
+
+    const updatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("planId", "title duration price durationUnit");
+
+    res.json({
+      success: true,
+      message: `Plan deactivated for ${user.name}`,
+      user: updatedUser
+    });
+
+  } catch (err) {
+    console.error("DEACTIVATE PLAN ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= REACTIVATE USER PLAN (Admin) =================
+export const reactivateUserPlan = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.planId) {
+      return res.status(400).json({ message: "User has no plan assigned" });
+    }
+
+    // Check if plan is expired
+    if (user.planExpiryDate && new Date(user.planExpiryDate) < new Date()) {
+      return res.status(400).json({ 
+        message: "Cannot reactivate expired plan. Please assign a new plan." 
+      });
+    }
+
+    // Reactivate the plan
+    user.isPlanActive = true;
+    user.planDeactivatedByAdmin = false;
+    user.subscriptionStatus = "active";
+    user.planDeactivatedAt = null;
+
+    // Restore program access
+    const plan = await Plan.findById(user.planId);
+    if (plan && (plan.unlocksAllContent || plan.accessLevel === "full")) {
+      if (user.programId && !user.programAccess.includes(user.programId)) {
+        user.programAccess.push(user.programId);
+      }
+    }
+
+    await user.save();
+
+    // Send notification to user
+    await createNotification(
+      user._id,
+      "student",
+      "success",
+      "Plan Reactivated ✅",
+      `Your plan "${plan?.title || 'Plan'}" has been reactivated. You now have full access again.`,
+      "/student/dashboard",
+      { action: "plan_reactivated" }
+    );
+
+    const updatedUser = await User.findById(user._id)
+      .select("-password")
+      .populate("planId", "title duration price durationUnit");
+
+    res.json({
+      success: true,
+      message: `Plan reactivated for ${user.name}`,
+      user: updatedUser
+    });
+
+  } catch (err) {
+    console.error("REACTIVATE PLAN ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= UPDATE PLAN FOR ALL USERS (When Plan Changes) =================
+export const updatePlanForAllUsers = async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const { duration, durationUnit, price, isFree, unlocksAllContent, accessLevel, programAccess } = req.body;
+
+    const plan = await Plan.findById(planId);
+    if (!plan) {
+      return res.status(404).json({ message: "Plan not found" });
+    }
+
+    // Update plan
+    if (duration) plan.duration = duration;
+    if (durationUnit) plan.durationUnit = durationUnit;
+    if (price !== undefined) plan.price = price;
+    if (isFree !== undefined) plan.isFree = isFree;
+    if (unlocksAllContent !== undefined) plan.unlocksAllContent = unlocksAllContent;
+    if (accessLevel) plan.accessLevel = accessLevel;
+    if (programAccess) plan.programAccess = programAccess;
+
+    await plan.save();
+
+    // Find all users with this plan
+    const usersWithPlan = await User.find({ planId: plan._id, isPlanActive: true });
+
+    // Update each user's plan details
+    for (const user of usersWithPlan) {
+      // Update expiry date if duration changed
+      if (duration || durationUnit) {
+        const startDate = user.planStartDate || new Date();
+        const expiryDate = new Date(startDate);
+        
+        const newDuration = duration || plan.duration;
+        const newDurationUnit = durationUnit || plan.durationUnit;
+        
+        switch (newDurationUnit) {
+          case "day":
+            expiryDate.setDate(expiryDate.getDate() + newDuration);
+            break;
+          case "week":
+            expiryDate.setDate(expiryDate.getDate() + (newDuration * 7));
+            break;
+          case "month":
+            expiryDate.setMonth(expiryDate.getMonth() + newDuration);
+            break;
+          case "year":
+            expiryDate.setFullYear(expiryDate.getFullYear() + newDuration);
+            break;
+          default:
+            expiryDate.setDate(expiryDate.getDate() + newDuration);
+        }
+        
+        user.planExpiryDate = expiryDate;
+      }
+
+      // Update program access
+      if (unlocksAllContent || accessLevel === "full") {
+        if (!user.programAccess) {
+          user.programAccess = [];
+        }
+        if (programAccess && programAccess.length > 0) {
+          for (const progId of programAccess) {
+            if (!user.programAccess.includes(progId)) {
+              user.programAccess.push(progId);
+            }
+          }
+        } else if (user.programId && !user.programAccess.includes(user.programId)) {
+          user.programAccess.push(user.programId);
+        }
+      }
+
+      await user.save();
+
+      // Send notification to user
+      await createNotification(
+        user._id,
+        "student",
+        "info",
+        "Plan Updated 🔄",
+        `Your plan "${plan.title}" has been updated by an administrator.`,
+        "/student/plans",
+        { planId: plan._id, action: "plan_updated" }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Plan updated for ${usersWithPlan.length} users`,
+      updatedCount: usersWithPlan.length
+    });
+
+  } catch (err) {
+    console.error("UPDATE PLAN FOR ALL USERS ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ================= DELETE PLAN AND CLEAN UP USERS =================
+export const deletePlanAndCleanup = async (req, res) => {
+  try {
+    const { planId } = req.params;
+
+    const plan = await Plan.findById(planId);
+    if (!plan) {
+      return res.status(404).json({ message: "Plan not found" });
+    }
+
+    // Find all users with this plan
+    const usersWithPlan = await User.find({ planId: plan._id });
+
+    // Remove plan from all users and lock their content
+    for (const user of usersWithPlan) {
+      user.planId = null;
+      user.planStartDate = null;
+      user.planExpiryDate = null;
+      user.isPlanActive = false;
+      user.programAccess = [];
+      user.subscriptionStatus = "none";
+      user.manuallyAssignedPlan = false;
+      user.planDeactivatedByAdmin = false;
+
+      await user.save();
+
+      // Send notification to user
+      await createNotification(
+        user._id,
+        "student",
+        "warning",
+        "Plan Removed ⚠️",
+        `Your plan "${plan.title}" has been removed by an administrator. All premium content is now locked.`,
+        "/student/plans",
+        { planId: plan._id, action: "plan_removed" }
+      );
+    }
+
+    // Delete the plan
+    await plan.deleteOne();
+
+    // Notify admins
+    const adminUsers = await User.find({ role: "admin" });
+    for (const admin of adminUsers) {
+      await createNotification(
+        admin._id,
+        "admin",
+        "info",
+        "Plan Deleted",
+        `Plan "${plan.title}" has been deleted. ${usersWithPlan.length} users affected.`,
+        "/admin/plans",
+        { planId: plan._id, action: "plan_deleted" }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Plan "${plan.title}" deleted. ${usersWithPlan.length} users updated.`,
+      affectedUsers: usersWithPlan.length
+    });
+
+  } catch (err) {
+    console.error("DELETE PLAN AND CLEANUP ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};

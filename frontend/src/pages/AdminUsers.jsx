@@ -1,4 +1,4 @@
-// AdminUsers.jsx - Updated with Registration Details Display
+// AdminUsers.jsx - Updated with Plan Deactivation/Reactivation and Pending Approval Filter
 import { useEffect, useState } from "react";
 import { 
   FaTrash, 
@@ -38,6 +38,9 @@ import {
   FaInfoCircle,
   FaClipboardList,
   FaEye,
+  FaPlay,
+  FaStop,
+  FaSync,
 } from "react-icons/fa";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -52,6 +55,7 @@ const AdminUsers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [userTypeFilter, setUserTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showAddLecturerModal, setShowAddLecturerModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -81,6 +85,7 @@ const AdminUsers = () => {
   });
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // ================= FETCH USERS =================
   const fetchUsers = async () => {
@@ -98,6 +103,7 @@ const AdminUsers = () => {
                          "Not set",
         planName: user.planId?.title || "No Plan",
         planStatus: user.isPlanActive ? "Active" : 
+                    user.planDeactivatedByAdmin ? "Deactivated" :
                     user.planId ? "Expired" : "None",
         isApprovedDisplay: user.isApproved ? "✅ Approved" : "⏳ Pending",
         registrationSourceDisplay: user.registrationSource === "phone" ? "📱 Phone (0549556116)" :
@@ -213,7 +219,7 @@ const AdminUsers = () => {
     }
 
     try {
-      setLoading(true);
+      setActionLoading(true);
       const response = await axios.post("/auth/assign-plan", {
         userId: selectedUser._id,
         planId: selectedPlanForUser
@@ -232,7 +238,55 @@ const AdminUsers = () => {
       console.error("Assign plan error:", err);
       toast.error(err.response?.data?.message || "Failed to assign plan");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
+    }
+  };
+
+  // ================= DEACTIVATE USER PLAN =================
+  const handleDeactivatePlan = async (user) => {
+    if (!window.confirm(`Are you sure you want to deactivate ${user.name}'s plan? They will lose access to all premium content.`)) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await axios.post(`/auth/plan/deactivate/${user._id}`);
+
+      if (response.data.success) {
+        toast.success(`Plan deactivated for ${user.name}`);
+        fetchUsers();
+      } else {
+        toast.error(response.data.message || "Failed to deactivate plan");
+      }
+    } catch (err) {
+      console.error("Deactivate plan error:", err);
+      toast.error(err.response?.data?.message || "Failed to deactivate plan");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ================= REACTIVATE USER PLAN =================
+  const handleReactivatePlan = async (user) => {
+    if (!window.confirm(`Are you sure you want to reactivate ${user.name}'s plan? They will regain access to premium content.`)) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await axios.post(`/auth/plan/reactivate/${user._id}`);
+
+      if (response.data.success) {
+        toast.success(`Plan reactivated for ${user.name}`);
+        fetchUsers();
+      } else {
+        toast.error(response.data.message || "Failed to reactivate plan");
+      }
+    } catch (err) {
+      console.error("Reactivate plan error:", err);
+      toast.error(err.response?.data?.message || "Failed to reactivate plan");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -246,7 +300,7 @@ const AdminUsers = () => {
   // ================= APPROVE USER =================
   const handleApproveUser = async (userId) => {
     try {
-      setLoading(true);
+      setActionLoading(true);
       const response = await axios.patch(`/auth/admin/approve/${userId}`);
       
       if (response.data.success) {
@@ -259,7 +313,7 @@ const AdminUsers = () => {
       console.error("Approve user error:", err);
       toast.error(err.response?.data?.message || "Failed to approve user");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -272,7 +326,7 @@ const AdminUsers = () => {
   // ================= UPDATE USER =================
   const handleUpdateUser = async () => {
     try {
-      setLoading(true);
+      setActionLoading(true);
       
       const updateData = {
         name: editUserData.name,
@@ -310,7 +364,7 @@ const AdminUsers = () => {
       console.error("Update error:", err);
       toast.error(err.response?.data?.message || "Failed to update user");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -354,7 +408,7 @@ const AdminUsers = () => {
   // ================= UPDATE USER ROLE =================
   const handleRoleChange = async (id, role) => {
     try {
-      setLoading(true);
+      setActionLoading(true);
       const response = await axios.put(`/users/${id}/role`, { role });
       if (response.data.success) {
         fetchUsers();
@@ -364,7 +418,7 @@ const AdminUsers = () => {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to update role");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -373,7 +427,7 @@ const AdminUsers = () => {
     if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
 
     try {
-      setLoading(true);
+      setActionLoading(true);
       await axios.delete(`/users/${id}`);
       setUsers((prev) => prev.filter((u) => u._id !== id));
       toast.success("User deleted successfully");
@@ -381,7 +435,7 @@ const AdminUsers = () => {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to delete user");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -390,23 +444,23 @@ const AdminUsers = () => {
     e.preventDefault();
     
     try {
-      setLoading(true);
+      setActionLoading(true);
       
       if (!newLecturer.name || !newLecturer.email || !newLecturer.password) {
         toast.error("Please fill in all required fields");
-        setLoading(false);
+        setActionLoading(false);
         return;
       }
       
       if (!newLecturer.programId) {
         toast.error("Please select a program");
-        setLoading(false);
+        setActionLoading(false);
         return;
       }
       
       if (!newLecturer.courseId) {
         toast.error("Please select a course");
-        setLoading(false);
+        setActionLoading(false);
         return;
       }
       
@@ -446,7 +500,7 @@ const AdminUsers = () => {
       console.error("Error adding lecturer:", err);
       toast.error(err.response?.data?.message || "Failed to add lecturer");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -548,12 +602,39 @@ const AdminUsers = () => {
     }
   };
 
+  const getPlanStatusBadge = (user) => {
+    if (user.planDeactivatedByAdmin) {
+      return { color: "bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800", icon: <FaBan className="h-3 w-3" />, label: "Deactivated" };
+    }
+    if (user.isPlanActive) {
+      return { color: "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800", icon: <FaCheckCircle className="h-3 w-3" />, label: "Active" };
+    }
+    if (user.planId) {
+      return { color: "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800", icon: <FaExclamationTriangle className="h-3 w-3" />, label: "Expired" };
+    }
+    return { color: "bg-gray-100 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700", icon: <FaRegClock className="h-3 w-3" />, label: "No Plan" };
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
     const matchesUserType = userTypeFilter === "all" || user.userType === userTypeFilter;
-    return matchesSearch && matchesRole && matchesUserType;
+    
+    let matchesStatus = true;
+    if (statusFilter === "pending") {
+      matchesStatus = user.userType === "alveoly_student" && !user.isApproved;
+    } else if (statusFilter === "active") {
+      matchesStatus = user.isPlanActive && !user.planDeactivatedByAdmin;
+    } else if (statusFilter === "deactivated") {
+      matchesStatus = user.planDeactivatedByAdmin;
+    } else if (statusFilter === "expired") {
+      matchesStatus = !user.isPlanActive && user.planId && !user.planDeactivatedByAdmin;
+    } else if (statusFilter === "no_plan") {
+      matchesStatus = !user.planId;
+    }
+    
+    return matchesSearch && matchesRole && matchesUserType && matchesStatus;
   });
 
   const totalUsers = users.length;
@@ -683,7 +764,7 @@ const AdminUsers = () => {
           </button>
         </div>
         {showFilters && (
-          <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="relative">
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input 
@@ -713,6 +794,18 @@ const AdminUsers = () => {
               <option value="alveoly_student">Alveoly Student</option>
               <option value="non_alveoly_student">Non-Alveoly Student</option>
               <option value="">Not Set</option>
+            </select>
+            <select 
+              value={statusFilter} 
+              onChange={(e) => setStatusFilter(e.target.value)} 
+              className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">⏳ Pending Approval</option>
+              <option value="active">✅ Active Plan</option>
+              <option value="deactivated">⛔ Deactivated Plan</option>
+              <option value="expired">⏰ Expired Plan</option>
+              <option value="no_plan">📋 No Plan</option>
             </select>
           </div>
         )}
@@ -749,16 +842,17 @@ const AdminUsers = () => {
                 {filteredUsers.map((user) => {
                   const isPending = user.userType === "alveoly_student" && !user.isApproved;
                   const hasRegistrationDetails = user.registrationSource === "other" && user.registrationDetails;
+                  const planStatus = getPlanStatusBadge(user);
                   
                   return (
                     <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${
-                            isPending ? "from-amber-500 to-amber-600" :
+                          <div className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${(
                             user.role === "admin" ? "from-purple-500 to-purple-600" :
-                            user.role === "lecturer" ? "from-blue-500 to-blue-600" : "from-green-500 to-green-600"
-                          }`}>
+                            user.role === "lecturer" ? "from-blue-500 to-blue-600" : 
+                            isPending ? "from-amber-500 to-amber-600" : "from-green-500 to-green-600"
+                          )}`}>
                             <span className="text-white font-semibold text-sm">{user.name?.charAt(0).toUpperCase()}</span>
                           </div>
                           <div>
@@ -767,6 +861,12 @@ const AdminUsers = () => {
                               <div className="flex items-center gap-1 mt-0.5">
                                 <FaClock className="h-3 w-3 text-amber-500" />
                                 <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending Approval</span>
+                              </div>
+                            )}
+                            {user.planDeactivatedByAdmin && (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <FaBan className="h-3 w-3 text-red-500" />
+                                <span className="text-xs text-red-600 dark:text-red-400 font-medium">Plan Deactivated</span>
                               </div>
                             )}
                             {hasRegistrationDetails && (
@@ -839,18 +939,14 @@ const AdminUsers = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          {user.planId ? (
-                            <>
-                              <FaCrown className="h-3.5 w-3.5 text-yellow-500" />
-                              <span className="text-gray-600 dark:text-gray-400">{user.planId.title}</span>
-                              {user.isPlanActive ? (
-                                <span className="text-xs text-green-600 dark:text-green-400 font-medium">Active</span>
-                              ) : (
-                                <span className="text-xs text-red-600 dark:text-red-400 font-medium">Expired</span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-gray-400 dark:text-gray-500">No Plan</span>
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${planStatus.color}`}>
+                            {planStatus.icon}
+                            {planStatus.label}
+                          </span>
+                          {user.planId && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[100px]">
+                              {user.planId.title}
+                            </span>
                           )}
                         </div>
                       </td>
@@ -871,13 +967,33 @@ const AdminUsers = () => {
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap items-center gap-2">
                           {user.role === "student" && (
-                            <button 
-                              onClick={() => openAssignPlanModal(user)} 
-                              className="flex items-center gap-1 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-950/50 transition-colors text-sm font-medium"
-                              title="Assign Plan"
-                            >
-                              <FaCrown className="h-3 w-3" />
-                            </button>
+                            <>
+                              <button 
+                                onClick={() => openAssignPlanModal(user)} 
+                                className="flex items-center gap-1 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-950/50 transition-colors text-sm font-medium"
+                                title="Assign Plan"
+                              >
+                                <FaCrown className="h-3 w-3" />
+                              </button>
+                              {user.planId && user.isPlanActive && !user.planDeactivatedByAdmin && (
+                                <button 
+                                  onClick={() => handleDeactivatePlan(user)} 
+                                  className="flex items-center gap-1 px-2 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
+                                  title="Deactivate Plan"
+                                >
+                                  <FaStop className="h-3 w-3" />
+                                </button>
+                              )}
+                              {user.planId && user.planDeactivatedByAdmin && (
+                                <button 
+                                  onClick={() => handleReactivatePlan(user)} 
+                                  className="flex items-center gap-1 px-2 py-1.5 bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors text-sm font-medium"
+                                  title="Reactivate Plan"
+                                >
+                                  <FaPlay className="h-3 w-3" />
+                                </button>
+                              )}
+                            </>
                           )}
                           <button 
                             onClick={() => openEditModal(user)} 
@@ -954,6 +1070,7 @@ const AdminUsers = () => {
                   <p><span className="font-medium">Program:</span> {selectedUser.programName}</p>
                   <p><span className="font-medium">Course:</span> {selectedUser.courseName}</p>
                   <p><span className="font-medium">Plan:</span> {selectedUser.planName}</p>
+                  <p><span className="font-medium">Plan Status:</span> {selectedUser.isPlanActive ? "Active" : selectedUser.planDeactivatedByAdmin ? "Deactivated by Admin" : selectedUser.planId ? "Expired" : "None"}</p>
                 </div>
               </div>
 
@@ -1029,10 +1146,10 @@ const AdminUsers = () => {
                 </button>
                 <button
                   onClick={handleAssignPlan}
-                  disabled={loading || !selectedPlanForUser}
+                  disabled={actionLoading || !selectedPlanForUser}
                   className="flex-1 px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaCheck className="h-4 w-4" />}
+                  {actionLoading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaCheck className="h-4 w-4" />}
                   Assign Plan
                 </button>
               </div>
@@ -1119,8 +1236,8 @@ const AdminUsers = () => {
 
               <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button type="button" onClick={() => setShowAddLecturerModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
-                <button type="submit" disabled={loading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                  {loading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaUserPlus className="h-4 w-4" />}
+                <button type="submit" disabled={actionLoading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  {actionLoading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaUserPlus className="h-4 w-4" />}
                   Add Lecturer
                 </button>
               </div>
@@ -1215,8 +1332,8 @@ const AdminUsers = () => {
 
               <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button onClick={() => setShowEditUserModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
-                <button onClick={handleUpdateUser} disabled={loading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-                  {loading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaSave className="h-4 w-4" />}
+                <button onClick={handleUpdateUser} disabled={actionLoading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                  {actionLoading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaSave className="h-4 w-4" />}
                   Save Changes
                 </button>
               </div>

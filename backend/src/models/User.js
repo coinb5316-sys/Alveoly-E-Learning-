@@ -1,4 +1,4 @@
-// models/User.js - Add programAccess field
+// models/User.js - Add plan management fields
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -106,6 +106,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    planDeactivatedByAdmin: {
+      type: Boolean,
+      default: false
+    },
     // ================= PROGRAM ACCESS (For plan unlocking) =================
     programAccess: [{
       type: mongoose.Schema.Types.ObjectId,
@@ -160,10 +164,14 @@ const userSchema = new mongoose.Schema(
     },
     subscriptionStatus: {
       type: String,
-      enum: ["none", "active", "expired", "pending"],
+      enum: ["none", "active", "expired", "pending", "deactivated"],
       default: "none"
     },
     subscriptionExpiry: {
+      type: Date,
+      default: null
+    },
+    planDeactivatedAt: {
       type: Date,
       default: null
     }
@@ -187,6 +195,8 @@ userSchema.index({ planId: 1 });
 userSchema.index({ isPlanActive: 1 });
 userSchema.index({ planExpiryDate: 1 });
 userSchema.index({ programAccess: 1 });
+userSchema.index({ planDeactivatedByAdmin: 1 });
+userSchema.index({ subscriptionStatus: 1 });
 
 // ================= VIRTUAL: Check if user is active =================
 userSchema.virtual('isRecentlyActive').get(function() {
@@ -199,6 +209,7 @@ userSchema.virtual('isRecentlyActive').get(function() {
 userSchema.methods.hasActivePlan = function() {
   if (!this.planId) return false;
   if (!this.isPlanActive) return false;
+  if (this.planDeactivatedByAdmin) return false;
   if (this.planExpiryDate && new Date(this.planExpiryDate) < new Date()) {
     this.isPlanActive = false;
     this.subscriptionStatus = "expired";
