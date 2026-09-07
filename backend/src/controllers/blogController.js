@@ -1,11 +1,13 @@
-// controllers/blogController.js - UPDATED WITH CLOUDINARY BUFFER UPLOAD
+// controllers/blogController.js - FIXED IMPORTS
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
 import BlogComment from "../models/BlogComment.js";
 import User from "../models/User.js";
+// Change these imports - config is in backend/config/, not src/config/
 import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../config/cloudinary.js";
-import { io, emitAdminNotification } from "../../server.js";
+// Import notification service
+import { emitAdminNotification } from "../services/notificationService.js";
 
 // ==================== POST CONTROLLERS ====================
 
@@ -150,13 +152,11 @@ export const createBlogPost = async (req, res) => {
       .lean();
 
     // Send notification to admin
-    if (global.io) {
-      global.io.to("admin").emit("new_notification", {
-        type: "blog_post_created",
-        message: `New blog post "${title}" created`,
-        data: { postId: newPost._id, title }
-      });
-    }
+    emitAdminNotification({
+      type: "blog_post_created",
+      message: `New blog post "${title}" created`,
+      data: { postId: newPost._id, title }
+    });
 
     res.status(201).json({
       success: true,
