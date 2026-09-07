@@ -1,4 +1,4 @@
-// components/ProtectedRoutes.jsx - FULLY UPDATED
+// src/components/ProtectedRoutes.jsx - UPDATED
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -43,6 +43,25 @@ const ProtectedRoute = ({ children, role }) => {
   }
 
   // ✅ Allow access
+  return children;
+};
+
+// ===== PUBLIC ROUTE COMPONENT =====
+// This component ensures public routes don't redirect to login
+export const PublicRoute = ({ children }) => {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return children;
 };
 

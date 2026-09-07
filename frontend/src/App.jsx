@@ -1,4 +1,4 @@
-// src/App.js - Updated with Blog Routes
+// src/App.js - Updated with PublicRoute for blog routes
 import React, { useEffect } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
@@ -13,7 +13,7 @@ import Admissions from "./pages/Admissions";
 import Contact from "./pages/Contact";
 import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
-import ProtectedRoute from "./components/ProtectedRoutes";
+import ProtectedRoute, { PublicRoute } from "./components/ProtectedRoutes";
 import StudentDashboard from "./pages/StudentDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import StudentLayout from "./pages/StudentLayout";
@@ -149,54 +149,55 @@ function App() {
         />
         
         <Routes>
-          {/* ==================== PUBLIC ROUTES ==================== */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/programs" element={<Programs />} />
-          <Route path="/programs/:id" element={<ProgramDetail />} />
-          <Route path="/admissions" element={<Admissions />} />
-          <Route path="/contact_us" element={<Contact />} />
+          {/* ==================== PUBLIC ROUTES (No Auth Required) ==================== */}
+          <Route path="/" element={<PublicRoute><HomePage /></PublicRoute>} />
+          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
+          <Route path="/about" element={<PublicRoute><AboutPage /></PublicRoute>} />
+          <Route path="/programs" element={<PublicRoute><Programs /></PublicRoute>} />
+          <Route path="/programs/:id" element={<PublicRoute><ProgramDetail /></PublicRoute>} />
+          <Route path="/admissions" element={<PublicRoute><Admissions /></PublicRoute>} />
+          <Route path="/contact_us" element={<PublicRoute><Contact /></PublicRoute>} />
+          <Route path="/pricing" element={<PublicRoute><Pricing /></PublicRoute>} />
           
-          {/* ==================== BLOG ROUTES ==================== */}
-          <Route path="/blog" element={<BlogPage />} />
-          <Route path="/blog/post/:id" element={<BlogPostPage />} />
-          <Route path="/blog/category/:category" element={<BlogCategory />} />
-          <Route path="/blog/author/:authorId" element={<BlogAuthor />} />
-          <Route path="/blog/search" element={<BlogSearch />} />
+          {/* ==================== BLOG ROUTES (PUBLIC) ==================== */}
+          <Route path="/blog" element={<PublicRoute><BlogPage /></PublicRoute>} />
+          <Route path="/blog/post/:id" element={<PublicRoute><BlogPostPage /></PublicRoute>} />
+          <Route path="/blog/category/:category" element={<PublicRoute><BlogCategory /></PublicRoute>} />
+          <Route path="/blog/author/:authorId" element={<PublicRoute><BlogAuthor /></PublicRoute>} />
+          <Route path="/blog/search" element={<PublicRoute><BlogSearch /></PublicRoute>} />
           
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<TermsOfService />} />
-          <Route path="/disclaimer" element={<Disclaimer />} />
-          <Route path="/cookies" element={<CookiePolicy />} />
-          <Route path="/pricing" element={<Pricing />} />
-          <Route path="/careers" element={<CareerPage />} />
-          <Route path="/careers/what-we-do" element={<CareerWhatWeDo />} />
-          <Route path="/careers/life-at-alveoly" element={<LiveAtAlveoly />} />
-          <Route path="/careers/benefits" element={<CareerBenefits />} />
-          <Route path="/careers/jobs" element={<CareerJobs />} />
-          <Route path="/careers/jobs/:slug" element={<JobDetails />} />
-          <Route path="/careers/jobs/apply" element={<JobApplication />} />
-          <Route path="/medical" element={<MedicalPage />} />
-          <Route path="/nursing" element={<NursingPage />} />
-          <Route path="/accounting" element={<AccountingPage />} />
-          <Route path="/finance" element={<FinancePage />} />
-          <Route path="/high-school" element={<HighSchoolPage />} />
-          <Route path="/grad-school" element={<GradSchoolPage />} />
-          <Route path="/legal" element={<LegalPage />} />
-          <Route path="/pharmacy" element={<PharmacyPage />} />
+          {/* ==================== OTHER PUBLIC ROUTES ==================== */}
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+          <Route path="/reset-password/:token" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
+          <Route path="/privacy" element={<PublicRoute><PrivacyPolicy /></PublicRoute>} />
+          <Route path="/terms" element={<PublicRoute><TermsOfService /></PublicRoute>} />
+          <Route path="/disclaimer" element={<PublicRoute><Disclaimer /></PublicRoute>} />
+          <Route path="/cookies" element={<PublicRoute><CookiePolicy /></PublicRoute>} />
+          <Route path="/careers" element={<PublicRoute><CareerPage /></PublicRoute>} />
+          <Route path="/careers/what-we-do" element={<PublicRoute><CareerWhatWeDo /></PublicRoute>} />
+          <Route path="/careers/life-at-alveoly" element={<PublicRoute><LiveAtAlveoly /></PublicRoute>} />
+          <Route path="/careers/benefits" element={<PublicRoute><CareerBenefits /></PublicRoute>} />
+          <Route path="/careers/jobs" element={<PublicRoute><CareerJobs /></PublicRoute>} />
+          <Route path="/careers/jobs/:slug" element={<PublicRoute><JobDetails /></PublicRoute>} />
+          <Route path="/careers/jobs/apply" element={<PublicRoute><JobApplication /></PublicRoute>} />
+          <Route path="/medical" element={<PublicRoute><MedicalPage /></PublicRoute>} />
+          <Route path="/nursing" element={<PublicRoute><NursingPage /></PublicRoute>} />
+          <Route path="/accounting" element={<PublicRoute><AccountingPage /></PublicRoute>} />
+          <Route path="/finance" element={<PublicRoute><FinancePage /></PublicRoute>} />
+          <Route path="/high-school" element={<PublicRoute><HighSchoolPage /></PublicRoute>} />
+          <Route path="/grad-school" element={<PublicRoute><GradSchoolPage /></PublicRoute>} />
+          <Route path="/legal" element={<PublicRoute><LegalPage /></PublicRoute>} />
+          <Route path="/pharmacy" element={<PublicRoute><PharmacyPage /></PublicRoute>} />
           
           {/* Payment Success Routes */}
-          <Route path="/payment-success" element={<PaymentSuccess />} />
-          <Route path="/content-payment-success" element={<ContentPaymentSuccess />} />
-          <Route path="/plan-payment-success" element={<PlanPaymentSuccess />} />
-          <Route path="/subject-payment-success" element={<SubjectPaymentSuccess />} />
-          <Route path="/join/:classId" element={<JoinLiveClass />} />
+          <Route path="/payment-success" element={<PublicRoute><PaymentSuccess /></PublicRoute>} />
+          <Route path="/content-payment-success" element={<PublicRoute><ContentPaymentSuccess /></PublicRoute>} />
+          <Route path="/plan-payment-success" element={<PublicRoute><PlanPaymentSuccess /></PublicRoute>} />
+          <Route path="/subject-payment-success" element={<PublicRoute><SubjectPaymentSuccess /></PublicRoute>} />
+          <Route path="/join/:classId" element={<PublicRoute><JoinLiveClass /></PublicRoute>} />
 
-          {/* ==================== STUDENT ROUTES ==================== */}
+          {/* ==================== STUDENT ROUTES (Protected) ==================== */}
           <Route
             path="/select-program"
             element={
@@ -236,7 +237,7 @@ function App() {
             <Route path="game-match/:matchId/results" element={<GameMatchResults />} />
           </Route>
 
-          {/* ==================== ADMIN ROUTES ==================== */}
+          {/* ==================== ADMIN ROUTES (Protected) ==================== */}
           <Route
             path="/admin"
             element={
@@ -272,15 +273,15 @@ function App() {
             <Route path="ai-plans" element={<AIPlansAdmin />} />
             <Route path="ai-generator" element={<AIGenerator />} />
             <Route path="blog/posts" element={<AdminBlogPosts />} />
-<Route path="blog/create" element={<AdminCreateBlogPost />} />
-<Route path="blog/edit/:id" element={<AdminCreateBlogPost />} />
-<Route path="blog/categories" element={<AdminBlogCategories />} />
-<Route path="blog/authors" element={<AdminBlogAuthors />} />
-<Route path="blog/tags" element={<AdminBlogTags />} />
-<Route path="blog/comments" element={<AdminBlogComments />} />
+            <Route path="blog/create" element={<AdminCreateBlogPost />} />
+            <Route path="blog/edit/:id" element={<AdminCreateBlogPost />} />
+            <Route path="blog/categories" element={<AdminBlogCategories />} />
+            <Route path="blog/authors" element={<AdminBlogAuthors />} />
+            <Route path="blog/tags" element={<AdminBlogTags />} />
+            <Route path="blog/comments" element={<AdminBlogComments />} />
           </Route>
 
-          {/* ==================== LECTURER ROUTES ==================== */}
+          {/* ==================== LECTURER ROUTES (Protected) ==================== */}
           <Route
             path="/lecturer"
             element={
