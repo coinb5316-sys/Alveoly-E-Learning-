@@ -1,4 +1,4 @@
-// src/pages/BlogAuthor.jsx
+// src/pages/BlogAuthor.jsx - COMPLETE WITH API INTEGRATION
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -16,164 +16,61 @@ import {
   FaBookmark,
   FaRegBookmark,
   FaFire,
-  FaUserCircle
+  FaUserCircle,
+  FaSpinner,
+  FaShareAlt,
+  FaFacebook,
+  FaWhatsapp
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
-
-// Mock API - Replace with actual API calls
-const fetchAuthorData = async (authorId) => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  const authors = {
-    '1': {
-      id: 1,
-      name: "Dr. Sarah Mitchell",
-      title: "Chief Nursing Officer, Alveoly Academy",
-      image: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=300&h=300&fit=crop&crop=face",
-      bio: "Dr. Mitchell is a leading expert in nursing informatics with over 20 years of experience in healthcare innovation. She has published extensively on the intersection of technology and patient care, and is passionate about preparing the next generation of nurses for a digital healthcare future.",
-      joinedDate: "2024-03-15",
-      social: {
-        twitter: "https://twitter.com/drsarahmitchell",
-        linkedin: "https://linkedin.com/in/drsarahmitchell",
-        email: "sarah.mitchell@alveoly.com"
-      },
-      expertise: ["Nursing Informatics", "Healthcare Technology", "Patient Care", "AI in Healthcare"],
-      stats: {
-        posts: 24,
-        followers: 3847,
-        likes: 2456
-      }
-    },
-    '2': {
-      id: 2,
-      name: "Prof. James Anderson",
-      title: "Research Director, Alveoly Academy",
-      image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop&crop=face",
-      bio: "Prof. Anderson is a distinguished researcher in evidence-based nursing practice. With over 25 years of experience in clinical research and education, he has helped shape nursing curricula across multiple institutions.",
-      joinedDate: "2023-08-01",
-      social: {
-        twitter: "https://twitter.com/profjamesanderson",
-        linkedin: "https://linkedin.com/in/profjamesanderson",
-        email: "james.anderson@alveoly.com"
-      },
-      expertise: ["Evidence-Based Practice", "Clinical Research", "Nursing Education", "Research Methodology"],
-      stats: {
-        posts: 18,
-        followers: 2156,
-        likes: 1876
-      }
-    }
-  };
-  
-  return authors[authorId] || {
-    id: parseInt(authorId),
-    name: "Guest Author",
-    title: "Contributor",
-    image: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&h=300&fit=crop&crop=face",
-    bio: "Guest author contributing to Alveoly Academy's healthcare blog.",
-    joinedDate: "2025-01-01",
-    social: {
-      twitter: "#",
-      linkedin: "#",
-      email: "#"
-    },
-    expertise: ["Healthcare", "Nursing", "Patient Care"],
-    stats: {
-      posts: 5,
-      followers: 342,
-      likes: 156
-    }
-  };
-};
-
-const fetchAuthorPosts = async (authorId, page = 1) => {
-  await new Promise(resolve => setTimeout(resolve, 400));
-  
-  const allPosts = [
-    {
-      id: 1,
-      title: "The Future of Nursing: AI-Powered Patient Care in 2026",
-      subtitle: "How artificial intelligence is revolutionizing healthcare delivery",
-      category: "Healthcare Technology",
-      tags: ["AI", "Nursing", "Healthcare"],
-      featuredImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80",
-      publishDate: "2026-01-15",
-      readTime: 8,
-      views: 1247,
-      likes: 89,
-      comments: 34
-    },
-    {
-      id: 2,
-      title: "Evidence-Based Practice: Bridging Research and Clinical Care",
-      subtitle: "How to implement evidence-based practice in daily nursing routines",
-      category: "Nursing Practice",
-      tags: ["Evidence-Based Practice", "Nursing", "Research"],
-      featuredImage: "https://images.unsplash.com/photo-1584982751601-97dcc096659c?w=800&q=80",
-      publishDate: "2026-01-12",
-      readTime: 6,
-      views: 856,
-      likes: 67,
-      comments: 28
-    },
-    {
-      id: 3,
-      title: "Mental Health in Healthcare Workers: Strategies for Self-Care",
-      subtitle: "Essential wellness practices for nurses and healthcare professionals",
-      category: "Mental Health",
-      tags: ["Mental Health", "Wellness", "Self-Care"],
-      featuredImage: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=800&q=80",
-      publishDate: "2026-01-10",
-      readTime: 7,
-      views: 2341,
-      likes: 156,
-      comments: 67
-    }
-  ];
-  
-  // Filter by author (in real API, this would be done on the server)
-  const filtered = allPosts;
-  
-  const limit = 6;
-  const start = (page - 1) * limit;
-  const end = start + limit;
-  const paginated = filtered.slice(start, end);
-  
-  return {
-    posts: paginated,
-    total: filtered.length,
-    totalPages: Math.ceil(filtered.length / limit),
-    currentPage: page
-  };
-};
+import blogAPI from '../api/blogApi';
+import { useAuth } from '../context/AuthContext';
 
 const BlogAuthor = () => {
   const { authorId } = useParams();
+  const { user } = useAuth();
   const [author, setAuthor] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalPosts, setTotalPosts] = useState(0);
   const [bookmarks, setBookmarks] = useState([]);
   const [followed, setFollowed] = useState(false);
+  const [authorStats, setAuthorStats] = useState({
+    totalPosts: 0,
+    totalLikes: 0,
+    totalViews: 0
+  });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         
-        // Fetch author data
-        const authorData = await fetchAuthorData(authorId);
-        setAuthor(authorData);
+        // Fetch author data and posts from API
+        const response = await blogAPI.getPostsByAuthor(authorId, {
+          page: currentPage,
+          limit: 6
+        });
         
-        // Fetch author posts
-        const postsResult = await fetchAuthorPosts(authorId, currentPage);
-        setPosts(postsResult.posts);
-        setTotalPages(postsResult.totalPages);
-        
+        if (response.success) {
+          const data = response.data;
+          setAuthor(data.author);
+          setPosts(data.posts || []);
+          setTotalPages(data.pagination?.totalPages || 1);
+          setTotalPosts(data.pagination?.total || 0);
+          setAuthorStats({
+            totalPosts: data.stats?.totalPosts || 0,
+            totalLikes: data.stats?.totalLikes || 0,
+            totalViews: data.stats?.totalViews || 0
+          });
+        } else {
+          toast.error(response.message || 'Failed to load author');
+        }
       } catch (error) {
         console.error('Error fetching author data:', error);
-        toast.error('Failed to load author');
+        toast.error(error.response?.data?.message || 'Failed to load author');
       } finally {
         setLoading(false);
       }
@@ -184,6 +81,7 @@ const BlogAuthor = () => {
   }, [authorId, currentPage]);
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',
@@ -200,17 +98,47 @@ const BlogAuthor = () => {
     toast.success(bookmarks.includes(postId) ? 'Removed from bookmarks' : 'Added to bookmarks');
   };
 
-  const handleFollow = () => {
-    setFollowed(!followed);
-    toast.success(followed ? 'Unfollowed' : 'Followed');
+  const handleFollow = async () => {
+    try {
+      // If user is not logged in, redirect to login
+      if (!user) {
+        toast.error('Please login to follow authors');
+        return;
+      }
+      
+      // Toggle follow status
+      setFollowed(!followed);
+      toast.success(followed ? 'Unfollowed' : 'Followed');
+      
+      // In a real implementation, you would call an API to follow/unfollow
+      // await blogAPI.followAuthor(authorId);
+    } catch (error) {
+      console.error('Error following author:', error);
+      toast.error('Failed to follow author');
+      setFollowed(!followed); // Revert on error
+    }
+  };
+
+  const handleShare = (post) => {
+    const url = `${window.location.origin}/blog/post/${post.id || post._id}`;
+    if (navigator.share) {
+      navigator.share({
+        title: post.title,
+        text: post.subtitle,
+        url: url,
+      });
+    } else {
+      navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard!');
+    }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading author...</p>
+          <FaSpinner className="animate-spin text-4xl text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading author...</p>
         </div>
       </div>
     );
@@ -253,28 +181,34 @@ const BlogAuthor = () => {
               </Link>
               
               <div className="flex flex-col md:flex-row items-center gap-8">
-                <img
-                  src={author.image}
-                  alt={author.name}
-                  className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white/30 object-cover"
-                />
+                {author.avatar || author.image ? (
+                  <img
+                    src={author.avatar || author.image}
+                    alt={author.name}
+                    className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white/30 object-cover"
+                  />
+                ) : (
+                  <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 border-4 border-white/30 flex items-center justify-center text-white text-5xl font-bold">
+                    {author.name?.charAt(0) || 'A'}
+                  </div>
+                )}
                 <div className="text-center md:text-left">
                   <h1 className="text-3xl md:text-4xl font-bold text-white">
                     {author.name}
                   </h1>
-                  <p className="text-white/80 text-lg">{author.title}</p>
+                  <p className="text-white/80 text-lg">{author.title || 'Contributor'}</p>
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mt-4 text-white/70 text-sm">
                     <span className="flex items-center gap-1.5">
                       <FaUser />
-                      {author.stats.posts} articles
+                      {authorStats.totalPosts || author.postCount || 0} articles
                     </span>
                     <span className="flex items-center gap-1.5">
                       <FaFire />
-                      {author.stats.followers} followers
+                      {author.followers || 0} followers
                     </span>
                     <span className="flex items-center gap-1.5">
                       <FaHeart />
-                      {author.stats.likes} likes
+                      {authorStats.totalLikes || 0} likes
                     </span>
                   </div>
                   <button
@@ -300,49 +234,59 @@ const BlogAuthor = () => {
           <div className="flex flex-col md:flex-row gap-8">
             <div className="flex-1">
               <h2 className="text-lg font-bold text-gray-900 mb-3">About {author.name}</h2>
-              <p className="text-gray-700 leading-relaxed">{author.bio}</p>
+              <p className="text-gray-700 leading-relaxed">{author.bio || 'No bio available'}</p>
               
-              <div className="mt-4">
-                <h3 className="text-sm font-semibold text-gray-900 mb-2">Areas of Expertise</h3>
-                <div className="flex flex-wrap gap-2">
-                  {author.expertise.map((skill) => (
-                    <span key={skill} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
-                      {skill}
-                    </span>
-                  ))}
+              {author.expertise && author.expertise.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Areas of Expertise</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {author.expertise.map((skill) => (
+                      <span key={skill} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             
             <div className="md:w-48">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">Connect</h3>
               <div className="flex flex-wrap gap-3">
-                <a
-                  href={author.social.twitter}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 bg-[#1da1f2] text-white rounded-lg hover:shadow-lg transition"
-                >
-                  <FaTwitter className="text-lg" />
-                </a>
-                <a
-                  href={author.social.linkedin}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 bg-[#0a66c2] text-white rounded-lg hover:shadow-lg transition"
-                >
-                  <FaLinkedin className="text-lg" />
-                </a>
-                <a
-                  href={`mailto:${author.social.email}`}
-                  className="p-2 bg-[#ea4335] text-white rounded-lg hover:shadow-lg transition"
-                >
-                  <FaEnvelope className="text-lg" />
-                </a>
+                {author.social?.twitter && (
+                  <a
+                    href={author.social.twitter}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 bg-[#1da1f2] text-white rounded-lg hover:shadow-lg transition"
+                  >
+                    <FaTwitter className="text-lg" />
+                  </a>
+                )}
+                {author.social?.linkedin && (
+                  <a
+                    href={author.social.linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 bg-[#0a66c2] text-white rounded-lg hover:shadow-lg transition"
+                  >
+                    <FaLinkedin className="text-lg" />
+                  </a>
+                )}
+                {author.email && (
+                  <a
+                    href={`mailto:${author.email}`}
+                    className="p-2 bg-[#ea4335] text-white rounded-lg hover:shadow-lg transition"
+                  >
+                    <FaEnvelope className="text-lg" />
+                  </a>
+                )}
               </div>
-              <p className="text-xs text-gray-500 mt-3">
-                Joined {formatDate(author.joinedDate)}
-              </p>
+              {author.joinedDate && (
+                <p className="text-xs text-gray-500 mt-3">
+                  Joined {formatDate(author.joinedDate)}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -350,9 +294,14 @@ const BlogAuthor = () => {
 
       {/* ===== POSTS ===== */}
       <div className="container mx-auto px-4 py-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">
-          Articles by {author.name}
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">
+            Articles by {author.name}
+          </h2>
+          <span className="text-sm text-gray-500">
+            {totalPosts} {totalPosts === 1 ? 'article' : 'articles'}
+          </span>
+        </div>
         
         {posts.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-3xl shadow-xl border border-gray-100">
@@ -365,27 +314,36 @@ const BlogAuthor = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {posts.map((post, index) => (
                 <motion.article
-                  key={post.id}
+                  key={post._id || post.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 group"
                 >
-                  <Link to={`/blog/post/${post.id}`} className="block">
+                  <Link to={`/blog/post/${post.slug || post._id}`} className="block">
                     <div className="relative overflow-hidden h-48">
                       <img
                         src={post.featuredImage}
                         alt={post.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                       />
+                      {post.tags && post.tags.length > 0 && (
+                        <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+                          {post.tags.slice(0, 2).map((tag) => (
+                            <span key={tag} className="px-2 py-1 bg-black/50 backdrop-blur-sm rounded-full text-white text-xs">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <button
                         onClick={(e) => {
                           e.preventDefault();
-                          handleBookmark(post.id);
+                          handleBookmark(post._id || post.id);
                         }}
                         className="absolute top-3 right-3 p-1.5 bg-white/20 backdrop-blur-sm rounded-full hover:bg-white/40 transition"
                       >
-                        {bookmarks.includes(post.id) ? (
+                        {bookmarks.includes(post._id || post.id) ? (
                           <FaBookmark className="text-yellow-400 text-sm" />
                         ) : (
                           <FaRegBookmark className="text-white text-sm" />
@@ -400,7 +358,7 @@ const BlogAuthor = () => {
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <FaClock className="text-gray-400" />
-                          {post.readTime} min read
+                          {post.readTime || 5} min read
                         </span>
                       </div>
                       <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition line-clamp-2">
@@ -409,19 +367,30 @@ const BlogAuthor = () => {
                       <p className="text-gray-600 line-clamp-2 mb-4">
                         {post.subtitle}
                       </p>
-                      <div className="flex items-center gap-4 text-gray-400 text-sm">
-                        <span className="flex items-center gap-1">
-                          <FaHeart className="text-red-400" />
-                          {post.likes}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <FaComment className="text-blue-400" />
-                          {post.comments}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <FaEye className="text-gray-400" />
-                          {post.views}
-                        </span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 text-gray-400 text-sm">
+                          <span className="flex items-center gap-1">
+                            <FaHeart className="text-red-400" />
+                            {post.likes || 0}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <FaComment className="text-blue-400" />
+                            {post.comments || 0}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <FaEye className="text-gray-400" />
+                            {post.views || 0}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleShare(post);
+                          }}
+                          className="text-gray-400 hover:text-blue-600 transition"
+                        >
+                          <FaShareAlt />
+                        </button>
                       </div>
                     </div>
                   </Link>
@@ -433,29 +402,45 @@ const BlogAuthor = () => {
             {totalPages > 1 && (
               <div className="flex flex-wrap items-center justify-center gap-2 mt-12">
                 <button
-                  onClick={() => setCurrentPage(currentPage - 1)}
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
                   className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
                 
-                {[...Array(totalPages)].map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCurrentPage(i + 1)}
-                    className={`w-10 h-10 rounded-xl transition ${
-                      currentPage === i + 1
-                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25'
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+                {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  if (pageNum > 0 && pageNum <= totalPages) {
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-10 h-10 rounded-xl transition ${
+                          currentPage === pageNum
+                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25'
+                            : 'bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  }
+                  return null;
+                })}
                 
                 <button
-                  onClick={() => setCurrentPage(currentPage + 1)}
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
                   className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >

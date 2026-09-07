@@ -1,4 +1,4 @@
-// src/pages/BlogCategory.jsx
+// src/pages/BlogCategory.jsx - COMPLETE WITH API INTEGRATION
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -14,198 +14,16 @@ import {
   FaFire,
   FaBookmark,
   FaRegBookmark,
-  FaSearch
+  FaSearch,
+  FaSpinner,
+  FaShareAlt,
+  FaTwitter,
+  FaLinkedin,
+  FaFacebook,
+  FaWhatsapp
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
-
-// Mock API - Replace with actual API calls
-const fetchCategoryPosts = async (categorySlug, page = 1) => {
-  await new Promise(resolve => setTimeout(resolve, 600));
-  
-  const allPosts = [
-    {
-      id: 1,
-      title: "The Future of Nursing: AI-Powered Patient Care in 2026",
-      subtitle: "How artificial intelligence is revolutionizing healthcare delivery",
-      category: "Healthcare Technology",
-      slug: "healthcare-technology",
-      tags: ["AI", "Nursing", "Healthcare"],
-      author: {
-        id: 1,
-        name: "Dr. Sarah Mitchell",
-        image: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&h=100&fit=crop&crop=face"
-      },
-      featuredImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80",
-      publishDate: "2026-01-15",
-      readTime: 8,
-      views: 1247,
-      likes: 89,
-      comments: 34
-    },
-    {
-      id: 2,
-      title: "Evidence-Based Practice: Bridging Research and Clinical Care",
-      subtitle: "How to implement evidence-based practice in daily nursing routines",
-      category: "Nursing Practice",
-      slug: "nursing-practice",
-      tags: ["Evidence-Based Practice", "Nursing", "Research"],
-      author: {
-        id: 2,
-        name: "Prof. James Anderson",
-        image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face"
-      },
-      featuredImage: "https://images.unsplash.com/photo-1584982751601-97dcc096659c?w=800&q=80",
-      publishDate: "2026-01-12",
-      readTime: 6,
-      views: 856,
-      likes: 67,
-      comments: 28
-    },
-    {
-      id: 3,
-      title: "Mental Health in Healthcare Workers: Strategies for Self-Care",
-      subtitle: "Essential wellness practices for nurses and healthcare professionals",
-      category: "Mental Health",
-      slug: "mental-health",
-      tags: ["Mental Health", "Wellness", "Self-Care"],
-      author: {
-        id: 3,
-        name: "Dr. Emily Chen",
-        image: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=100&h=100&fit=crop&crop=face"
-      },
-      featuredImage: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=800&q=80",
-      publishDate: "2026-01-10",
-      readTime: 7,
-      views: 2341,
-      likes: 156,
-      comments: 67
-    },
-    {
-      id: 4,
-      title: "Telehealth: The New Normal in Patient Care",
-      subtitle: "Best practices for virtual nursing consultations",
-      category: "Telehealth",
-      slug: "telehealth",
-      tags: ["Telehealth", "Virtual Care", "Technology"],
-      author: {
-        id: 4,
-        name: "Dr. Michael Roberts",
-        image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face"
-      },
-      featuredImage: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?w=800&q=80",
-      publishDate: "2026-01-08",
-      readTime: 5,
-      views: 632,
-      likes: 45,
-      comments: 19
-    },
-    {
-      id: 5,
-      title: "Cultural Competence in Nursing: Providing Inclusive Care",
-      subtitle: "Understanding and respecting cultural differences in healthcare",
-      category: "Patient Care",
-      slug: "patient-care",
-      tags: ["Culture", "Diversity", "Patient Care"],
-      author: {
-        id: 5,
-        name: "Dr. Maria Santos",
-        image: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face"
-      },
-      featuredImage: "https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=800&q=80",
-      publishDate: "2026-01-05",
-      readTime: 9,
-      views: 978,
-      likes: 78,
-      comments: 42
-    },
-    {
-      id: 6,
-      title: "Nursing Leadership in the Digital Age",
-      subtitle: "How nurse leaders can leverage technology for better outcomes",
-      category: "Nursing Leadership",
-      slug: "nursing-leadership",
-      tags: ["Leadership", "Technology", "Management"],
-      author: {
-        id: 6,
-        name: "Dr. Robert Kim",
-        image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face"
-      },
-      featuredImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80",
-      publishDate: "2026-01-03",
-      readTime: 7,
-      views: 743,
-      likes: 56,
-      comments: 23
-    }
-  ];
-
-  // Filter by category slug
-  const filtered = allPosts.filter(post => post.slug === categorySlug);
-  
-  // Pagination
-  const limit = 6;
-  const start = (page - 1) * limit;
-  const end = start + limit;
-  const paginated = filtered.slice(start, end);
-  
-  return {
-    posts: paginated,
-    total: filtered.length,
-    totalPages: Math.ceil(filtered.length / limit),
-    currentPage: page,
-    categoryName: filtered.length > 0 ? filtered[0].category : categorySlug
-  };
-};
-
-const getCategoryInfo = async (slug) => {
-  await new Promise(resolve => setTimeout(resolve, 300));
-  
-  const categories = {
-    'healthcare-technology': {
-      name: 'Healthcare Technology',
-      description: 'Exploring the latest innovations in healthcare technology and their impact on nursing practice.',
-      icon: '💻',
-      count: 12
-    },
-    'nursing-practice': {
-      name: 'Nursing Practice',
-      description: 'Best practices, clinical guidelines, and evidence-based approaches to nursing care.',
-      icon: '🏥',
-      count: 8
-    },
-    'mental-health': {
-      name: 'Mental Health',
-      description: 'Understanding mental health issues, wellness strategies, and support for healthcare workers.',
-      icon: '🧠',
-      count: 6
-    },
-    'telehealth': {
-      name: 'Telehealth',
-      description: 'The future of virtual care, telemedicine technologies, and remote patient monitoring.',
-      icon: '📱',
-      count: 5
-    },
-    'patient-care': {
-      name: 'Patient Care',
-      description: 'Comprehensive approaches to patient-centered care and improving patient outcomes.',
-      icon: '❤️',
-      count: 9
-    },
-    'nursing-leadership': {
-      name: 'Nursing Leadership',
-      description: 'Leadership strategies, management skills, and career development for nursing professionals.',
-      icon: '👔',
-      count: 7
-    }
-  };
-  
-  return categories[slug] || {
-    name: slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g, ' '),
-    description: 'Articles in this category',
-    icon: '📚',
-    count: 0
-  };
-};
+import blogAPI from '../api/blogApi';
 
 const BlogCategory = () => {
   const { category } = useParams();
@@ -217,25 +35,50 @@ const BlogCategory = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalPosts, setTotalPosts] = useState(0);
   const [bookmarks, setBookmarks] = useState([]);
+  const [sortBy, setSortBy] = useState('latest');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         
-        // Fetch category info
-        const info = await getCategoryInfo(category);
-        setCategoryInfo(info);
+        // Fetch category info from API
+        const categoryResponse = await blogAPI.getCategoryBySlug(category);
         
-        // Fetch posts
-        const result = await fetchCategoryPosts(category, currentPage);
-        setPosts(result.posts);
-        setTotalPages(result.totalPages);
-        setTotalPosts(result.total);
+        if (categoryResponse.success) {
+          setCategoryInfo(categoryResponse.data);
+        } else {
+          // If category not found, use fallback
+          const fallbackName = category
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          setCategoryInfo({
+            name: fallbackName,
+            description: `Articles in ${fallbackName} category`,
+            icon: '📚',
+            count: 0
+          });
+        }
+        
+        // Fetch posts by category
+        const postsResponse = await blogAPI.getPostsByCategory(category, {
+          page: currentPage,
+          limit: 6,
+          sort: sortBy
+        });
+        
+        if (postsResponse.success) {
+          setPosts(postsResponse.data.posts || []);
+          setTotalPages(postsResponse.data.pagination?.totalPages || 1);
+          setTotalPosts(postsResponse.data.pagination?.total || 0);
+        } else {
+          toast.error(postsResponse.message || 'Failed to load posts');
+        }
         
       } catch (error) {
         console.error('Error fetching category data:', error);
-        toast.error('Failed to load category');
+        toast.error(error.response?.data?.message || 'Failed to load category');
       } finally {
         setLoading(false);
       }
@@ -243,9 +86,10 @@ const BlogCategory = () => {
     
     fetchData();
     window.scrollTo(0, 0);
-  }, [category, currentPage]);
+  }, [category, currentPage, sortBy]);
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',
@@ -262,12 +106,38 @@ const BlogCategory = () => {
     toast.success(bookmarks.includes(postId) ? 'Removed from bookmarks' : 'Added to bookmarks');
   };
 
+  const handleShare = (post) => {
+    const url = `${window.location.origin}/blog/post/${post.slug || post._id}`;
+    if (navigator.share) {
+      navigator.share({
+        title: post.title,
+        text: post.subtitle,
+        url: url,
+      });
+    } else {
+      navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard!');
+    }
+  };
+
+  const getIconForCategory = (categoryName) => {
+    const icons = {
+      'Healthcare Technology': '💻',
+      'Nursing Practice': '🏥',
+      'Mental Health': '🧠',
+      'Telehealth': '📱',
+      'Patient Care': '❤️',
+      'Nursing Leadership': '👔',
+    };
+    return icons[categoryName] || '📚';
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading category...</p>
+          <FaSpinner className="animate-spin text-4xl text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading category...</p>
         </div>
       </div>
     );
@@ -296,22 +166,48 @@ const BlogCategory = () => {
               </Link>
               
               <div className="flex items-center gap-4 mb-4">
-                <span className="text-5xl">{categoryInfo?.icon || '📚'}</span>
+                <span className="text-5xl">{categoryInfo?.icon || getIconForCategory(categoryInfo?.name) || '📚'}</span>
                 <div>
                   <h1 className="text-4xl md:text-5xl font-bold text-white">
                     {categoryInfo?.name || category}
                   </h1>
                   <p className="text-white/80 text-lg mt-2">
-                    {categoryInfo?.description || 'Articles in this category'}
+                    {categoryInfo?.description || `Articles in ${categoryInfo?.name || category} category`}
                   </p>
                 </div>
               </div>
               
-              <div className="flex items-center gap-4 text-white/70 text-sm">
-                <span className="flex items-center gap-1.5">
-                  <FaTag />
-                  {totalPosts} articles
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-4 text-white/70 text-sm">
+                  <span className="flex items-center gap-1.5">
+                    <FaTag />
+                    {totalPosts} articles
+                  </span>
+                  {categoryInfo?.count && (
+                    <span className="flex items-center gap-1.5">
+                      <FaFire />
+                      {categoryInfo.count} total posts
+                    </span>
+                  )}
+                </div>
+                
+                {/* Sort Options */}
+                <div className="flex items-center gap-2">
+                  <span className="text-white/70 text-sm">Sort by:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => {
+                      setSortBy(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="px-3 py-1 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/50"
+                  >
+                    <option value="latest" className="text-gray-900">Latest</option>
+                    <option value="popular" className="text-gray-900">Most Popular</option>
+                    <option value="trending" className="text-gray-900">Trending</option>
+                    <option value="oldest" className="text-gray-900">Oldest</option>
+                  </select>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -337,34 +233,36 @@ const BlogCategory = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {posts.map((post, index) => (
                 <motion.article
-                  key={post.id}
+                  key={post._id || post.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 group"
                 >
-                  <Link to={`/blog/post/${post.id}`} className="block">
+                  <Link to={`/blog/post/${post.slug || post._id}`} className="block">
                     <div className="relative overflow-hidden h-48">
                       <img
                         src={post.featuredImage}
                         alt={post.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                       />
-                      <div className="absolute top-3 left-3 flex flex-wrap gap-2">
-                        {post.tags.slice(0, 2).map((tag) => (
-                          <span key={tag} className="px-2 py-1 bg-black/50 backdrop-blur-sm rounded-full text-white text-xs">
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
+                      {post.tags && post.tags.length > 0 && (
+                        <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+                          {post.tags.slice(0, 2).map((tag) => (
+                            <span key={tag} className="px-2 py-1 bg-black/50 backdrop-blur-sm rounded-full text-white text-xs">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <button
                         onClick={(e) => {
                           e.preventDefault();
-                          handleBookmark(post.id);
+                          handleBookmark(post._id || post.id);
                         }}
                         className="absolute top-3 right-3 p-1.5 bg-white/20 backdrop-blur-sm rounded-full hover:bg-white/40 transition"
                       >
-                        {bookmarks.includes(post.id) ? (
+                        {bookmarks.includes(post._id || post.id) ? (
                           <FaBookmark className="text-yellow-400 text-sm" />
                         ) : (
                           <FaRegBookmark className="text-white text-sm" />
@@ -372,10 +270,15 @@ const BlogCategory = () => {
                       </button>
                     </div>
                     <div className="p-6">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 mb-2 flex-wrap">
                         <span className="font-medium text-blue-600">{post.category}</span>
                         <span>•</span>
                         <span>{formatDate(post.publishDate)}</span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          <FaClock className="text-gray-400" />
+                          {post.readTime || 5} min read
+                        </span>
                       </div>
                       <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition line-clamp-2">
                         {post.title}
@@ -385,26 +288,41 @@ const BlogCategory = () => {
                       </p>
                       <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                         <div className="flex items-center gap-2">
-                          <img
-                            src={post.author.image}
-                            alt={post.author.name}
-                            className="w-8 h-8 rounded-full object-cover"
-                          />
-                          <span className="text-sm text-gray-700">{post.author.name}</span>
+                          {post.author?.avatar || post.author?.image ? (
+                            <img
+                              src={post.author.avatar || post.author.image}
+                              alt={post.author.name}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                              {post.author?.name?.charAt(0) || 'A'}
+                            </div>
+                          )}
+                          <span className="text-sm text-gray-700">{post.author?.name || 'Unknown'}</span>
                         </div>
                         <div className="flex items-center gap-3 text-gray-400 text-sm">
                           <span className="flex items-center gap-1">
                             <FaHeart className="text-red-400" />
-                            {post.likes}
+                            {post.likes || 0}
                           </span>
                           <span className="flex items-center gap-1">
                             <FaComment className="text-blue-400" />
-                            {post.comments}
+                            {post.comments || 0}
                           </span>
                           <span className="flex items-center gap-1">
                             <FaEye className="text-gray-400" />
-                            {post.views}
+                            {post.views || 0}
                           </span>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleShare(post);
+                            }}
+                            className="text-gray-400 hover:text-blue-600 transition"
+                          >
+                            <FaShareAlt />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -417,29 +335,45 @@ const BlogCategory = () => {
             {totalPages > 1 && (
               <div className="flex flex-wrap items-center justify-center gap-2 mt-12">
                 <button
-                  onClick={() => setCurrentPage(currentPage - 1)}
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
                   className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
                 
-                {[...Array(totalPages)].map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCurrentPage(i + 1)}
-                    className={`w-10 h-10 rounded-xl transition ${
-                      currentPage === i + 1
-                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25'
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+                {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  if (pageNum > 0 && pageNum <= totalPages) {
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-10 h-10 rounded-xl transition ${
+                          currentPage === pageNum
+                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25'
+                            : 'bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  }
+                  return null;
+                })}
                 
                 <button
-                  onClick={() => setCurrentPage(currentPage + 1)}
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
                   className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >

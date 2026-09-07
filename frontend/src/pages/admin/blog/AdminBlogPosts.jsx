@@ -1,7 +1,7 @@
-// src/pages/admin/blog/AdminBlogPosts.jsx - FIXED
+// src/pages/admin/blog/AdminBlogPosts.jsx - COMPLETE WITH API INTEGRATION
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Plus,
   Search,
@@ -21,133 +21,11 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
-  MessageSquare // <-- ADD THIS IMPORT
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
-// Mock data - Replace with API calls
-const mockPosts = [
-  {
-    id: 1,
-    title: "The Future of Nursing: AI-Powered Patient Care in 2026",
-    subtitle: "How artificial intelligence is revolutionizing healthcare delivery",
-    category: "Healthcare Technology",
-    tags: ["AI", "Nursing", "Healthcare", "Technology"],
-    author: {
-      id: 1,
-      name: "Dr. Sarah Mitchell",
-      avatar: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&h=100&fit=crop&crop=face"
-    },
-    status: "published",
-    featured: true,
-    views: 1247,
-    likes: 89,
-    comments: 34,
-    publishDate: "2026-01-15",
-    createdAt: "2026-01-10T10:30:00Z",
-    updatedAt: "2026-01-15T14:20:00Z"
-  },
-  {
-    id: 2,
-    title: "Evidence-Based Practice: Bridging Research and Clinical Care",
-    subtitle: "How to implement evidence-based practice in daily nursing routines",
-    category: "Nursing Practice",
-    tags: ["Evidence-Based Practice", "Nursing", "Research"],
-    author: {
-      id: 2,
-      name: "Prof. James Anderson",
-      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face"
-    },
-    status: "draft",
-    featured: false,
-    views: 0,
-    likes: 0,
-    comments: 0,
-    publishDate: null,
-    createdAt: "2026-01-16T09:00:00Z",
-    updatedAt: "2026-01-16T11:30:00Z"
-  },
-  {
-    id: 3,
-    title: "Mental Health in Healthcare Workers: Strategies for Self-Care",
-    subtitle: "Essential wellness practices for nurses and healthcare professionals",
-    category: "Mental Health",
-    tags: ["Mental Health", "Wellness", "Self-Care"],
-    author: {
-      id: 3,
-      name: "Dr. Emily Chen",
-      avatar: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=100&h=100&fit=crop&crop=face"
-    },
-    status: "published",
-    featured: true,
-    views: 2341,
-    likes: 156,
-    comments: 67,
-    publishDate: "2026-01-10",
-    createdAt: "2026-01-08T08:00:00Z",
-    updatedAt: "2026-01-10T16:45:00Z"
-  },
-  {
-    id: 4,
-    title: "Telehealth: The New Normal in Patient Care",
-    subtitle: "Best practices for virtual nursing consultations",
-    category: "Telehealth",
-    tags: ["Telehealth", "Virtual Care", "Technology"],
-    author: {
-      id: 4,
-      name: "Dr. Michael Roberts",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face"
-    },
-    status: "pending",
-    featured: false,
-    views: 0,
-    likes: 0,
-    comments: 0,
-    publishDate: null,
-    createdAt: "2026-01-17T13:00:00Z",
-    updatedAt: "2026-01-17T15:20:00Z"
-  },
-  {
-    id: 5,
-    title: "Cultural Competence in Nursing: Providing Inclusive Care",
-    subtitle: "Understanding and respecting cultural differences in healthcare",
-    category: "Patient Care",
-    tags: ["Culture", "Diversity", "Patient Care"],
-    author: {
-      id: 5,
-      name: "Dr. Maria Santos",
-      avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face"
-    },
-    status: "published",
-    featured: false,
-    views: 978,
-    likes: 78,
-    comments: 42,
-    publishDate: "2026-01-05",
-    createdAt: "2026-01-02T11:00:00Z",
-    updatedAt: "2026-01-05T09:30:00Z"
-  },
-  {
-    id: 6,
-    title: "Nursing Leadership in the Digital Age",
-    subtitle: "How nurse leaders can leverage technology for better outcomes",
-    category: "Nursing Leadership",
-    tags: ["Leadership", "Technology", "Management"],
-    author: {
-      id: 6,
-      name: "Dr. Robert Kim",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face"
-    },
-    status: "archived",
-    featured: false,
-    views: 743,
-    likes: 56,
-    comments: 23,
-    publishDate: "2026-01-03",
-    createdAt: "2025-12-28T14:00:00Z",
-    updatedAt: "2026-01-03T10:15:00Z"
-  }
-];
+import blogAPI from '../../../api/blogApi';
 
 const statusColors = {
   published: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
@@ -169,80 +47,130 @@ const AdminBlogPosts = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categories, setCategories] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalPosts, setTotalPosts] = useState(0);
   const [selectedPosts, setSelectedPosts] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
-  const itemsPerPage = 6;
+  const [sortBy, setSortBy] = useState('latest');
+  const itemsPerPage = 10;
 
   useEffect(() => {
     fetchPosts();
-  }, [currentPage, statusFilter, categoryFilter, searchTerm]);
+    fetchCategories();
+  }, [currentPage, statusFilter, categoryFilter, searchTerm, sortBy]);
 
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 600));
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        category: categoryFilter !== 'all' ? categoryFilter : undefined,
+        search: searchTerm || undefined,
+        sort: sortBy
+      };
+
+      const response = await blogAPI.getPosts(params);
       
-      let filtered = [...mockPosts];
-      
-      // Search filter
-      if (searchTerm) {
-        const search = searchTerm.toLowerCase();
-        filtered = filtered.filter(post =>
-          post.title.toLowerCase().includes(search) ||
-          post.subtitle.toLowerCase().includes(search) ||
-          post.tags.some(tag => tag.toLowerCase().includes(search)) ||
-          post.author.name.toLowerCase().includes(search)
-        );
+      if (response.success) {
+        setPosts(response.data.posts || []);
+        setTotalPages(response.data.pagination?.totalPages || 1);
+        setTotalPosts(response.data.pagination?.total || 0);
+      } else {
+        toast.error(response.message || 'Failed to load posts');
       }
-      
-      // Status filter
-      if (statusFilter !== 'all') {
-        filtered = filtered.filter(post => post.status === statusFilter);
-      }
-      
-      // Category filter
-      if (categoryFilter !== 'all') {
-        filtered = filtered.filter(post => post.category === categoryFilter);
-      }
-      
-      // Pagination
-      const start = (currentPage - 1) * itemsPerPage;
-      const end = start + itemsPerPage;
-      const paginated = filtered.slice(start, end);
-      
-      setPosts(paginated);
-      setTotalPages(Math.ceil(filtered.length / itemsPerPage));
     } catch (error) {
       console.error('Error fetching posts:', error);
-      toast.error('Failed to load posts');
+      toast.error(error.response?.data?.message || 'Failed to load posts');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = (postId) => {
-    if (window.confirm('Are you sure you want to delete this post?')) {
-      setPosts(prev => prev.filter(post => post.id !== postId));
-      toast.success('Post deleted successfully');
+  const fetchCategories = async () => {
+    try {
+      const response = await blogAPI.getCategories();
+      if (response.success) {
+        setCategories(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
     }
   };
 
-  const handleBulkDelete = () => {
+  const handleDelete = async (postId) => {
+    if (!window.confirm('Are you sure you want to delete this post?')) return;
+    
+    try {
+      const response = await blogAPI.deletePost(postId);
+      if (response.success) {
+        toast.success('Post deleted successfully');
+        fetchPosts();
+      } else {
+        toast.error(response.message || 'Failed to delete post');
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete post');
+    }
+  };
+
+  const handleBulkDelete = async () => {
     if (selectedPosts.length === 0) return;
-    if (window.confirm(`Delete ${selectedPosts.length} selected posts?`)) {
-      setPosts(prev => prev.filter(post => !selectedPosts.includes(post.id)));
-      setSelectedPosts([]);
-      setShowBulkActions(false);
-      toast.success(`${selectedPosts.length} posts deleted`);
+    if (!window.confirm(`Delete ${selectedPosts.length} selected posts?`)) return;
+    
+    try {
+      const response = await blogAPI.bulkDeletePosts(selectedPosts);
+      if (response.success) {
+        toast.success(`${selectedPosts.length} posts deleted successfully`);
+        setSelectedPosts([]);
+        setShowBulkActions(false);
+        fetchPosts();
+      } else {
+        toast.error(response.message || 'Failed to delete posts');
+      }
+    } catch (error) {
+      console.error('Error bulk deleting posts:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete posts');
+    }
+  };
+
+  const handleToggleFeatured = async (postId) => {
+    try {
+      const response = await blogAPI.toggleFeatured(postId);
+      if (response.success) {
+        toast.success(response.message || 'Featured status updated');
+        fetchPosts();
+      } else {
+        toast.error(response.message || 'Failed to update featured status');
+      }
+    } catch (error) {
+      console.error('Error toggling featured:', error);
+      toast.error(error.response?.data?.message || 'Failed to update featured status');
+    }
+  };
+
+  const handlePublish = async (postId) => {
+    try {
+      const response = await blogAPI.publishPost(postId);
+      if (response.success) {
+        toast.success('Post published successfully');
+        fetchPosts();
+      } else {
+        toast.error(response.message || 'Failed to publish post');
+      }
+    } catch (error) {
+      console.error('Error publishing post:', error);
+      toast.error(error.response?.data?.message || 'Failed to publish post');
     }
   };
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedPosts(posts.map(post => post.id));
+      setSelectedPosts(posts.map(post => post._id));
       setShowBulkActions(true);
     } else {
       setSelectedPosts([]);
@@ -270,6 +198,7 @@ const AdminBlogPosts = () => {
   };
 
   const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -279,17 +208,12 @@ const AdminBlogPosts = () => {
     });
   };
 
-  const getCategories = () => {
-    const cats = ['all', ...new Set(mockPosts.map(post => post.category))];
-    return cats;
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-500">Loading posts...</p>
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">Loading posts...</p>
         </div>
       </div>
     );
@@ -309,6 +233,7 @@ const AdminBlogPosts = () => {
           <button
             onClick={fetchPosts}
             className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            title="Refresh"
           >
             <RefreshCw className="h-5 w-5" />
           </button>
@@ -324,9 +249,9 @@ const AdminBlogPosts = () => {
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 space-y-4">
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex flex-wrap gap-4">
           {/* Search */}
-          <div className="flex-1 relative">
+          <div className="flex-1 min-w-[200px] relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
@@ -357,9 +282,23 @@ const AdminBlogPosts = () => {
             className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
           >
             <option value="all">All Categories</option>
-            {getCategories().filter(c => c !== 'all').map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
+            {categories.map((cat) => (
+              <option key={cat._id || cat.name} value={cat.name}>
+                {cat.name}
+              </option>
             ))}
+          </select>
+
+          {/* Sort By */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+          >
+            <option value="latest">Latest</option>
+            <option value="oldest">Oldest</option>
+            <option value="popular">Most Viewed</option>
+            <option value="trending">Most Liked</option>
           </select>
         </div>
         
@@ -447,7 +386,7 @@ const AdminBlogPosts = () => {
                   const StatusIcon = statusIcons[post.status] || Edit;
                   return (
                     <motion.tr
-                      key={post.id}
+                      key={post._id}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition"
@@ -455,8 +394,8 @@ const AdminBlogPosts = () => {
                       <td className="px-4 py-3">
                         <input
                           type="checkbox"
-                          checked={selectedPosts.includes(post.id)}
-                          onChange={() => handleSelectPost(post.id)}
+                          checked={selectedPosts.includes(post._id)}
+                          onChange={() => handleSelectPost(post._id)}
                           className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                         />
                       </td>
@@ -474,12 +413,12 @@ const AdminBlogPosts = () => {
                             {post.subtitle}
                           </p>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {post.tags.slice(0, 3).map(tag => (
+                            {post.tags?.slice(0, 3).map(tag => (
                               <span key={tag} className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400">
                                 #{tag}
                               </span>
                             ))}
-                            {post.tags.length > 3 && (
+                            {post.tags?.length > 3 && (
                               <span className="px-1.5 py-0.5 text-xs text-gray-400">
                                 +{post.tags.length - 3}
                               </span>
@@ -500,13 +439,19 @@ const AdminBlogPosts = () => {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <img
-                            src={post.author.avatar}
-                            alt={post.author.name}
-                            className="w-7 h-7 rounded-full object-cover"
-                          />
+                          {post.author?.avatar ? (
+                            <img
+                              src={post.author.avatar}
+                              alt={post.author.name}
+                              className="w-7 h-7 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-medium">
+                              {post.author?.name?.charAt(0) || 'A'}
+                            </div>
+                          )}
                           <span className="text-sm text-gray-700 dark:text-gray-300">
-                            {post.author.name}
+                            {post.author?.name || 'Unknown'}
                           </span>
                         </div>
                       </td>
@@ -514,15 +459,15 @@ const AdminBlogPosts = () => {
                         <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
                           <span className="flex items-center gap-1">
                             <Eye className="h-3.5 w-3.5" />
-                            {post.views}
+                            {post.views || 0}
                           </span>
                           <span className="flex items-center gap-1">
                             <Star className="h-3.5 w-3.5" />
-                            {post.likes}
+                            {post.likes || 0}
                           </span>
                           <span className="flex items-center gap-1">
                             <MessageSquare className="h-3.5 w-3.5" />
-                            {post.comments}
+                            {post.comments || 0}
                           </span>
                         </div>
                       </td>
@@ -544,20 +489,40 @@ const AdminBlogPosts = () => {
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <Link
-                            to={`/admin/blog/edit/${post.id}`}
+                            to={`/admin/blog/edit/${post._id}`}
                             className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/30 transition"
                           >
                             <Edit className="h-4 w-4" />
                           </Link>
                           <Link
-                            to={`/blog/post/${post.id}`}
+                            to={`/blog/post/${post.slug || post._id}`}
                             target="_blank"
                             className="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded-lg hover:bg-green-50 dark:hover:bg-green-950/30 transition"
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
+                          {post.status !== 'published' && (
+                            <button
+                              onClick={() => handlePublish(post._id)}
+                              className="p-1.5 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded-lg hover:bg-green-50 dark:hover:bg-green-950/30 transition"
+                              title="Publish"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleDelete(post.id)}
+                            onClick={() => handleToggleFeatured(post._id)}
+                            className={`p-1.5 transition rounded-lg ${
+                              post.featured 
+                                ? 'text-yellow-500 hover:text-yellow-600' 
+                                : 'text-gray-400 hover:text-yellow-500'
+                            }`}
+                            title={post.featured ? 'Remove featured' : 'Make featured'}
+                          >
+                            <Star className={`h-4 w-4 ${post.featured ? 'fill-yellow-500' : ''}`} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(post._id)}
                             className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -577,7 +542,7 @@ const AdminBlogPosts = () => {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Showing {posts.length} of {mockPosts.length} posts
+            Showing {posts.length} of {totalPosts} posts
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -587,19 +552,35 @@ const AdminBlogPosts = () => {
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
-            {[...Array(totalPages)].map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`w-9 h-9 rounded-lg text-sm font-medium transition ${
-                  currentPage === i + 1
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
+            {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              
+              if (pageNum > 0 && pageNum <= totalPages) {
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-9 h-9 rounded-lg text-sm font-medium transition ${
+                      currentPage === pageNum
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              }
+              return null;
+            })}
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}

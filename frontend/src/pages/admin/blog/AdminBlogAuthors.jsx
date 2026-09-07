@@ -1,5 +1,5 @@
-// src/pages/admin/blog/AdminBlogAuthors.jsx
-import React, { useState } from 'react';
+// src/pages/admin/blog/AdminBlogAuthors.jsx - COMPLETE WITH API INTEGRATION
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Plus,
@@ -16,113 +16,23 @@ import {
   AlertCircle,
   Search,
   Filter,
-  RefreshCw
+  RefreshCw,
+  Loader2,
+  Check,
+  Twitter,
+  Linkedin,
+  Mail as MailIcon,
+  Globe,
+  UserCheck,
+  UserX,
+  Clock
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
-// Mock data
-const mockAuthors = [
-  {
-    id: 1,
-    name: "Dr. Sarah Mitchell",
-    email: "sarah.mitchell@alveoly.com",
-    title: "Chief Nursing Officer",
-    avatar: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&h=100&fit=crop&crop=face",
-    bio: "Leading expert in nursing informatics with over 20 years of experience.",
-    posts: 24,
-    followers: 3847,
-    joinedDate: "2024-03-15",
-    status: "active",
-    social: {
-      twitter: "https://twitter.com/drsarahmitchell",
-      linkedin: "https://linkedin.com/in/drsarahmitchell"
-    }
-  },
-  {
-    id: 2,
-    name: "Prof. James Anderson",
-    email: "james.anderson@alveoly.com",
-    title: "Research Director",
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face",
-    bio: "Distinguished researcher in evidence-based nursing practice.",
-    posts: 18,
-    followers: 2156,
-    joinedDate: "2023-08-01",
-    status: "active",
-    social: {
-      twitter: "https://twitter.com/profjamesanderson",
-      linkedin: "https://linkedin.com/in/profjamesanderson"
-    }
-  },
-  {
-    id: 3,
-    name: "Dr. Emily Chen",
-    email: "emily.chen@alveoly.com",
-    title: "Clinical Psychologist",
-    avatar: "https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=100&h=100&fit=crop&crop=face",
-    bio: "Specializing in mental health and wellness for healthcare professionals.",
-    posts: 15,
-    followers: 1789,
-    joinedDate: "2024-01-10",
-    status: "active",
-    social: {
-      twitter: "https://twitter.com/dremilychen",
-      linkedin: "https://linkedin.com/in/dremilychen"
-    }
-  },
-  {
-    id: 4,
-    name: "Dr. Michael Roberts",
-    email: "michael.roberts@alveoly.com",
-    title: "Telehealth Specialist",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face",
-    bio: "Pioneer in virtual care and telemedicine technologies.",
-    posts: 10,
-    followers: 934,
-    joinedDate: "2024-06-20",
-    status: "inactive",
-    social: {
-      twitter: "https://twitter.com/drmichaelroberts",
-      linkedin: "https://linkedin.com/in/drmichaelroberts"
-    }
-  },
-  {
-    id: 5,
-    name: "Dr. Maria Santos",
-    email: "maria.santos@alveoly.com",
-    title: "Patient Advocacy Director",
-    avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face",
-    bio: "Champion for patient-centered care and cultural competence.",
-    posts: 12,
-    followers: 1456,
-    joinedDate: "2024-09-05",
-    status: "active",
-    social: {
-      twitter: "https://twitter.com/drmariasantos",
-      linkedin: "https://linkedin.com/in/drmariasantos"
-    }
-  },
-  {
-    id: 6,
-    name: "Dr. Robert Kim",
-    email: "robert.kim@alveoly.com",
-    title: "Chief Nurse Executive",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop&crop=face",
-    bio: "Healthcare leader driving innovation in nursing practice.",
-    posts: 8,
-    followers: 1123,
-    joinedDate: "2024-11-01",
-    status: "pending",
-    social: {
-      twitter: "https://twitter.com/drrobertkim",
-      linkedin: "https://linkedin.com/in/drrobertkim"
-    }
-  }
-];
+import blogAPI from '../../../api/blogApi';
 
 const AdminBlogAuthors = () => {
-  const [authors, setAuthors] = useState(mockAuthors);
-  const [loading, setLoading] = useState(false);
+  const [authors, setAuthors] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -137,6 +47,31 @@ const AdminBlogAuthors = () => {
     social: { twitter: '', linkedin: '' }
   });
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [selectedAuthor, setSelectedAuthor] = useState(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+
+  useEffect(() => {
+    fetchAuthors();
+  }, []);
+
+  const fetchAuthors = async () => {
+    try {
+      setLoading(true);
+      const response = await blogAPI.getAuthors();
+      
+      if (response.success) {
+        setAuthors(response.data || []);
+      } else {
+        toast.error(response.message || 'Failed to load authors');
+      }
+    } catch (error) {
+      console.error('Error fetching authors:', error);
+      toast.error(error.response?.data?.message || 'Failed to load authors');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleOpenModal = (author = null) => {
     if (author) {
@@ -144,10 +79,10 @@ const AdminBlogAuthors = () => {
       setFormData({
         name: author.name,
         email: author.email,
-        title: author.title,
-        bio: author.bio,
+        title: author.title || '',
+        bio: author.bio || '',
         avatar: author.avatar || '',
-        status: author.status,
+        status: author.status || 'active',
         social: author.social || { twitter: '', linkedin: '' }
       });
     } else {
@@ -210,37 +145,58 @@ const AdminBlogAuthors = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateForm()) return;
 
-    if (editingAuthor) {
-      setAuthors(prev =>
-        prev.map(author =>
-          author.id === editingAuthor.id
-            ? { ...author, ...formData }
-            : author
-        )
-      );
-      toast.success('Author updated successfully');
-    } else {
-      const newAuthor = {
-        id: authors.length + 1,
-        ...formData,
-        posts: 0,
-        followers: 0,
-        joinedDate: new Date().toISOString().split('T')[0]
-      };
-      setAuthors(prev => [...prev, newAuthor]);
-      toast.success('Author created successfully');
+    try {
+      setSaving(true);
+      let response;
+      
+      if (editingAuthor) {
+        response = await blogAPI.updateAuthor(editingAuthor._id, formData);
+      } else {
+        // For now, we're using the update endpoint since we don't have a create author endpoint
+        // In a real implementation, you'd want to create a new user with role 'author'
+        toast.error('Creating new authors is not yet implemented. Please use existing users.');
+        setSaving(false);
+        return;
+      }
+      
+      if (response.success) {
+        toast.success(editingAuthor ? 'Author updated successfully' : 'Author created successfully');
+        fetchAuthors();
+        handleCloseModal();
+      } else {
+        toast.error(response.message || 'Failed to save author');
+      }
+    } catch (error) {
+      console.error('Error saving author:', error);
+      toast.error(error.response?.data?.message || 'Failed to save author');
+    } finally {
+      setSaving(false);
     }
-    handleCloseModal();
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this author?')) {
-      setAuthors(prev => prev.filter(author => author.id !== id));
-      toast.success('Author deleted successfully');
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this author? This will remove all their posts.')) return;
+    
+    try {
+      const response = await blogAPI.deleteAuthor(id);
+      if (response.success) {
+        toast.success('Author deleted successfully');
+        fetchAuthors();
+      } else {
+        toast.error(response.message || 'Failed to delete author');
+      }
+    } catch (error) {
+      console.error('Error deleting author:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete author');
     }
+  };
+
+  const handleViewAuthor = (author) => {
+    setSelectedAuthor(author);
+    setIsViewModalOpen(true);
   };
 
   const getStatusColor = (status) => {
@@ -252,13 +208,61 @@ const AdminBlogAuthors = () => {
     return colors[status] || colors.inactive;
   };
 
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'active': return <UserCheck className="h-3.5 w-3.5" />;
+      case 'inactive': return <UserX className="h-3.5 w-3.5" />;
+      case 'pending': return <Clock className="h-3.5 w-3.5" />;
+      default: return <User className="h-3.5 w-3.5" />;
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'A';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   const filteredAuthors = authors.filter(author => {
-    const matchesSearch = author.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          author.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          author.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = author.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          author.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          author.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          author.bio?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || author.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const stats = {
+    total: authors.length,
+    active: authors.filter(a => a.status === 'active').length,
+    pending: authors.filter(a => a.status === 'pending').length,
+    inactive: authors.filter(a => a.status === 'inactive').length,
+    totalPosts: authors.reduce((sum, a) => sum + (a.postCount || 0), 0)
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">Loading authors...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -270,13 +274,46 @@ const AdminBlogAuthors = () => {
             Manage blog authors and contributors
           </p>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300"
-        >
-          <Plus className="h-4 w-4" />
-          Add Author
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchAuthors}
+            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            title="Refresh"
+          >
+            <RefreshCw className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300"
+          >
+            <Plus className="h-4 w-4" />
+            Add Author
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.total}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Total Authors</p>
+        </div>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.active}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Active</p>
+        </div>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Pending</p>
+        </div>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-2xl font-bold text-gray-600 dark:text-gray-400">{stats.inactive}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Inactive</p>
+        </div>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.totalPosts}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Total Posts</p>
+        </div>
       </div>
 
       {/* Filters */}
@@ -286,7 +323,7 @@ const AdminBlogAuthors = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search authors..."
+              placeholder="Search authors by name, email, or title..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
@@ -306,103 +343,140 @@ const AdminBlogAuthors = () => {
       </div>
 
       {/* Authors Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredAuthors.map((author) => (
-          <motion.div
-            key={author.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 hover:shadow-lg transition-all duration-300"
-          >
-            <div className="flex items-start gap-4">
-              <img
-                src={author.avatar}
-                alt={author.name}
-                className="w-16 h-16 rounded-full object-cover border-2 border-blue-100 dark:border-blue-900/50"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-                      {author.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                      {author.title}
-                    </p>
+      {filteredAuthors.length === 0 ? (
+        <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+          <User className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+          <p className="text-lg font-medium text-gray-900 dark:text-gray-100">No authors found</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {searchTerm ? 'Try adjusting your search' : 'No authors have been created yet'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAuthors.map((author) => (
+            <motion.div
+              key={author._id || author.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 hover:shadow-lg transition-all duration-300 group relative"
+            >
+              <div className="flex items-start gap-4">
+                {author.avatar ? (
+                  <img
+                    src={author.avatar}
+                    alt={author.name}
+                    className="w-16 h-16 rounded-full object-cover border-2 border-blue-100 dark:border-blue-900/50"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+                    {getInitials(author.name)}
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => handleOpenModal(author)}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/30 transition"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(author.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                        {author.name}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                        {author.title || 'Contributor'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleViewAuthor(author)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/30 transition"
+                        title="View details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenModal(author)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/30 transition"
+                        title="Edit author"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(author._id || author.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                        title="Delete author"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2 text-sm">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(author.status)}`}>
+                      {getStatusIcon(author.status)}
+                      {author.status?.charAt(0).toUpperCase() + author.status?.slice(1) || 'Active'}
+                    </span>
+                    {author.role && (
+                      <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium">
+                        {author.role}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 mt-2 text-sm">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(author.status)}`}>
-                    {author.status.charAt(0).toUpperCase() + author.status.slice(1)}
+              </div>
+
+              <div className="mt-4 space-y-2">
+                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                  {author.bio || 'No bio available'}
+                </p>
+                <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                  <span className="flex items-center gap-1">
+                    <FileText className="h-3.5 w-3.5" />
+                    {author.postCount || 0} posts
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Star className="h-3.5 w-3.5" />
+                    {author.totalLikes || 0} likes
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Eye className="h-3.5 w-3.5" />
+                    {author.totalViews || 0} views
                   </span>
                 </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                  <a
+                    href={author.social?.twitter}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 bg-[#1da1f2]/10 text-[#1da1f2] rounded hover:bg-[#1da1f2]/20 transition"
+                  >
+                    <Twitter className="h-4 w-4" />
+                  </a>
+                  <a
+                    href={author.social?.linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 bg-[#0a66c2]/10 text-[#0a66c2] rounded hover:bg-[#0a66c2]/20 transition"
+                  >
+                    <Linkedin className="h-4 w-4" />
+                  </a>
+                  <a
+                    href={`mailto:${author.email}`}
+                    className="p-1.5 bg-[#ea4335]/10 text-[#ea4335] rounded hover:bg-[#ea4335]/20 transition"
+                  >
+                    <MailIcon className="h-4 w-4" />
+                  </a>
+                  {author.website && (
+                    <a
+                      href={author.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 bg-[#4285f4]/10 text-[#4285f4] rounded hover:bg-[#4285f4]/20 transition"
+                    >
+                      <Globe className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
-
-            <div className="mt-4 space-y-2">
-              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                {author.bio}
-              </p>
-              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                <span className="flex items-center gap-1">
-                  <User className="h-3.5 w-3.5" />
-                  {author.posts} posts
-                </span>
-                <span className="flex items-center gap-1">
-                  <Star className="h-3.5 w-3.5" />
-                  {author.followers}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5" />
-                  {author.joinedDate}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                <a
-                  href={author.social.twitter}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 bg-[#1da1f2]/10 text-[#1da1f2] rounded hover:bg-[#1da1f2]/20 transition"
-                >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                </a>
-                <a
-                  href={author.social.linkedin}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 bg-[#0a66c2]/10 text-[#0a66c2] rounded hover:bg-[#0a66c2]/20 transition"
-                >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                  </svg>
-                </a>
-                <a
-                  href={`mailto:${author.email}`}
-                  className="p-1.5 bg-[#ea4335]/10 text-[#ea4335] rounded hover:bg-[#ea4335]/20 transition"
-                >
-                  <Mail className="h-4 w-4" />
-                </a>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Create/Edit Modal */}
       {isModalOpen && (
@@ -414,9 +488,14 @@ const AdminBlogAuthors = () => {
             className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                {editingAuthor ? 'Edit Author' : 'Add Author'}
-              </h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  {editingAuthor ? 'Edit Author' : 'Add Author'}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {editingAuthor ? 'Update author details' : 'Add a new author to the blog'}
+                </p>
+              </div>
               <button
                 onClick={handleCloseModal}
                 className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
@@ -428,7 +507,7 @@ const AdminBlogAuthors = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Full Name *
+                  Full Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -448,7 +527,7 @@ const AdminBlogAuthors = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Email *
+                  Email <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -468,7 +547,7 @@ const AdminBlogAuthors = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Title *
+                  Title <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -488,7 +567,7 @@ const AdminBlogAuthors = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Bio *
+                  Bio <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   name="bio"
@@ -504,6 +583,9 @@ const AdminBlogAuthors = () => {
                     {errors.bio}
                   </p>
                 )}
+                <p className="mt-1 text-xs text-gray-400">
+                  {formData.bio.length}/500 characters
+                </p>
               </div>
 
               <div>
@@ -518,6 +600,19 @@ const AdminBlogAuthors = () => {
                   placeholder="https://example.com/avatar.jpg"
                   className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                 />
+                {formData.avatar && (
+                  <div className="mt-2 flex items-center gap-3">
+                    <img
+                      src={formData.avatar}
+                      alt="Avatar preview"
+                      className="w-10 h-10 rounded-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                    <span className="text-xs text-gray-400">Preview</span>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -574,9 +669,158 @@ const AdminBlogAuthors = () => {
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300"
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
                 {editingAuthor ? 'Update' : 'Add'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* View Author Modal */}
+      {isViewModalOpen && selectedAuthor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Author Details</h2>
+              <button
+                onClick={() => setIsViewModalOpen(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                {selectedAuthor.avatar ? (
+                  <img
+                    src={selectedAuthor.avatar}
+                    alt={selectedAuthor.name}
+                    className="w-20 h-20 rounded-full object-cover border-2 border-blue-100 dark:border-blue-900/50"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
+                    {getInitials(selectedAuthor.name)}
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                    {selectedAuthor.name}
+                  </h3>
+                  <p className="text-gray-500 dark:text-gray-400">{selectedAuthor.title}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedAuthor.status)}`}>
+                      {getStatusIcon(selectedAuthor.status)}
+                      {selectedAuthor.status?.charAt(0).toUpperCase() + selectedAuthor.status?.slice(1)}
+                    </span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      Joined {formatDate(selectedAuthor.joinedDate)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Email</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedAuthor.email}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Role</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{selectedAuthor.role || 'Author'}</p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Bio</p>
+                <p className="text-gray-700 dark:text-gray-300 mt-1">{selectedAuthor.bio || 'No bio available'}</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    {selectedAuthor.postCount || 0}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Posts</p>
+                </div>
+                <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                    {selectedAuthor.totalLikes || 0}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Likes</p>
+                </div>
+                <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {selectedAuthor.totalViews || 0}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Views</p>
+                </div>
+              </div>
+
+              {selectedAuthor.social && (
+                <div className="flex items-center gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Connect:</p>
+                  {selectedAuthor.social.twitter && (
+                    <a
+                      href={selectedAuthor.social.twitter}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 bg-[#1da1f2] text-white rounded-lg hover:shadow-lg transition"
+                    >
+                      <Twitter className="h-4 w-4" />
+                    </a>
+                  )}
+                  {selectedAuthor.social.linkedin && (
+                    <a
+                      href={selectedAuthor.social.linkedin}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 bg-[#0a66c2] text-white rounded-lg hover:shadow-lg transition"
+                    >
+                      <Linkedin className="h-4 w-4" />
+                    </a>
+                  )}
+                  <a
+                    href={`mailto:${selectedAuthor.email}`}
+                    className="p-2 bg-[#ea4335] text-white rounded-lg hover:shadow-lg transition"
+                  >
+                    <MailIcon className="h-4 w-4" />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-800">
+              <button
+                onClick={() => {
+                  setIsViewModalOpen(false);
+                  handleOpenModal(selectedAuthor);
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
+              >
+                Edit Author
+              </button>
+              <button
+                onClick={() => {
+                  setIsViewModalOpen(false);
+                  handleDelete(selectedAuthor._id || selectedAuthor.id);
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition"
+              >
+                Delete Author
               </button>
             </div>
           </motion.div>
@@ -585,5 +829,12 @@ const AdminBlogAuthors = () => {
     </div>
   );
 };
+
+// Add missing FileText icon (if not imported)
+const FileText = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
 
 export default AdminBlogAuthors;

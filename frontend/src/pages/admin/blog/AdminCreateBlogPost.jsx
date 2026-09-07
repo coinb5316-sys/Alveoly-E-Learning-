@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminCreateBlogPost.jsx - FIXED (removed duplicate CheckCircle)
+// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE FULL UI
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,7 +17,7 @@ import {
   User,
   FileText,
   AlertCircle,
-  CheckCircle, // <-- Keep this import
+  CheckCircle,
   Video,
   Music,
   Link as LinkIcon,
@@ -41,7 +41,6 @@ import {
   VolumeX,
   Expand,
   Compress,
-  Download,
   Share2,
   Heart,
   MessageCircle,
@@ -56,36 +55,22 @@ import {
   File,
   Music2,
   Mic,
-  Camera
+  Camera,
+  Loader2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import blogAPI from '../../../api/blogApi';
 
-// Mock data
-const mockCategories = [
-  'Healthcare Technology',
-  'Nursing Practice',
-  'Mental Health',
-  'Telehealth',
-  'Patient Care',
-  'Nursing Leadership'
-];
-
-const mockTags = [
-  'AI', 'Nursing', 'Healthcare', 'Technology', 'Patient Care',
-  'Innovation', 'Research', 'Mental Health', 'Wellness', 'Self-Care',
-  'Telehealth', 'Virtual Care', 'Leadership', 'Management', 'Culture',
-  'Diversity', 'Evidence-Based Practice', 'Clinical Care', 'Education',
-  'Digital Health', 'Medical', 'Science', 'Public Health', 'Nursing Education'
-];
-
-// Custom GraduationCap icon (not in lucide-react)
+// Custom GraduationCap icon
 const GraduationCap = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422M12 14l-6.16-3.422M12 14v6m-6 0h12" />
   </svg>
 );
 
-// Custom Checkmark icon (use a different name to avoid conflict)
+// Custom Checkmark icon
 const CheckmarkIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -97,6 +82,8 @@ const AdminCreateBlogPost = () => {
   const navigate = useNavigate();
   const isEditing = Boolean(id);
   const contentEditorRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -127,6 +114,7 @@ const AdminCreateBlogPost = () => {
     showShareButtons: true
   });
   
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
@@ -134,100 +122,96 @@ const AdminCreateBlogPost = () => {
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [errors, setErrors] = useState({});
-  const [activeTab, setActiveTab] = useState('editor');
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
   const [refInput, setRefInput] = useState('');
   const [objectiveInput, setObjectiveInput] = useState('');
   const [statLabel, setStatLabel] = useState('');
   const [statValue, setStatValue] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [availableTags, setAvailableTags] = useState([]);
+  const [activeSection, setActiveSection] = useState('general');
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
   useEffect(() => {
+    fetchCategories();
+    fetchTags();
     if (isEditing) {
       fetchPost();
     }
   }, [id]);
 
+  const fetchCategories = async () => {
+    try {
+      const response = await blogAPI.getCategories();
+      if (response.success) {
+        setCategories(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const fetchTags = async () => {
+    try {
+      const response = await blogAPI.getTags();
+      if (response.success) {
+        setAvailableTags(response.data.map(tag => tag.name) || []);
+      }
+    } catch (error) {
+      console.error('Error fetching tags:', error);
+    }
+  };
+
   const fetchPost = async () => {
     try {
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const response = await blogAPI.getPostById(id);
       
-      // Mock data for editing with all features
-      const mockPost = {
-        title: "The Future of Nursing: AI-Powered Patient Care in 2026",
-        subtitle: "How artificial intelligence is revolutionizing healthcare delivery and nursing practice",
-        content: `<p>Artificial intelligence is no longer a concept of the future—it's transforming the way nurses deliver care today. From predictive analytics that identify patient deterioration early, to smart monitoring systems that free up valuable nursing time, AI is reshaping the healthcare landscape.</p>
+      if (response.success) {
+        const post = response.data;
+        setFormData({
+          title: post.title || '',
+          subtitle: post.subtitle || '',
+          content: post.content || '',
+          category: post.category || '',
+          tags: post.tags || [],
+          featuredImage: post.featuredImage || null,
+          galleryImages: post.galleryImages || [],
+          videoUrl: post.videoUrl || '',
+          videoEmbed: post.videoEmbed || '',
+          audioUrl: post.audioUrl || '',
+          status: post.status || 'draft',
+          featured: post.featured || false,
+          publishDate: post.publishDate ? post.publishDate.split('T')[0] : null,
+          metaDescription: post.metaDescription || '',
+          metaKeywords: post.metaKeywords || '',
+          author: post.authorName || '',
+          authorBio: post.authorBio || '',
+          authorImage: post.authorImage || null,
+          references: post.references || [],
+          learningObjectives: post.learningObjectives || [],
+          statistics: post.statistics || [],
+          relatedPosts: post.relatedPosts || [],
+          readingTime: post.readingTime || 5,
+          allowComments: post.allowComments !== undefined ? post.allowComments : true,
+          showAuthor: post.showAuthor !== undefined ? post.showAuthor : true,
+          showShareButtons: post.showShareButtons !== undefined ? post.showShareButtons : true
+        });
         
-        <h2>The Rise of Smart Patient Monitoring</h2>
-        <p>Modern healthcare facilities are increasingly adopting AI-powered monitoring systems that can predict patient deterioration up to 24 hours before traditional methods would detect it. This early warning capability is saving lives and reducing ICU admissions by up to 30% in hospitals that have implemented these systems.</p>
-        
-        <figure>
-          <img src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80" alt="AI patient monitoring" />
-          <figcaption>AI-powered monitoring systems are revolutionizing patient care</figcaption>
-        </figure>
-        
-        <blockquote>
-          "AI is not replacing nurses—it's empowering them to focus on what matters most: direct patient care and compassion."
-          <cite>— Dr. Sarah Mitchell</cite>
-        </blockquote>
-        
-        <h2>AI-Assisted Clinical Decision Making</h2>
-        <p>Nurses are now using AI tools that analyze vast amounts of patient data to provide real-time insights and recommendations. These systems help identify potential drug interactions, suggest evidence-based interventions, and flag unusual patterns in vital signs.</p>
-        
-        <h3>Key Benefits for Nursing Practice</h3>
-        <ul>
-          <li>Reduced documentation time by 40%</li>
-          <li>Improved patient outcomes and safety</li>
-          <li>Enhanced clinical decision support</li>
-          <li>More time for direct patient interaction</li>
-        </ul>`,
-        category: "Healthcare Technology",
-        tags: ["AI", "Nursing", "Healthcare", "Technology", "Innovation"],
-        featuredImage: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80",
-        galleryImages: [
-          "https://images.unsplash.com/photo-1584982751601-97dcc096659c?w=800&q=80",
-          "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=800&q=80"
-        ],
-        videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        videoEmbed: '<iframe width="560" height="315" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allowfullscreen></iframe>',
-        audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-        status: "published",
-        featured: true,
-        publishDate: "2026-01-15",
-        metaDescription: "Explore how AI is transforming nursing practice",
-        metaKeywords: "AI, nursing, healthcare, technology, patient care",
-        author: "Dr. Sarah Mitchell",
-        authorBio: "Dr. Mitchell is a leading expert in nursing informatics with over 20 years of experience in healthcare innovation.",
-        authorImage: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&h=150&fit=crop&crop=face",
-        references: [
-          "Smith, J. et al. (2025). AI in Healthcare: A Systematic Review. Journal of Medical Informatics.",
-          "Johnson, M. (2024). The Future of Nursing: AI Integration. Healthcare Technology Review."
-        ],
-        learningObjectives: [
-          "Understand the role of AI in modern nursing practice",
-          "Identify key applications of AI in patient monitoring",
-          "Evaluate the impact of AI on nursing workflow and patient outcomes"
-        ],
-        statistics: [
-          { value: "40%", label: "Reduced Documentation Time" },
-          { value: "85%", label: "Accuracy in Patient Monitoring" }
-        ],
-        relatedPosts: [1, 2, 3],
-        readingTime: 8,
-        allowComments: true,
-        showAuthor: true,
-        showShareButtons: true
-      };
-      
-      setFormData(mockPost);
-      setImagePreview(mockPost.featuredImage);
-      setGalleryPreviews(mockPost.galleryImages);
+        if (post.featuredImage) {
+          setImagePreview(post.featuredImage);
+        }
+        if (post.galleryImages && post.galleryImages.length > 0) {
+          setGalleryPreviews(post.galleryImages);
+        }
+      } else {
+        toast.error(response.message || 'Failed to load post');
+        navigate('/admin/blog/posts');
+      }
     } catch (error) {
       console.error('Error fetching post:', error);
-      toast.error('Failed to load post');
+      toast.error(error.response?.data?.message || 'Failed to load post');
+      navigate('/admin/blog/posts');
     } finally {
       setLoading(false);
     }
@@ -374,18 +358,66 @@ const AdminCreateBlogPost = () => {
 
     try {
       setSaving(true);
-      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      toast.success(isEditing ? 'Post updated successfully!' : 'Post created successfully!');
+      const formDataToSend = new FormData();
+      formDataToSend.append('title', formData.title);
+      formDataToSend.append('subtitle', formData.subtitle || '');
+      formDataToSend.append('content', formData.content);
+      formDataToSend.append('category', formData.category);
+      formDataToSend.append('tags', JSON.stringify(formData.tags));
+      formDataToSend.append('videoUrl', formData.videoUrl || '');
+      formDataToSend.append('videoEmbed', formData.videoEmbed || '');
+      formDataToSend.append('audioUrl', formData.audioUrl || '');
+      formDataToSend.append('status', status);
+      formDataToSend.append('featured', formData.featured);
+      formDataToSend.append('metaDescription', formData.metaDescription || '');
+      formDataToSend.append('metaKeywords', formData.metaKeywords || '');
+      formDataToSend.append('authorBio', formData.authorBio || '');
+      formDataToSend.append('authorTitle', formData.author || '');
+      formDataToSend.append('authorImage', formData.authorImage || '');
+      formDataToSend.append('references', JSON.stringify(formData.references));
+      formDataToSend.append('learningObjectives', JSON.stringify(formData.learningObjectives));
+      formDataToSend.append('statistics', JSON.stringify(formData.statistics));
+      formDataToSend.append('allowComments', formData.allowComments);
+      formDataToSend.append('showAuthor', formData.showAuthor);
+      formDataToSend.append('showShareButtons', formData.showShareButtons);
+      formDataToSend.append('readingTime', formData.readingTime);
       
-      if (status === 'published') {
-        navigate('/admin/blog/posts');
+      if (formData.publishDate) {
+        formDataToSend.append('publishDate', formData.publishDate);
+      }
+      
+      if (formData.featuredImage && typeof formData.featuredImage === 'object') {
+        formDataToSend.append('featuredImage', formData.featuredImage);
+      }
+      
+      if (formData.galleryImages && formData.galleryImages.length > 0) {
+        const imageUrls = formData.galleryImages.filter(img => typeof img === 'string');
+        if (imageUrls.length > 0) {
+          formDataToSend.append('galleryImages', JSON.stringify(imageUrls));
+        }
+      }
+
+      let response;
+      if (isEditing) {
+        response = await blogAPI.updatePost(id, formDataToSend);
       } else {
-        toast.info('Draft saved successfully');
+        response = await blogAPI.createPost(formDataToSend);
+      }
+      
+      if (response.success) {
+        toast.success(isEditing ? 'Post updated successfully!' : 'Post created successfully!');
+        if (status === 'published') {
+          navigate('/admin/blog/posts');
+        } else {
+          toast.info('Draft saved successfully');
+        }
+      } else {
+        toast.error(response.message || 'Failed to save post');
       }
     } catch (error) {
       console.error('Error saving post:', error);
-      toast.error('Failed to save post');
+      toast.error(error.response?.data?.message || 'Failed to save post');
     } finally {
       setSaving(false);
     }
@@ -445,15 +477,15 @@ const AdminCreateBlogPost = () => {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-500">Loading post...</p>
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-500">Loading post...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 sticky top-0 z-20 bg-gray-50 dark:bg-gray-950/95 backdrop-blur-sm -mx-4 px-4 py-4 md:-mx-6 md:px-6 border-b border-gray-200/50 dark:border-gray-800/50">
         <div className="flex items-center gap-4">
@@ -494,7 +526,7 @@ const AdminCreateBlogPost = () => {
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300 disabled:opacity-50"
           >
             {saving ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
                 {isEditing ? 'Update' : 'Publish'}
@@ -507,12 +539,12 @@ const AdminCreateBlogPost = () => {
 
       {/* Main Form */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Content */}
-        <div className={`lg:col-span-2 space-y-6 ${showPreview ? 'lg:col-span-3' : ''}`}>
+        {/* Main Content - Left Side */}
+        <div className="lg:col-span-2 space-y-6">
           {/* Title */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Title *
+              Title <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -626,6 +658,7 @@ const AdminCreateBlogPost = () => {
                   multiple
                   onChange={handleGalleryUpload}
                   className="hidden"
+                  ref={galleryInputRef}
                 />
               </label>
             </div>
@@ -676,9 +709,12 @@ const AdminCreateBlogPost = () => {
                   />
                 </div>
                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                  <button className="flex items-center gap-1 hover:text-gray-700 transition">
-                    <Play className="h-4 w-4" />
-                    Play
+                  <button 
+                    onClick={() => setIsVideoPlaying(!isVideoPlaying)}
+                    className="flex items-center gap-1 hover:text-gray-700 transition"
+                  >
+                    {isVideoPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {isVideoPlaying ? 'Pause' : 'Play'}
                   </button>
                   <button className="flex items-center gap-1 hover:text-gray-700 transition">
                     <Volume2 className="h-4 w-4" />
@@ -745,7 +781,7 @@ const AdminCreateBlogPost = () => {
               
               {showTagSuggestions && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
-                  {mockTags
+                  {availableTags
                     .filter(tag => tag.toLowerCase().includes(tagInput.toLowerCase()))
                     .slice(0, 10)
                     .map(tag => (
@@ -899,7 +935,7 @@ const AdminCreateBlogPost = () => {
           </div>
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar - Right Side */}
         <div className="space-y-6">
           {/* Featured Image */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
@@ -939,6 +975,7 @@ const AdminCreateBlogPost = () => {
                   accept="image/*"
                   onChange={handleImageUpload}
                   className="hidden"
+                  ref={fileInputRef}
                 />
               </label>
             )}
@@ -946,7 +983,10 @@ const AdminCreateBlogPost = () => {
 
           {/* Author Info */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Author Information</h3>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Author Information
+            </h3>
             
             <div>
               <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
@@ -994,7 +1034,7 @@ const AdminCreateBlogPost = () => {
           {/* Category */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Category *
+              Category <span className="text-red-500">*</span>
             </label>
             <select
               name="category"
@@ -1003,8 +1043,10 @@ const AdminCreateBlogPost = () => {
               className={`w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border ${errors.category ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition`}
             >
               <option value="">Select category</option>
-              {mockCategories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+              {categories.map((cat) => (
+                <option key={cat._id || cat.name} value={cat.name}>
+                  {cat.name}
+                </option>
               ))}
             </select>
             {errors.category && (
@@ -1032,6 +1074,8 @@ const AdminCreateBlogPost = () => {
 
           {/* Status Options */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Post Settings</h3>
+            
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -1123,7 +1167,10 @@ const AdminCreateBlogPost = () => {
 
           {/* SEO Section */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">SEO Settings</h3>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              SEO Settings
+            </h3>
             
             <div>
               <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
@@ -1172,8 +1219,14 @@ const AdminCreateBlogPost = () => {
               disabled={saving}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300 disabled:opacity-50"
             >
-              {isEditing ? 'Update Post' : 'Publish Post'}
-              <CheckCircle className="h-4 w-4" />
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  {isEditing ? 'Update Post' : 'Publish Post'}
+                  <CheckCircle className="h-4 w-4" />
+                </>
+              )}
             </button>
             <button
               onClick={() => setShowPreview(!showPreview)}
@@ -1246,6 +1299,22 @@ const AdminCreateBlogPost = () => {
                   className="prose prose-lg prose-blue max-w-none dark:prose-invert"
                   dangerouslySetInnerHTML={{ __html: formData.content }}
                 />
+                
+                {/* Gallery Images */}
+                {galleryPreviews.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {galleryPreviews.map((img, index) => (
+                      <img key={index} src={img} alt={`Gallery ${index + 1}`} className="rounded-lg object-cover h-48 w-full" />
+                    ))}
+                  </div>
+                )}
+                
+                {/* Video */}
+                {formData.videoUrl && (
+                  <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                    <iframe src={formData.videoUrl} className="w-full h-full" allowFullScreen title="Video" />
+                  </div>
+                )}
                 
                 {/* Statistics */}
                 {formData.statistics.length > 0 && (

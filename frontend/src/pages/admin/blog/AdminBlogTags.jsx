@@ -1,5 +1,5 @@
-// src/pages/admin/blog/AdminBlogTags.jsx
-import React, { useState } from 'react';
+// src/pages/admin/blog/AdminBlogTags.jsx - COMPLETE WITH API INTEGRATION
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Plus,
@@ -12,116 +12,206 @@ import {
   X,
   Save,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Loader2,
+  Check,
+  ChevronDown
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
-// Mock data
-const mockTags = [
-  { id: 1, name: 'AI', slug: 'ai', count: 45, color: '#3b82f6', createdAt: '2025-12-01' },
-  { id: 2, name: 'Nursing', slug: 'nursing', count: 38, color: '#10b981', createdAt: '2025-12-15' },
-  { id: 3, name: 'Healthcare', slug: 'healthcare', count: 32, color: '#f59e0b', createdAt: '2026-01-02' },
-  { id: 4, name: 'Technology', slug: 'technology', count: 28, color: '#8b5cf6', createdAt: '2026-01-10' },
-  { id: 5, name: 'Patient Care', slug: 'patient-care', count: 25, color: '#ef4444', createdAt: '2025-11-20' },
-  { id: 6, name: 'Innovation', slug: 'innovation', count: 20, color: '#ec4899', createdAt: '2025-12-28' },
-  { id: 7, name: 'Research', slug: 'research', count: 18, color: '#14b8a6', createdAt: '2026-01-05' },
-  { id: 8, name: 'Mental Health', slug: 'mental-health', count: 15, color: '#8b5cf6', createdAt: '2026-01-08' },
-  { id: 9, name: 'Leadership', slug: 'leadership', count: 12, color: '#f97316', createdAt: '2026-01-12' },
-  { id: 10, name: 'Telehealth', slug: 'telehealth', count: 10, color: '#06b6d4', createdAt: '2026-01-15' }
-];
+import blogAPI from '../../../api/blogApi';
 
 const colorOptions = [
   '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444',
   '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#6366f1',
-  '#84cc16', '#d946ef', '#f43f5e', '#0ea5e9', '#22d3ee'
+  '#84cc16', '#d946ef', '#f43f5e', '#0ea5e9', '#22d3ee',
+  '#a855f7', '#ec4899', '#14b8a6', '#f43f5e', '#22c55e'
 ];
 
 const AdminBlogTags = () => {
-  const [tags, setTags] = useState(mockTags);
+  const [tags, setTags] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTag, setEditingTag] = useState(null);
   const [formData, setFormData] = useState({ name: '', slug: '', color: '#3b82f6' });
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [selectedColor, setSelectedColor] = useState('#3b82f6');
+  const [showColorPicker, setShowColorPicker] = useState(false);
+
+  useEffect(() => {
+    fetchTags();
+  }, []);
+
+  const fetchTags = async () => {
+    try {
+      setLoading(true);
+      const response = await blogAPI.getTags();
+      
+      if (response.success) {
+        setTags(response.data || []);
+      } else {
+        toast.error(response.message || 'Failed to load tags');
+      }
+    } catch (error) {
+      console.error('Error fetching tags:', error);
+      toast.error(error.response?.data?.message || 'Failed to load tags');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleOpenModal = (tag = null) => {
     if (tag) {
       setEditingTag(tag);
-      setFormData({ name: tag.name, slug: tag.slug, color: tag.color });
+      setFormData({
+        name: tag.name,
+        slug: tag.slug,
+        color: tag.color || '#3b82f6'
+      });
+      setSelectedColor(tag.color || '#3b82f6');
     } else {
       setEditingTag(null);
-      setFormData({ name: '', slug: '', color: '#3b82f6' });
+      setFormData({
+        name: '',
+        slug: '',
+        color: '#3b82f6'
+      });
+      setSelectedColor('#3b82f6');
     }
     setErrors({});
     setIsModalOpen(true);
+    setShowColorPicker(false);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingTag(null);
-    setFormData({ name: '', slug: '', color: '#3b82f6' });
+    setFormData({
+      name: '',
+      slug: '',
+      color: '#3b82f6'
+    });
     setErrors({});
+    setShowColorPicker(false);
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    
     if (name === 'name') {
-      const slug = value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const slug = value
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
       setFormData(prev => ({ ...prev, slug }));
     }
+    
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
+  const handleColorSelect = (color) => {
+    setSelectedColor(color);
+    setFormData(prev => ({ ...prev, color }));
+    setShowColorPicker(false);
+  };
+
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.name.trim()) newErrors.name = 'Tag name is required';
-    if (!formData.slug.trim()) newErrors.slug = 'Slug is required';
+    if (!formData.name.trim()) {
+      newErrors.name = 'Tag name is required';
+    }
+    if (!formData.slug.trim()) {
+      newErrors.slug = 'Slug is required';
+    }
     if (formData.slug && !/^[a-z0-9-]+$/.test(formData.slug)) {
       newErrors.slug = 'Slug can only contain lowercase letters, numbers, and hyphens';
+    }
+    // Check for duplicate name
+    const existingTag = tags.find(t => 
+      t.name.toLowerCase() === formData.name.toLowerCase() && 
+      (!editingTag || t._id !== editingTag._id)
+    );
+    if (existingTag) {
+      newErrors.name = 'A tag with this name already exists';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateForm()) return;
 
-    if (editingTag) {
-      setTags(prev =>
-        prev.map(tag =>
-          tag.id === editingTag.id
-            ? { ...tag, ...formData }
-            : tag
-        )
-      );
-      toast.success('Tag updated successfully');
-    } else {
-      const newTag = {
-        id: tags.length + 1,
-        ...formData,
-        count: 0,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setTags(prev => [...prev, newTag]);
-      toast.success('Tag created successfully');
-    }
-    handleCloseModal();
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this tag?')) {
-      setTags(prev => prev.filter(tag => tag.id !== id));
-      toast.success('Tag deleted successfully');
+    try {
+      setSaving(true);
+      let response;
+      
+      if (editingTag) {
+        response = await blogAPI.updateTag(editingTag._id, formData);
+      } else {
+        response = await blogAPI.createTag(formData);
+      }
+      
+      if (response.success) {
+        toast.success(editingTag ? 'Tag updated successfully' : 'Tag created successfully');
+        fetchTags();
+        handleCloseModal();
+      } else {
+        toast.error(response.message || 'Failed to save tag');
+      }
+    } catch (error) {
+      console.error('Error saving tag:', error);
+      toast.error(error.response?.data?.message || 'Failed to save tag');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const filteredTags = tags.filter(tag =>
-    tag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tag.slug.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this tag? This will remove it from all posts.')) return;
+    
+    try {
+      const response = await blogAPI.deleteTag(id);
+      if (response.success) {
+        toast.success('Tag deleted successfully');
+        fetchTags();
+      } else {
+        toast.error(response.message || 'Failed to delete tag');
+      }
+    } catch (error) {
+      console.error('Error deleting tag:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete tag');
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const getTagColor = (color) => {
+    return color || '#3b82f6';
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">Loading tags...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -133,13 +223,48 @@ const AdminBlogTags = () => {
             Manage blog tags for better content organization
           </p>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300"
-        >
-          <Plus className="h-4 w-4" />
-          New Tag
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchTags}
+            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            title="Refresh"
+          >
+            <RefreshCw className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300"
+          >
+            <Plus className="h-4 w-4" />
+            New Tag
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{tags.length}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Total Tags</p>
+        </div>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+            {tags.filter(t => t.count > 0).length}
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Active Tags</p>
+        </div>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+            {tags.reduce((sum, t) => sum + (t.count || 0), 0)}
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Total Mentions</p>
+        </div>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+            {tags.filter(t => t.count > 5).length}
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Popular Tags</p>
+        </div>
       </div>
 
       {/* Search */}
@@ -157,57 +282,85 @@ const AdminBlogTags = () => {
       </div>
 
       {/* Tags Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        {filteredTags.map((tag) => (
-          <motion.div
-            key={tag.id}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 hover:shadow-lg transition-all duration-300 group"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: tag.color }}
-                  />
-                  <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                    {tag.name}
-                  </span>
+      {filteredTags.length === 0 ? (
+        <div className="text-center py-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+          <Tag className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+          <p className="text-lg font-medium text-gray-900 dark:text-gray-100">No tags found</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {searchTerm ? 'Try adjusting your search' : 'Create your first tag'}
+          </p>
+          {!searchTerm && (
+            <button
+              onClick={() => handleOpenModal()}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Create Tag
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          {filteredTags.map((tag) => (
+            <motion.div
+              key={tag._id || tag.id}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 hover:shadow-lg transition-all duration-300 group relative"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full flex-shrink-0 transition-transform group-hover:scale-110"
+                      style={{ backgroundColor: getTagColor(tag.color) }}
+                    />
+                    <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {tag.name}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    /{tag.slug}
+                  </p>
+                  <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Hash className="h-3 w-3" />
+                      {tag.count || 0} posts
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {formatDate(tag.createdAt)}
+                    </span>
+                  </div>
+                  {tag.count > 5 && (
+                    <div className="mt-1">
+                      <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full">
+                        Popular
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  /{tag.slug}
-                </p>
-                <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  <span className="flex items-center gap-1">
-                    <Hash className="h-3 w-3" />
-                    {tag.count} posts
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {tag.createdAt}
-                  </span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => handleOpenModal(tag)}
+                    className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 transition"
+                    title="Edit tag"
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(tag._id || tag.id)}
+                    className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                    title="Delete tag"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => handleOpenModal(tag)}
-                  className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 transition"
-                >
-                  <Edit className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => handleDelete(tag.id)}
-                  className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Create/Edit Modal */}
       {isModalOpen && (
@@ -219,9 +372,14 @@ const AdminBlogTags = () => {
             className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                {editingTag ? 'Edit Tag' : 'Create Tag'}
-              </h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  {editingTag ? 'Edit Tag' : 'Create Tag'}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {editingTag ? 'Update tag details' : 'Add a new tag for content organization'}
+                </p>
+              </div>
               <button
                 onClick={handleCloseModal}
                 className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
@@ -233,7 +391,7 @@ const AdminBlogTags = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Tag Name *
+                  Tag Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -249,11 +407,14 @@ const AdminBlogTags = () => {
                     {errors.name}
                   </p>
                 )}
+                <p className="mt-1 text-xs text-gray-400">
+                  This will be displayed as #{formData.name || 'tagname'}
+                </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Slug *
+                  Slug <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -278,19 +439,65 @@ const AdminBlogTags = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Color
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {colorOptions.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setFormData(prev => ({ ...prev, color }))}
-                      className={`w-8 h-8 rounded-full transition-all duration-200 ${
-                        formData.color === color
-                          ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
-                          : 'hover:scale-110'
-                      }`}
-                      style={{ backgroundColor: color }}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowColorPicker(!showColorPicker)}
+                    className="w-full flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                  >
+                    <div
+                      className="w-6 h-6 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: selectedColor }}
                     />
-                  ))}
+                    <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 text-left">
+                      {selectedColor}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showColorPicker ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {showColorPicker && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 z-10">
+                      <div className="grid grid-cols-5 gap-2">
+                        {colorOptions.map((color) => (
+                          <button
+                            key={color}
+                            onClick={() => handleColorSelect(color)}
+                            className={`w-8 h-8 rounded-full transition-all duration-200 hover:scale-110 ${
+                              selectedColor === color
+                                ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                                : ''
+                            }`}
+                            style={{ backgroundColor: color }}
+                          >
+                            {selectedColor === color && (
+                              <Check className="h-4 w-4 text-white mx-auto" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Preview</p>
+                <div className="mt-2 flex items-center gap-3">
+                  <span
+                    className="px-3 py-1 rounded-full text-sm font-medium"
+                    style={{
+                      backgroundColor: selectedColor + '20',
+                      color: selectedColor
+                    }}
+                  >
+                    #{formData.name || 'tagname'}
+                  </span>
+                  <span className="text-xs text-gray-400">or</span>
+                  <span
+                    className="px-3 py-1 rounded-full text-sm font-medium text-white"
+                    style={{ backgroundColor: selectedColor }}
+                  >
+                    #{formData.name || 'tagname'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -304,8 +511,14 @@ const AdminBlogTags = () => {
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300"
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
                 {editingTag ? 'Update' : 'Create'}
               </button>
             </div>
