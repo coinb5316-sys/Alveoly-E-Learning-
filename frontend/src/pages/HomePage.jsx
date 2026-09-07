@@ -788,141 +788,63 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          JOIN US SECTION - Updated with African nursing students image
-      ======================================================= */}
+    JOIN US SECTION - FIXED MOBILE TEXT WRAPPING
+====================================================== */}
 
-      <section className="bg-[#edf4f7]">
+<section className="bg-[#edf4f7]">
+  <div className="max-w-[1180px] mx-auto grid md:grid-cols-2">
+    
+    {/* Image - African nursing students */}
+    <div className="min-h-[300px] md:min-h-[380px]">
+      <img
+        src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1400&q=85"
+        alt="African nursing students learning together"
+        className="w-full h-full object-cover"
+      />
+    </div>
 
-        <div
-          className="
-            max-w-[1180px]
-            mx-auto
-            grid
-            md:grid-cols-2
-          "
-        >
+    {/* Dark panel - FIXED TEXT WRAPPING */}
+    <div className="bg-[#17364d] text-white flex items-center px-6 sm:px-8 py-10 md:px-12 md:py-12">
+      <div className="w-full max-w-[430px]">
+        
+        {/* Heading - Fixed with proper breakpoints */}
+        <h2 className="text-xl sm:text-2xl md:text-[25px] font-normal leading-[1.3] md:leading-[1.25]">
+          <span className="block">Ready to Make Your Learning</span>
+          <span className="block">and Exam Practice Easy</span>
+          <span className="block">at Your Doorsteps?</span>
+        </h2>
 
-          {/* Image - African nursing students */}
-          <div className="min-h-[300px] md:min-h-[380px]">
+        {/* Description - Fixed with proper text wrapping */}
+        <p className="mt-4 md:mt-5 text-xs sm:text-sm md:text-[12px] leading-relaxed md:leading-5 text-white/75 max-w-full break-words">
+          Join our passionate team of educators and innovators who are dedicated to creating meaningful learning experiences for students across Ghana and beyond.
+        </p>
 
-            <img
-              src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1400&q=85"
-              alt="African nursing students learning together"
-              className="
-                w-full
-                h-full
-                object-cover
-              "
-            />
-
-          </div>
-
-
-          {/* Dark panel */}
-          <div
-            className="
-              bg-[#17364d]
-              text-white
-              flex
-              items-center
-              px-8
-              py-12
-              md:px-12
-            "
+        {/* Button Container */}
+        <div className="mt-5 md:mt-6 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+          {/* Contact Us Button */}
+          <button
+            onClick={() => navigate("/contact_us")}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f7c928] hover:bg-[#eab900] text-[#222] px-5 sm:px-6 py-2.5 text-xs sm:text-[11px] font-medium transition-colors w-full sm:w-auto whitespace-nowrap"
           >
+            <FaEnvelope className="text-xs sm:text-[12px]" />
+            Contact Us
+          </button>
 
-            <div className="max-w-[430px]">
-
-              <h2
-                className="
-                  text-[21px]
-                  md:text-[25px]
-                  font-normal
-                  leading-[1.25]
-                "
-              >
-                Ready to Make Your Learning
-                <br className="hidden md:block" />
-                and Exam Practice Easy
-                <br className="hidden md:block" />
-                at Your Doorsteps?
-              </h2>
-
-              <p
-                className="
-                  mt-5
-                  text-[11px]
-                  md:text-[12px]
-                  leading-5
-                  text-white/75
-                "
-              >
-                Join our passionate team of educators and
-                innovators who are dedicated to creating
-                meaningful learning experiences for students
-                across Ghana and beyond.
-              </p>
-
-              {/* Button Container with proper spacing */}
-              <div className="mt-6 flex flex-col sm:flex-row items-center gap-4">
-
-                {/* Contact Us Button */}
-                <button
-                  onClick={() => navigate("/contact_us")}
-                  className="
-                    inline-flex
-                    items-center
-                    justify-center
-                    gap-2
-                    rounded-full
-                    bg-[#f7c928]
-                    hover:bg-[#eab900]
-                    text-[#222]
-                    px-6
-                    py-2.5
-                    text-[11px]
-                    font-medium
-                    transition-colors
-                    w-full
-                    sm:w-auto
-                  "
-                >
-                  <FaEnvelope className="text-[12px]" />
-                  Contact Us
-                </button>
-
-                {/* Join Our Team Button */}
-                <button
-                  onClick={() => navigate("/careers")}
-                  className="
-                    inline-flex
-                    items-center
-                    justify-center
-                    gap-2
-                    rounded-full
-                    bg-[#1687df]
-                    hover:bg-[#0d76c8]
-                    px-6
-                    py-2.5
-                    text-[11px]
-                    font-medium
-                    transition-colors
-                    w-full
-                    sm:w-auto
-                  "
-                >
-                  Join Our Team
-                  <FaArrowRight className="text-[8px]" />
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-
+          {/* Join Our Team Button */}
+          <button
+            onClick={() => navigate("/careers")}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#1687df] hover:bg-[#0d76c8] px-5 sm:px-6 py-2.5 text-xs sm:text-[11px] font-medium transition-colors w-full sm:w-auto whitespace-nowrap"
+          >
+            Join Our Team
+            <FaArrowRight className="text-[8px]" />
+          </button>
         </div>
-      </section>
+
+      </div>
+    </div>
+
+  </div>
+</section>
 
 
       {/* ======================================================
