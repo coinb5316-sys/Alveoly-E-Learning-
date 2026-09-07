@@ -37,7 +37,7 @@ import {
   incrementViews
 } from "../controllers/blogController.js";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
-import { upload } from "../config/multer.js";
+import { upload } from "../../config/multer.js";
 
 const router = express.Router();
 
