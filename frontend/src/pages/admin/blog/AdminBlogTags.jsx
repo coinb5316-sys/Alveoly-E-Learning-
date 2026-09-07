@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminBlogTags.jsx - COMPLETE WITH API INTEGRATION
+// src/pages/admin/blog/AdminBlogTags.jsx - COMPLETE FIXED
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -201,6 +201,12 @@ const AdminBlogTags = () => {
   const getTagColor = (color) => {
     return color || '#3b82f6';
   };
+
+  // FIX: Define filteredTags here
+  const filteredTags = tags.filter(tag =>
+    tag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tag.slug.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (loading) {
     return (
