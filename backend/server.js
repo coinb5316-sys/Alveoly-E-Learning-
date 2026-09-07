@@ -9,6 +9,8 @@ import FAQ from "./src/models/FAQ.js";
 import cron from "node-cron";
 import { checkExpiredPlans, checkApproachingExpiry } from "./src/utils/planScheduler.js";
 import sgMail from "@sendgrid/mail";
+// FIX: Import setIO from notification service
+import { setIO } from "./src/services/notificationService.js";
 
 dotenv.config();
 
@@ -72,6 +74,13 @@ export const io = new Server(httpServer, {
   perMessageDeflate: false,
   httpCompression: false,
 });
+
+// ================= FIX: Initialize notification service with io =================
+setIO(io);
+console.log("✅ Notification service initialized with Socket.IO");
+
+// Make io available globally
+global.io = io;
 
 // Store active rooms and participants
 const rooms = new Map();
@@ -490,6 +499,7 @@ httpServer.listen(PORT, () => {
   console.log(`✅ Transports: websocket, polling`);
   console.log(`✅ Allowed origins:`, allowedOrigins);
   console.log(`✅ SendGrid: ${SENDGRID_API_KEY ? "Enabled ✅" : "Disabled ❌"}`);
+  console.log(`✅ Notification service: Initialized with Socket.IO`);
   console.log(`\n🎥 Video Conference Ready:`);
   console.log(`   - Peer-to-peer video calling`);
   console.log(`   - Screen sharing support`);

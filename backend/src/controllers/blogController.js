@@ -1,4 +1,4 @@
-// controllers/blogController.js - COMPLETE FIXED
+// controllers/blogController.js - FIXED TOP SECTION
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
@@ -7,8 +7,8 @@ import User from "../models/User.js";
 // CORRECTED: Import from root config folder (../../config/)
 import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
 
-// Import notification service (if exists, otherwise comment out)
-// import { emitAdminNotification } from "../services/notificationService.js";
+// FIX: DO NOT import notification service directly - use try/catch dynamic import
+// or simply comment it out and use console.log
 
 // ==================== POST CONTROLLERS ====================
 
@@ -184,16 +184,20 @@ export const createBlogPost = async (req, res) => {
       .populate("author", "name email avatar role")
       .lean();
 
-    // Send notification to admin (if service exists)
+    // FIX: Safely handle notification - wrap in try/catch and use dynamic import
     try {
-      // emitAdminNotification({
-      //   type: "blog_post_created",
-      //   message: `New blog post "${title}" created`,
-      //   data: { postId: newPost._id, title }
-      // });
-      console.log("📨 Notification would be sent");
+      const notificationModule = await import("../services/notificationService.js");
+      if (notificationModule && typeof notificationModule.emitAdminNotification === 'function') {
+        notificationModule.emitAdminNotification({
+          type: "blog_post_created",
+          message: `New blog post "${title}" created`,
+          data: { postId: newPost._id, title }
+        });
+        console.log("📨 Notification sent");
+      }
     } catch (notifError) {
-      console.log("⚠️ Notification error:", notifError.message);
+      // Silent fail - notifications are not critical
+      console.log("ℹ️ Notification service not available:", notifError.message);
     }
 
     res.status(201).json({
@@ -211,6 +215,8 @@ export const createBlogPost = async (req, res) => {
     });
   }
 };
+
+// ... rest of the controller remains the same
 
 // Get all blog posts with pagination and filters
 export const getAllBlogPosts = async (req, res) => {
