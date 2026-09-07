@@ -1,4 +1,4 @@
-// src/pages/BlogPostPage.jsx - COMPLETE WITH API INTEGRATION
+// src/pages/BlogPostPage.jsx - FIXED (public access)
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -44,7 +44,7 @@ const ReactPlayer = lazy(() => import('react-player'));
 const BlogPostPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth(); // Get auth state
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [liked, setLiked] = useState(false);
@@ -66,7 +66,7 @@ const BlogPostPage = () => {
       try {
         setLoading(true);
         
-        // Fetch post by slug or ID
+        // Fetch post by slug or ID - PUBLIC endpoint
         const response = await blogAPI.getPostBySlug(id);
         
         if (response.success) {
@@ -77,13 +77,13 @@ const BlogPostPage = () => {
           setLikesCount(data.likes || 0);
           setViewsCount(data.views || 0);
           
-          // Check if user has liked this post
-          if (user && data.likedBy) {
+          // Check if user has liked this post (only if authenticated)
+          if (isAuthenticated && user && data.likedBy) {
             setLiked(data.likedBy.includes(user._id));
           }
           
-          // Check if user has bookmarked this post
-          if (user && data.bookmarkedBy) {
+          // Check if user has bookmarked this post (only if authenticated)
+          if (isAuthenticated && user && data.bookmarkedBy) {
             setBookmarked(data.bookmarkedBy.includes(user._id));
           }
           
@@ -104,10 +104,10 @@ const BlogPostPage = () => {
     
     fetchPost();
     window.scrollTo(0, 0);
-  }, [id, navigate, user]);
+  }, [id, navigate, user, isAuthenticated]);
 
   const handleLike = async () => {
-    if (!user) {
+    if (!isAuthenticated) {
       toast.error('Please login to like posts');
       return;
     }
@@ -127,19 +127,15 @@ const BlogPostPage = () => {
   };
 
   const handleBookmark = async () => {
-    if (!user) {
+    if (!isAuthenticated) {
       toast.error('Please login to bookmark posts');
       return;
     }
     
     try {
-      // Use the toggleFeatured or similar endpoint, or create a bookmark endpoint
-      // For now, we'll toggle locally
+      // Toggle locally
       setBookmarked(!bookmarked);
       toast.success(bookmarked ? 'Removed from bookmarks' : 'Added to bookmarks');
-      
-      // In a real implementation, you'd call an API endpoint
-      // await blogAPI.toggleBookmark(post._id);
     } catch (error) {
       console.error('Error bookmarking post:', error);
       toast.error('Failed to bookmark post');
@@ -151,7 +147,7 @@ const BlogPostPage = () => {
     e.preventDefault();
     if (!commentText.trim()) return;
     
-    if (!user) {
+    if (!isAuthenticated) {
       toast.error('Please login to comment');
       return;
     }
@@ -611,45 +607,59 @@ const BlogPostPage = () => {
                   Comments ({comments.length})
                 </h3>
 
-                {/* Comment Form */}
-                <form onSubmit={handleCommentSubmit} className="mb-8">
-                  <div className="flex gap-3">
-                    {user?.avatar ? (
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                        {user?.name?.charAt(0) || 'G'}
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <textarea
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        placeholder={user ? "Share your thoughts on this article..." : "Please login to comment"}
-                        disabled={!user}
-                        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none resize-none text-gray-700 dark:text-gray-300 min-h-[80px] transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        rows={3}
-                      />
-                      <div className="flex justify-end mt-2">
-                        <button
-                          type="submit"
-                          disabled={!user || submittingComment || !commentText.trim()}
-                          className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                          {submittingComment ? (
-                            <FaSpinner className="animate-spin" />
-                          ) : (
-                            'Post Comment'
-                          )}
-                        </button>
+                {/* Comment Form - Only show if authenticated */}
+                {isAuthenticated ? (
+                  <form onSubmit={handleCommentSubmit} className="mb-8">
+                    <div className="flex gap-3">
+                      {user?.avatar ? (
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                          {user?.name?.charAt(0) || 'G'}
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <textarea
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          placeholder="Share your thoughts on this article..."
+                          className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none resize-none text-gray-700 dark:text-gray-300 min-h-[80px] transition"
+                          rows={3}
+                        />
+                        <div className="flex justify-end mt-2">
+                          <button
+                            type="submit"
+                            disabled={submittingComment || !commentText.trim()}
+                            className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {submittingComment ? (
+                              <FaSpinner className="animate-spin" />
+                            ) : (
+                              'Post Comment'
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  </form>
+                ) : (
+                  <div className="mb-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl text-center">
+                    <p className="text-gray-600 dark:text-gray-400">
+                      <Link to="/login" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                        Login
+                      </Link>{' '}
+                      or{' '}
+                      <Link to="/signup" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                        Sign up
+                      </Link>{' '}
+                      to join the conversation
+                    </p>
                   </div>
-                </form>
+                )}
 
                 {/* Comments List */}
                 <div className="space-y-4">

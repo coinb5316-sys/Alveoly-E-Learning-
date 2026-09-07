@@ -8,7 +8,8 @@ const blogAPI = {
   // Get all blog posts with pagination and filters
   getPosts: async (params = {}) => {
     try {
-      const response = await API.get("/blogs/posts", { params });
+      // FIXED: Use /blog/posts (public)
+      const response = await API.get("/blog/posts", { params });
       return response.data;
     } catch (error) {
       console.error("Error fetching blog posts:", error);
@@ -19,7 +20,8 @@ const blogAPI = {
   // Get a single blog post by ID
   getPostById: async (id) => {
     try {
-      const response = await API.get(`/blogs/posts/${id}`);
+      // FIXED: Use /blog/posts (public)
+      const response = await API.get(`/blog/posts/${id}`);
       return response.data;
     } catch (error) {
       console.error("Error fetching blog post:", error);
@@ -30,7 +32,8 @@ const blogAPI = {
   // Get a single blog post by slug
   getPostBySlug: async (slug) => {
     try {
-      const response = await API.get(`/blogs/posts/slug/${slug}`);
+      // FIXED: Use /blog/posts/slug (public)
+      const response = await API.get(`/blog/posts/slug/${slug}`);
       return response.data;
     } catch (error) {
       console.error("Error fetching blog post by slug:", error);
@@ -41,6 +44,7 @@ const blogAPI = {
   // Create a new blog post (Admin only)
   createPost: async (formData) => {
     try {
+      // FIXED: Use /admin/blog/posts (admin only)
       const response = await API.post("/admin/blog/posts", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -138,10 +142,10 @@ const blogAPI = {
 
   // ==================== CATEGORY OPERATIONS ====================
 
-  // Get all categories
+  // Get all categories - FIXED: Use /blog/categories (public)
   getCategories: async () => {
     try {
-      const response = await API.get("/admin/blog/categories");
+      const response = await API.get("/blog/categories");
       return response.data;
     } catch (error) {
       console.error("Error fetching categories:", error);
@@ -152,7 +156,7 @@ const blogAPI = {
   // Get category by slug
   getCategoryBySlug: async (slug) => {
     try {
-      const response = await API.get(`/admin/blog/categories/${slug}`);
+      const response = await API.get(`/blog/categories/${slug}`);
       return response.data;
     } catch (error) {
       console.error("Error fetching category:", error);
@@ -195,10 +199,10 @@ const blogAPI = {
 
   // ==================== COMMENT OPERATIONS ====================
 
-  // Get comments for a post
+  // Get comments for a post - FIXED: Use /blog/comments (public)
   getComments: async (postId, params = {}) => {
     try {
-      const response = await API.get(`/admin/blog/comments/${postId}`, { params });
+      const response = await API.get(`/blog/comments/${postId}`, { params });
       return response.data;
     } catch (error) {
       console.error("Error fetching comments:", error);
@@ -206,10 +210,10 @@ const blogAPI = {
     }
   },
 
-  // Add a comment
+  // Add a comment - FIXED: Use /blog/comments (public)
   addComment: async (postId, data) => {
     try {
-      const response = await API.post(`/blogs/comments/${postId}`, data);
+      const response = await API.post(`/blog/comments/${postId}`, data);
       return response.data;
     } catch (error) {
       console.error("Error adding comment:", error);
@@ -366,10 +370,10 @@ const blogAPI = {
 
   // ==================== SEARCH OPERATIONS ====================
 
-  // Search posts
+  // Search posts - FIXED: Use /blog/posts/search (public)
   searchPosts: async (query, params = {}) => {
     try {
-      const response = await API.get("/blogs/posts/search", {
+      const response = await API.get("/blog/posts/search", {
         params: { q: query, ...params },
       });
       return response.data;
@@ -379,10 +383,10 @@ const blogAPI = {
     }
   },
 
-  // Get posts by category
+  // Get posts by category - FIXED: Use /blog/posts/category (public)
   getPostsByCategory: async (category, params = {}) => {
     try {
-      const response = await API.get(`/blogs/posts/category/${category}`, { params });
+      const response = await API.get(`/blog/posts/category/${category}`, { params });
       return response.data;
     } catch (error) {
       console.error("Error fetching posts by category:", error);
@@ -390,10 +394,10 @@ const blogAPI = {
     }
   },
 
-  // Get posts by author
+  // Get posts by author - FIXED: Use /blog/posts/author (public)
   getPostsByAuthor: async (authorId, params = {}) => {
     try {
-      const response = await API.get(`/blogs/posts/author/${authorId}`, { params });
+      const response = await API.get(`/blog/posts/author/${authorId}`, { params });
       return response.data;
     } catch (error) {
       console.error("Error fetching posts by author:", error);
@@ -401,10 +405,10 @@ const blogAPI = {
     }
   },
 
-  // Get related posts
+  // Get related posts - FIXED: Use /blog/posts (public)
   getRelatedPosts: async (id) => {
     try {
-      const response = await API.get(`/blogs/posts/${id}/related`);
+      const response = await API.get(`/blog/posts/${id}/related`);
       return response.data;
     } catch (error) {
       console.error("Error fetching related posts:", error);
@@ -412,10 +416,10 @@ const blogAPI = {
     }
   },
 
-  // Increment views
+  // Increment views - FIXED: Use /blog/posts (public)
   incrementViews: async (id) => {
     try {
-      const response = await API.post(`/blogs/posts/${id}/view`);
+      const response = await API.post(`/blog/posts/${id}/view`);
       return response.data;
     } catch (error) {
       console.error("Error incrementing views:", error);
@@ -423,10 +427,10 @@ const blogAPI = {
     }
   },
 
-  // Toggle like
+  // Toggle like - FIXED: Use /blog/posts (public)
   toggleLike: async (id) => {
     try {
-      const response = await API.post(`/blogs/posts/${id}/like`);
+      const response = await API.post(`/blog/posts/${id}/like`);
       return response.data;
     } catch (error) {
       console.error("Error toggling like:", error);

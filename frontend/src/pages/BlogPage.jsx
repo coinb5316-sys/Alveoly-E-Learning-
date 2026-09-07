@@ -1,4 +1,4 @@
-// src/pages/BlogPage.jsx - COMPLETE WITH API INTEGRATION
+// src/pages/BlogPage.jsx - FIXED
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -45,9 +45,11 @@ import {
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../api/blogApi';
+import { useAuth } from '../context/AuthContext'; // Import useAuth
 
 const BlogPage = () => {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth(); // Get auth state
   const [posts, setPosts] = useState([]);
   const [featuredPost, setFeaturedPost] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -65,13 +67,13 @@ const BlogPage = () => {
   const [selectedTags, setSelectedTags] = useState([]);
   const [authorStats, setAuthorStats] = useState([]);
 
-  // Fetch data
+  // Fetch data - NO AUTH REQUIRED
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         
-        // Fetch posts with filters
+        // Fetch posts with filters - PUBLIC endpoint
         const postsResult = await blogAPI.getPosts({
           page: currentPage,
           limit: 6,
@@ -92,7 +94,7 @@ const BlogPage = () => {
           toast.error(postsResult.message || 'Failed to load posts');
         }
         
-        // Fetch categories
+        // Fetch categories - PUBLIC endpoint
         const categoriesResult = await blogAPI.getCategories();
         if (categoriesResult.success) {
           setCategories(categoriesResult.data || []);
@@ -132,8 +134,12 @@ const BlogPage = () => {
     );
   };
 
-  // Handle bookmark toggle
+  // Handle bookmark toggle - requires auth
   const handleBookmark = (postId) => {
+    if (!isAuthenticated) {
+      toast.error('Please login to bookmark posts');
+      return;
+    }
     setBookmarks(prev => 
       prev.includes(postId) 
         ? prev.filter(id => id !== postId)
@@ -471,7 +477,7 @@ const BlogPage = () => {
                           ))}
                         </div>
                       )}
-                      {bookmarks.includes(post._id || post.id) && (
+                      {isAuthenticated && bookmarks.includes(post._id || post.id) && (
                         <div className="absolute top-3 right-3 p-1.5 bg-yellow-500 rounded-full">
                           <FaBookmark className="text-white text-xs" />
                         </div>
@@ -536,19 +542,21 @@ const BlogPage = () => {
                           </span>
                         </Link>
                         <div className="flex items-center gap-3 text-gray-400 text-sm">
-                          <button 
-                            onClick={(e) => {
-                              e.preventDefault();
-                              handleBookmark(post._id || post.id);
-                            }}
-                            className="hover:text-yellow-500 transition"
-                          >
-                            {bookmarks.includes(post._id || post.id) ? (
-                              <FaBookmark className="text-yellow-500" />
-                            ) : (
-                              <FaRegBookmark />
-                            )}
-                          </button>
+                          {isAuthenticated && (
+                            <button 
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleBookmark(post._id || post.id);
+                              }}
+                              className="hover:text-yellow-500 transition"
+                            >
+                              {bookmarks.includes(post._id || post.id) ? (
+                                <FaBookmark className="text-yellow-500" />
+                              ) : (
+                                <FaRegBookmark />
+                              )}
+                            </button>
+                          )}
                           <span className="flex items-center gap-1">
                             <FaHeart className="text-red-400" />
                             {post.likes || 0}

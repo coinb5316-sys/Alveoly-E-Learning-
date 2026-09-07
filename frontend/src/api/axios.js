@@ -1,4 +1,4 @@
-// api/axios.js - FIXED
+// src/api/axios.js - FIXED
 import axios from "axios";
 
 const API_BASE_URL = "https://alveoly-e-learning-755w.onrender.com";
@@ -55,9 +55,28 @@ API.interceptors.response.use(
       console.error("   URL:", error.config?.url);
       showNetworkError();
     } else if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
+      // FIXED: Only redirect to login for protected routes
+      // Check if the request was for a public blog endpoint
+      const url = error.config?.url || '';
+      const isBlogPublicRoute = 
+        url.includes('/blog/posts') || 
+        url.includes('/blog/categories') || 
+        url.includes('/blog/comments') ||
+        url.includes('/blog/posts/search') ||
+        url.includes('/blog/posts/category') ||
+        url.includes('/blog/posts/author');
+      
+      // Only redirect to login if it's NOT a public blog route
+      if (!isBlogPublicRoute) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        // Don't redirect if we're on a blog page
+        if (!window.location.pathname.includes('/blog')) {
+          window.location.href = "/login";
+        }
+      } else {
+        console.warn("⚠️ Public blog route returned 401 - ignoring");
+      }
     } else if (error.response) {
       console.error(`❌ ${error.response.status} Error:`, error.response.data?.message);
     }
