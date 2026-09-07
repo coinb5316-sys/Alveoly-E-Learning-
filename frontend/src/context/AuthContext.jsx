@@ -83,9 +83,11 @@ export const AuthProvider = ({ children }) => {
       return res.data;
     } catch (err) {
       console.error("Fetch user error:", err);
+      // Only clear auth on 401 (unauthorized) errors
       if (err.response?.status === 401) {
         clearAuth();
       }
+      // For other errors (like network), keep the token but mark loading as false
       return null;
     } finally {
       setLoading(false);
@@ -131,7 +133,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= NON-ALVEOLY REGISTER - NOW WORKS EXACTLY LIKE GOOGLE LOGIN =================
+  // ================= NON-ALVEOLY REGISTER =================
   const registerNonAlveoly = async (form) => {
     try {
       console.log("📝 Registering non-alveoly student with form:", form);
@@ -141,8 +143,6 @@ export const AuthProvider = ({ children }) => {
       
       const { token: newToken, user: userData, requiresPlan, userId } = res.data;
       
-      // CRITICAL: Set auth EXACTLY like googleLogin does
-      // This sets localStorage, token state, user state, and isAuthenticated
       setAuth(newToken, userData);
       
       return { 
