@@ -36,7 +36,7 @@ import {
   createTag
 } from "../controllers/adminBlogController.js";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
-import { upload } from "../config/multer.js";
+import { upload } from "../../config/multer.js";
 
 const router = express.Router();
 

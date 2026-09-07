@@ -1,11 +1,13 @@
-// controllers/adminBlogController.js - UPDATED
+// controllers/adminBlogController.js - FIXED IMPORTS
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
 import BlogComment from "../models/BlogComment.js";
 import User from "../models/User.js";
-import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../config/cloudinary.js";
-import { emitAdminNotification } from "../../server.js";
+// FIX: Import from root config folder (../../config/)
+import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
+// FIX: Import notification service
+import { emitAdminNotification } from "../services/notificationService.js";
 
 // ==================== POST MANAGEMENT ====================
 
