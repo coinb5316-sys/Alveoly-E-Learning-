@@ -1,4 +1,4 @@
-// models/BlogPost.js - COMPLETE FIXED
+// models/BlogPost.js - SIMPLIFIED (No pre-save middleware)
 import mongoose from "mongoose";
 
 const blogPostSchema = new mongoose.Schema({
@@ -28,7 +28,6 @@ const blogPostSchema = new mongoose.Schema({
   }],
   featuredImage: {
     type: String
-    // Removed required: true to allow drafts without image
   },
   galleryImages: [{
     type: String
@@ -138,48 +137,10 @@ const blogPostSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// ================= FIXED: Pre-save middleware =================
-// IMPORTANT: Must use function declaration, not arrow function
-// And must call next() properly
-blogPostSchema.pre("save", function(next) {
-  try {
-    // Generate slug from title if not exists
-    if (this.title && !this.slug) {
-      this.slug = this.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-    }
-    
-    // Auto-calculate reading time from content
-    if (this.content) {
-      // Strip HTML tags and count words
-      const text = this.content.replace(/<[^>]*>/g, " ");
-      const words = text.split(/\s+/).filter(word => word.length > 0).length;
-      this.readingTime = Math.max(1, Math.round(words / 200));
-    }
-    
-    // Set isPublished based on status
-    if (this.status === "published") {
-      this.isPublished = true;
-      if (!this.publishDate) {
-        this.publishDate = new Date();
-      }
-    } else {
-      this.isPublished = false;
-    }
-    
-    // Call next() to proceed
-    next();
-  } catch (error) {
-    // Pass error to next
-    next(error);
-  }
-});
+// ================= NO MIDDLEWARE - Handle slug and reading time in controller =================
+// This avoids the "next is not a function" error entirely
 
 // ================= FIXED: Remove duplicate indexes =================
-// Only keep the schema.index() calls, remove any index: true from schema fields
-// Schema indexes for better query performance
 blogPostSchema.index({ slug: 1 });
 blogPostSchema.index({ category: 1 });
 blogPostSchema.index({ tags: 1 });
