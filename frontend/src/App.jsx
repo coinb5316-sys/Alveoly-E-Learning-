@@ -113,7 +113,7 @@ import AdminCreateBlogPost from "./pages/admin/blog/AdminCreateBlogPost";
 import AdminBlogCategories from "./pages/admin/blog/AdminBlogCategories";
 import AdminBlogAuthors from "./pages/admin/blog/AdminBlogAuthors";
 import AdminBlogTags from "./pages/admin/blog/AdminBlogTags";
-import AdminBlogComments from "./pages/admin/AdminBlogComments";
+import AdminBlogComments from "./pages/admin/blog/AdminBlogComments";
 import AdminBlogPosts from "./pages/admin/blog/AdminBlogPosts";
 
 function App() {
