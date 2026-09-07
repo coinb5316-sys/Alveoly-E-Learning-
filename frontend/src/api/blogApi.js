@@ -1,4 +1,4 @@
-// src/api/blogApi.js - FIXED (use default import)
+// src/api/blogApi.js - FIXED RESPONSE HANDLING
 import API from "./axios";
 
 // Base API service for blog operations
@@ -313,6 +313,7 @@ const blogAPI = {
   getTags: async (params = {}) => {
     try {
       const response = await API.get("/admin/blog/tags", { params });
+      // FIX: Return the data directly - the controller returns { success: true, data: [...] }
       return response.data;
     } catch (error) {
       console.error("Error fetching tags:", error);

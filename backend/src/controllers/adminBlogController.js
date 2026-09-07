@@ -289,10 +289,13 @@ export const deleteAuthor = async (req, res) => {
 
 // ==================== TAG MANAGEMENT ====================
 
-// Get all tags - from posts aggregation
+// controllers/adminBlogController.js - Add this fix at the end of getAllTags function
+
 export const getAllTags = async (req, res) => {
   try {
     const { search } = req.query;
+
+    console.log('Fetching tags with search:', search);
 
     // Build aggregation pipeline
     let pipeline = [
@@ -317,15 +320,24 @@ export const getAllTags = async (req, res) => {
     }
 
     const tags = await BlogPost.aggregate(pipeline);
+    
+    console.log('Aggregated tags:', tags);
 
+    // FIX: Map tags with proper _id field
+    const formattedTags = tags.map(tag => ({
+      _id: tag._id, // Use the tag name as _id
+      id: tag._id, // Also provide id for compatibility
+      name: tag._id,
+      slug: tag._id.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
+      count: tag.count,
+      color: getTagColor(tag._id),
+      createdAt: new Date().toISOString() // Add a default date
+    }));
+
+    // Return in the expected format
     res.json({
       success: true,
-      data: tags.map(tag => ({
-        name: tag._id,
-        slug: tag._id.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
-        count: tag.count,
-        color: getTagColor(tag._id)
-      }))
+      data: formattedTags
     });
   } catch (error) {
     console.error("Get tags error:", error);
@@ -337,7 +349,6 @@ export const getAllTags = async (req, res) => {
   }
 };
 
-// Create tag - just check if it exists in posts
 export const createTag = async (req, res) => {
   try {
     const { name, color } = req.body;
@@ -366,15 +377,18 @@ export const createTag = async (req, res) => {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    // Return the created tag (it will be added to posts when used)
+    // FIX: Return the created tag with _id
     res.status(201).json({
       success: true,
       message: "Tag created successfully",
       data: {
+        _id: name.trim(), // Use name as _id
+        id: name.trim(),
         name: name.trim(),
         slug,
         color: color || '#3b82f6',
-        count: 0
+        count: 0,
+        createdAt: new Date().toISOString()
       }
     });
   } catch (error) {

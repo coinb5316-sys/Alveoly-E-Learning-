@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminBlogTags.jsx - COMPLETE FIXED
+// src/pages/admin/blog/AdminBlogTags.jsx - FIXED DATA HANDLING
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -48,14 +48,30 @@ const AdminBlogTags = () => {
       setLoading(true);
       const response = await blogAPI.getTags();
       
-      if (response.success) {
-        setTags(response.data || []);
+      console.log('Tags API Response:', response);
+      
+      // FIX: Check the response structure correctly
+      if (response && response.success) {
+        // The data is in response.data
+        const tagsData = response.data || [];
+        console.log('Tags data:', tagsData);
+        setTags(tagsData);
       } else {
-        toast.error(response.message || 'Failed to load tags');
+        // If response doesn't have success flag, try to use response directly
+        if (Array.isArray(response)) {
+          setTags(response);
+        } else if (response && response.data && Array.isArray(response.data)) {
+          setTags(response.data);
+        } else {
+          console.warn('Unexpected response format:', response);
+          setTags([]);
+          toast.error('Unexpected response format from server');
+        }
       }
     } catch (error) {
       console.error('Error fetching tags:', error);
       toast.error(error.response?.data?.message || 'Failed to load tags');
+      setTags([]);
     } finally {
       setLoading(false);
     }
@@ -157,12 +173,14 @@ const AdminBlogTags = () => {
         response = await blogAPI.createTag(formData);
       }
       
-      if (response.success) {
+      console.log('Save tag response:', response);
+      
+      if (response && response.success) {
         toast.success(editingTag ? 'Tag updated successfully' : 'Tag created successfully');
-        fetchTags();
+        await fetchTags(); // Refresh the list
         handleCloseModal();
       } else {
-        toast.error(response.message || 'Failed to save tag');
+        toast.error(response?.message || 'Failed to save tag');
       }
     } catch (error) {
       console.error('Error saving tag:', error);
@@ -177,11 +195,11 @@ const AdminBlogTags = () => {
     
     try {
       const response = await blogAPI.deleteTag(id);
-      if (response.success) {
+      if (response && response.success) {
         toast.success('Tag deleted successfully');
-        fetchTags();
+        await fetchTags(); // Refresh the list
       } else {
-        toast.error(response.message || 'Failed to delete tag');
+        toast.error(response?.message || 'Failed to delete tag');
       }
     } catch (error) {
       console.error('Error deleting tag:', error);
@@ -202,10 +220,10 @@ const AdminBlogTags = () => {
     return color || '#3b82f6';
   };
 
-  // FIX: Define filteredTags here
+  // Filter tags
   const filteredTags = tags.filter(tag =>
-    tag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tag.slug.toLowerCase().includes(searchTerm.toLowerCase())
+    tag.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tag.slug?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
@@ -255,7 +273,7 @@ const AdminBlogTags = () => {
         </div>
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {tags.filter(t => t.count > 0).length}
+            {tags.filter(t => (t.count || 0) > 0).length}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">Active Tags</p>
         </div>
@@ -267,7 +285,7 @@ const AdminBlogTags = () => {
         </div>
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
           <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-            {tags.filter(t => t.count > 5).length}
+            {tags.filter(t => (t.count || 0) > 5).length}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">Popular Tags</p>
         </div>
@@ -308,7 +326,7 @@ const AdminBlogTags = () => {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filteredTags.map((tag) => (
             <motion.div
-              key={tag._id || tag.id}
+              key={tag._id || tag.id || tag.name}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.2 }}
@@ -333,12 +351,14 @@ const AdminBlogTags = () => {
                       <Hash className="h-3 w-3" />
                       {tag.count || 0} posts
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {formatDate(tag.createdAt)}
-                    </span>
+                    {tag.createdAt && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(tag.createdAt)}
+                      </span>
+                    )}
                   </div>
-                  {tag.count > 5 && (
+                  {(tag.count || 0) > 5 && (
                     <div className="mt-1">
                       <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full">
                         Popular
@@ -368,7 +388,7 @@ const AdminBlogTags = () => {
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create/Edit Modal - Same as before */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <motion.div
