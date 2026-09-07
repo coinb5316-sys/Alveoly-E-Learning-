@@ -1,4 +1,4 @@
-// controllers/adminBlogController.js - FIXED IMPORTS
+// controllers/adminBlogController.js - COMPLETE FIXED
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
@@ -6,8 +6,6 @@ import BlogComment from "../models/BlogComment.js";
 import User from "../models/User.js";
 // FIX: Import from root config folder (../../config/)
 import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
-// FIX: Import notification service
-import { emitAdminNotification } from "../services/notificationService.js";
 
 // ==================== POST MANAGEMENT ====================
 
@@ -289,13 +287,22 @@ export const deleteAuthor = async (req, res) => {
 
 // ==================== TAG MANAGEMENT ====================
 
-// controllers/adminBlogController.js - Add this fix at the end of getAllTags function
+const getTagColor = (tagName) => {
+  const colors = [
+    "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444",
+    "#ec4899", "#14b8a6", "#f97316", "#06b6d4", "#6366f1",
+    "#84cc16", "#d946ef", "#f43f5e", "#0ea5e9", "#22d3ee",
+    "#a855f7", "#ec4899", "#14b8a6", "#f43f5e", "#22c55e"
+  ];
+  const index = tagName.length % colors.length;
+  return colors[index];
+};
 
 export const getAllTags = async (req, res) => {
   try {
     const { search } = req.query;
 
-    console.log('Fetching tags with search:', search);
+    console.log('📋 Fetching tags with search:', search);
 
     // Build aggregation pipeline
     let pipeline = [
@@ -321,29 +328,63 @@ export const getAllTags = async (req, res) => {
 
     const tags = await BlogPost.aggregate(pipeline);
     
-    console.log('Aggregated tags:', tags);
+    console.log('📊 Aggregated tags:', tags);
 
-    // FIX: Map tags with proper _id field
+    // Format tags with proper _id field
     const formattedTags = tags.map(tag => ({
-      _id: tag._id, // Use the tag name as _id
-      id: tag._id, // Also provide id for compatibility
+      _id: tag._id,
+      id: tag._id,
       name: tag._id,
       slug: tag._id.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
       count: tag.count,
       color: getTagColor(tag._id),
-      createdAt: new Date().toISOString() // Add a default date
+      createdAt: new Date().toISOString()
     }));
 
-    // Return in the expected format
     res.json({
       success: true,
       data: formattedTags
     });
   } catch (error) {
-    console.error("Get tags error:", error);
+    console.error("❌ Get tags error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch tags",
+      error: error.message
+    });
+  }
+};
+
+export const getTagBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const tagName = slug.replace(/-/g, " ");
+
+    const posts = await BlogPost.find({
+      tags: { $in: [tagName] }
+    })
+      .populate("author", "name email avatar role")
+      .sort({ publishDate: -1 })
+      .lean();
+
+    const count = await BlogPost.countDocuments({
+      tags: { $in: [tagName] }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        name: tagName,
+        slug,
+        count,
+        posts
+      }
+    });
+  } catch (error) {
+    console.error("Get tag by slug error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch tag",
       error: error.message
     });
   }
@@ -353,7 +394,7 @@ export const createTag = async (req, res) => {
   try {
     const { name, color } = req.body;
 
-    console.log("Creating tag with data:", { name, color });
+    console.log("📝 Creating tag with data:", { name, color });
 
     if (!name) {
       return res.status(400).json({
@@ -377,12 +418,11 @@ export const createTag = async (req, res) => {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    // FIX: Return the created tag with _id
     res.status(201).json({
       success: true,
       message: "Tag created successfully",
       data: {
-        _id: name.trim(), // Use name as _id
+        _id: name.trim(),
         id: name.trim(),
         name: name.trim(),
         slug,
@@ -392,7 +432,7 @@ export const createTag = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Create tag error:", error);
+    console.error("❌ Create tag error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to create tag",
@@ -401,7 +441,6 @@ export const createTag = async (req, res) => {
   }
 };
 
-// Update tag - update in all posts
 export const updateTag = async (req, res) => {
   try {
     const { id } = req.params;
@@ -459,7 +498,6 @@ export const updateTag = async (req, res) => {
   }
 };
 
-// Delete tag - remove from all posts
 export const deleteTag = async (req, res) => {
   try {
     const { id } = req.params;
@@ -482,50 +520,4 @@ export const deleteTag = async (req, res) => {
       error: error.message
     });
   }
-};
-
-export const getTagBySlug = async (req, res) => {
-  try {
-    const { slug } = req.params;
-    const tagName = slug.replace(/-/g, " ");
-
-    const posts = await BlogPost.find({
-      tags: { $in: [tagName] }
-    })
-      .populate("author", "name email avatar role")
-      .sort({ publishDate: -1 })
-      .lean();
-
-    const count = await BlogPost.countDocuments({
-      tags: { $in: [tagName] }
-    });
-
-    res.json({
-      success: true,
-      data: {
-        name: tagName,
-        slug,
-        count,
-        posts
-      }
-    });
-  } catch (error) {
-    console.error("Get tag by slug error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch tag",
-      error: error.message
-    });
-  }
-};
-
-const getTagColor = (tagName) => {
-  const colors = [
-    "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444",
-    "#ec4899", "#14b8a6", "#f97316", "#06b6d4", "#6366f1",
-    "#84cc16", "#d946ef", "#f43f5e", "#0ea5e9", "#22d3ee",
-    "#a855f7", "#ec4899", "#14b8a6", "#f43f5e", "#22c55e"
-  ];
-  const index = tagName.length % colors.length;
-  return colors[index];
 };

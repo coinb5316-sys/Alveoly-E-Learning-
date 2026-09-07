@@ -2,7 +2,6 @@
 import multer from "multer";
 
 // Use memory storage - files are stored in memory as Buffer
-// This is ideal for serverless/cloud deployments like Render
 const storage = multer.memoryStorage();
 
 // File filter for images only
@@ -28,7 +27,7 @@ const upload = multer({
 const uploadMultiple = multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit per file
+    fileSize: 10 * 1024 * 1024
   },
   fileFilter: imageFilter
 }).array("galleryImages", 10);
@@ -37,7 +36,7 @@ const uploadMultiple = multer({
 const uploadAny = multer({
   storage: storage,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit
+    fileSize: 50 * 1024 * 1024
   }
 });
 

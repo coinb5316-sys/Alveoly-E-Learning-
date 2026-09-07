@@ -1,4 +1,4 @@
-// routes/adminBlogRoutes.js - FULLY FIXED
+// routes/adminBlogRoutes.js - COMPLETE FIXED
 import express from "express";
 import {
   // Posts - from blogController
@@ -17,7 +17,7 @@ import {
   getCategoryBySlug,
   updateCategory,
   deleteCategory,
-  // Comments - from blogController (these exist there)
+  // Comments - from blogController
   getComments,
   approveComment,
   rejectComment,
@@ -38,7 +38,7 @@ import {
   deleteTag,
   createTag
 } from "../controllers/adminBlogController.js";
-// routes/adminBlogRoutes.js - Add at the top
+
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 import { upload } from "../../config/multer.js";
 

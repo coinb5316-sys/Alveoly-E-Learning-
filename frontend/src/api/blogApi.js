@@ -1,4 +1,4 @@
-// src/api/blogApi.js - FIXED RESPONSE HANDLING
+// src/api/blogApi.js - COMPLETE FIXED
 import API from "./axios";
 
 // Base API service for blog operations
@@ -41,7 +41,7 @@ const blogAPI = {
   // Create a new blog post (Admin only)
   createPost: async (formData) => {
     try {
-      const response = await API.post("/blogs/posts", formData, {
+      const response = await API.post("/admin/blog/posts", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -56,7 +56,7 @@ const blogAPI = {
   // Update a blog post (Admin only)
   updatePost: async (id, formData) => {
     try {
-      const response = await API.put(`/blogs/posts/${id}`, formData, {
+      const response = await API.put(`/admin/blog/posts/${id}`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -71,7 +71,7 @@ const blogAPI = {
   // Delete a blog post (Admin only)
   deletePost: async (id) => {
     try {
-      const response = await API.delete(`/blogs/posts/${id}`);
+      const response = await API.delete(`/admin/blog/posts/${id}`);
       return response.data;
     } catch (error) {
       console.error("Error deleting blog post:", error);
@@ -82,7 +82,7 @@ const blogAPI = {
   // Bulk delete posts (Admin only)
   bulkDeletePosts: async (postIds) => {
     try {
-      const response = await API.delete("/blogs/posts/bulk", {
+      const response = await API.delete("/admin/blog/posts/bulk", {
         data: { postIds },
       });
       return response.data;
@@ -95,7 +95,7 @@ const blogAPI = {
   // Toggle featured status (Admin only)
   toggleFeatured: async (id) => {
     try {
-      const response = await API.patch(`/blogs/posts/${id}/featured`);
+      const response = await API.patch(`/admin/blog/posts/${id}/featured`);
       return response.data;
     } catch (error) {
       console.error("Error toggling featured:", error);
@@ -106,7 +106,7 @@ const blogAPI = {
   // Publish a blog post (Admin only)
   publishPost: async (id) => {
     try {
-      const response = await API.patch(`/blogs/posts/${id}/publish`);
+      const response = await API.patch(`/admin/blog/posts/${id}/publish`);
       return response.data;
     } catch (error) {
       console.error("Error publishing post:", error);
@@ -117,7 +117,7 @@ const blogAPI = {
   // Archive a blog post (Admin only)
   archivePost: async (id) => {
     try {
-      const response = await API.patch(`/blogs/posts/${id}/archive`);
+      const response = await API.patch(`/admin/blog/posts/${id}/archive`);
       return response.data;
     } catch (error) {
       console.error("Error archiving post:", error);
@@ -128,7 +128,7 @@ const blogAPI = {
   // Get post stats (Admin only)
   getPostStats: async () => {
     try {
-      const response = await API.get("/blogs/posts/stats");
+      const response = await API.get("/admin/blog/posts/stats");
       return response.data;
     } catch (error) {
       console.error("Error fetching post stats:", error);
@@ -141,7 +141,7 @@ const blogAPI = {
   // Get all categories
   getCategories: async () => {
     try {
-      const response = await API.get("/blogs/categories");
+      const response = await API.get("/admin/blog/categories");
       return response.data;
     } catch (error) {
       console.error("Error fetching categories:", error);
@@ -152,7 +152,7 @@ const blogAPI = {
   // Get category by slug
   getCategoryBySlug: async (slug) => {
     try {
-      const response = await API.get(`/blogs/categories/${slug}`);
+      const response = await API.get(`/admin/blog/categories/${slug}`);
       return response.data;
     } catch (error) {
       console.error("Error fetching category:", error);
@@ -163,7 +163,7 @@ const blogAPI = {
   // Create a new category (Admin only)
   createCategory: async (data) => {
     try {
-      const response = await API.post("/blogs/categories", data);
+      const response = await API.post("/admin/blog/categories", data);
       return response.data;
     } catch (error) {
       console.error("Error creating category:", error);
@@ -174,7 +174,7 @@ const blogAPI = {
   // Update a category (Admin only)
   updateCategory: async (id, data) => {
     try {
-      const response = await API.put(`/blogs/categories/${id}`, data);
+      const response = await API.put(`/admin/blog/categories/${id}`, data);
       return response.data;
     } catch (error) {
       console.error("Error updating category:", error);
@@ -185,7 +185,7 @@ const blogAPI = {
   // Delete a category (Admin only)
   deleteCategory: async (id) => {
     try {
-      const response = await API.delete(`/blogs/categories/${id}`);
+      const response = await API.delete(`/admin/blog/categories/${id}`);
       return response.data;
     } catch (error) {
       console.error("Error deleting category:", error);
@@ -198,7 +198,7 @@ const blogAPI = {
   // Get comments for a post
   getComments: async (postId, params = {}) => {
     try {
-      const response = await API.get(`/blogs/comments/${postId}`, { params });
+      const response = await API.get(`/admin/blog/comments/${postId}`, { params });
       return response.data;
     } catch (error) {
       console.error("Error fetching comments:", error);
@@ -220,7 +220,7 @@ const blogAPI = {
   // Approve a comment (Admin only)
   approveComment: async (id) => {
     try {
-      const response = await API.put(`/blogs/comments/${id}/approve`);
+      const response = await API.put(`/admin/blog/comments/${id}/approve`);
       return response.data;
     } catch (error) {
       console.error("Error approving comment:", error);
@@ -231,7 +231,7 @@ const blogAPI = {
   // Reject a comment (Admin only)
   rejectComment: async (id) => {
     try {
-      const response = await API.put(`/blogs/comments/${id}/reject`);
+      const response = await API.put(`/admin/blog/comments/${id}/reject`);
       return response.data;
     } catch (error) {
       console.error("Error rejecting comment:", error);
@@ -242,7 +242,7 @@ const blogAPI = {
   // Delete a comment (Admin only)
   deleteComment: async (id) => {
     try {
-      const response = await API.delete(`/blogs/comments/${id}`);
+      const response = await API.delete(`/admin/blog/comments/${id}`);
       return response.data;
     } catch (error) {
       console.error("Error deleting comment:", error);
@@ -253,7 +253,7 @@ const blogAPI = {
   // Get comment stats (Admin only)
   getCommentStats: async () => {
     try {
-      const response = await API.get("/blogs/comments/stats");
+      const response = await API.get("/admin/blog/comments/stats");
       return response.data;
     } catch (error) {
       console.error("Error fetching comment stats:", error);
@@ -313,7 +313,6 @@ const blogAPI = {
   getTags: async (params = {}) => {
     try {
       const response = await API.get("/admin/blog/tags", { params });
-      // FIX: Return the data directly - the controller returns { success: true, data: [...] }
       return response.data;
     } catch (error) {
       console.error("Error fetching tags:", error);
