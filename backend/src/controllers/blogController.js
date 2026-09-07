@@ -1,23 +1,17 @@
-// controllers/blogController.js - FIXED TOP SECTION
+// controllers/blogController.js - FIXED UPLOAD HANDLING
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
 import BlogComment from "../models/BlogComment.js";
 import User from "../models/User.js";
-// CORRECTED: Import from root config folder (../../config/)
-import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
+import { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
 
-// FIX: DO NOT import notification service directly - use try/catch dynamic import
-// or simply comment it out and use console.log
-
-// ==================== POST CONTROLLERS ====================
-
-// Create a new blog post
+// ==================== CREATE BLOG POST - FIXED ====================
 export const createBlogPost = async (req, res) => {
   try {
     console.log("📝 Create blog post request received");
     console.log("📋 Request body:", req.body);
-    console.log("📎 File:", req.file);
+    console.log("📎 File:", req.file ? "Present" : "None");
     console.log("👤 User:", req.user?.id);
 
     const {
@@ -48,14 +42,13 @@ export const createBlogPost = async (req, res) => {
 
     // Validate required fields
     if (!title || !content || !category) {
-      console.log("❌ Missing required fields:", { title: !!title, content: !!content, category: !!category });
       return res.status(400).json({
         success: false,
         message: "Title, content, and category are required"
       });
     }
 
-    // Upload featured image if provided (from memory buffer)
+    // Upload featured image if provided
     let featuredImage = null;
     if (req.file) {
       try {
@@ -78,8 +71,6 @@ export const createBlogPost = async (req, res) => {
           error: uploadError.message
         });
       }
-    } else {
-      console.log("⚠️ No featured image file provided");
     }
 
     // Process gallery images
@@ -89,7 +80,6 @@ export const createBlogPost = async (req, res) => {
         processedGalleryImages = typeof galleryImages === "string" 
           ? JSON.parse(galleryImages) 
           : galleryImages;
-        console.log("📸 Gallery images:", processedGalleryImages);
       } catch (e) {
         console.log("⚠️ Failed to parse galleryImages:", e.message);
         processedGalleryImages = [];
@@ -99,13 +89,11 @@ export const createBlogPost = async (req, res) => {
     // Get author details
     const author = await User.findById(req.user.id);
     if (!author) {
-      console.log("❌ Author not found:", req.user.id);
       return res.status(404).json({
         success: false,
         message: "Author not found"
       });
     }
-    console.log("👤 Author found:", author.name);
 
     const authorName = author.name;
     const authorTitleFinal = authorTitle || author.title || "Contributor";
@@ -121,7 +109,6 @@ export const createBlogPost = async (req, res) => {
     if (existingPost) {
       slug += `-${Date.now()}`;
     }
-    console.log("🔗 Generated slug:", slug);
 
     // Parse JSON fields
     const parsedTags = tags ? (typeof tags === "string" ? JSON.parse(tags) : tags) : [];
@@ -129,20 +116,19 @@ export const createBlogPost = async (req, res) => {
     const parsedLearningObjectives = learningObjectives ? (typeof learningObjectives === "string" ? JSON.parse(learningObjectives) : learningObjectives) : [];
     const parsedStatistics = statistics ? (typeof statistics === "string" ? JSON.parse(statistics) : statistics) : [];
 
-    console.log("📊 Creating post with:", {
-      title,
-      category,
-      tags: parsedTags.length,
-      references: parsedReferences.length,
-      objectives: parsedLearningObjectives.length,
-      statistics: parsedStatistics.length
-    });
+    // Determine publish date
+    let publishDateFinal = null;
+    if (publishDate) {
+      publishDateFinal = new Date(publishDate);
+    } else if (status === "published") {
+      publishDateFinal = new Date();
+    }
 
     const newPost = new BlogPost({
-      title,
+      title: title.trim(),
       subtitle: subtitle || "",
       content,
-      category,
+      category: category.trim(),
       tags: parsedTags,
       featuredImage,
       galleryImages: processedGalleryImages,
@@ -156,7 +142,7 @@ export const createBlogPost = async (req, res) => {
       authorImage: authorImage || author.avatar || "",
       status,
       featured: featured === true || featured === "true",
-      publishDate: publishDate || (status === "published" ? new Date() : null),
+      publishDate: publishDateFinal,
       metaDescription: metaDescription || "",
       metaKeywords: metaKeywords || "",
       references: parsedReferences,
@@ -174,7 +160,7 @@ export const createBlogPost = async (req, res) => {
 
     // Update category count
     await BlogCategory.findOneAndUpdate(
-      { name: category },
+      { name: category.trim() },
       { $inc: { count: 1 } },
       { upsert: true }
     );
@@ -183,22 +169,6 @@ export const createBlogPost = async (req, res) => {
     const populatedPost = await BlogPost.findById(newPost._id)
       .populate("author", "name email avatar role")
       .lean();
-
-    // FIX: Safely handle notification - wrap in try/catch and use dynamic import
-    try {
-      const notificationModule = await import("../services/notificationService.js");
-      if (notificationModule && typeof notificationModule.emitAdminNotification === 'function') {
-        notificationModule.emitAdminNotification({
-          type: "blog_post_created",
-          message: `New blog post "${title}" created`,
-          data: { postId: newPost._id, title }
-        });
-        console.log("📨 Notification sent");
-      }
-    } catch (notifError) {
-      // Silent fail - notifications are not critical
-      console.log("ℹ️ Notification service not available:", notifError.message);
-    }
 
     res.status(201).json({
       success: true,
@@ -216,9 +186,121 @@ export const createBlogPost = async (req, res) => {
   }
 };
 
-// ... rest of the controller remains the same
+// ==================== UPDATE BLOG POST - FIXED ====================
+export const updateBlogPost = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = { ...req.body };
+    console.log("📝 Update blog post:", id);
 
-// Get all blog posts with pagination and filters
+    // Find existing post
+    const existingPost = await BlogPost.findById(id);
+    if (!existingPost) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    // Handle featured image upload
+    if (req.file) {
+      try {
+        // Delete old image from Cloudinary if exists
+        if (existingPost.featuredImage) {
+          try {
+            const oldPublicId = existingPost.featuredImage.split("/").pop().split(".")[0];
+            await deleteFromCloudinary(`blog/featured/${oldPublicId}`);
+          } catch (err) {
+            console.log("⚠️ Could not delete old image:", err.message);
+          }
+        }
+
+        // Upload new image
+        const result = await uploadToCloudinary(req.file.buffer, {
+          folder: "blog/featured",
+          public_id: `featured_${Date.now()}`,
+          transformation: [
+            { width: 1200, height: 630, crop: "fill" },
+            { quality: "auto" }
+          ]
+        });
+        updates.featuredImage = result.secure_url;
+        console.log("✅ Featured image updated:", updates.featuredImage);
+      } catch (uploadError) {
+        console.error("❌ Cloudinary upload error:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload image",
+          error: uploadError.message
+        });
+      }
+    }
+
+    // Parse JSON fields
+    const jsonFields = ['galleryImages', 'tags', 'references', 'learningObjectives', 'statistics'];
+    for (const field of jsonFields) {
+      if (updates[field] && typeof updates[field] === "string") {
+        try {
+          updates[field] = JSON.parse(updates[field]);
+        } catch (e) {
+          updates[field] = [];
+        }
+      }
+    }
+
+    // Update slug if title changed
+    if (updates.title && updates.title !== existingPost.title) {
+      let newSlug = updates.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      
+      const existingSlug = await BlogPost.findOne({ 
+        slug: newSlug, 
+        _id: { $ne: id } 
+      });
+      if (existingSlug) {
+        newSlug += `-${Date.now()}`;
+      }
+      updates.slug = newSlug;
+    }
+
+    // Set publish date if status changed to published
+    if (updates.status === "published" && existingPost.status !== "published") {
+      updates.publishDate = new Date();
+      updates.isPublished = true;
+    }
+
+    // Update the post
+    const updatedPost = await BlogPost.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).populate("author", "name email avatar role title");
+
+    if (!updatedPost) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found after update"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Blog post updated successfully",
+      data: updatedPost
+    });
+  } catch (error) {
+    console.error("❌ Update blog post error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update blog post",
+      error: error.message
+    });
+  }
+};
+
+// ==================== GET ALL BLOG POSTS ====================
 export const getAllBlogPosts = async (req, res) => {
   try {
     const {
@@ -354,7 +436,7 @@ export const getAllBlogPosts = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Get blog posts error:", error);
+    console.error("❌ Get blog posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch blog posts",
@@ -363,7 +445,7 @@ export const getAllBlogPosts = async (req, res) => {
   }
 };
 
-// Get blog post by slug
+// ==================== GET BLOG POST BY SLUG ====================
 export const getBlogPostBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -414,7 +496,7 @@ export const getBlogPostBySlug = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Get blog post by slug error:", error);
+    console.error("❌ Get blog post by slug error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch blog post",
@@ -423,7 +505,7 @@ export const getBlogPostBySlug = async (req, res) => {
   }
 };
 
-// Get blog post by ID
+// ==================== GET BLOG POST BY ID ====================
 export const getBlogPostById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -440,24 +522,12 @@ export const getBlogPostById = async (req, res) => {
       });
     }
 
-    // Get comments
-    const comments = await BlogComment.find({ 
-      postId: post._id, 
-      status: "approved" 
-    })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
-
     res.json({
       success: true,
-      data: {
-        ...post,
-        comments
-      }
+      data: post
     });
   } catch (error) {
-    console.error("Get blog post by ID error:", error);
+    console.error("❌ Get blog post by ID error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch blog post",
@@ -466,108 +536,7 @@ export const getBlogPostById = async (req, res) => {
   }
 };
 
-// Update blog post
-export const updateBlogPost = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
-
-    // Find existing post
-    const existingPost = await BlogPost.findById(id);
-    if (!existingPost) {
-      return res.status(404).json({
-        success: false,
-        message: "Blog post not found"
-      });
-    }
-
-    // Handle featured image upload from buffer
-    if (req.file) {
-      try {
-        // Delete old image from Cloudinary if exists
-        if (existingPost.featuredImage) {
-          const oldPublicId = existingPost.featuredImage.split("/").pop().split(".")[0];
-          await deleteFromCloudinary(`blog/featured/${oldPublicId}`);
-        }
-
-        // Upload new image
-        const result = await uploadToCloudinary(req.file.buffer, {
-          folder: "blog/featured",
-          public_id: `featured_${Date.now()}`,
-          transformation: [
-            { width: 1200, height: 630, crop: "fill" },
-            { quality: "auto" }
-          ]
-        });
-        updates.featuredImage = result.secure_url;
-      } catch (uploadError) {
-        console.error("Cloudinary upload error:", uploadError);
-        return res.status(500).json({
-          success: false,
-          message: "Failed to upload image",
-          error: uploadError.message
-        });
-      }
-    }
-
-    // Parse JSON fields
-    const jsonFields = ['galleryImages', 'tags', 'references', 'learningObjectives', 'statistics'];
-    for (const field of jsonFields) {
-      if (updates[field] && typeof updates[field] === "string") {
-        try {
-          updates[field] = JSON.parse(updates[field]);
-        } catch (e) {
-          updates[field] = [];
-        }
-      }
-    }
-
-    // Update slug if title changed
-    if (updates.title && updates.title !== existingPost.title) {
-      let newSlug = updates.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-      
-      const existingSlug = await BlogPost.findOne({ 
-        slug: newSlug, 
-        _id: { $ne: id } 
-      });
-      if (existingSlug) {
-        newSlug += `-${Date.now()}`;
-      }
-      updates.slug = newSlug;
-    }
-
-    // Set publish date if status changed to published
-    if (updates.status === "published" && existingPost.status !== "published") {
-      updates.publishDate = new Date();
-      updates.isPublished = true;
-    }
-
-    // Update the post
-    const updatedPost = await BlogPost.findByIdAndUpdate(
-      id,
-      { $set: updates },
-      { new: true, runValidators: true }
-    ).populate("author", "name email avatar role title");
-
-    res.json({
-      success: true,
-      message: "Blog post updated successfully",
-      data: updatedPost
-    });
-  } catch (error) {
-    console.error("Update blog post error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to update blog post",
-      error: error.message
-    });
-  }
-};
-
-// Delete blog post
+// ==================== DELETE BLOG POST ====================
 export const deleteBlogPost = async (req, res) => {
   try {
     const { id } = req.params;
@@ -590,18 +559,6 @@ export const deleteBlogPost = async (req, res) => {
       }
     }
 
-    // Delete gallery images from Cloudinary
-    if (post.galleryImages && post.galleryImages.length > 0) {
-      for (const image of post.galleryImages) {
-        try {
-          const publicId = image.split("/").pop().split(".")[0];
-          await deleteFromCloudinary(`blog/gallery/${publicId}`);
-        } catch (err) {
-          console.error("Failed to delete gallery image:", err);
-        }
-      }
-    }
-
     // Delete comments
     await BlogComment.deleteMany({ postId: id });
 
@@ -619,7 +576,7 @@ export const deleteBlogPost = async (req, res) => {
       message: "Blog post deleted successfully"
     });
   } catch (error) {
-    console.error("Delete blog post error:", error);
+    console.error("❌ Delete blog post error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete blog post",
@@ -628,54 +585,7 @@ export const deleteBlogPost = async (req, res) => {
   }
 };
 
-// Bulk delete posts
-export const bulkDeletePosts = async (req, res) => {
-  try {
-    const { postIds } = req.body;
-
-    if (!postIds || !Array.isArray(postIds) || postIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Post IDs array is required"
-      });
-    }
-
-    // Get posts to delete
-    const posts = await BlogPost.find({ _id: { $in: postIds } });
-    
-    // Delete images from Cloudinary
-    for (const post of posts) {
-      if (post.featuredImage) {
-        try {
-          const publicId = post.featuredImage.split("/").pop().split(".")[0];
-          await deleteFromCloudinary(`blog/featured/${publicId}`);
-        } catch (err) {
-          console.error("Failed to delete image:", err);
-        }
-      }
-    }
-
-    // Delete comments
-    await BlogComment.deleteMany({ postId: { $in: postIds } });
-
-    // Delete posts
-    await BlogPost.deleteMany({ _id: { $in: postIds } });
-
-    res.json({
-      success: true,
-      message: `${postIds.length} blog posts deleted successfully`
-    });
-  } catch (error) {
-    console.error("Bulk delete posts error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete posts",
-      error: error.message
-    });
-  }
-};
-
-// Toggle featured
+// ==================== TOGGLE FEATURED ====================
 export const toggleFeatured = async (req, res) => {
   try {
     const { id } = req.params;
@@ -697,7 +607,7 @@ export const toggleFeatured = async (req, res) => {
       data: { featured: post.featured }
     });
   } catch (error) {
-    console.error("Toggle featured error:", error);
+    console.error("❌ Toggle featured error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to toggle featured",
@@ -706,7 +616,7 @@ export const toggleFeatured = async (req, res) => {
   }
 };
 
-// Publish blog post
+// ==================== PUBLISH BLOG POST ====================
 export const publishBlogPost = async (req, res) => {
   try {
     const { id } = req.params;
@@ -730,7 +640,7 @@ export const publishBlogPost = async (req, res) => {
       data: post
     });
   } catch (error) {
-    console.error("Publish blog post error:", error);
+    console.error("❌ Publish blog post error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to publish blog post",
@@ -739,7 +649,7 @@ export const publishBlogPost = async (req, res) => {
   }
 };
 
-// Archive blog post
+// ==================== ARCHIVE BLOG POST ====================
 export const archiveBlogPost = async (req, res) => {
   try {
     const { id } = req.params;
@@ -762,7 +672,7 @@ export const archiveBlogPost = async (req, res) => {
       data: post
     });
   } catch (error) {
-    console.error("Archive blog post error:", error);
+    console.error("❌ Archive blog post error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to archive blog post",
@@ -771,7 +681,7 @@ export const archiveBlogPost = async (req, res) => {
   }
 };
 
-// Get featured posts
+// ==================== GET FEATURED POSTS ====================
 export const getFeaturedPosts = async (req, res) => {
   try {
     const { limit = 3 } = req.query;
@@ -790,7 +700,7 @@ export const getFeaturedPosts = async (req, res) => {
       data: posts
     });
   } catch (error) {
-    console.error("Get featured posts error:", error);
+    console.error("❌ Get featured posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch featured posts",
@@ -799,7 +709,7 @@ export const getFeaturedPosts = async (req, res) => {
   }
 };
 
-// Get trending posts
+// ==================== GET TRENDING POSTS ====================
 export const getTrendingPosts = async (req, res) => {
   try {
     const { limit = 5 } = req.query;
@@ -815,7 +725,7 @@ export const getTrendingPosts = async (req, res) => {
       data: posts
     });
   } catch (error) {
-    console.error("Get trending posts error:", error);
+    console.error("❌ Get trending posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch trending posts",
@@ -824,7 +734,7 @@ export const getTrendingPosts = async (req, res) => {
   }
 };
 
-// Get related posts
+// ==================== GET RELATED POSTS ====================
 export const getRelatedPosts = async (req, res) => {
   try {
     const { id } = req.params;
@@ -856,7 +766,7 @@ export const getRelatedPosts = async (req, res) => {
       data: relatedPosts
     });
   } catch (error) {
-    console.error("Get related posts error:", error);
+    console.error("❌ Get related posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch related posts",
@@ -865,7 +775,7 @@ export const getRelatedPosts = async (req, res) => {
   }
 };
 
-// Get posts by category
+// ==================== GET POSTS BY CATEGORY ====================
 export const getPostsByCategory = async (req, res) => {
   try {
     const { category } = req.params;
@@ -903,7 +813,7 @@ export const getPostsByCategory = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Get posts by category error:", error);
+    console.error("❌ Get posts by category error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch posts",
@@ -912,7 +822,7 @@ export const getPostsByCategory = async (req, res) => {
   }
 };
 
-// Get posts by author
+// ==================== GET POSTS BY AUTHOR ====================
 export const getPostsByAuthor = async (req, res) => {
   try {
     const { authorId } = req.params;
@@ -937,19 +847,16 @@ export const getPostsByAuthor = async (req, res) => {
       BlogPost.countDocuments(filter)
     ]);
 
-    // Get author stats
     const author = await User.findById(authorId).select("name email avatar role title bio");
 
-    const [totalPosts, totalLikes, totalViews] = await Promise.all([
-      BlogPost.countDocuments({ author: authorId, status: "published" }),
-      BlogPost.aggregate([
-        { $match: { author: new mongoose.Types.ObjectId(authorId), status: "published" } },
-        { $group: { _id: null, total: { $sum: "$likes" } } }
-      ]),
-      BlogPost.aggregate([
-        { $match: { author: new mongoose.Types.ObjectId(authorId), status: "published" } },
-        { $group: { _id: null, total: { $sum: "$views" } } }
-      ])
+    const totalPosts = await BlogPost.countDocuments({ author: authorId, status: "published" });
+    const totalLikes = await BlogPost.aggregate([
+      { $match: { author: new mongoose.Types.ObjectId(authorId), status: "published" } },
+      { $group: { _id: null, total: { $sum: "$likes" } } }
+    ]);
+    const totalViews = await BlogPost.aggregate([
+      { $match: { author: new mongoose.Types.ObjectId(authorId), status: "published" } },
+      { $group: { _id: null, total: { $sum: "$views" } } }
     ]);
 
     res.json({
@@ -971,7 +878,7 @@ export const getPostsByAuthor = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Get posts by author error:", error);
+    console.error("❌ Get posts by author error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch posts",
@@ -980,7 +887,7 @@ export const getPostsByAuthor = async (req, res) => {
   }
 };
 
-// Search posts
+// ==================== SEARCH POSTS ====================
 export const searchPosts = async (req, res) => {
   try {
     const { q, page = 1, limit = 10, category, tag } = req.query;
@@ -1031,12 +938,11 @@ export const searchPosts = async (req, res) => {
           limit: limitNum,
           total,
           totalPages: Math.ceil(total / limitNum)
-        },
-        suggestions: await getSearchSuggestions(q)
+        }
       }
     });
   } catch (error) {
-    console.error("Search posts error:", error);
+    console.error("❌ Search posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to search posts",
@@ -1045,41 +951,7 @@ export const searchPosts = async (req, res) => {
   }
 };
 
-// Get search suggestions
-const getSearchSuggestions = async (query) => {
-  try {
-    const regex = new RegExp(query.trim(), "i");
-    
-    const [titles, tags, categories] = await Promise.all([
-      BlogPost.find({ status: "published", title: regex })
-        .select("title")
-        .limit(5)
-        .lean(),
-      BlogPost.aggregate([
-        { $match: { status: "published", tags: { $in: [regex] } } },
-        { $unwind: "$tags" },
-        { $match: { tags: regex } },
-        { $group: { _id: "$tags", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 5 }
-      ]),
-      BlogPost.find({ status: "published", category: regex })
-        .distinct("category")
-        .limit(5)
-    ]);
-
-    return {
-      titles: titles.map(t => t.title),
-      tags: tags.map(t => t._id),
-      categories
-    };
-  } catch (error) {
-    console.error("Get search suggestions error:", error);
-    return { titles: [], tags: [], categories: [] };
-  }
-};
-
-// Get post stats
+// ==================== GET POST STATS ====================
 export const getPostStats = async (req, res) => {
   try {
     const [
@@ -1119,7 +991,7 @@ export const getPostStats = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Get post stats error:", error);
+    console.error("❌ Get post stats error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch stats",
@@ -1128,69 +1000,43 @@ export const getPostStats = async (req, res) => {
   }
 };
 
-// Toggle like
-export const toggleLike = async (req, res) => {
+// ==================== BULK DELETE POSTS ====================
+export const bulkDeletePosts = async (req, res) => {
   try {
-    const { id } = req.params;
-    const userId = req.user?.id;
+    const { postIds } = req.body;
 
-    const post = await BlogPost.findById(id);
-    if (!post) {
-      return res.status(404).json({
+    if (!postIds || !Array.isArray(postIds) || postIds.length === 0) {
+      return res.status(400).json({
         success: false,
-        message: "Blog post not found"
+        message: "Post IDs array is required"
       });
     }
 
-    // If user is authenticated, track their like
-    if (userId) {
-      const likedBy = post.likedBy || [];
-      const hasLiked = likedBy.includes(userId);
-
-      if (hasLiked) {
-        post.likes = Math.max(0, post.likes - 1);
-        post.likedBy = likedBy.filter(id => id.toString() !== userId);
-      } else {
-        post.likes += 1;
-        post.likedBy = [...likedBy, userId];
+    const posts = await BlogPost.find({ _id: { $in: postIds } });
+    
+    for (const post of posts) {
+      if (post.featuredImage) {
+        try {
+          const publicId = post.featuredImage.split("/").pop().split(".")[0];
+          await deleteFromCloudinary(`blog/featured/${publicId}`);
+        } catch (err) {
+          console.error("Failed to delete image:", err);
+        }
       }
-    } else {
-      // Anonymous like
-      post.likes += 1;
     }
 
-    await post.save();
+    await BlogComment.deleteMany({ postId: { $in: postIds } });
+    await BlogPost.deleteMany({ _id: { $in: postIds } });
 
     res.json({
       success: true,
-      data: { likes: post.likes }
+      message: `${postIds.length} blog posts deleted successfully`
     });
   } catch (error) {
-    console.error("Toggle like error:", error);
+    console.error("❌ Bulk delete posts error:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to toggle like",
-      error: error.message
-    });
-  }
-};
-
-// Increment views
-export const incrementViews = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    await BlogPost.findByIdAndUpdate(id, { $inc: { views: 1 } });
-
-    res.json({
-      success: true,
-      message: "View counted"
-    });
-  } catch (error) {
-    console.error("Increment views error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to increment views",
+      message: "Failed to delete posts",
       error: error.message
     });
   }
@@ -1201,8 +1047,6 @@ export const incrementViews = async (req, res) => {
 export const createCategory = async (req, res) => {
   try {
     const { name, description, icon, color } = req.body;
-
-    console.log("Creating category with data:", { name, description, icon, color });
 
     if (!name) {
       return res.status(400).json({
@@ -1216,15 +1060,11 @@ export const createCategory = async (req, res) => {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    console.log("Generated slug:", slug);
-
-    // Check if category already exists
     const existingCategory = await BlogCategory.findOne({ 
       $or: [{ slug }, { name: name }] 
     });
     
     if (existingCategory) {
-      console.log("Category already exists:", existingCategory);
       return res.status(400).json({
         success: false,
         message: "Category already exists"
@@ -1239,9 +1079,7 @@ export const createCategory = async (req, res) => {
       color: color || '#3b82f6'
     });
 
-    console.log("Saving category:", category);
     await category.save();
-    console.log("Category saved successfully:", category);
 
     res.status(201).json({
       success: true,
@@ -1249,21 +1087,13 @@ export const createCategory = async (req, res) => {
       data: category
     });
   } catch (error) {
-    console.error("Create category error details:", {
-      message: error.message,
-      stack: error.stack,
-      code: error.code,
-      name: error.name
-    });
-    
-    // Handle duplicate key error
+    console.error("❌ Create category error:", error);
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
         message: "Category with this name or slug already exists"
       });
     }
-    
     res.status(500).json({
       success: false,
       message: "Failed to create category",
@@ -1272,7 +1102,6 @@ export const createCategory = async (req, res) => {
   }
 };
 
-// Get all categories
 export const getAllCategories = async (req, res) => {
   try {
     const categories = await BlogCategory.find({ isActive: true })
@@ -1284,7 +1113,7 @@ export const getAllCategories = async (req, res) => {
       data: categories
     });
   } catch (error) {
-    console.error("Get categories error:", error);
+    console.error("❌ Get categories error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch categories",
@@ -1293,7 +1122,6 @@ export const getAllCategories = async (req, res) => {
   }
 };
 
-// Get category by slug
 export const getCategoryBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
@@ -1311,7 +1139,7 @@ export const getCategoryBySlug = async (req, res) => {
       data: category
     });
   } catch (error) {
-    console.error("Get category error:", error);
+    console.error("❌ Get category error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch category",
@@ -1320,7 +1148,6 @@ export const getCategoryBySlug = async (req, res) => {
   }
 };
 
-// Update category
 export const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1364,7 +1191,7 @@ export const updateCategory = async (req, res) => {
       data: category
     });
   } catch (error) {
-    console.error("Update category error:", error);
+    console.error("❌ Update category error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update category",
@@ -1373,7 +1200,6 @@ export const updateCategory = async (req, res) => {
   }
 };
 
-// Delete category
 export const deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1386,7 +1212,6 @@ export const deleteCategory = async (req, res) => {
       });
     }
 
-    // Check if there are posts in this category
     const postCount = await BlogPost.countDocuments({ category: category.name });
     if (postCount > 0) {
       return res.status(400).json({
@@ -1402,7 +1227,7 @@ export const deleteCategory = async (req, res) => {
       message: "Category deleted successfully"
     });
   } catch (error) {
-    console.error("Delete category error:", error);
+    console.error("❌ Delete category error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete category",
@@ -1413,7 +1238,6 @@ export const deleteCategory = async (req, res) => {
 
 // ==================== COMMENT CONTROLLERS ====================
 
-// Add comment
 export const addComment = async (req, res) => {
   try {
     const { postId } = req.params;
@@ -1451,7 +1275,6 @@ export const addComment = async (req, res) => {
       authorAvatar: req.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=random`
     });
 
-    // Increment comment count
     await BlogPost.findByIdAndUpdate(postId, { $inc: { comments: 1 } });
 
     res.status(201).json({
@@ -1460,7 +1283,7 @@ export const addComment = async (req, res) => {
       data: comment
     });
   } catch (error) {
-    console.error("Add comment error:", error);
+    console.error("❌ Add comment error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to add comment",
@@ -1469,7 +1292,6 @@ export const addComment = async (req, res) => {
   }
 };
 
-// Get comments
 export const getComments = async (req, res) => {
   try {
     const { postId } = req.params;
@@ -1504,7 +1326,7 @@ export const getComments = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Get comments error:", error);
+    console.error("❌ Get comments error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch comments",
@@ -1513,7 +1335,6 @@ export const getComments = async (req, res) => {
   }
 };
 
-// Approve comment
 export const approveComment = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1536,7 +1357,7 @@ export const approveComment = async (req, res) => {
       data: comment
     });
   } catch (error) {
-    console.error("Approve comment error:", error);
+    console.error("❌ Approve comment error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to approve comment",
@@ -1545,7 +1366,6 @@ export const approveComment = async (req, res) => {
   }
 };
 
-// Reject comment
 export const rejectComment = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1567,7 +1387,7 @@ export const rejectComment = async (req, res) => {
       data: comment
     });
   } catch (error) {
-    console.error("Reject comment error:", error);
+    console.error("❌ Reject comment error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to reject comment",
@@ -1576,7 +1396,6 @@ export const rejectComment = async (req, res) => {
   }
 };
 
-// Delete comment
 export const deleteComment = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1589,9 +1408,7 @@ export const deleteComment = async (req, res) => {
       });
     }
 
-    // Decrement comment count
     await BlogPost.findByIdAndUpdate(comment.postId, { $inc: { comments: -1 } });
-
     await BlogComment.findByIdAndDelete(id);
 
     res.json({
@@ -1599,7 +1416,7 @@ export const deleteComment = async (req, res) => {
       message: "Comment deleted successfully"
     });
   } catch (error) {
-    console.error("Delete comment error:", error);
+    console.error("❌ Delete comment error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete comment",
@@ -1608,7 +1425,6 @@ export const deleteComment = async (req, res) => {
   }
 };
 
-// Get comment stats
 export const getCommentStats = async (req, res) => {
   try {
     const [total, pending, approved, rejected, spam] = await Promise.all([
@@ -1619,7 +1435,6 @@ export const getCommentStats = async (req, res) => {
       BlogComment.countDocuments({ status: "spam" })
     ]);
 
-    // Get recent comments
     const recent = await BlogComment.find()
       .sort({ createdAt: -1 })
       .limit(5)
@@ -1638,10 +1453,76 @@ export const getCommentStats = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Get comment stats error:", error);
+    console.error("❌ Get comment stats error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch comment stats",
+      error: error.message
+    });
+  }
+};
+
+// ==================== LIKE / VIEW CONTROLLERS ====================
+
+export const toggleLike = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    const post = await BlogPost.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    if (userId) {
+      const likedBy = post.likedBy || [];
+      const hasLiked = likedBy.includes(userId);
+
+      if (hasLiked) {
+        post.likes = Math.max(0, post.likes - 1);
+        post.likedBy = likedBy.filter(id => id.toString() !== userId);
+      } else {
+        post.likes += 1;
+        post.likedBy = [...likedBy, userId];
+      }
+    } else {
+      post.likes += 1;
+    }
+
+    await post.save();
+
+    res.json({
+      success: true,
+      data: { likes: post.likes }
+    });
+  } catch (error) {
+    console.error("❌ Toggle like error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to toggle like",
+      error: error.message
+    });
+  }
+};
+
+export const incrementViews = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await BlogPost.findByIdAndUpdate(id, { $inc: { views: 1 } });
+
+    res.json({
+      success: true,
+      message: "View counted"
+    });
+  } catch (error) {
+    console.error("❌ Increment views error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to increment views",
       error: error.message
     });
   }

@@ -1,7 +1,7 @@
-// config/multer.js
+// config/multer.js - COMPLETE FIXED
 import multer from "multer";
 
-// Use memory storage - files are stored in memory as Buffer
+// Memory storage - files stored as Buffer in memory
 const storage = multer.memoryStorage();
 
 // File filter for images only

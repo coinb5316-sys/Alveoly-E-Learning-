@@ -1,7 +1,7 @@
 // routes/adminBlogRoutes.js - COMPLETE FIXED
 import express from "express";
 import {
-  // Posts - from blogController
+  // Posts
   createBlogPost,
   getAllBlogPosts,
   getBlogPostById,
@@ -11,13 +11,13 @@ import {
   publishBlogPost,
   archiveBlogPost,
   bulkDeletePosts,
-  // Categories - from blogController
+  // Categories
   createCategory,
   getAllCategories,
   getCategoryBySlug,
   updateCategory,
   deleteCategory,
-  // Comments - from blogController
+  // Comments
   getComments,
   approveComment,
   rejectComment,
@@ -26,12 +26,12 @@ import {
 } from "../controllers/blogController.js";
 
 import {
-  // Authors - from adminBlogController
+  // Authors
   getAllAuthors,
   getAuthorById,
   updateAuthor,
   deleteAuthor,
-  // Tags - from adminBlogController
+  // Tags
   getAllTags,
   getTagBySlug,
   updateTag,

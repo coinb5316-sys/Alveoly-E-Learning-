@@ -1,4 +1,4 @@
-// src/app.js - UPDATED
+// src/app.js - COMPLETE FIXED
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -49,7 +49,7 @@ app.use(
   })
 );
 
-// ================= CORS - FIXED =================
+// ================= CORS =================
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
@@ -66,7 +66,6 @@ console.log("✅ CORS Allowed Origins:", allowedOrigins);
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl)
       if (!origin) {
         return callback(null, true);
       }
@@ -76,7 +75,6 @@ app.use(
       }
       
       console.warn(`❌ CORS blocked origin: ${origin}`);
-      // For Render deployment, allow all origins temporarily
       return callback(null, true);
     },
     credentials: true,
@@ -90,9 +88,6 @@ app.use(
     ],
   })
 );
-
-// ================= REMOVE THIS LINE IF IT EXISTS =================
-// DO NOT USE: app.options("*", cors()); - This causes issues
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
@@ -130,8 +125,13 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/ai-subscriptions", aiSubscriptionRoutes);
 app.use("/api/ai-plans", aiPlanRoutes);
 app.use("/api/programs", programRoutes);
-app.use("/api/blogs", blogRoutes);
+
+// ================= BLOG ROUTES - FIXED MOUNTING =================
+// Public blog routes - mounted at /api/blog (singular for consistency)
+app.use("/api/blog", blogRoutes);
+// Admin blog routes - mounted at /api/admin/blog
 app.use("/api/admin/blog", adminBlogRoutes);
+
 app.use("/api/nursing-games", nursingGameRoutes);
 
 // ================= HEALTH CHECK =================
@@ -140,9 +140,9 @@ app.get("/", (req, res) => {
     status: "OK", 
     message: "API is running 🚀",
     routes: {
-      auth: "/api/auth",
-      registerAlveoly: "/api/auth/register/alveoly",
-      registerNonAlveoly: "/api/auth/register/non-alveoly"
+      blog: "/api/blog",
+      adminBlog: "/api/admin/blog",
+      auth: "/api/auth"
     }
   });
 });
@@ -152,8 +152,8 @@ app.get("/api/test", (req, res) => {
   res.json({ 
     message: "API is working!",
     routes: {
-      registerAlveoly: "/api/auth/register/alveoly",
-      registerNonAlveoly: "/api/auth/register/non-alveoly"
+      blog: "/api/blog",
+      adminBlog: "/api/admin/blog"
     }
   });
 });
@@ -163,9 +163,9 @@ app.use((req, res) => {
   res.status(404).json({ 
     message: `Route ${req.method} ${req.url} not found`,
     availableRoutes: {
-      auth: "/api/auth",
-      registerAlveoly: "/api/auth/register/alveoly",
-      registerNonAlveoly: "/api/auth/register/non-alveoly"
+      blog: "/api/blog",
+      adminBlog: "/api/admin/blog",
+      auth: "/api/auth"
     }
   });
 });

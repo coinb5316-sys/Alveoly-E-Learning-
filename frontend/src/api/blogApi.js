@@ -5,10 +5,9 @@ import API from "./axios";
 const blogAPI = {
   // ==================== POST OPERATIONS ====================
   
-  // Get all blog posts with pagination and filters
+  // Get all blog posts with pagination and filters - PUBLIC
   getPosts: async (params = {}) => {
     try {
-      // FIXED: Use /blog/posts (public)
       const response = await API.get("/blog/posts", { params });
       return response.data;
     } catch (error) {
@@ -17,10 +16,9 @@ const blogAPI = {
     }
   },
 
-  // Get a single blog post by ID
+  // Get a single blog post by ID - PUBLIC
   getPostById: async (id) => {
     try {
-      // FIXED: Use /blog/posts (public)
       const response = await API.get(`/blog/posts/${id}`);
       return response.data;
     } catch (error) {
@@ -29,10 +27,9 @@ const blogAPI = {
     }
   },
 
-  // Get a single blog post by slug
+  // Get a single blog post by slug - PUBLIC
   getPostBySlug: async (slug) => {
     try {
-      // FIXED: Use /blog/posts/slug (public)
       const response = await API.get(`/blog/posts/slug/${slug}`);
       return response.data;
     } catch (error) {
@@ -41,10 +38,9 @@ const blogAPI = {
     }
   },
 
-  // Create a new blog post (Admin only)
+  // Create a new blog post - ADMIN ONLY
   createPost: async (formData) => {
     try {
-      // FIXED: Use /admin/blog/posts (admin only)
       const response = await API.post("/admin/blog/posts", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
@@ -57,7 +53,7 @@ const blogAPI = {
     }
   },
 
-  // Update a blog post (Admin only)
+  // Update a blog post - ADMIN ONLY
   updatePost: async (id, formData) => {
     try {
       const response = await API.put(`/admin/blog/posts/${id}`, formData, {
@@ -72,7 +68,7 @@ const blogAPI = {
     }
   },
 
-  // Delete a blog post (Admin only)
+  // Delete a blog post - ADMIN ONLY
   deletePost: async (id) => {
     try {
       const response = await API.delete(`/admin/blog/posts/${id}`);
@@ -83,7 +79,7 @@ const blogAPI = {
     }
   },
 
-  // Bulk delete posts (Admin only)
+  // Bulk delete posts - ADMIN ONLY
   bulkDeletePosts: async (postIds) => {
     try {
       const response = await API.delete("/admin/blog/posts/bulk", {
@@ -96,7 +92,7 @@ const blogAPI = {
     }
   },
 
-  // Toggle featured status (Admin only)
+  // Toggle featured status - ADMIN ONLY
   toggleFeatured: async (id) => {
     try {
       const response = await API.patch(`/admin/blog/posts/${id}/featured`);
@@ -107,7 +103,7 @@ const blogAPI = {
     }
   },
 
-  // Publish a blog post (Admin only)
+  // Publish a blog post - ADMIN ONLY
   publishPost: async (id) => {
     try {
       const response = await API.patch(`/admin/blog/posts/${id}/publish`);
@@ -118,7 +114,7 @@ const blogAPI = {
     }
   },
 
-  // Archive a blog post (Admin only)
+  // Archive a blog post - ADMIN ONLY
   archivePost: async (id) => {
     try {
       const response = await API.patch(`/admin/blog/posts/${id}/archive`);
@@ -129,7 +125,7 @@ const blogAPI = {
     }
   },
 
-  // Get post stats (Admin only)
+  // Get post stats - ADMIN ONLY
   getPostStats: async () => {
     try {
       const response = await API.get("/admin/blog/posts/stats");
@@ -142,7 +138,7 @@ const blogAPI = {
 
   // ==================== CATEGORY OPERATIONS ====================
 
-  // Get all categories - FIXED: Use /blog/categories (public)
+  // Get all categories - PUBLIC
   getCategories: async () => {
     try {
       const response = await API.get("/blog/categories");
@@ -153,7 +149,7 @@ const blogAPI = {
     }
   },
 
-  // Get category by slug
+  // Get category by slug - PUBLIC
   getCategoryBySlug: async (slug) => {
     try {
       const response = await API.get(`/blog/categories/${slug}`);
@@ -164,7 +160,7 @@ const blogAPI = {
     }
   },
 
-  // Create a new category (Admin only)
+  // Create a new category - ADMIN ONLY
   createCategory: async (data) => {
     try {
       const response = await API.post("/admin/blog/categories", data);
@@ -175,7 +171,7 @@ const blogAPI = {
     }
   },
 
-  // Update a category (Admin only)
+  // Update a category - ADMIN ONLY
   updateCategory: async (id, data) => {
     try {
       const response = await API.put(`/admin/blog/categories/${id}`, data);
@@ -186,7 +182,7 @@ const blogAPI = {
     }
   },
 
-  // Delete a category (Admin only)
+  // Delete a category - ADMIN ONLY
   deleteCategory: async (id) => {
     try {
       const response = await API.delete(`/admin/blog/categories/${id}`);
@@ -199,7 +195,7 @@ const blogAPI = {
 
   // ==================== COMMENT OPERATIONS ====================
 
-  // Get comments for a post - FIXED: Use /blog/comments (public)
+  // Get comments for a post - PUBLIC
   getComments: async (postId, params = {}) => {
     try {
       const response = await API.get(`/blog/comments/${postId}`, { params });
@@ -210,7 +206,7 @@ const blogAPI = {
     }
   },
 
-  // Add a comment - FIXED: Use /blog/comments (public)
+  // Add a comment - PUBLIC (but requires user auth for better experience)
   addComment: async (postId, data) => {
     try {
       const response = await API.post(`/blog/comments/${postId}`, data);
@@ -221,7 +217,7 @@ const blogAPI = {
     }
   },
 
-  // Approve a comment (Admin only)
+  // Approve a comment - ADMIN ONLY
   approveComment: async (id) => {
     try {
       const response = await API.put(`/admin/blog/comments/${id}/approve`);
@@ -232,7 +228,7 @@ const blogAPI = {
     }
   },
 
-  // Reject a comment (Admin only)
+  // Reject a comment - ADMIN ONLY
   rejectComment: async (id) => {
     try {
       const response = await API.put(`/admin/blog/comments/${id}/reject`);
@@ -243,7 +239,7 @@ const blogAPI = {
     }
   },
 
-  // Delete a comment (Admin only)
+  // Delete a comment - ADMIN ONLY
   deleteComment: async (id) => {
     try {
       const response = await API.delete(`/admin/blog/comments/${id}`);
@@ -254,7 +250,7 @@ const blogAPI = {
     }
   },
 
-  // Get comment stats (Admin only)
+  // Get comment stats - ADMIN ONLY
   getCommentStats: async () => {
     try {
       const response = await API.get("/admin/blog/comments/stats");
@@ -265,9 +261,8 @@ const blogAPI = {
     }
   },
 
-  // ==================== AUTHOR OPERATIONS (Admin only) ====================
+  // ==================== AUTHOR OPERATIONS - ADMIN ONLY ====================
 
-  // Get all authors
   getAuthors: async (params = {}) => {
     try {
       const response = await API.get("/admin/blog/authors", { params });
@@ -278,7 +273,6 @@ const blogAPI = {
     }
   },
 
-  // Get author by ID
   getAuthorById: async (id) => {
     try {
       const response = await API.get(`/admin/blog/authors/${id}`);
@@ -289,7 +283,6 @@ const blogAPI = {
     }
   },
 
-  // Update an author (Admin only)
   updateAuthor: async (id, data) => {
     try {
       const response = await API.put(`/admin/blog/authors/${id}`, data);
@@ -300,7 +293,6 @@ const blogAPI = {
     }
   },
 
-  // Delete an author (Admin only)
   deleteAuthor: async (id) => {
     try {
       const response = await API.delete(`/admin/blog/authors/${id}`);
@@ -311,9 +303,8 @@ const blogAPI = {
     }
   },
 
-  // ==================== TAG OPERATIONS (Admin only) ====================
+  // ==================== TAG OPERATIONS - ADMIN ONLY ====================
 
-  // Get all tags
   getTags: async (params = {}) => {
     try {
       const response = await API.get("/admin/blog/tags", { params });
@@ -324,7 +315,6 @@ const blogAPI = {
     }
   },
 
-  // Get tag by slug
   getTagBySlug: async (slug) => {
     try {
       const response = await API.get(`/admin/blog/tags/${slug}`);
@@ -335,7 +325,6 @@ const blogAPI = {
     }
   },
 
-  // Create a new tag (Admin only)
   createTag: async (data) => {
     try {
       const response = await API.post("/admin/blog/tags", data);
@@ -346,7 +335,6 @@ const blogAPI = {
     }
   },
 
-  // Update a tag (Admin only)
   updateTag: async (id, data) => {
     try {
       const response = await API.put(`/admin/blog/tags/${id}`, data);
@@ -357,7 +345,6 @@ const blogAPI = {
     }
   },
 
-  // Delete a tag (Admin only)
   deleteTag: async (id) => {
     try {
       const response = await API.delete(`/admin/blog/tags/${id}`);
@@ -370,7 +357,7 @@ const blogAPI = {
 
   // ==================== SEARCH OPERATIONS ====================
 
-  // Search posts - FIXED: Use /blog/posts/search (public)
+  // Search posts - PUBLIC
   searchPosts: async (query, params = {}) => {
     try {
       const response = await API.get("/blog/posts/search", {
@@ -383,7 +370,7 @@ const blogAPI = {
     }
   },
 
-  // Get posts by category - FIXED: Use /blog/posts/category (public)
+  // Get posts by category - PUBLIC
   getPostsByCategory: async (category, params = {}) => {
     try {
       const response = await API.get(`/blog/posts/category/${category}`, { params });
@@ -394,7 +381,7 @@ const blogAPI = {
     }
   },
 
-  // Get posts by author - FIXED: Use /blog/posts/author (public)
+  // Get posts by author - PUBLIC
   getPostsByAuthor: async (authorId, params = {}) => {
     try {
       const response = await API.get(`/blog/posts/author/${authorId}`, { params });
@@ -405,7 +392,7 @@ const blogAPI = {
     }
   },
 
-  // Get related posts - FIXED: Use /blog/posts (public)
+  // Get related posts - PUBLIC
   getRelatedPosts: async (id) => {
     try {
       const response = await API.get(`/blog/posts/${id}/related`);
@@ -416,7 +403,7 @@ const blogAPI = {
     }
   },
 
-  // Increment views - FIXED: Use /blog/posts (public)
+  // Increment views - PUBLIC
   incrementViews: async (id) => {
     try {
       const response = await API.post(`/blog/posts/${id}/view`);
@@ -427,7 +414,7 @@ const blogAPI = {
     }
   },
 
-  // Toggle like - FIXED: Use /blog/posts (public)
+  // Toggle like - PUBLIC
   toggleLike: async (id) => {
     try {
       const response = await API.post(`/blog/posts/${id}/like`);
