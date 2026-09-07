@@ -1,910 +1,1595 @@
-// backend/src/controllers/blogController.js - COMPLETE FIXED VERSION
-import Blog from "../models/Blog.js";
-import QuizAttempt from "../models/QuizAttempt.js";
-import cloudinary from "../../config/cloudinary.js";
-import streamifier from "streamifier";
-import Subscriber from "../models/Subscriber.js";
-import BlogLike from "../models/BlogLike.js";
-import BlogView from "../models/BlogView.js";
+// controllers/blogController.js - UPDATED WITH CLOUDINARY BUFFER UPLOAD
+import mongoose from "mongoose";
+import BlogPost from "../models/BlogPost.js";
+import BlogCategory from "../models/BlogCategory.js";
 import BlogComment from "../models/BlogComment.js";
+import User from "../models/User.js";
+import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../config/cloudinary.js";
+import { io, emitAdminNotification } from "../../server.js";
 
-// ================= CREATE BLOG (FIXED) =================
-export const createBlog = async (req, res) => {
+// ==================== POST CONTROLLERS ====================
+
+// Create a new blog post
+export const createBlogPost = async (req, res) => {
   try {
     const {
-      title, excerpt, content, featuredImage, category,
-      tags, status, publishedAt, hasQuiz, quiz
+      title,
+      subtitle,
+      content,
+      category,
+      tags,
+      videoUrl,
+      videoEmbed,
+      audioUrl,
+      status = "draft",
+      featured = false,
+      publishDate,
+      metaDescription,
+      metaKeywords,
+      authorBio,
+      authorTitle,
+      authorImage,
+      references,
+      learningObjectives,
+      statistics,
+      allowComments,
+      showAuthor,
+      showShareButtons,
+      galleryImages
     } = req.body;
 
-    if (!title || !excerpt || !content) {
-      return res.status(400).json({ message: "Title, excerpt, and content are required" });
+    // Validate required fields
+    if (!title || !content || !category) {
+      return res.status(400).json({
+        success: false,
+        message: "Title, content, and category are required"
+      });
     }
 
+    // Upload featured image if provided (from memory buffer)
+    let featuredImage = null;
+    if (req.file) {
+      try {
+        const result = await uploadToCloudinary(req.file.buffer, {
+          folder: "blog/featured",
+          public_id: `featured_${Date.now()}`,
+          transformation: [
+            { width: 1200, height: 630, crop: "fill" },
+            { quality: "auto" }
+          ]
+        });
+        featuredImage = result.secure_url;
+      } catch (uploadError) {
+        console.error("Cloudinary upload error:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload image",
+          error: uploadError.message
+        });
+      }
+    }
+
+    // Process gallery images
+    let processedGalleryImages = [];
+    if (galleryImages) {
+      try {
+        processedGalleryImages = typeof galleryImages === "string" 
+          ? JSON.parse(galleryImages) 
+          : galleryImages;
+      } catch (e) {
+        processedGalleryImages = [];
+      }
+    }
+
+    // Get author details
+    const author = await User.findById(req.user.id);
+    const authorName = author.name;
+    const authorTitleFinal = authorTitle || author.title || "Contributor";
+
+    // Create slug from title
     let slug = title
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    
-    let existingBlog = await Blog.findOne({ slug });
-    if (existingBlog) {
-      slug = `${slug}-${Date.now()}`;
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    // Check if slug exists
+    const existingPost = await BlogPost.findOne({ slug });
+    if (existingPost) {
+      slug += `-${Date.now()}`;
     }
 
-    // FIXED: Better reading time calculation
-    const plainText = content.replace(/<[^>]*>/g, '');
-    const words = plainText.split(/\s+/).filter(word => word.length > 0);
-    const wordCount = words.length;
-    const readingTime = Math.max(1, Math.ceil(wordCount / 200));
-    
-    console.log(`📖 Reading time: ${wordCount} words → ${readingTime} min`);
+    // Parse JSON fields
+    const parsedTags = tags ? (typeof tags === "string" ? JSON.parse(tags) : tags) : [];
+    const parsedReferences = references ? (typeof references === "string" ? JSON.parse(references) : references) : [];
+    const parsedLearningObjectives = learningObjectives ? (typeof learningObjectives === "string" ? JSON.parse(learningObjectives) : learningObjectives) : [];
+    const parsedStatistics = statistics ? (typeof statistics === "string" ? JSON.parse(statistics) : statistics) : [];
 
-    let finalFeaturedImage = { url: "/blog-default.jpg", publicId: "" };
-    if (featuredImage) {
-      if (typeof featuredImage === 'object' && featuredImage.url) {
-        finalFeaturedImage = featuredImage;
-      } else if (typeof featuredImage === 'string' && featuredImage !== "/blog-default.jpg") {
-        finalFeaturedImage = { url: featuredImage, publicId: "" };
-      }
-    }
-
-    const blog = await Blog.create({
+    const newPost = new BlogPost({
       title,
+      subtitle,
+      content,
+      category,
+      tags: parsedTags,
+      featuredImage,
+      galleryImages: processedGalleryImages,
+      videoUrl,
+      videoEmbed,
+      audioUrl,
+      author: req.user.id,
+      authorName,
+      authorTitle: authorTitleFinal,
+      authorBio: authorBio || author.bio || "",
+      authorImage: authorImage || author.avatar || "",
+      status,
+      featured,
+      publishDate: publishDate || (status === "published" ? new Date() : null),
+      metaDescription,
+      metaKeywords,
+      references: parsedReferences,
+      learningObjectives: parsedLearningObjectives,
+      statistics: parsedStatistics,
+      allowComments: allowComments !== undefined ? allowComments : true,
+      showAuthor: showAuthor !== undefined ? showAuthor : true,
+      showShareButtons: showShareButtons !== undefined ? showShareButtons : true,
       slug,
-      excerpt,
-      content,
-      readingTime,  // Now correctly calculated
-      featuredImage: finalFeaturedImage,
-      category: category || 'Announcements',
-      tags: tags || [],
-      author: {
-        name: req.user?.name || 'Alveoly Admin',
-        avatar: req.user?.avatar || '',
-        bio: ''
-      },
-      status: status || 'draft',
-      publishedAt: status === 'published' ? new Date() : (publishedAt || new Date()),
-      hasQuiz: hasQuiz || false,
-      quiz: hasQuiz ? quiz : {},
-      createdBy: req.user?._id,
-      viewsCount: 0,      // FIXED: Use viewsCount
-      likesCount: 0,      // FIXED: Use likesCount
-      commentsCount: 0
+      isPublished: status === "published"
     });
 
-    res.status(201).json(blog);
+    await newPost.save();
+
+    // Update category count
+    await BlogCategory.findOneAndUpdate(
+      { name: category },
+      { $inc: { count: 1 } },
+      { upsert: true }
+    );
+
+    // Populate author details for response
+    const populatedPost = await BlogPost.findById(newPost._id)
+      .populate("author", "name email avatar role")
+      .lean();
+
+    // Send notification to admin
+    if (global.io) {
+      global.io.to("admin").emit("new_notification", {
+        type: "blog_post_created",
+        message: `New blog post "${title}" created`,
+        data: { postId: newPost._id, title }
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Blog post created successfully",
+      data: populatedPost
+    });
   } catch (error) {
-    console.error("Create Blog Error:", error);
-    res.status(500).json({ message: error.message || "Server Error" });
+    console.error("Create blog post error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create blog post",
+      error: error.message
+    });
   }
 };
 
-// ================= GET ALL BLOGS (ADMIN) =================
-export const getBlogs = async (req, res) => {
+// Get all blog posts with pagination and filters
+export const getAllBlogPosts = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, category, search } = req.query;
-    const query = {};
+    const {
+      page = 1,
+      limit = 10,
+      category,
+      status,
+      tag,
+      author,
+      search,
+      sort = "-publishDate",
+      featured,
+      publishedOnly = true
+    } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build filter
+    const filter = {};
     
-    if (status) query.status = status;
-    if (category) query.category = category;
+    if (publishedOnly === "true" || publishedOnly === true) {
+      filter.status = "published";
+      filter.isPublished = true;
+    }
+    
+    if (status) filter.status = status;
+    if (category) filter.category = category;
+    if (featured === "true" || featured === true) filter.featured = true;
+    if (author) filter.author = author;
+    if (tag) filter.tags = { $in: [tag] };
+    
+    // Search
     if (search) {
-      query.$text = { $search: search };
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { subtitle: { $regex: search, $options: "i" } },
+        { content: { $regex: search, $options: "i" } },
+        { tags: { $in: [new RegExp(search, "i")] } }
+      ];
     }
-    
-    const blogs = await Blog.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .populate('createdBy', 'name email');
-    
-    const total = await Blog.countDocuments(query);
-    
-    res.json({
-      blogs,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
-    });
-  } catch (error) {
-    console.error("Get Blogs Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
 
-// ================= GET PUBLIC BLOGS (FIXED) =================
-export const getPublicBlogs = async (req, res) => {
-  try {
-    const { page = 1, limit = 12, category, tag } = req.query;
-    const query = { status: 'published' };
-    
-    if (category && category !== 'all') query.category = category;
-    if (tag) query.tags = tag;
-    
-    const blogs = await Blog.find(query)
-      .select('-content -quiz.questions.correctAnswer')
-      .sort({ publishedAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-    
-    const formattedBlogs = blogs.map(blog => {
-      const blogObj = blog.toObject();
-      if (blogObj.featuredImage && typeof blogObj.featuredImage === 'object') {
-        blogObj.featuredImage = blogObj.featuredImage.url || "/blog-default.jpg";
-      }
-      // FIXED: Use correct field names
-      blogObj.views = blogObj.viewsCount || 0;
-      blogObj.likes = blogObj.likesCount || 0;
-      return blogObj;
-    });
-    
-    const total = await Blog.countDocuments(query);
-    const categories = await Blog.aggregate([
-      { $match: { status: 'published' } },
-      { $group: { _id: '$category', count: { $sum: 1 } } }
+    // Build sort
+    const sortOptions = {};
+    if (sort === "latest") sortOptions.publishDate = -1;
+    else if (sort === "oldest") sortOptions.publishDate = 1;
+    else if (sort === "popular") sortOptions.views = -1;
+    else if (sort === "trending") sortOptions.likes = -1;
+    else if (sort === "featured") { sortOptions.featured = -1; sortOptions.publishDate = -1; }
+    else sortOptions.createdAt = -1;
+
+    // Execute query
+    const [posts, total] = await Promise.all([
+      BlogPost.find(filter)
+        .populate("author", "name email avatar role title")
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      BlogPost.countDocuments(filter)
     ]);
-    
-    res.json({
-      blogs: formattedBlogs,
-      categories,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
-    });
-  } catch (error) {
-    console.error("Get Public Blogs Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
 
-// ================= GET BLOG BY SLUG (Count EVERY view) =================
-export const getBlogBySlug = async (req, res) => {
-  try {
-    const { slug } = req.params;
-    
-    const blog = await Blog.findOne({ slug, status: 'published' });
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
+    // Get featured post
+    let featuredPost = null;
+    if (pageNum === 1 && !search && !category && !status) {
+      featuredPost = await BlogPost.findOne({ featured: true, status: "published" })
+        .populate("author", "name email avatar role title")
+        .sort({ publishDate: -1 })
+        .lean();
     }
-    
-    // Get client IP address
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
-                     req.socket.remoteAddress || 
-                     req.ip ||
-                     'unknown';
-    
-    const userAgent = req.headers['user-agent'] || 'unknown';
-    const userId = req.user?._id || null;
-    
-    // FIXED: ALWAYS record view (NO 24-hour cooldown)
-    await BlogView.create({
-      blogId: blog._id,
-      ip: clientIp,
-      userId,
-      userAgent,
-      viewedAt: new Date()
-    });
-    
-    // Increment view count
-    blog.viewsCount = (blog.viewsCount || 0) + 1;
-    await blog.save();
-    console.log(`✅ View counted for ${slug} from IP ${clientIp} - Total views: ${blog.viewsCount}`);
-    
-    // Get like count and comment count
-    const likesCount = blog.likesCount || 0;
-    const commentsCount = await BlogComment.countDocuments({ 
-      blogId: blog._id, 
-      isApproved: true 
-    });
-    
-    const blogData = blog.toObject();
-    
-    // Format featuredImage for frontend
-    if (blogData.featuredImage && typeof blogData.featuredImage === 'object') {
-      blogData.featuredImage = blogData.featuredImage.url || "/blog-default.jpg";
-    }
-    
-    // Add counts to response (using 'views' and 'likes' for frontend compatibility)
-    blogData.likes = likesCount;
-    blogData.views = blog.viewsCount;
-    blogData.commentsCount = commentsCount;
-    
-    // Remove correct answers from quiz for security
-    if (blogData.quiz && blogData.quiz.questions) {
-      blogData.quiz = {
-        ...blogData.quiz,
-        questions: blogData.quiz.questions.map(q => ({
-          question: q.question,
-          options: q.options,
-          explanation: q.explanation
-        }))
+
+    // Get categories with counts
+    const categories = await BlogCategory.find({ isActive: true })
+      .sort({ count: -1 })
+      .lean();
+
+    // Get trending tags
+    const tagAggregation = await BlogPost.aggregate([
+      { $match: { status: "published" } },
+      { $unwind: "$tags" },
+      { $group: { _id: "$tags", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 20 }
+    ]);
+    const trendingTags = tagAggregation.map(t => ({ name: t._id, count: t.count }));
+
+    // Get author stats
+    const authorAggregation = await BlogPost.aggregate([
+      { $match: { status: "published" } },
+      { $group: { 
+        _id: "$author", 
+        count: { $sum: 1 },
+        totalLikes: { $sum: "$likes" },
+        totalViews: { $sum: "$views" }
+      }},
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+
+    const authorIds = authorAggregation.map(a => a._id);
+    const authors = await User.find({ _id: { $in: authorIds } })
+      .select("name email avatar role title")
+      .lean();
+
+    const authorStats = authorAggregation.map(a => {
+      const user = authors.find(u => u._id.toString() === a._id.toString());
+      return {
+        author: user,
+        postCount: a.count,
+        totalLikes: a.totalLikes,
+        totalViews: a.totalViews
       };
-    }
-    
-    res.json(blogData);
-  } catch (error) {
-    console.error("Get Blog By Slug Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-
-// ================= GET BLOG BY ID =================
-export const getBlogById = async (req, res) => {
-  try {
-    const blog = await Blog.findById(req.params.id);
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
-    }
-    res.json(blog);
-  } catch (error) {
-    console.error("Get Blog By ID Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-// ================= UPDATE BLOG (FIXED) =================
-export const updateBlog = async (req, res) => {
-  try {
-    const blog = await Blog.findById(req.params.id);
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
-    }
-    
-    const updates = req.body;
-    
-    if (updates.status === 'published' && blog.status !== 'published') {
-      updates.publishedAt = new Date();
-    }
-    
-    // FIXED: If content is updated, recalculate reading time
-    if (updates.content && updates.content !== blog.content) {
-      const plainText = updates.content.replace(/<[^>]*>/g, '');
-      const words = plainText.split(/\s+/).filter(word => word.length > 0);
-      const wordCount = words.length;
-      updates.readingTime = Math.max(1, Math.ceil(wordCount / 200));
-      console.log(`📖 Updated reading time: ${wordCount} words → ${updates.readingTime} min`);
-    }
-    
-    Object.assign(blog, updates);
-    
-    if (updates.title && updates.title !== blog.title) {
-      let newSlug = updates.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-      const existingBlog = await Blog.findOne({ slug: newSlug, _id: { $ne: blog._id } });
-      if (existingBlog) {
-        newSlug = `${newSlug}-${Date.now()}`;
-      }
-      blog.slug = newSlug;
-    }
-    
-    await blog.save();
-    res.json(blog);
-  } catch (error) {
-    console.error("Update Blog Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-// ================= DELETE BLOG =================
-export const deleteBlog = async (req, res) => {
-  try {
-    const blog = await Blog.findById(req.params.id);
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
-    }
-    
-    await blog.deleteOne();
-    res.json({ message: "Blog deleted successfully" });
-  } catch (error) {
-    console.error("Delete Blog Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-// ================= TOGGLE LIKE (Using IP address - NO LOGIN REQUIRED) =================
-export const toggleLike = async (req, res) => {
-  console.log("🔵 toggleLike called");
-  console.log("🔵 Request params:", req.params);
-  console.log("🔵 Request headers - IP:", req.ip);
-  
-  try {
-    const { slug } = req.params;
-    
-    // Get client IP address
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
-                     req.socket.remoteAddress || 
-                     req.ip ||
-                     'unknown';
-    
-    console.log("🔵 Client IP:", clientIp);
-    
-    if (!clientIp || clientIp === 'unknown') {
-      return res.status(400).json({ liked: false, likes: 0, message: "Could not identify your device" });
-    }
-    
-    const blog = await Blog.findOne({ slug });
-    if (!blog) {
-      return res.status(404).json({ liked: false, likes: 0, message: "Blog not found" });
-    }
-    
-    // Check if this IP already liked this blog
-    const existingLike = await BlogLike.findOne({ 
-      blogId: blog._id, 
-      ipAddress: clientIp 
     });
-    
-    if (!existingLike) {
-      // Add like
-      await BlogLike.create({ 
-        blogId: blog._id, 
-        ipAddress: clientIp, 
-        likedAt: new Date() 
-      });
-      blog.likesCount = (blog.likesCount || 0) + 1;
-      await blog.save();
-      console.log(`✅ Like added from IP ${clientIp} - New likes count: ${blog.likesCount}`);
-      return res.json({ liked: true, likes: blog.likesCount });
-    } else {
-      // Remove like (dislike)
-      await BlogLike.deleteOne({ _id: existingLike._id });
-      blog.likesCount = Math.max(0, (blog.likesCount || 0) - 1);
-      await blog.save();
-      console.log(`✅ Like removed from IP ${clientIp} - New likes count: ${blog.likesCount}`);
-      return res.json({ liked: false, likes: blog.likesCount });
-    }
-  } catch (error) {
-    console.error("🔴 Toggle Like Error:", error);
-    res.status(500).json({ liked: false, likes: 0, message: error.message });
-  }
-};
 
-
-// ================= CHECK IF IP HAS LIKED =================
-export const checkUserLiked = async (req, res) => {
-  try {
-    const { slug } = req.params;
-    
-    // Get client IP address
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
-                     req.socket.remoteAddress || 
-                     req.ip ||
-                     'unknown';
-    
-    if (!clientIp || clientIp === 'unknown') {
-      return res.json({ liked: false });
-    }
-    
-    const blog = await Blog.findOne({ slug });
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
-    }
-    
-    const like = await BlogLike.findOne({ 
-      blogId: blog._id, 
-      ipAddress: clientIp 
-    });
-    
-    res.json({ liked: !!like });
-  } catch (error) {
-    console.error("Check User Liked Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-
-// ================= SUBMIT QUIZ =================
-export const submitQuiz = async (req, res) => {
-  try {
-    const { slug } = req.params;
-    const { answers, userName, userId, userEmail } = req.body;
-    
-    const blog = await Blog.findOne({ slug });
-    if (!blog || !blog.hasQuiz) {
-      return res.status(404).json({ message: "Quiz not found" });
-    }
-    
-    let score = 0;
-    const answerDetails = [];
-    
-    blog.quiz.questions.forEach((question, index) => {
-      const userAnswer = answers[index];
-      const isCorrect = userAnswer === question.correctAnswer;
-      if (isCorrect) score++;
-      
-      answerDetails.push({
-        question: question.question,
-        userAnswer: userAnswer !== undefined ? userAnswer : -1,
-        correctAnswer: question.correctAnswer,
-        isCorrect: isCorrect,
-        explanation: question.explanation
-      });
-    });
-    
-    const percentage = (score / blog.quiz.questions.length) * 100;
-    const passed = percentage >= blog.quiz.passingScore;
-    
-    const quizAttempt = await QuizAttempt.create({
-      blogId: blog._id,
-      blogTitle: blog.title,
-      blogSlug: blog.slug,
-      userId: userId || null,
-      userName: userName || "Anonymous",
-      userEmail: userEmail || "",
-      answers: answerDetails,
-      score: score,
-      totalQuestions: blog.quiz.questions.length,
-      percentage: percentage,
-      passed: passed,
-      passingScore: blog.quiz.passingScore
-    });
-    
-    blog.quiz.attempts = (blog.quiz.attempts || 0) + 1;
-    if (passed) blog.quiz.completions = (blog.quiz.completions || 0) + 1;
-    await blog.save();
-    
     res.json({
-      score,
-      total: blog.quiz.questions.length,
-      percentage,
-      passed,
-      passingScore: blog.quiz.passingScore
+      success: true,
+      data: {
+        posts,
+        featuredPost,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+          hasNext: pageNum < Math.ceil(total / limitNum),
+          hasPrev: pageNum > 1
+        },
+        categories,
+        trendingTags,
+        authorStats,
+        totalPosts: total
+      }
     });
   } catch (error) {
-    console.error("Submit Quiz Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-// ================= GET ALL QUIZ RESULTS =================
-export const getAllQuizResults = async (req, res) => {
-  try {
-    const attempts = await QuizAttempt.find()
-      .sort({ completedAt: -1 })
-      .populate('userId', 'name email');
-    
-    const formattedResults = attempts.map(attempt => ({
-      id: attempt._id,
-      userName: attempt.userName,
-      userEmail: attempt.userEmail,
-      blogTitle: attempt.blogTitle,
-      blogSlug: attempt.blogSlug,
-      blogId: attempt.blogId,
-      score: attempt.score,
-      totalQuestions: attempt.totalQuestions,
-      percentage: attempt.percentage,
-      passed: attempt.passed,
-      passingScore: attempt.passingScore,
-      completedAt: attempt.completedAt,
-      answers: attempt.answers
-    }));
-    
-    res.json(formattedResults);
-  } catch (error) {
-    console.error("Get All Quiz Results Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-// ================= ADD COMMENT (Using separate model) =================
-export const addComment = async (req, res) => {
-  try {
-    const { slug } = req.params;
-    const { userName, userEmail, content, userId } = req.body;
-    
-    if (!userName || !content) {
-      return res.status(400).json({ message: "Name and comment are required" });
-    }
-    
-    const blog = await Blog.findOne({ slug });
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
-    }
-    
-    const comment = await BlogComment.create({
-      blogId: blog._id,
-      userId: userId || null,
-      userName,
-      userEmail: userEmail || '',
-      content,
-      isApproved: false,
-      isRead: false
+    console.error("Get blog posts error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch blog posts",
+      error: error.message
     });
-    
-    // Update comment count on blog
-    blog.commentsCount = (blog.commentsCount || 0) + 1;
-    await blog.save();
-    
-    res.json({ message: "Comment submitted for approval", comment });
-  } catch (error) {
-    console.error("Add Comment Error:", error);
-    res.status(500).json({ message: "Server Error" });
   }
 };
 
-// ================= GET APPROVED COMMENTS (Using separate model) =================
-export const getApprovedComments = async (req, res) => {
+// Get blog post by slug
+export const getBlogPostBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
-    
-    const blog = await Blog.findOne({ slug });
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
-    }
-    
-    const approvedComments = await BlogComment.find({
-      blogId: blog._id,
-      isApproved: true
-    }).sort({ createdAt: -1 });
-    
-    res.json(approvedComments);
-  } catch (error) {
-    console.error("Get Approved Comments Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
 
+    const post = await BlogPost.findOne({ slug, status: "published" })
+      .populate("author", "name email avatar role title bio")
+      .populate("relatedPosts", "title slug featuredImage readTime")
+      .lean();
 
-// ================= GET RELATED BLOGS =================
-export const getRelatedBlogs = async (req, res) => {
-  try {
-    const { slug } = req.params;
-    
-    const blog = await Blog.findOne({ slug });
-    if (!blog) {
-      return res.status(404).json({ message: "Blog not found" });
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
     }
-    
-    const relatedBlogs = await Blog.find({
-      _id: { $ne: blog._id },
-      status: 'published',
-      category: blog.category
+
+    // Increment view count
+    await BlogPost.findByIdAndUpdate(post._id, { $inc: { views: 1 } });
+
+    // Get comments
+    const comments = await BlogComment.find({ 
+      postId: post._id, 
+      status: "approved" 
     })
-      .select('-content -quiz')
-      .limit(3)
-      .sort({ publishedAt: -1 });
-    
-    const formattedBlogs = relatedBlogs.map(b => {
-      const blogObj = b.toObject();
-      if (blogObj.featuredImage && typeof blogObj.featuredImage === 'object') {
-        blogObj.featuredImage = blogObj.featuredImage.url || "/blog-default.jpg";
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    // Get related posts
+    let relatedPosts = post.relatedPosts || [];
+    if (relatedPosts.length === 0) {
+      relatedPosts = await BlogPost.find({
+        _id: { $ne: post._id },
+        category: post.category,
+        status: "published"
+      })
+        .select("title slug featuredImage readTime")
+        .limit(3)
+        .lean();
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...post,
+        comments,
+        relatedPosts
       }
-      return blogObj;
     });
-    
-    res.json(formattedBlogs);
   } catch (error) {
-    console.error("Get Related Blogs Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    console.error("Get blog post by slug error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch blog post",
+      error: error.message
+    });
   }
 };
 
-// ================= GET BLOG STATS (Updated with separate models) =================
-export const getBlogStats = async (req, res) => {
+// Get blog post by ID
+export const getBlogPostById = async (req, res) => {
   try {
-    const total = await Blog.countDocuments();
-    const published = await Blog.countDocuments({ status: 'published' });
-    const drafts = await Blog.countDocuments({ status: 'draft' });
-    
-    const totalViewsAgg = await Blog.aggregate([
-      { $group: { _id: null, total: { $sum: '$viewsCount' } } }
-    ]);
-    const totalViews = totalViewsAgg[0]?.total || 0;
-    
-    const totalLikesAgg = await Blog.aggregate([
-      { $group: { _id: null, total: { $sum: '$likesCount' } } }
-    ]);
-    const totalLikes = totalLikesAgg[0]?.total || 0;
-    
-    const topPosts = await Blog.find({ status: 'published' })
-      .select('title slug viewsCount likesCount featuredImage')
-      .sort({ viewsCount: -1 })
-      .limit(5);
-    
-    // Format top posts for frontend
-    const formattedTopPosts = topPosts.map(post => ({
-      _id: post._id,
-      title: post.title,
-      slug: post.slug,
-      views: post.viewsCount,
-      likes: post.likesCount,
-      featuredImage: post.featuredImage
-    }));
-    
+    const { id } = req.params;
+
+    const post = await BlogPost.findById(id)
+      .populate("author", "name email avatar role title bio")
+      .populate("relatedPosts", "title slug featuredImage readTime")
+      .lean();
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    // Get comments
+    const comments = await BlogComment.find({ 
+      postId: post._id, 
+      status: "approved" 
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
     res.json({
-      total,
-      published,
-      drafts,
+      success: true,
+      data: {
+        ...post,
+        comments
+      }
+    });
+  } catch (error) {
+    console.error("Get blog post by ID error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch blog post",
+      error: error.message
+    });
+  }
+};
+
+// Update blog post
+export const updateBlogPost = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // Find existing post
+    const existingPost = await BlogPost.findById(id);
+    if (!existingPost) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    // Handle featured image upload from buffer
+    if (req.file) {
+      try {
+        // Delete old image from Cloudinary if exists
+        if (existingPost.featuredImage) {
+          const oldPublicId = existingPost.featuredImage.split("/").pop().split(".")[0];
+          await deleteFromCloudinary(`blog/featured/${oldPublicId}`);
+        }
+
+        // Upload new image
+        const result = await uploadToCloudinary(req.file.buffer, {
+          folder: "blog/featured",
+          public_id: `featured_${Date.now()}`,
+          transformation: [
+            { width: 1200, height: 630, crop: "fill" },
+            { quality: "auto" }
+          ]
+        });
+        updates.featuredImage = result.secure_url;
+      } catch (uploadError) {
+        console.error("Cloudinary upload error:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload image",
+          error: uploadError.message
+        });
+      }
+    }
+
+    // Parse JSON fields
+    const jsonFields = ['galleryImages', 'tags', 'references', 'learningObjectives', 'statistics'];
+    for (const field of jsonFields) {
+      if (updates[field] && typeof updates[field] === "string") {
+        try {
+          updates[field] = JSON.parse(updates[field]);
+        } catch (e) {
+          updates[field] = [];
+        }
+      }
+    }
+
+    // Update slug if title changed
+    if (updates.title && updates.title !== existingPost.title) {
+      let newSlug = updates.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      
+      const existingSlug = await BlogPost.findOne({ 
+        slug: newSlug, 
+        _id: { $ne: id } 
+      });
+      if (existingSlug) {
+        newSlug += `-${Date.now()}`;
+      }
+      updates.slug = newSlug;
+    }
+
+    // Set publish date if status changed to published
+    if (updates.status === "published" && existingPost.status !== "published") {
+      updates.publishDate = new Date();
+      updates.isPublished = true;
+    }
+
+    // Update the post
+    const updatedPost = await BlogPost.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).populate("author", "name email avatar role title");
+
+    res.json({
+      success: true,
+      message: "Blog post updated successfully",
+      data: updatedPost
+    });
+  } catch (error) {
+    console.error("Update blog post error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update blog post",
+      error: error.message
+    });
+  }
+};
+
+// Delete blog post
+export const deleteBlogPost = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const post = await BlogPost.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    // Delete featured image from Cloudinary
+    if (post.featuredImage) {
+      try {
+        const publicId = post.featuredImage.split("/").pop().split(".")[0];
+        await deleteFromCloudinary(`blog/featured/${publicId}`);
+      } catch (err) {
+        console.error("Failed to delete featured image:", err);
+      }
+    }
+
+    // Delete gallery images from Cloudinary
+    if (post.galleryImages && post.galleryImages.length > 0) {
+      for (const image of post.galleryImages) {
+        try {
+          const publicId = image.split("/").pop().split(".")[0];
+          await deleteFromCloudinary(`blog/gallery/${publicId}`);
+        } catch (err) {
+          console.error("Failed to delete gallery image:", err);
+        }
+      }
+    }
+
+    // Delete comments
+    await BlogComment.deleteMany({ postId: id });
+
+    // Delete the post
+    await BlogPost.findByIdAndDelete(id);
+
+    // Update category count
+    await BlogCategory.findOneAndUpdate(
+      { name: post.category },
+      { $inc: { count: -1 } }
+    );
+
+    res.json({
+      success: true,
+      message: "Blog post deleted successfully"
+    });
+  } catch (error) {
+    console.error("Delete blog post error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete blog post",
+      error: error.message
+    });
+  }
+};
+
+// Bulk delete posts
+export const bulkDeletePosts = async (req, res) => {
+  try {
+    const { postIds } = req.body;
+
+    if (!postIds || !Array.isArray(postIds) || postIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Post IDs array is required"
+      });
+    }
+
+    // Get posts to delete
+    const posts = await BlogPost.find({ _id: { $in: postIds } });
+    
+    // Delete images from Cloudinary
+    for (const post of posts) {
+      if (post.featuredImage) {
+        try {
+          const publicId = post.featuredImage.split("/").pop().split(".")[0];
+          await deleteFromCloudinary(`blog/featured/${publicId}`);
+        } catch (err) {
+          console.error("Failed to delete image:", err);
+        }
+      }
+    }
+
+    // Delete comments
+    await BlogComment.deleteMany({ postId: { $in: postIds } });
+
+    // Delete posts
+    await BlogPost.deleteMany({ _id: { $in: postIds } });
+
+    res.json({
+      success: true,
+      message: `${postIds.length} blog posts deleted successfully`
+    });
+  } catch (error) {
+    console.error("Bulk delete posts error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete posts",
+      error: error.message
+    });
+  }
+};
+
+// Toggle featured
+export const toggleFeatured = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const post = await BlogPost.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    post.featured = !post.featured;
+    await post.save();
+
+    res.json({
+      success: true,
+      message: `Post ${post.featured ? "featured" : "unfeatured"}`,
+      data: { featured: post.featured }
+    });
+  } catch (error) {
+    console.error("Toggle featured error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to toggle featured",
+      error: error.message
+    });
+  }
+};
+
+// Publish blog post
+export const publishBlogPost = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const post = await BlogPost.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    post.status = "published";
+    post.isPublished = true;
+    post.publishDate = new Date();
+    await post.save();
+
+    // Send notification to admin
+    if (global.io) {
+      global.io.to("admin").emit("new_notification", {
+        type: "blog_post_published",
+        message: `Blog post "${post.title}" published`,
+        data: { postId: post._id, title: post.title }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Blog post published successfully",
+      data: post
+    });
+  } catch (error) {
+    console.error("Publish blog post error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to publish blog post",
+      error: error.message
+    });
+  }
+};
+
+// Archive blog post
+export const archiveBlogPost = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const post = await BlogPost.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    post.status = "archived";
+    post.isPublished = false;
+    await post.save();
+
+    res.json({
+      success: true,
+      message: "Blog post archived successfully",
+      data: post
+    });
+  } catch (error) {
+    console.error("Archive blog post error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to archive blog post",
+      error: error.message
+    });
+  }
+};
+
+// Get featured posts
+export const getFeaturedPosts = async (req, res) => {
+  try {
+    const { limit = 3 } = req.query;
+
+    const posts = await BlogPost.find({ 
+      featured: true, 
+      status: "published" 
+    })
+      .populate("author", "name email avatar role title")
+      .sort({ publishDate: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    res.json({
+      success: true,
+      data: posts
+    });
+  } catch (error) {
+    console.error("Get featured posts error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch featured posts",
+      error: error.message
+    });
+  }
+};
+
+// Get trending posts
+export const getTrendingPosts = async (req, res) => {
+  try {
+    const { limit = 5 } = req.query;
+
+    const posts = await BlogPost.find({ status: "published" })
+      .populate("author", "name email avatar role title")
+      .sort({ views: -1, likes: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    res.json({
+      success: true,
+      data: posts
+    });
+  } catch (error) {
+    console.error("Get trending posts error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch trending posts",
+      error: error.message
+    });
+  }
+};
+
+// Get related posts
+export const getRelatedPosts = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit = 3 } = req.query;
+
+    const post = await BlogPost.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    const relatedPosts = await BlogPost.find({
+      _id: { $ne: id },
+      status: "published",
+      $or: [
+        { category: post.category },
+        { tags: { $in: post.tags } }
+      ]
+    })
+      .populate("author", "name email avatar role title")
+      .sort({ publishDate: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    res.json({
+      success: true,
+      data: relatedPosts
+    });
+  } catch (error) {
+    console.error("Get related posts error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch related posts",
+      error: error.message
+    });
+  }
+};
+
+// Get posts by category
+export const getPostsByCategory = async (req, res) => {
+  try {
+    const { category } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const filter = { 
+      category, 
+      status: "published" 
+    };
+
+    const [posts, total] = await Promise.all([
+      BlogPost.find(filter)
+        .populate("author", "name email avatar role title")
+        .sort({ publishDate: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      BlogPost.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        posts,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum)
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Get posts by category error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch posts",
+      error: error.message
+    });
+  }
+};
+
+// Get posts by author
+export const getPostsByAuthor = async (req, res) => {
+  try {
+    const { authorId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const filter = { 
+      author: authorId,
+      status: "published" 
+    };
+
+    const [posts, total] = await Promise.all([
+      BlogPost.find(filter)
+        .populate("author", "name email avatar role title bio")
+        .sort({ publishDate: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      BlogPost.countDocuments(filter)
+    ]);
+
+    // Get author stats
+    const author = await User.findById(authorId).select("name email avatar role title bio");
+
+    const [totalPosts, totalLikes, totalViews] = await Promise.all([
+      BlogPost.countDocuments({ author: authorId, status: "published" }),
+      BlogPost.aggregate([
+        { $match: { author: new mongoose.Types.ObjectId(authorId), status: "published" } },
+        { $group: { _id: null, total: { $sum: "$likes" } } }
+      ]),
+      BlogPost.aggregate([
+        { $match: { author: new mongoose.Types.ObjectId(authorId), status: "published" } },
+        { $group: { _id: null, total: { $sum: "$views" } } }
+      ])
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        author,
+        posts,
+        stats: {
+          totalPosts,
+          totalLikes: totalLikes[0]?.total || 0,
+          totalViews: totalViews[0]?.total || 0
+        },
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum)
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Get posts by author error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch posts",
+      error: error.message
+    });
+  }
+};
+
+// Search posts
+export const searchPosts = async (req, res) => {
+  try {
+    const { q, page = 1, limit = 10, category, tag } = req.query;
+
+    if (!q || q.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query must be at least 2 characters"
+      });
+    }
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const searchRegex = new RegExp(q.trim(), "i");
+    const filter = {
+      status: "published",
+      $or: [
+        { title: searchRegex },
+        { subtitle: searchRegex },
+        { content: searchRegex },
+        { tags: { $in: [searchRegex] } },
+        { authorName: searchRegex }
+      ]
+    };
+
+    if (category) filter.category = category;
+    if (tag) filter.tags = { $in: [tag] };
+
+    const [posts, total] = await Promise.all([
+      BlogPost.find(filter)
+        .populate("author", "name email avatar role title")
+        .sort({ publishDate: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      BlogPost.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        posts,
+        query: q,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum)
+        },
+        suggestions: await getSearchSuggestions(q)
+      }
+    });
+  } catch (error) {
+    console.error("Search posts error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to search posts",
+      error: error.message
+    });
+  }
+};
+
+// Get search suggestions
+const getSearchSuggestions = async (query) => {
+  try {
+    const regex = new RegExp(query.trim(), "i");
+    
+    const [titles, tags, categories] = await Promise.all([
+      BlogPost.find({ status: "published", title: regex })
+        .select("title")
+        .limit(5)
+        .lean(),
+      BlogPost.aggregate([
+        { $match: { status: "published", tags: { $in: [regex] } } },
+        { $unwind: "$tags" },
+        { $match: { tags: regex } },
+        { $group: { _id: "$tags", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 }
+      ]),
+      BlogPost.find({ status: "published", category: regex })
+        .distinct("category")
+        .limit(5)
+    ]);
+
+    return {
+      titles: titles.map(t => t.title),
+      tags: tags.map(t => t._id),
+      categories
+    };
+  } catch (error) {
+    console.error("Get search suggestions error:", error);
+    return { titles: [], tags: [], categories: [] };
+  }
+};
+
+// Get post stats
+export const getPostStats = async (req, res) => {
+  try {
+    const [
+      totalPosts,
+      publishedPosts,
+      draftPosts,
+      pendingPosts,
+      archivedPosts,
+      featuredPosts,
       totalViews,
       totalLikes,
-      topPosts: formattedTopPosts
+      totalComments
+    ] = await Promise.all([
+      BlogPost.countDocuments(),
+      BlogPost.countDocuments({ status: "published" }),
+      BlogPost.countDocuments({ status: "draft" }),
+      BlogPost.countDocuments({ status: "pending" }),
+      BlogPost.countDocuments({ status: "archived" }),
+      BlogPost.countDocuments({ featured: true, status: "published" }),
+      BlogPost.aggregate([{ $group: { _id: null, total: { $sum: "$views" } } }]),
+      BlogPost.aggregate([{ $group: { _id: null, total: { $sum: "$likes" } } }]),
+      BlogComment.countDocuments({ status: "approved" })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalPosts,
+        publishedPosts,
+        draftPosts,
+        pendingPosts,
+        archivedPosts,
+        featuredPosts,
+        totalViews: totalViews[0]?.total || 0,
+        totalLikes: totalLikes[0]?.total || 0,
+        totalComments
+      }
     });
   } catch (error) {
-    console.error("Get Blog Stats Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    console.error("Get post stats error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch stats",
+      error: error.message
+    });
   }
 };
-// ================= SUBSCRIBE TO NEWSLETTER (SIMPLIFIED) =================
-export const subscribeNewsletter = async (req, res) => {
-  console.log("📧 Subscribe request received for:", req.body.email);
-  
+
+// Toggle like
+export const toggleLike = async (req, res) => {
   try {
-    const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({ success: false, message: "Email is required" });
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    const post = await BlogPost.findById(id);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
     }
-    
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
-    }
-    
-    // Check if already subscribed
-    let existingSubscriber = await Subscriber.findOne({ email });
-    
-    if (existingSubscriber) {
-      if (existingSubscriber.isActive) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "This email is already subscribed to our newsletter!" 
-        });
+
+    // If user is authenticated, track their like
+    if (userId) {
+      const likedBy = post.likedBy || [];
+      const hasLiked = likedBy.includes(userId);
+
+      if (hasLiked) {
+        post.likes = Math.max(0, post.likes - 1);
+        post.likedBy = likedBy.filter(id => id.toString() !== userId);
       } else {
-        existingSubscriber.isActive = true;
-        existingSubscriber.subscribedAt = new Date();
-        await existingSubscriber.save();
-        console.log(`✅ Reactivated subscriber: ${email}`);
-        return res.json({ 
-          success: true, 
-          message: "Welcome back! You have been re-subscribed successfully!" 
+        post.likes += 1;
+        post.likedBy = [...likedBy, userId];
+      }
+    } else {
+      // Anonymous like
+      post.likes += 1;
+    }
+
+    await post.save();
+
+    res.json({
+      success: true,
+      data: { likes: post.likes }
+    });
+  } catch (error) {
+    console.error("Toggle like error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to toggle like",
+      error: error.message
+    });
+  }
+};
+
+// Increment views
+export const incrementViews = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await BlogPost.findByIdAndUpdate(id, { $inc: { views: 1 } });
+
+    res.json({
+      success: true,
+      message: "View counted"
+    });
+  } catch (error) {
+    console.error("Increment views error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to increment views",
+      error: error.message
+    });
+  }
+};
+
+// ==================== CATEGORY CONTROLLERS ====================
+
+// Create category
+export const createCategory = async (req, res) => {
+  try {
+    const { name, description, icon, color } = req.body;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Category name is required"
+      });
+    }
+
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    const existingCategory = await BlogCategory.findOne({ slug });
+    if (existingCategory) {
+      return res.status(400).json({
+        success: false,
+        message: "Category already exists"
+      });
+    }
+
+    const category = await BlogCategory.create({
+      name,
+      slug,
+      description,
+      icon,
+      color
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Category created successfully",
+      data: category
+    });
+  } catch (error) {
+    console.error("Create category error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create category",
+      error: error.message
+    });
+  }
+};
+
+// Get all categories
+export const getAllCategories = async (req, res) => {
+  try {
+    const categories = await BlogCategory.find({ isActive: true })
+      .sort({ count: -1, name: 1 })
+      .lean();
+
+    res.json({
+      success: true,
+      data: categories
+    });
+  } catch (error) {
+    console.error("Get categories error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch categories",
+      error: error.message
+    });
+  }
+};
+
+// Get category by slug
+export const getCategoryBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const category = await BlogCategory.findOne({ slug });
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      data: category
+    });
+  } catch (error) {
+    console.error("Get category error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch category",
+      error: error.message
+    });
+  }
+};
+
+// Update category
+export const updateCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, icon, color, isActive } = req.body;
+
+    const category = await BlogCategory.findById(id);
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found"
+      });
+    }
+
+    if (name && name !== category.name) {
+      const slug = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      
+      const existing = await BlogCategory.findOne({ slug, _id: { $ne: id } });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: "Category with this name already exists"
         });
       }
+      category.slug = slug;
     }
-    
-    // Create new subscriber
-    const newSubscriber = new Subscriber({
-      email,
-      subscribedAt: new Date(),
-      isActive: true
-    });
-    
-    await newSubscriber.save();
-    console.log(`✅ New subscriber added: ${email}`);
-    
-    res.json({ 
-      success: true, 
-      message: "Successfully subscribed to our newsletter!" 
+
+    category.name = name || category.name;
+    category.description = description !== undefined ? description : category.description;
+    category.icon = icon !== undefined ? icon : category.icon;
+    category.color = color !== undefined ? color : category.color;
+    category.isActive = isActive !== undefined ? isActive : category.isActive;
+
+    await category.save();
+
+    res.json({
+      success: true,
+      message: "Category updated successfully",
+      data: category
     });
   } catch (error) {
-    console.error("Subscribe Error:", error);
-    if (error.code === 11000) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "This email is already subscribed!" 
+    console.error("Update category error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update category",
+      error: error.message
+    });
+  }
+};
+
+// Delete category
+export const deleteCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const category = await BlogCategory.findById(id);
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found"
       });
     }
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to subscribe. Please try again later." 
-    });
-  }
-};
 
-// backend/src/controllers/blogController.js
-
-// ================= GET SUBSCRIBERS (FIXED - using Subscriber model) =================
-export const getSubscribers = async (req, res) => {
-  try {
-    console.log("🔵 Fetching subscribers from Subscriber model...");
-    
-    // Get all active subscribers
-    const subscribers = await Subscriber.find({ isActive: true })
-      .sort({ subscribedAt: -1 });
-    
-    const inactiveCount = await Subscriber.countDocuments({ isActive: false });
-    
-    console.log(`✅ Found ${subscribers.length} active subscribers`);
-    
-    res.json({ 
-      subscribers: subscribers,
-      total: subscribers.length,
-      inactive: inactiveCount 
-    });
-  } catch (error) {
-    console.error("Get Subscribers Error:", error);
-    res.status(500).json({ message: "Server Error", error: error.message });
-  }
-};
-
-// ================= UNSUBSCRIBE NEWSLETTER (FIXED) =================
-export const unsubscribeNewsletter = async (req, res) => {
-  try {
-    const { email } = req.params;
-    
-    console.log(`🔵 Unsubscribe request for: ${email}`);
-    
-    const subscriber = await Subscriber.findOne({ email });
-    
-    if (subscriber) {
-      subscriber.isActive = false;
-      await subscriber.save();
-      console.log(`✅ Unsubscribed: ${email}`);
-      return res.json({ success: true, message: "Successfully unsubscribed from our newsletter." });
+    // Check if there are posts in this category
+    const postCount = await BlogPost.countDocuments({ category: category.name });
+    if (postCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete category with ${postCount} posts. Reassign posts first.`
+      });
     }
-    
-    res.json({ success: true, message: "Email not found in subscribers list." });
+
+    await BlogCategory.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: "Category deleted successfully"
+    });
   } catch (error) {
-    console.error("Unsubscribe Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    console.error("Delete category error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete category",
+      error: error.message
+    });
   }
 };
 
-// ================= GET PENDING COMMENTS =================
-export const getPendingComments = async (req, res) => {
+// ==================== COMMENT CONTROLLERS ====================
+
+// Add comment
+export const addComment = async (req, res) => {
   try {
-    const pendingComments = await BlogComment.find({ isApproved: false })
-      .populate('userId', 'name email')
-      .sort({ createdAt: -1 });
-    
-    // Get blog titles for each comment
-    const commentsWithBlogs = await Promise.all(pendingComments.map(async (comment) => {
-      const blog = await Blog.findById(comment.blogId).select('title slug');
-      return {
-        id: comment._id,
-        blogId: comment.blogId,
-        blogTitle: blog?.title || 'Unknown',
-        blogSlug: blog?.slug || '',
-        userName: comment.userName,
-        userEmail: comment.userEmail,
-        content: comment.content,
-        createdAt: comment.createdAt,
-        isApproved: comment.isApproved
-      };
-    }));
-    
-    res.json(commentsWithBlogs);
+    const { postId } = req.params;
+    const { content, authorName, authorEmail } = req.body;
+
+    if (!content || !authorName || !authorEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "Content, author name, and email are required"
+      });
+    }
+
+    const post = await BlogPost.findById(postId);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog post not found"
+      });
+    }
+
+    if (!post.allowComments) {
+      return res.status(403).json({
+        success: false,
+        message: "Comments are disabled for this post"
+      });
+    }
+
+    const comment = await BlogComment.create({
+      postId,
+      author: req.user?.id,
+      authorName,
+      authorEmail,
+      content,
+      status: "pending",
+      authorAvatar: req.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=random`
+    });
+
+    // Increment comment count
+    await BlogPost.findByIdAndUpdate(postId, { $inc: { comments: 1 } });
+
+    // Notify admin
+    if (global.io) {
+      global.io.to("admin").emit("new_notification", {
+        type: "blog_comment",
+        message: `New comment on "${post.title}" from ${authorName}`,
+        data: { postId, commentId: comment._id, postTitle: post.title }
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Comment submitted for approval",
+      data: comment
+    });
   } catch (error) {
-    console.error("Get Pending Comments Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    console.error("Add comment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to add comment",
+      error: error.message
+    });
   }
 };
 
+// Get comments
+export const getComments = async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const { status = "approved", page = 1, limit = 20 } = req.query;
 
-// ================= APPROVE COMMENT =================
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const filter = { postId };
+    if (status !== "all") filter.status = status;
+
+    const [comments, total] = await Promise.all([
+      BlogComment.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      BlogComment.countDocuments(filter)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        comments,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum)
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Get comments error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch comments",
+      error: error.message
+    });
+  }
+};
+
+// Approve comment
 export const approveComment = async (req, res) => {
   try {
-    const { blogId, commentId } = req.params;
-    
-    const comment = await BlogComment.findById(commentId);
+    const { id } = req.params;
+
+    const comment = await BlogComment.findById(id);
     if (!comment) {
-      return res.status(404).json({ message: "Comment not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Comment not found"
+      });
     }
-    
+
+    comment.status = "approved";
     comment.isApproved = true;
     await comment.save();
-    
-    res.json({ message: "Comment approved successfully", comment });
+
+    res.json({
+      success: true,
+      message: "Comment approved successfully",
+      data: comment
+    });
   } catch (error) {
-    console.error("Approve Comment Error:", error);
-    res.status(500).json({ message: "Server Error" });
+    console.error("Approve comment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to approve comment",
+      error: error.message
+    });
   }
 };
 
+// Reject comment
+export const rejectComment = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-// ================= DELETE COMMENT =================
+    const comment = await BlogComment.findById(id);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: "Comment not found"
+      });
+    }
+
+    comment.status = "rejected";
+    await comment.save();
+
+    res.json({
+      success: true,
+      message: "Comment rejected successfully",
+      data: comment
+    });
+  } catch (error) {
+    console.error("Reject comment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to reject comment",
+      error: error.message
+    });
+  }
+};
+
+// Delete comment
 export const deleteComment = async (req, res) => {
   try {
-    const { blogId, commentId } = req.params;
-    
-    const comment = await BlogComment.findByIdAndDelete(commentId);
+    const { id } = req.params;
+
+    const comment = await BlogComment.findById(id);
     if (!comment) {
-      return res.status(404).json({ message: "Comment not found" });
-    }
-    
-    // Update blog comment count
-    const blog = await Blog.findById(blogId);
-    if (blog) {
-      blog.commentsCount = Math.max(0, (blog.commentsCount || 0) - 1);
-      await blog.save();
-    }
-    
-    res.json({ message: "Comment deleted successfully" });
-  } catch (error) {
-    console.error("Delete Comment Error:", error);
-    res.status(500).json({ message: "Server Error" });
-  }
-};
-
-// ================= UPLOAD FEATURED IMAGE =================
-export const uploadFeaturedImage = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
-    
-    const result = await new Promise((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: "alveoly-blogs",
-          transformation: [{ width: 1200, height: 630, crop: "fill" }]
-        },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
-      );
-      streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
-    });
-    
-    res.json({
-      success: true,
-      url: result.secure_url,
-      publicId: result.public_id,
-      format: result.format,
-      size: result.bytes
-    });
-  } catch (error) {
-    console.error("Upload Error:", error);
-    res.status(500).json({ message: "Failed to upload image" });
-  }
-};
-
-// ================= UPLOAD GALLERY IMAGES =================
-export const uploadGalleryImages = async (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: "No files uploaded" });
-    }
-    
-    const images = [];
-    
-    for (const file of req.files) {
-      const result = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            folder: "alveoly-blog-images",
-            transformation: [{ width: 1920, height: 1080, crop: "limit" }]
-          },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
-          }
-        );
-        streamifier.createReadStream(file.buffer).pipe(uploadStream);
-      });
-      
-      images.push({
-        url: result.secure_url,
-        publicId: result.public_id,
-        caption: ""
+      return res.status(404).json({
+        success: false,
+        message: "Comment not found"
       });
     }
-    
+
+    // Decrement comment count
+    await BlogPost.findByIdAndUpdate(comment.postId, { $inc: { comments: -1 } });
+
+    await BlogComment.findByIdAndDelete(id);
+
     res.json({
       success: true,
-      images
+      message: "Comment deleted successfully"
     });
   } catch (error) {
-    console.error("Upload Error:", error);
-    res.status(500).json({ message: "Failed to upload images" });
+    console.error("Delete comment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete comment",
+      error: error.message
+    });
   }
 };
 
-// ================= DELETE IMAGE =================
-export const deleteImage = async (req, res) => {
+// Get comment stats
+export const getCommentStats = async (req, res) => {
   try {
-    const { publicId } = req.params;
-    
-    if (!publicId) {
-      return res.status(400).json({ message: "Public ID is required" });
-    }
-    
-    const result = await cloudinary.uploader.destroy(publicId);
-    
-    if (result.result === 'ok') {
-      res.json({ success: true, message: "Image deleted successfully" });
-    } else {
-      res.status(404).json({ message: "Image not found" });
-    }
+    const [total, pending, approved, rejected, spam] = await Promise.all([
+      BlogComment.countDocuments(),
+      BlogComment.countDocuments({ status: "pending" }),
+      BlogComment.countDocuments({ status: "approved" }),
+      BlogComment.countDocuments({ status: "rejected" }),
+      BlogComment.countDocuments({ status: "spam" })
+    ]);
+
+    // Get recent comments
+    const recent = await BlogComment.find()
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("postId", "title slug")
+      .lean();
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        pending,
+        approved,
+        rejected,
+        spam,
+        recent
+      }
+    });
   } catch (error) {
-    console.error("Delete Error:", error);
-    res.status(500).json({ message: "Failed to delete image" });
+    console.error("Get comment stats error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch comment stats",
+      error: error.message
+    });
   }
 };

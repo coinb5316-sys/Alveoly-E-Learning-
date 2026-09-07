@@ -1,65 +1,104 @@
-// backend/src/routes/blogRoutes.js
+// routes/blogRoutes.js
 import express from "express";
 import {
-  createBlog,
-  getBlogs,
-  getPublicBlogs,
-  getBlogBySlug,
-  getBlogById,
-  updateBlog,
-  deleteBlog,
-  toggleLike,
-  checkUserLiked,
-  submitQuiz,
+  createBlogPost,
+  getAllBlogPosts,
+  getBlogPostBySlug,
+  getBlogPostById,
+  updateBlogPost,
+  deleteBlogPost,
+  toggleFeatured,
+  publishBlogPost,
+  archiveBlogPost,
+  getFeaturedPosts,
+  getTrendingPosts,
+  getRelatedPosts,
+  getPostsByCategory,
+  getPostsByAuthor,
+  searchPosts,
+  getPostStats,
+  bulkDeletePosts,
+  // Categories
+  createCategory,
+  getAllCategories,
+  getCategoryBySlug,
+  updateCategory,
+  deleteCategory,
+  // Comments
   addComment,
-  getApprovedComments,
-  getPendingComments,
+  getComments,
   approveComment,
+  rejectComment,
   deleteComment,
-  getRelatedBlogs,
-  getBlogStats,
-  uploadFeaturedImage,
-  uploadGalleryImages,
-  deleteImage,
-  subscribeNewsletter,
-  getSubscribers,
-  unsubscribeNewsletter,
-  getAllQuizResults
+  getCommentStats,
+  // Likes
+  toggleLike,
+  // Views
+  incrementViews
 } from "../controllers/blogController.js";
-import { adminOnly, protect } from "../middleware/authMiddleware.js";
-import upload from "../middleware/upload.js";
+import { protect, adminOnly } from "../middleware/authMiddleware.js";
+import { upload } from "../config/multer.js";
 
 const router = express.Router();
 
-// ================= PUBLIC ROUTES (NO AUTH REQUIRED) =================
-// These must come BEFORE any protected routes
-router.post("/subscribe", subscribeNewsletter);
-router.delete("/unsubscribe/:email", unsubscribeNewsletter);
-router.get("/public", getPublicBlogs);
-router.get("/public/:slug", getBlogBySlug);
-router.get("/public/:slug/related", getRelatedBlogs);
-router.get("/public/:slug/comments", getApprovedComments);
-router.post("/public/:slug/like", toggleLike);
-router.get("/public/:slug/liked", checkUserLiked);
-router.post("/public/:slug/quiz", submitQuiz);
-router.post("/public/:slug/comment", addComment);
+// ==================== POST ROUTES ====================
 
-// ================= PROTECTED ROUTES (Admin Only) =================
-router.get("/quiz-results", protect, adminOnly, getAllQuizResults);
-router.get("/", protect, adminOnly, getBlogs);
-router.get("/stats", protect, adminOnly, getBlogStats);
-router.get("/comments/pending", protect, adminOnly, getPendingComments);
-router.get("/subscribers", protect, adminOnly, getSubscribers);
-router.get("/:id", protect, adminOnly, getBlogById);
-router.post("/", protect, adminOnly, createBlog);
-router.put("/:id", protect, adminOnly, updateBlog);
-router.delete("/:id", protect, adminOnly, deleteBlog);
-router.put("/:blogId/comments/:commentId/approve", protect, adminOnly, approveComment);
-router.delete("/:blogId/comments/:commentId", protect, adminOnly, deleteComment);
+// Public routes
+router.get("/posts", getAllBlogPosts);
+router.get("/posts/featured", getFeaturedPosts);
+router.get("/posts/trending", getTrendingPosts);
+router.get("/posts/search", searchPosts);
+router.get("/posts/stats", getPostStats);
+router.get("/posts/category/:category", getPostsByCategory);
+router.get("/posts/author/:authorId", getPostsByAuthor);
+router.get("/posts/slug/:slug", getBlogPostBySlug);
+router.get("/posts/:id", getBlogPostById);
+router.get("/posts/:id/related", getRelatedPosts);
 
-// ================= IMAGE UPLOAD ROUTES =================
-router.post("/upload/featured", protect, adminOnly, upload.single("image"), uploadFeaturedImage);
-router.post("/upload/gallery", protect, adminOnly, upload.array("images", 10), uploadGalleryImages);
-router.delete("/image/:publicId", protect, adminOnly, deleteImage);
+// Protected routes (Admin only)
+router.post(
+  "/posts",
+  protect,
+  adminOnly,
+  upload.single("featuredImage"),
+  createBlogPost
+);
+
+router.put(
+  "/posts/:id",
+  protect,
+  adminOnly,
+  upload.single("featuredImage"),
+  updateBlogPost
+);
+
+router.delete("/posts/:id", protect, adminOnly, deleteBlogPost);
+router.delete("/posts/bulk", protect, adminOnly, bulkDeletePosts);
+router.patch("/posts/:id/featured", protect, adminOnly, toggleFeatured);
+router.patch("/posts/:id/publish", protect, adminOnly, publishBlogPost);
+router.patch("/posts/:id/archive", protect, adminOnly, archiveBlogPost);
+
+// Public interaction routes
+router.post("/posts/:id/like", toggleLike);
+router.post("/posts/:id/view", incrementViews);
+
+// ==================== CATEGORY ROUTES ====================
+
+router.get("/categories", getAllCategories);
+router.get("/categories/:slug", getCategoryBySlug);
+
+router.post("/categories", protect, adminOnly, createCategory);
+router.put("/categories/:id", protect, adminOnly, updateCategory);
+router.delete("/categories/:id", protect, adminOnly, deleteCategory);
+
+// ==================== COMMENT ROUTES ====================
+
+router.get("/comments/:postId", getComments);
+router.post("/comments/:postId", addComment);
+
+router.put("/comments/:id/approve", protect, adminOnly, approveComment);
+router.put("/comments/:id/reject", protect, adminOnly, rejectComment);
+router.delete("/comments/:id", protect, adminOnly, deleteComment);
+router.get("/comments/stats", protect, adminOnly, getCommentStats);
 
 export default router;

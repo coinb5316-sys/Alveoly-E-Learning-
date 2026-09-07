@@ -1,46 +1,63 @@
-// backend/src/models/BlogComment.js
+// models/BlogComment.js
 import mongoose from "mongoose";
 
-const blogCommentSchema = new mongoose.Schema(
-  {
-    blogId: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'Blog', 
-      required: true 
-    },
-    userId: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'User' 
-    },
-    userName: { 
-      type: String, 
-      required: true 
-    },
-    userEmail: { 
-      type: String 
-    },
-    content: { 
-      type: String, 
-      required: true 
-    },
-    isApproved: { 
-      type: Boolean, 
-      default: false 
-    },
-    isRead: { 
-      type: Boolean, 
-      default: false 
-    },
-    parentCommentId: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'BlogComment' 
-    }
+const blogCommentSchema = new mongoose.Schema({
+  postId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "BlogPost",
+    required: true
   },
-  { timestamps: true }
-);
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
+  },
+  authorName: {
+    type: String,
+    required: true
+  },
+  authorEmail: {
+    type: String,
+    required: true
+  },
+  authorAvatar: {
+    type: String
+  },
+  content: {
+    type: String,
+    required: [true, "Comment content is required"],
+    trim: true,
+    maxlength: [1000, "Comment cannot exceed 1000 characters"]
+  },
+  status: {
+    type: String,
+    enum: ["pending", "approved", "rejected", "spam"],
+    default: "pending"
+  },
+  likes: {
+    type: Number,
+    default: 0
+  },
+  replies: [{
+    authorName: String,
+    authorEmail: String,
+    content: String,
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  isApproved: {
+    type: Boolean,
+    default: false
+  }
+}, {
+  timestamps: true
+});
 
 // Indexes
-blogCommentSchema.index({ blogId: 1, isApproved: 1, createdAt: -1 });
-blogCommentSchema.index({ blogId: 1, createdAt: -1 });
+blogCommentSchema.index({ postId: 1 });
+blogCommentSchema.index({ status: 1 });
+blogCommentSchema.index({ createdAt: -1 });
 
-export default mongoose.model('BlogComment', blogCommentSchema);
+const BlogComment = mongoose.model("BlogComment", blogCommentSchema);
+export default BlogComment;
