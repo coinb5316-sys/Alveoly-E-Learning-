@@ -1,4 +1,4 @@
-// models/BlogCategory.js - FIXED
+// models/BlogCategory.js - COMPLETELY FIXED
 import mongoose from "mongoose";
 
 const blogCategorySchema = new mongoose.Schema({
@@ -40,23 +40,22 @@ const blogCategorySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Pre-save middleware to generate slug
+// SINGLE pre-save middleware - combine both operations
 blogCategorySchema.pre("save", function(next) {
+  // Trim name
+  if (this.name) {
+    this.name = this.name.trim();
+  }
+  
+  // Generate slug from name
   if (this.isModified('name') && this.name) {
     this.slug = this.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
   }
-  next();
-});
-
-// Pre-save middleware to trim name
-blogCategorySchema.pre("save", function(next) {
-  if (this.name) {
-    this.name = this.name.trim();
-  }
-  next();
+  
+  next(); // Make sure this is called exactly once
 });
 
 const BlogCategory = mongoose.model("BlogCategory", blogCategorySchema);
