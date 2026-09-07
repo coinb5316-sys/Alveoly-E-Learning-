@@ -4,8 +4,9 @@ import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
 import BlogComment from "../models/BlogComment.js";
 import User from "../models/User.js";
-// Change these imports - config is in backend/config/, not src/config/
-import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../config/cloudinary.js";
+// CORRECTED: Import from root config folder (../../config/)
+import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
+
 // Import notification service
 import { emitAdminNotification } from "../services/notificationService.js";
 
