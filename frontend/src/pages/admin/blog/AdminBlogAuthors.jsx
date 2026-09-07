@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminBlogAuthors.jsx - COMPLETE WITH API INTEGRATION
+// src/pages/admin/blog/AdminBlogAuthors.jsx - COMPLETE FIXED
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -19,16 +19,20 @@ import {
   RefreshCw,
   Loader2,
   Check,
-  Twitter,
-  Linkedin,
-  Mail as MailIcon,
-  Globe,
-  UserCheck,
-  UserX,
-  Clock
+  // Twitter and Linkedin are not in lucide-react, use these instead:
+  // Or import from react-icons/fa
 } from 'lucide-react';
+// Import social icons from react-icons
+import { FaTwitter, FaLinkedin, FaGlobe } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../../../api/blogApi';
+
+// FileText icon component
+const FileText = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
 
 const AdminBlogAuthors = () => {
   const [authors, setAuthors] = useState([]);
@@ -155,8 +159,6 @@ const AdminBlogAuthors = () => {
       if (editingAuthor) {
         response = await blogAPI.updateAuthor(editingAuthor._id, formData);
       } else {
-        // For now, we're using the update endpoint since we don't have a create author endpoint
-        // In a real implementation, you'd want to create a new user with role 'author'
         toast.error('Creating new authors is not yet implemented. Please use existing users.');
         setSaving(false);
         return;
@@ -445,7 +447,7 @@ const AdminBlogAuthors = () => {
                     rel="noopener noreferrer"
                     className="p-1.5 bg-[#1da1f2]/10 text-[#1da1f2] rounded hover:bg-[#1da1f2]/20 transition"
                   >
-                    <Twitter className="h-4 w-4" />
+                    <FaTwitter className="h-4 w-4" />
                   </a>
                   <a
                     href={author.social?.linkedin}
@@ -453,13 +455,13 @@ const AdminBlogAuthors = () => {
                     rel="noopener noreferrer"
                     className="p-1.5 bg-[#0a66c2]/10 text-[#0a66c2] rounded hover:bg-[#0a66c2]/20 transition"
                   >
-                    <Linkedin className="h-4 w-4" />
+                    <FaLinkedin className="h-4 w-4" />
                   </a>
                   <a
                     href={`mailto:${author.email}`}
                     className="p-1.5 bg-[#ea4335]/10 text-[#ea4335] rounded hover:bg-[#ea4335]/20 transition"
                   >
-                    <MailIcon className="h-4 w-4" />
+                    <Mail className="h-4 w-4" />
                   </a>
                   {author.website && (
                     <a
@@ -468,7 +470,7 @@ const AdminBlogAuthors = () => {
                       rel="noopener noreferrer"
                       className="p-1.5 bg-[#4285f4]/10 text-[#4285f4] rounded hover:bg-[#4285f4]/20 transition"
                     >
-                      <Globe className="h-4 w-4" />
+                      <FaGlobe className="h-4 w-4" />
                     </a>
                   )}
                 </div>
@@ -780,7 +782,7 @@ const AdminBlogAuthors = () => {
                       rel="noopener noreferrer"
                       className="p-2 bg-[#1da1f2] text-white rounded-lg hover:shadow-lg transition"
                     >
-                      <Twitter className="h-4 w-4" />
+                      <FaTwitter className="h-4 w-4" />
                     </a>
                   )}
                   {selectedAuthor.social.linkedin && (
@@ -790,14 +792,14 @@ const AdminBlogAuthors = () => {
                       rel="noopener noreferrer"
                       className="p-2 bg-[#0a66c2] text-white rounded-lg hover:shadow-lg transition"
                     >
-                      <Linkedin className="h-4 w-4" />
+                      <FaLinkedin className="h-4 w-4" />
                     </a>
                   )}
                   <a
                     href={`mailto:${selectedAuthor.email}`}
                     className="p-2 bg-[#ea4335] text-white rounded-lg hover:shadow-lg transition"
                   >
-                    <MailIcon className="h-4 w-4" />
+                    <Mail className="h-4 w-4" />
                   </a>
                 </div>
               )}
@@ -830,10 +832,22 @@ const AdminBlogAuthors = () => {
   );
 };
 
-// Add missing FileText icon (if not imported)
-const FileText = ({ className }) => (
+// Add missing UserCheck, UserX, Clock components
+const UserCheck = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+  </svg>
+);
+
+const UserX = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zm-4 7a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+  </svg>
+);
+
+const Clock = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 );
 
