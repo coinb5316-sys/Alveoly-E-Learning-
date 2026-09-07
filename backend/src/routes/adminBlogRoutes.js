@@ -39,7 +39,6 @@ import {
   createTag
 } from "../controllers/adminBlogController.js";
 // routes/adminBlogRoutes.js - Add at the top
-import BlogTag from "../models/BlogTag.js";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 import { upload } from "../../config/multer.js";
 

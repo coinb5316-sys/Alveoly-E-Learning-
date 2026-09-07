@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
 import BlogComment from "../models/BlogComment.js";
-import BlogTag from "../models/BlogTag.js";
 import User from "../models/User.js";
 // FIX: Import from root config folder (../../config/)
 import cloudinary, { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
@@ -290,53 +289,43 @@ export const deleteAuthor = async (req, res) => {
 
 // ==================== TAG MANAGEMENT ====================
 
+// Get all tags - from posts aggregation
 export const getAllTags = async (req, res) => {
   try {
     const { search } = req.query;
 
-    // Query the Tag model directly
-    let query = {};
+    // Build aggregation pipeline
+    let pipeline = [
+      { $unwind: "$tags" },
+      { $group: { 
+        _id: "$tags", 
+        count: { $sum: 1 }
+      }},
+      { $sort: { count: -1 } }
+    ];
+
     if (search) {
-      query.name = { $regex: search, $options: 'i' };
-    }
-
-    const tags = await BlogTag.find(query)
-      .sort({ count: -1, name: 1 })
-      .lean();
-
-    // If no tags in the Tag model, fallback to aggregating from posts
-    if (tags.length === 0) {
-      const pipeline = [
+      pipeline = [
         { $unwind: "$tags" },
+        { $match: { tags: { $regex: search, $options: 'i' } } },
         { $group: { 
           _id: "$tags", 
           count: { $sum: 1 }
         }},
         { $sort: { count: -1 } }
       ];
-
-      if (search) {
-        pipeline.unshift({ 
-          $match: { tags: { $regex: search, $options: 'i' } } 
-        });
-      }
-
-      const aggregatedTags = await BlogPost.aggregate(pipeline);
-
-      return res.json({
-        success: true,
-        data: aggregatedTags.map(tag => ({
-          name: tag._id,
-          slug: tag._id.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
-          count: tag.count,
-          color: getTagColor(tag._id)
-        }))
-      });
     }
+
+    const tags = await BlogPost.aggregate(pipeline);
 
     res.json({
       success: true,
-      data: tags
+      data: tags.map(tag => ({
+        name: tag._id,
+        slug: tag._id.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
+        count: tag.count,
+        color: getTagColor(tag._id)
+      }))
     });
   } catch (error) {
     console.error("Get tags error:", error);
@@ -348,6 +337,7 @@ export const getAllTags = async (req, res) => {
   }
 };
 
+// Create tag - just check if it exists in posts
 export const createTag = async (req, res) => {
   try {
     const { name, color } = req.body;
@@ -361,57 +351,34 @@ export const createTag = async (req, res) => {
       });
     }
 
-    // Check if tag already exists in Tag model
-    const existingTag = await BlogTag.findOne({ 
-      name: { $regex: new RegExp(`^${name}$`, 'i') } 
-    });
-    
-    if (existingTag) {
+    // Check if tag already exists in any post
+    const existingPost = await BlogPost.findOne({ tags: name });
+    if (existingPost) {
       return res.status(400).json({
         success: false,
         message: "Tag already exists"
       });
     }
 
-    // Generate slug
     const slug = name
       .toLowerCase()
       .trim()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    // Create new tag
-    const tag = new BlogTag({
-      name: name.trim(),
-      slug,
-      color: color || '#3b82f6',
-      count: 0
-    });
-
-    await tag.save();
-
-    console.log("Tag created successfully:", tag);
-
+    // Return the created tag (it will be added to posts when used)
     res.status(201).json({
       success: true,
       message: "Tag created successfully",
-      data: tag
+      data: {
+        name: name.trim(),
+        slug,
+        color: color || '#3b82f6',
+        count: 0
+      }
     });
   } catch (error) {
-    console.error("Create tag error details:", {
-      message: error.message,
-      stack: error.stack,
-      code: error.code,
-      name: error.name
-    });
-    
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: "Tag with this name or slug already exists"
-      });
-    }
-    
+    console.error("Create tag error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to create tag",
@@ -420,10 +387,11 @@ export const createTag = async (req, res) => {
   }
 };
 
+// Update tag - update in all posts
 export const updateTag = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, color } = req.body;
+    const { name } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -432,51 +400,40 @@ export const updateTag = async (req, res) => {
       });
     }
 
-    const tag = await BlogTag.findById(id);
-    if (!tag) {
+    // Find all posts with this tag
+    const posts = await BlogPost.find({ tags: id });
+    
+    if (posts.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Tag not found"
       });
     }
 
-    // Check if new name already exists
-    if (name !== tag.name) {
-      const existingTag = await BlogTag.findOne({ 
-        name: { $regex: new RegExp(`^${name}$`, 'i') },
-        _id: { $ne: id }
-      });
-      
-      if (existingTag) {
-        return res.status(400).json({
-          success: false,
-          message: "Tag with this name already exists"
-        });
+    // Update tag in all posts
+    for (const post of posts) {
+      const tagIndex = post.tags.indexOf(id);
+      if (tagIndex !== -1) {
+        post.tags[tagIndex] = name;
+        await post.save();
       }
-
-      // Generate new slug
-      tag.slug = name
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-
-      // Update tag name in all posts
-      await BlogPost.updateMany(
-        { tags: tag.name },
-        { $set: { "tags.$": name } }
-      );
     }
 
-    tag.name = name.trim();
-    if (color) tag.color = color;
-
-    await tag.save();
+    const slug = name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
 
     res.json({
       success: true,
       message: "Tag updated successfully",
-      data: tag
+      data: {
+        oldName: id,
+        newName: name,
+        slug,
+        postsUpdated: posts.length
+      }
     });
   } catch (error) {
     console.error("Update tag error:", error);
@@ -488,26 +445,16 @@ export const updateTag = async (req, res) => {
   }
 };
 
+// Delete tag - remove from all posts
 export const deleteTag = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const tag = await BlogTag.findById(id);
-    if (!tag) {
-      return res.status(404).json({
-        success: false,
-        message: "Tag not found"
-      });
-    }
-
     // Remove tag from all posts
     await BlogPost.updateMany(
-      { tags: tag.name },
-      { $pull: { tags: tag.name } }
+      { tags: id },
+      { $pull: { tags: id } }
     );
-
-    // Delete the tag
-    await BlogTag.findByIdAndDelete(id);
 
     res.json({
       success: true,
@@ -526,30 +473,26 @@ export const deleteTag = async (req, res) => {
 export const getTagBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
+    const tagName = slug.replace(/-/g, " ");
 
-    const tag = await BlogTag.findOne({ slug });
-    if (!tag) {
-      return res.status(404).json({
-        success: false,
-        message: "Tag not found"
-      });
-    }
-
-    // Get posts with this tag
     const posts = await BlogPost.find({
-      tags: tag.name,
-      status: "published"
+      tags: { $in: [tagName] }
     })
       .populate("author", "name email avatar role")
       .sort({ publishDate: -1 })
       .lean();
 
+    const count = await BlogPost.countDocuments({
+      tags: { $in: [tagName] }
+    });
+
     res.json({
       success: true,
       data: {
-        ...tag.toObject(),
-        posts,
-        postCount: posts.length
+        name: tagName,
+        slug,
+        count,
+        posts
       }
     });
   } catch (error) {
