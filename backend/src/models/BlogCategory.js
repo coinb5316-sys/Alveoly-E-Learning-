@@ -1,4 +1,4 @@
-// models/BlogCategory.js
+// models/BlogCategory.js - FIXED
 import mongoose from "mongoose";
 
 const blogCategorySchema = new mongoose.Schema({
@@ -17,10 +17,12 @@ const blogCategorySchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    trim: true
+    trim: true,
+    default: ''
   },
   icon: {
-    type: String
+    type: String,
+    default: ''
   },
   color: {
     type: String,
@@ -40,11 +42,19 @@ const blogCategorySchema = new mongoose.Schema({
 
 // Pre-save middleware to generate slug
 blogCategorySchema.pre("save", function(next) {
-  if (this.name && !this.slug) {
+  if (this.isModified('name') && this.name) {
     this.slug = this.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
+  }
+  next();
+});
+
+// Pre-save middleware to trim name
+blogCategorySchema.pre("save", function(next) {
+  if (this.name) {
+    this.name = this.name.trim();
   }
   next();
 });

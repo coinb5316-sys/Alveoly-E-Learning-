@@ -1163,10 +1163,12 @@ export const incrementViews = async (req, res) => {
 
 // ==================== CATEGORY CONTROLLERS ====================
 
-// Create category
+// controllers/blogController.js - Updated createCategory with better error handling
 export const createCategory = async (req, res) => {
   try {
     const { name, description, icon, color } = req.body;
+
+    console.log("Creating category with data:", { name, description, icon, color });
 
     if (!name) {
       return res.status(400).json({
@@ -1180,21 +1182,32 @@ export const createCategory = async (req, res) => {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    const existingCategory = await BlogCategory.findOne({ slug });
+    console.log("Generated slug:", slug);
+
+    // Check if category already exists
+    const existingCategory = await BlogCategory.findOne({ 
+      $or: [{ slug }, { name: name }] 
+    });
+    
     if (existingCategory) {
+      console.log("Category already exists:", existingCategory);
       return res.status(400).json({
         success: false,
         message: "Category already exists"
       });
     }
 
-    const category = await BlogCategory.create({
-      name,
+    const category = new BlogCategory({
+      name: name.trim(),
       slug,
-      description,
-      icon,
-      color
+      description: description || '',
+      icon: icon || '',
+      color: color || '#3b82f6'
     });
+
+    console.log("Saving category:", category);
+    await category.save();
+    console.log("Category saved successfully:", category);
 
     res.status(201).json({
       success: true,
@@ -1202,7 +1215,21 @@ export const createCategory = async (req, res) => {
       data: category
     });
   } catch (error) {
-    console.error("Create category error:", error);
+    console.error("Create category error details:", {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      name: error.name
+    });
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Category with this name or slug already exists"
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: "Failed to create category",
