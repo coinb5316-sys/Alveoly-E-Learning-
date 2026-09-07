@@ -1,7 +1,7 @@
-// routes/adminBlogRoutes.js - UPDATED
+// routes/adminBlogRoutes.js - FULLY FIXED
 import express from "express";
 import {
-  // Posts
+  // Posts - from blogController
   createBlogPost,
   getAllBlogPosts,
   getBlogPostById,
@@ -11,32 +11,34 @@ import {
   publishBlogPost,
   archiveBlogPost,
   bulkDeletePosts,
-  // Categories
+  // Categories - from blogController
   createCategory,
   getAllCategories,
   getCategoryBySlug,
   updateCategory,
   deleteCategory,
-} from "../controllers/blogController.js";
-import {
-  // Comments - Import from blogController
+  // Comments - from blogController (these exist there)
   getComments,
   approveComment,
   rejectComment,
   deleteComment,
   getCommentStats,
-  // Authors
+} from "../controllers/blogController.js";
+
+import {
+  // Authors - from adminBlogController
   getAllAuthors,
   getAuthorById,
   updateAuthor,
   deleteAuthor,
-  // Tags
+  // Tags - from adminBlogController
   getAllTags,
   getTagBySlug,
   updateTag,
   deleteTag,
   createTag
 } from "../controllers/adminBlogController.js";
+
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 import { upload } from "../../config/multer.js";
 
