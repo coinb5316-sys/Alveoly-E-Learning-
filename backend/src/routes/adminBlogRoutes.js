@@ -1,4 +1,4 @@
-// routes/adminBlogRoutes.js
+// routes/adminBlogRoutes.js - UPDATED
 import express from "express";
 import {
   // Posts
@@ -17,7 +17,9 @@ import {
   getCategoryBySlug,
   updateCategory,
   deleteCategory,
-  // Comments
+} from "../controllers/blogController.js";
+import {
+  // Comments - Import from blogController
   getComments,
   approveComment,
   rejectComment,
