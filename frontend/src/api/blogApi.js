@@ -1,6 +1,5 @@
-// src/api/blogApi.js
-import axios from "axios";
-import { API } from "./axios";
+// src/api/blogApi.js - FIXED (use default import)
+import API from "./axios";
 
 // Base API service for blog operations
 const blogAPI = {
@@ -361,6 +360,76 @@ const blogAPI = {
       return response.data;
     } catch (error) {
       console.error("Error deleting tag:", error);
+      throw error;
+    }
+  },
+
+  // ==================== SEARCH OPERATIONS ====================
+
+  // Search posts
+  searchPosts: async (query, params = {}) => {
+    try {
+      const response = await API.get("/blogs/posts/search", {
+        params: { q: query, ...params },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error searching posts:", error);
+      throw error;
+    }
+  },
+
+  // Get posts by category
+  getPostsByCategory: async (category, params = {}) => {
+    try {
+      const response = await API.get(`/blogs/posts/category/${category}`, { params });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching posts by category:", error);
+      throw error;
+    }
+  },
+
+  // Get posts by author
+  getPostsByAuthor: async (authorId, params = {}) => {
+    try {
+      const response = await API.get(`/blogs/posts/author/${authorId}`, { params });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching posts by author:", error);
+      throw error;
+    }
+  },
+
+  // Get related posts
+  getRelatedPosts: async (id) => {
+    try {
+      const response = await API.get(`/blogs/posts/${id}/related`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching related posts:", error);
+      throw error;
+    }
+  },
+
+  // Increment views
+  incrementViews: async (id) => {
+    try {
+      const response = await API.post(`/blogs/posts/${id}/view`);
+      return response.data;
+    } catch (error) {
+      console.error("Error incrementing views:", error);
+      throw error;
+    }
+  },
+
+  // Toggle like
+  toggleLike: async (id) => {
+    try {
+      const response = await API.post(`/blogs/posts/${id}/like`);
+      return response.data;
+    } catch (error) {
+      console.error("Error toggling like:", error);
       throw error;
     }
   },

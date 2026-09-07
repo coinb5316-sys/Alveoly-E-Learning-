@@ -1,8 +1,7 @@
-// api/axios.js
+// api/axios.js - FIXED
 import axios from "axios";
 
 const API_BASE_URL = "https://alveoly-e-learning-755w.onrender.com";
-
 
 console.log("🚀 API Base URL:", API_BASE_URL);
 
@@ -22,13 +21,10 @@ let networkErrorCount = 0;
 
 const showNetworkError = () => {
   const now = Date.now();
-  // Only show error every 10 seconds max, and only 3 times
   if (now - lastNetworkErrorTime > 10000 && networkErrorCount < 3) {
     lastNetworkErrorTime = now;
     networkErrorCount++;
     console.warn("⚠️ Network connection issue detected");
-    // You can show a non-intrusive toast instead of alert
-    // For now, just log to console
   }
 };
 
@@ -50,7 +46,7 @@ API.interceptors.request.use(
 API.interceptors.response.use(
   (response) => {
     console.log(`📥 ${response.status} ${response.config.url}`);
-    networkErrorCount = 0; // Reset on successful response
+    networkErrorCount = 0;
     return response;
   },
   (error) => {
@@ -70,5 +66,6 @@ API.interceptors.response.use(
   }
 );
 
+// Export both as named exports and default
+export { API, API_BASE_URL };
 export default API;
-export { API_BASE_URL };
