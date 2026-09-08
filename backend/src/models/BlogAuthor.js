@@ -1,8 +1,7 @@
-// models/BlogAuthor.js - NEW COMPLETE MODEL
+// models/BlogAuthor.js
 import mongoose from "mongoose";
 
 const blogAuthorSchema = new mongoose.Schema({
-  // Basic Info
   name: {
     type: String,
     required: [true, "Author name is required"],
@@ -33,8 +32,6 @@ const blogAuthorSchema = new mongoose.Schema({
     type: String,
     default: ""
   },
-
-  // Professional Info
   expertise: [{
     type: String,
     trim: true
@@ -51,8 +48,6 @@ const blogAuthorSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
-
-  // Social Links
   social: {
     twitter: { type: String, default: "" },
     linkedin: { type: String, default: "" },
@@ -61,15 +56,11 @@ const blogAuthorSchema = new mongoose.Schema({
     youtube: { type: String, default: "" },
     website: { type: String, default: "" }
   },
-
-  // Status
   status: {
     type: String,
     enum: ["active", "inactive", "pending"],
     default: "active"
   },
-
-  // Stats (calculated)
   postCount: {
     type: Number,
     default: 0
@@ -82,39 +73,30 @@ const blogAuthorSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-
-  // User reference (if author is a registered user)
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     default: null
   },
-
-  // Slug for URL
   slug: {
     type: String,
     unique: true,
     lowercase: true,
     trim: true
   },
-
-  // Meta
   metaDescription: {
     type: String,
     maxlength: [160, "Meta description cannot exceed 160 characters"],
     default: ""
   },
-
   isActive: {
     type: Boolean,
     default: true
   }
-
 }, {
   timestamps: true
 });
 
-// Generate slug from name
 blogAuthorSchema.pre("save", function(next) {
   if (this.isModified('name') && this.name) {
     this.slug = this.name
@@ -125,11 +107,11 @@ blogAuthorSchema.pre("save", function(next) {
   next();
 });
 
-// Indexes
 blogAuthorSchema.index({ slug: 1 });
 blogAuthorSchema.index({ email: 1 });
 blogAuthorSchema.index({ status: 1 });
 blogAuthorSchema.index({ name: 1 });
 
+// FIX: Use default export
 const BlogAuthor = mongoose.model("BlogAuthor", blogAuthorSchema);
 export default BlogAuthor;
