@@ -1,4 +1,4 @@
-// src/pages/BlogPostPage.jsx - FIXED WITH AUDIO/PODCAST DISPLAY
+// src/pages/BlogPostPage.jsx - UPDATED WITH FULL AUTHOR INFO
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -37,13 +37,17 @@ import {
   FaPlay,
   FaPause,
   FaVolumeUp,
-  FaVolumeMute
+  FaVolumeMute,
+  FaInstagram,
+  FaYoutube,
+  FaGlobe,
+  FaAward,
+  FaBriefcase
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../api/blogApi';
 import { useAuth } from '../context/AuthContext';
 
-// Lazy load ReactPlayer
 const ReactPlayer = lazy(() => import('react-player'));
 
 const BlogPostPage = () => {
@@ -232,6 +236,38 @@ const BlogPostPage = () => {
     return formatDate(dateString);
   };
 
+  // Helper to render author social icons
+  const renderAuthorSocials = (author) => {
+    if (!author || !author.social) return null;
+    const socials = [];
+    if (author.social.twitter) socials.push({ icon: FaTwitter, url: author.social.twitter, color: '#1da1f2' });
+    if (author.social.linkedin) socials.push({ icon: FaLinkedin, url: author.social.linkedin, color: '#0a66c2' });
+    if (author.social.facebook) socials.push({ icon: FaFacebook, url: author.social.facebook, color: '#1877f2' });
+    if (author.social.instagram) socials.push({ icon: FaInstagram, url: author.social.instagram, color: '#e4405f' });
+    if (author.social.youtube) socials.push({ icon: FaYoutube, url: author.social.youtube, color: '#ff0000' });
+    if (author.social.website) socials.push({ icon: FaGlobe, url: author.social.website, color: '#4285f4' });
+    
+    if (socials.length === 0) return null;
+    
+    return (
+      <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+        <span className="text-sm text-gray-500 dark:text-gray-400">Connect:</span>
+        {socials.map((social, idx) => (
+          <a
+            key={idx}
+            href={social.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+            style={{ color: social.color }}
+          >
+            <social.icon className="h-4 w-4" />
+          </a>
+        ))}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -259,7 +295,7 @@ const BlogPostPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      {/* ===== HERO SECTION ===== */}
+      {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-900 via-purple-900 to-blue-900">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAyNHYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-20"></div>
@@ -311,6 +347,25 @@ const BlogPostPage = () => {
                   <div>
                     <p className="font-semibold">{post.author?.name || post.authorName || 'Unknown'}</p>
                     <p className="text-sm text-white/70">{post.author?.title || post.authorTitle || 'Contributor'}</p>
+                    {post.author?.social && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {post.author.social.twitter && (
+                          <a href={post.author.social.twitter} target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-white transition">
+                            <FaTwitter className="h-3 w-3" />
+                          </a>
+                        )}
+                        {post.author.social.linkedin && (
+                          <a href={post.author.social.linkedin} target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-white transition">
+                            <FaLinkedin className="h-3 w-3" />
+                          </a>
+                        )}
+                        {post.author.social.website && (
+                          <a href={post.author.social.website} target="_blank" rel="noopener noreferrer" className="text-white/60 hover:text-white transition">
+                            <FaGlobe className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-sm">
@@ -337,7 +392,7 @@ const BlogPostPage = () => {
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full filter blur-3xl"></div>
       </div>
 
-      {/* ===== CONTENT SECTION ===== */}
+      {/* Content Section */}
       <div className="container mx-auto px-4 py-12">
         <div className="flex flex-col lg:flex-row gap-12">
           {/* Main Content */}
@@ -400,7 +455,7 @@ const BlogPostPage = () => {
                   </div>
                 )}
 
-                {/* Audio/Podcast Player - Show in content tab too */}
+                {/* Audio/Podcast Player */}
                 {post.audioUrl && (
                   <div className="mb-8 p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl border border-blue-100 dark:border-blue-800/50">
                     <div className="flex items-center gap-4">
@@ -536,7 +591,7 @@ const BlogPostPage = () => {
               </motion.div>
             )}
 
-            {/* Audio Tab - Full podcast player */}
+            {/* Audio Tab */}
             {activeTab === 'audio' && post.audioUrl && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -610,7 +665,7 @@ const BlogPostPage = () => {
               </motion.div>
             )}
 
-            {/* ===== INTERACTION SECTION ===== */}
+            {/* Interaction Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -798,9 +853,9 @@ const BlogPostPage = () => {
             )}
           </div>
 
-          {/* ===== SIDEBAR ===== */}
+          {/* Sidebar */}
           <div className="lg:w-1/3 space-y-6">
-            {/* Author Card */}
+            {/* Author Card - FULL DETAILS */}
             <motion.div
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
@@ -825,9 +880,49 @@ const BlogPostPage = () => {
                 <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
                   {post.author?.title || post.authorTitle || 'Contributor'}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                  {post.author?.bio || post.authorBio || 'No bio available'}
-                </p>
+                
+                {/* Author Bio */}
+                {(post.author?.bio || post.authorBio) && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    {post.author?.bio || post.authorBio}
+                  </p>
+                )}
+
+                {/* Author Expertise */}
+                {post.author?.expertise && post.author.expertise.length > 0 && (
+                  <div className="mt-3">
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {post.author.expertise.slice(0, 3).map((exp, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 rounded-full text-xs">
+                          {exp}
+                        </span>
+                      ))}
+                      {post.author.expertise.length > 3 && (
+                        <span className="px-2 py-0.5 text-xs text-gray-400">+{post.author.expertise.length - 3}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Author Stats */}
+                <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <div>
+                    <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{post.author?.postCount || 0}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Posts</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{post.author?.totalLikes || 0}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Likes</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{post.author?.totalViews || 0}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Views</p>
+                  </div>
+                </div>
+
+                {/* Social Links */}
+                {renderAuthorSocials(post.author)}
+
                 <Link
                   to={`/blog/author/${post.author?._id || post.author?.id}`}
                   className="inline-block mt-4 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition"
@@ -924,7 +1019,7 @@ const BlogPostPage = () => {
         </div>
       </div>
 
-      {/* ===== BACK TO BLOG ===== */}
+      {/* Back to Blog */}
       <div className="container mx-auto px-4 py-8">
         <Link
           to="/blog"

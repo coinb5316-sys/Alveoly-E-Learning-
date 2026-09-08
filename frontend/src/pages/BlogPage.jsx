@@ -1,4 +1,4 @@
-// src/pages/BlogPage.jsx - FIXED
+// src/pages/BlogPage.jsx - UPDATED WITH FULL AUTHOR INFO
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -41,15 +41,21 @@ import {
   FaArrowLeft,
   FaArrowRight as FaArrowRightIcon,
   FaBars,
-  FaThLarge
+  FaThLarge,
+  FaInstagram,
+  FaYoutube,
+  FaGlobe,
+  FaGraduationCap,
+  FaAward,
+  FaBriefcase
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../api/blogApi';
-import { useAuth } from '../context/AuthContext'; // Import useAuth
+import { useAuth } from '../context/AuthContext';
 
 const BlogPage = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth(); // Get auth state
+  const { user, isAuthenticated } = useAuth();
   const [posts, setPosts] = useState([]);
   const [featuredPost, setFeaturedPost] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -67,13 +73,11 @@ const BlogPage = () => {
   const [selectedTags, setSelectedTags] = useState([]);
   const [authorStats, setAuthorStats] = useState([]);
 
-  // Fetch data - NO AUTH REQUIRED
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         
-        // Fetch posts with filters - PUBLIC endpoint
         const postsResult = await blogAPI.getPosts({
           page: currentPage,
           limit: 6,
@@ -94,7 +98,6 @@ const BlogPage = () => {
           toast.error(postsResult.message || 'Failed to load posts');
         }
         
-        // Fetch categories - PUBLIC endpoint
         const categoriesResult = await blogAPI.getCategories();
         if (categoriesResult.success) {
           setCategories(categoriesResult.data || []);
@@ -111,7 +114,6 @@ const BlogPage = () => {
     fetchData();
   }, [currentPage, selectedCategory, searchTerm, sortBy]);
 
-  // Handle search
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
@@ -119,13 +121,11 @@ const BlogPage = () => {
     }
   };
 
-  // Handle category filter
   const handleCategoryFilter = (category) => {
     setSelectedCategory(category);
     setCurrentPage(1);
   };
 
-  // Handle tag toggle
   const handleTagToggle = (tag) => {
     setSelectedTags(prev => 
       prev.includes(tag) 
@@ -134,7 +134,6 @@ const BlogPage = () => {
     );
   };
 
-  // Handle bookmark toggle - requires auth
   const handleBookmark = (postId) => {
     if (!isAuthenticated) {
       toast.error('Please login to bookmark posts');
@@ -148,7 +147,6 @@ const BlogPage = () => {
     toast.success(bookmarks.includes(postId) ? 'Removed from bookmarks' : 'Added to bookmarks');
   };
 
-  // Handle share
   const handleShare = (post) => {
     const url = `${window.location.origin}/blog/post/${post.slug || post._id}`;
     if (navigator.share) {
@@ -163,7 +161,6 @@ const BlogPage = () => {
     }
   };
 
-  // Format date
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -173,14 +170,12 @@ const BlogPage = () => {
     });
   };
 
-  // Truncate text
   const truncateText = (text, maxLength = 120) => {
     if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
   };
 
-  // Render loading skeleton
   const renderSkeleton = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {[...Array(6)].map((_, i) => (
@@ -197,9 +192,41 @@ const BlogPage = () => {
     </div>
   );
 
+  // Helper to render author social icons
+  const renderAuthorSocials = (author) => {
+    if (!author || !author.social) return null;
+    const socials = [];
+    if (author.social.twitter) socials.push({ icon: FaTwitter, url: author.social.twitter, color: '#1da1f2' });
+    if (author.social.linkedin) socials.push({ icon: FaLinkedin, url: author.social.linkedin, color: '#0a66c2' });
+    if (author.social.facebook) socials.push({ icon: FaFacebook, url: author.social.facebook, color: '#1877f2' });
+    if (author.social.instagram) socials.push({ icon: FaInstagram, url: author.social.instagram, color: '#e4405f' });
+    if (author.social.youtube) socials.push({ icon: FaYoutube, url: author.social.youtube, color: '#ff0000' });
+    if (author.social.website) socials.push({ icon: FaGlobe, url: author.social.website, color: '#4285f4' });
+    
+    if (socials.length === 0) return null;
+    
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        {socials.map((social, idx) => (
+          <a
+            key={idx}
+            href={social.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+            style={{ color: social.color }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <social.icon className="h-3 w-3" />
+          </a>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-      {/* ===== HEADER SECTION ===== */}
+      {/* Header Section */}
       <div className="relative bg-gradient-to-r from-blue-900 via-purple-900 to-blue-900 py-16 overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAyNHYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-20"></div>
         <div className="absolute top-1/2 right-0 w-96 h-96 bg-blue-500/10 rounded-full filter blur-3xl"></div>
@@ -224,7 +251,7 @@ const BlogPage = () => {
         </div>
       </div>
 
-      {/* ===== SEARCH AND FILTER SECTION ===== */}
+      {/* Search and Filter Section */}
       <div className="container mx-auto px-4 py-8 -mt-6 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -232,7 +259,6 @@ const BlogPage = () => {
           className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-4 md:p-6"
         >
           <div className="flex flex-col lg:flex-row gap-4">
-            {/* Search */}
             <form onSubmit={handleSearch} className="flex-1 relative">
               <input
                 type="text"
@@ -250,7 +276,6 @@ const BlogPage = () => {
               </button>
             </form>
             
-            {/* Filter Toggle Button */}
             <button
               onClick={() => setShowFilters(!showFilters)}
               className="lg:hidden flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-800 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition"
@@ -260,7 +285,6 @@ const BlogPage = () => {
               {showFilters ? <FaChevronUp /> : <FaChevronDown />}
             </button>
             
-            {/* Filters - Desktop */}
             <div className="hidden lg:flex items-center gap-2 overflow-x-auto pb-2">
               <FaFilter className="text-gray-400" />
               <button
@@ -289,7 +313,6 @@ const BlogPage = () => {
             </div>
           </div>
           
-          {/* Filters - Mobile Dropdown */}
           <AnimatePresence>
             {showFilters && (
               <motion.div
@@ -327,7 +350,6 @@ const BlogPage = () => {
             )}
           </AnimatePresence>
           
-          {/* Sort and View Options */}
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <span>{totalPosts} articles found</span>
@@ -368,7 +390,7 @@ const BlogPage = () => {
         </motion.div>
       </div>
 
-      {/* ===== FEATURED POST ===== */}
+      {/* Featured Post */}
       {featuredPost && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -402,7 +424,7 @@ const BlogPage = () => {
               <div className="flex flex-wrap items-center gap-4 text-white/80 text-sm mb-6">
                 <span className="flex items-center gap-1.5">
                   <FaUser />
-                  {featuredPost.author?.name || 'Unknown'}
+                  {featuredPost.author?.name || featuredPost.authorName || 'Unknown'}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <FaCalendarAlt />
@@ -410,7 +432,7 @@ const BlogPage = () => {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <FaClock />
-                  {featuredPost.readTime || 5} min read
+                  {featuredPost.readingTime || 5} min read
                 </span>
                 <span className="flex items-center gap-1.5">
                   <FaEye />
@@ -429,7 +451,7 @@ const BlogPage = () => {
         </motion.div>
       )}
 
-      {/* ===== BLOG GRID ===== */}
+      {/* Blog Grid */}
       <div className="container mx-auto px-4 py-12">
         {loading ? (
           renderSkeleton()
@@ -498,7 +520,7 @@ const BlogPage = () => {
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <FaClock className="text-gray-400" />
-                          {post.readTime || 5} min read
+                          {post.readingTime || 5} min read
                         </span>
                       </div>
                       <Link to={`/blog/post/${post.slug || post._id}`}>
@@ -525,7 +547,7 @@ const BlogPage = () => {
                       </div>
                       
                       <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
-                        <Link to={`/blog/author/${post.author?._id || post.author?.id}`} className="flex items-center gap-2 group">
+                        <div className="flex items-center gap-2">
                           {post.author?.avatar || post.author?.image ? (
                             <img
                               src={post.author.avatar || post.author.image}
@@ -534,13 +556,18 @@ const BlogPage = () => {
                             />
                           ) : (
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                              {post.author?.name?.charAt(0) || 'A'}
+                              {(post.author?.name || post.authorName)?.charAt(0) || 'A'}
                             </div>
                           )}
-                          <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
-                            {post.author?.name || 'Unknown'}
-                          </span>
-                        </Link>
+                          <div className="flex flex-col">
+                            <Link to={`/blog/author/${post.author?._id || post.author?.id}`} className="text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition font-medium">
+                              {post.author?.name || post.authorName || 'Unknown'}
+                            </Link>
+                            {post.author?.title && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">{post.author.title}</span>
+                            )}
+                          </div>
+                        </div>
                         <div className="flex items-center gap-3 text-gray-400 text-sm">
                           {isAuthenticated && (
                             <button 
@@ -580,13 +607,14 @@ const BlogPage = () => {
                           </button>
                         </div>
                       </div>
+                      {post.author && renderAuthorSocials(post.author)}
                     </div>
                   </div>
                 </motion.article>
               ))}
             </div>
 
-            {/* ===== PAGINATION ===== */}
+            {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex flex-wrap items-center justify-center gap-2 mt-12">
                 <button
@@ -642,7 +670,7 @@ const BlogPage = () => {
         )}
       </div>
 
-      {/* ===== TRENDING TAGS SECTION ===== */}
+      {/* Trending Tags Section */}
       <div className="container mx-auto px-4 py-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -672,7 +700,7 @@ const BlogPage = () => {
         </motion.div>
       </div>
 
-      {/* ===== NEWSLETTER SECTION ===== */}
+      {/* Newsletter Section */}
       <div className="bg-gradient-to-r from-blue-900 to-purple-900 py-16">
         <div className="container mx-auto px-4 text-center">
           <motion.div
