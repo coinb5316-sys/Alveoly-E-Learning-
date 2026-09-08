@@ -19,18 +19,14 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  Globe,
-  Twitter,
-  Linkedin,
-  Facebook,
-  Instagram,
-  Youtube,
   Award,
   BookOpen,
-  GraduationCap,
   Briefcase,
-  Users
+  Users,
+  GraduationCap as GraduationCapIcon
 } from 'lucide-react';
+// Import social icons from react-icons
+import { FaTwitter, FaLinkedin, FaFacebook, FaInstagram, FaYoutube, FaGlobe } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../../../api/blogApi';
 
@@ -38,6 +34,13 @@ import blogAPI from '../../../api/blogApi';
 const FileText = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
+// GraduationCap component
+const GraduationCap = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422M12 14l-6.16-3.422M12 14v6m-6 0h12" />
   </svg>
 );
 
@@ -542,32 +545,32 @@ const AdminBlogAuthors = () => {
                   <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex-wrap">
                     {author.social?.twitter && (
                       <a href={author.social.twitter} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-[#1da1f2]/10 text-[#1da1f2] rounded hover:bg-[#1da1f2]/20 transition">
-                        <Twitter className="h-3.5 w-3.5" />
+                        <FaTwitter className="h-3.5 w-3.5" />
                       </a>
                     )}
                     {author.social?.linkedin && (
                       <a href={author.social.linkedin} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-[#0a66c2]/10 text-[#0a66c2] rounded hover:bg-[#0a66c2]/20 transition">
-                        <Linkedin className="h-3.5 w-3.5" />
+                        <FaLinkedin className="h-3.5 w-3.5" />
                       </a>
                     )}
                     {author.social?.facebook && (
                       <a href={author.social.facebook} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-[#1877f2]/10 text-[#1877f2] rounded hover:bg-[#1877f2]/20 transition">
-                        <Facebook className="h-3.5 w-3.5" />
+                        <FaFacebook className="h-3.5 w-3.5" />
                       </a>
                     )}
                     {author.social?.instagram && (
                       <a href={author.social.instagram} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-[#e4405f]/10 text-[#e4405f] rounded hover:bg-[#e4405f]/20 transition">
-                        <Instagram className="h-3.5 w-3.5" />
+                        <FaInstagram className="h-3.5 w-3.5" />
                       </a>
                     )}
                     {author.social?.youtube && (
                       <a href={author.social.youtube} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-[#ff0000]/10 text-[#ff0000] rounded hover:bg-[#ff0000]/20 transition">
-                        <Youtube className="h-3.5 w-3.5" />
+                        <FaYoutube className="h-3.5 w-3.5" />
                       </a>
                     )}
                     {author.social?.website && (
                       <a href={author.social.website} target="_blank" rel="noopener noreferrer" className="p-1.5 bg-[#4285f4]/10 text-[#4285f4] rounded hover:bg-[#4285f4]/20 transition">
-                        <Globe className="h-3.5 w-3.5" />
+                        <FaGlobe className="h-3.5 w-3.5" />
                       </a>
                     )}
                     <a href={`mailto:${author.email}`} className="p-1.5 bg-[#ea4335]/10 text-[#ea4335] rounded hover:bg-[#ea4335]/20 transition">
@@ -941,7 +944,7 @@ const AdminBlogAuthors = () => {
                   className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition"
                 >
                   <div className="flex items-center gap-2">
-                    <Globe className="h-5 w-5 text-blue-600" />
+                    <FaGlobe className="h-5 w-5 text-blue-600" />
                     <span className="font-semibold text-gray-900 dark:text-gray-100">Social Links</span>
                   </div>
                   {expandedSections.social ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
@@ -951,7 +954,7 @@ const AdminBlogAuthors = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          <Twitter className="h-4 w-4 inline mr-1 text-[#1da1f2]" /> Twitter
+                          <FaTwitter className="h-4 w-4 inline mr-1 text-[#1da1f2]" /> Twitter
                         </label>
                         <input
                           type="text"
@@ -964,7 +967,7 @@ const AdminBlogAuthors = () => {
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          <Linkedin className="h-4 w-4 inline mr-1 text-[#0a66c2]" /> LinkedIn
+                          <FaLinkedin className="h-4 w-4 inline mr-1 text-[#0a66c2]" /> LinkedIn
                         </label>
                         <input
                           type="text"
@@ -977,7 +980,7 @@ const AdminBlogAuthors = () => {
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          <Facebook className="h-4 w-4 inline mr-1 text-[#1877f2]" /> Facebook
+                          <FaFacebook className="h-4 w-4 inline mr-1 text-[#1877f2]" /> Facebook
                         </label>
                         <input
                           type="text"
@@ -990,7 +993,7 @@ const AdminBlogAuthors = () => {
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          <Instagram className="h-4 w-4 inline mr-1 text-[#e4405f]" /> Instagram
+                          <FaInstagram className="h-4 w-4 inline mr-1 text-[#e4405f]" /> Instagram
                         </label>
                         <input
                           type="text"
@@ -1003,7 +1006,7 @@ const AdminBlogAuthors = () => {
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          <Youtube className="h-4 w-4 inline mr-1 text-[#ff0000]" /> YouTube
+                          <FaYoutube className="h-4 w-4 inline mr-1 text-[#ff0000]" /> YouTube
                         </label>
                         <input
                           type="text"
@@ -1016,7 +1019,7 @@ const AdminBlogAuthors = () => {
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          <Globe className="h-4 w-4 inline mr-1 text-[#4285f4]" /> Website
+                          <FaGlobe className="h-4 w-4 inline mr-1 text-[#4285f4]" /> Website
                         </label>
                         <input
                           type="text"
@@ -1206,32 +1209,32 @@ const AdminBlogAuthors = () => {
                   <p className="text-sm text-gray-500 dark:text-gray-400">Connect:</p>
                   {selectedAuthor.social.twitter && (
                     <a href={selectedAuthor.social.twitter} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#1da1f2] text-white rounded-lg hover:shadow-lg transition">
-                      <Twitter className="h-4 w-4" />
+                      <FaTwitter className="h-4 w-4" />
                     </a>
                   )}
                   {selectedAuthor.social.linkedin && (
                     <a href={selectedAuthor.social.linkedin} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#0a66c2] text-white rounded-lg hover:shadow-lg transition">
-                      <Linkedin className="h-4 w-4" />
+                      <FaLinkedin className="h-4 w-4" />
                     </a>
                   )}
                   {selectedAuthor.social.facebook && (
                     <a href={selectedAuthor.social.facebook} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#1877f2] text-white rounded-lg hover:shadow-lg transition">
-                      <Facebook className="h-4 w-4" />
+                      <FaFacebook className="h-4 w-4" />
                     </a>
                   )}
                   {selectedAuthor.social.instagram && (
                     <a href={selectedAuthor.social.instagram} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#e4405f] text-white rounded-lg hover:shadow-lg transition">
-                      <Instagram className="h-4 w-4" />
+                      <FaInstagram className="h-4 w-4" />
                     </a>
                   )}
                   {selectedAuthor.social.youtube && (
                     <a href={selectedAuthor.social.youtube} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#ff0000] text-white rounded-lg hover:shadow-lg transition">
-                      <Youtube className="h-4 w-4" />
+                      <FaYoutube className="h-4 w-4" />
                     </a>
                   )}
                   {selectedAuthor.social.website && (
                     <a href={selectedAuthor.social.website} target="_blank" rel="noopener noreferrer" className="p-2 bg-[#4285f4] text-white rounded-lg hover:shadow-lg transition">
-                      <Globe className="h-4 w-4" />
+                      <FaGlobe className="h-4 w-4" />
                     </a>
                   )}
                   <a href={`mailto:${selectedAuthor.email}`} className="p-2 bg-[#ea4335] text-white rounded-lg hover:shadow-lg transition">
