@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE WITH AUTHOR SELECTION
+// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE FIXED
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -115,7 +115,7 @@ const AdminCreateBlogPost = () => {
     publishDate: null,
     metaDescription: '',
     metaKeywords: '',
-    authorId: '', // Changed to store author ID
+    authorId: '',
     authorName: '',
     authorTitle: '',
     authorBio: '',
@@ -206,7 +206,6 @@ const AdminCreateBlogPost = () => {
       }
     } catch (error) {
       console.error('Error fetching authors:', error);
-      // Fallback: try the regular authors endpoint
       try {
         const fallbackResponse = await blogAPI.getAuthors({ limit: 100 });
         if (fallbackResponse.success) {
@@ -226,7 +225,6 @@ const AdminCreateBlogPost = () => {
       if (response.success) {
         const post = response.data;
         
-        // Find author if exists
         let authorId = '';
         let authorName = post.authorName || '';
         let authorTitle = post.authorTitle || '';
@@ -240,7 +238,6 @@ const AdminCreateBlogPost = () => {
           authorBio = post.author.bio || post.authorBio || '';
           authorImage = post.author.avatar || post.authorImage || '';
           
-          // Find the author in the authors list
           const foundAuthor = authors.find(a => a._id === post.author._id);
           if (foundAuthor) {
             setSelectedAuthorDetails(foundAuthor);
@@ -326,13 +323,15 @@ const AdminCreateBlogPost = () => {
   const handleGalleryUpload = (e) => {
     const files = Array.from(e.target.files);
     files.forEach(file => {
+      // Store the File object in formData
+      setFormData(prev => ({
+        ...prev,
+        galleryImages: [...prev.galleryImages, file]
+      }));
+      // Create preview URL for display
       const reader = new FileReader();
       reader.onloadend = () => {
         setGalleryPreviews(prev => [...prev, reader.result]);
-        setFormData(prev => ({
-          ...prev,
-          galleryImages: [...prev.galleryImages, file]
-        }));
       };
       reader.readAsDataURL(file);
     });
@@ -525,115 +524,129 @@ const AdminCreateBlogPost = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ==================== SAVE / PUBLISH - FIXED FOR GALLERY IMAGES ====================
+  // ==================== SAVE / PUBLISH - FIXED ====================
 
-const handleSave = async (status = 'draft') => {
-  if (!validateForm()) {
-    toast.error('Please fix the errors before saving');
-    return;
-  }
-
-  try {
-    setSaving(true);
-    
-    const formDataToSend = new FormData();
-    
-    // Basic fields
-    formDataToSend.append('title', formData.title);
-    formDataToSend.append('subtitle', formData.subtitle || '');
-    formDataToSend.append('content', formData.content);
-    formDataToSend.append('category', formData.category);
-    formDataToSend.append('status', status);
-    formDataToSend.append('featured', formData.featured);
-    formDataToSend.append('readingTime', formData.readingTime);
-    formDataToSend.append('allowComments', formData.allowComments);
-    formDataToSend.append('showAuthor', formData.showAuthor);
-    formDataToSend.append('showShareButtons', formData.showShareButtons);
-    
-    // Media fields
-    formDataToSend.append('videoUrl', formData.videoUrl || '');
-    formDataToSend.append('videoEmbed', formData.videoEmbed || '');
-    formDataToSend.append('audioUrl', formData.audioUrl || '');
-    
-    // Author fields - use both ID and direct values
-    if (formData.authorId) {
-      formDataToSend.append('author', formData.authorId);
-    }
-    formDataToSend.append('authorName', formData.authorName || '');
-    formDataToSend.append('authorTitle', formData.authorTitle || '');
-    formDataToSend.append('authorBio', formData.authorBio || '');
-    formDataToSend.append('authorImage', formData.authorImage || '');
-    
-    // SEO
-    formDataToSend.append('metaDescription', formData.metaDescription || '');
-    formDataToSend.append('metaKeywords', formData.metaKeywords || '');
-    
-    // JSON fields
-    formDataToSend.append('tags', JSON.stringify(formData.tags));
-    formDataToSend.append('references', JSON.stringify(formData.references));
-    formDataToSend.append('learningObjectives', JSON.stringify(formData.learningObjectives));
-    formDataToSend.append('statistics', JSON.stringify(formData.statistics));
-    formDataToSend.append('relatedPosts', JSON.stringify(formData.relatedPosts));
-    
-    // ========================================================
-    // FIX: Handle Gallery Images Properly
-    // ========================================================
-    
-    // Separate existing gallery URLs from new file uploads
-    const existingGalleryUrls = formData.galleryImages.filter(img => typeof img === 'string');
-    const newGalleryFiles = formData.galleryImages.filter(img => typeof img === 'object' && img instanceof File);
-    
-    // Send existing gallery URLs as JSON
-    if (existingGalleryUrls.length > 0) {
-      formDataToSend.append('galleryImages', JSON.stringify(existingGalleryUrls));
-      console.log('📸 Existing Gallery URLs:', existingGalleryUrls.length);
-    }
-    
-    // Append each new gallery file with the same field name 'galleryImages'
-    // This allows multer to handle them as an array
-    newGalleryFiles.forEach((file) => {
-      formDataToSend.append('galleryImages', file);
-    });
-    
-    console.log('📸 New Gallery Files to upload:', newGalleryFiles.length);
-    
-    // Publish date
-    if (formData.publishDate) {
-      formDataToSend.append('publishDate', formData.publishDate);
-    }
-    
-    // Featured image - if it's a File object, append it
-    if (formData.featuredImage && typeof formData.featuredImage === 'object') {
-      formDataToSend.append('featuredImage', formData.featuredImage);
+  const handleSave = async (status = 'draft') => {
+    // Validate form
+    if (!validateForm()) {
+      toast.error('Please fix the errors before saving');
+      return;
     }
 
-    let response;
-    if (isEditing) {
-      response = await blogAPI.updatePost(id, formDataToSend);
-    } else {
-      response = await blogAPI.createPost(formDataToSend);
-    }
-    
-    if (response.success) {
-      toast.success(isEditing ? 'Post updated successfully!' : 'Post created successfully!');
-      if (status === 'published') {
-        navigate('/admin/blog/posts');
-      } else {
-        toast.info('Draft saved successfully');
-        if (!isEditing) {
-          navigate(`/admin/blog/edit/${response.data._id}`);
-        }
+    try {
+      setSaving(true);
+      
+      const formDataToSend = new FormData();
+      
+      // Basic fields
+      formDataToSend.append('title', formData.title);
+      formDataToSend.append('subtitle', formData.subtitle || '');
+      formDataToSend.append('content', formData.content);
+      formDataToSend.append('category', formData.category);
+      formDataToSend.append('status', status);
+      formDataToSend.append('featured', formData.featured);
+      formDataToSend.append('readingTime', formData.readingTime);
+      formDataToSend.append('allowComments', formData.allowComments);
+      formDataToSend.append('showAuthor', formData.showAuthor);
+      formDataToSend.append('showShareButtons', formData.showShareButtons);
+      
+      // Media fields
+      formDataToSend.append('videoUrl', formData.videoUrl || '');
+      formDataToSend.append('videoEmbed', formData.videoEmbed || '');
+      formDataToSend.append('audioUrl', formData.audioUrl || '');
+      
+      // Author fields
+      if (formData.authorId) {
+        formDataToSend.append('author', formData.authorId);
       }
-    } else {
-      toast.error(response.message || 'Failed to save post');
+      formDataToSend.append('authorName', formData.authorName || '');
+      formDataToSend.append('authorTitle', formData.authorTitle || '');
+      formDataToSend.append('authorBio', formData.authorBio || '');
+      formDataToSend.append('authorImage', formData.authorImage || '');
+      
+      // SEO
+      formDataToSend.append('metaDescription', formData.metaDescription || '');
+      formDataToSend.append('metaKeywords', formData.metaKeywords || '');
+      
+      // JSON fields
+      formDataToSend.append('tags', JSON.stringify(formData.tags));
+      formDataToSend.append('references', JSON.stringify(formData.references));
+      formDataToSend.append('learningObjectives', JSON.stringify(formData.learningObjectives));
+      formDataToSend.append('statistics', JSON.stringify(formData.statistics));
+      formDataToSend.append('relatedPosts', JSON.stringify(formData.relatedPosts));
+      
+      // ========================================================
+      // FIXED: Handle Gallery Images Properly
+      // ========================================================
+      
+      // Separate existing gallery URLs from new file uploads
+      const existingGalleryUrls = [];
+      const newGalleryFiles = [];
+      
+      formData.galleryImages.forEach(img => {
+        if (typeof img === 'string') {
+          // This is an existing URL
+          existingGalleryUrls.push(img);
+        } else if (img instanceof File) {
+          // This is a new file
+          newGalleryFiles.push(img);
+        } else if (img && typeof img === 'object' && img.name && img.size) {
+          // This might be a File-like object
+          newGalleryFiles.push(img);
+        }
+      });
+      
+      // Send existing gallery URLs as JSON
+      if (existingGalleryUrls.length > 0) {
+        formDataToSend.append('galleryImages', JSON.stringify(existingGalleryUrls));
+        console.log('📸 Existing Gallery URLs:', existingGalleryUrls.length);
+      }
+      
+      // Append each new gallery file with the same field name 'galleryImages'
+      newGalleryFiles.forEach((file) => {
+        formDataToSend.append('galleryImages', file);
+      });
+      
+      console.log('📸 New Gallery Files to upload:', newGalleryFiles.length);
+      console.log('📸 Total Gallery Images:', formData.galleryImages.length);
+      
+      // Publish date
+      if (formData.publishDate) {
+        formDataToSend.append('publishDate', formData.publishDate);
+      }
+      
+      // Featured image - if it's a File object, append it
+      if (formData.featuredImage && typeof formData.featuredImage === 'object' && formData.featuredImage instanceof File) {
+        formDataToSend.append('featuredImage', formData.featuredImage);
+      }
+
+      let response;
+      if (isEditing) {
+        response = await blogAPI.updatePost(id, formDataToSend);
+      } else {
+        response = await blogAPI.createPost(formDataToSend);
+      }
+      
+      if (response.success) {
+        toast.success(isEditing ? 'Post updated successfully!' : 'Post created successfully!');
+        if (status === 'published') {
+          navigate('/admin/blog/posts');
+        } else {
+          toast.info('Draft saved successfully');
+          if (!isEditing) {
+            navigate(`/admin/blog/edit/${response.data._id}`);
+          }
+        }
+      } else {
+        toast.error(response.message || 'Failed to save post');
+      }
+    } catch (error) {
+      console.error('Error saving post:', error);
+      toast.error(error.response?.data?.message || 'Failed to save post');
+    } finally {
+      setSaving(false);
     }
-  } catch (error) {
-    console.error('Error saving post:', error);
-    toast.error(error.response?.data?.message || 'Failed to save post');
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   const handlePublish = () => {
     handleSave('published');
@@ -697,8 +710,6 @@ const handleSave = async (status = 'draft') => {
       </div>
     );
   }
-
-  // ==================== RENDER ====================
 
   return (
     <div className="space-y-6 pb-20">
@@ -1196,7 +1207,7 @@ const handleSave = async (status = 'draft') => {
             </div>
           </div>
 
-          {/* Author Selection - UPDATED WITH FULL AUTHOR FETCH */}
+          {/* Author Selection */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4">
               <User className="h-4 w-4" />
@@ -1280,7 +1291,6 @@ const handleSave = async (status = 'draft') => {
                     onClick={() => {
                       setAuthorSearch('');
                       setShowAuthorDropdown(false);
-                      // Refresh authors list
                       fetchAuthors();
                     }}
                     className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition"
@@ -1342,7 +1352,6 @@ const handleSave = async (status = 'draft') => {
                       <button
                         onClick={() => {
                           setShowAuthorDropdown(false);
-                          // Allow manual entry as fallback
                           setFormData(prev => ({
                             ...prev,
                             authorName: authorSearch,
@@ -1370,7 +1379,6 @@ const handleSave = async (status = 'draft') => {
               </p>
             )}
             
-            {/* Manual author fields (shown when no author is selected, or for additional info) */}
             {!selectedAuthorDetails && (
               <div className="mt-4 space-y-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                 <div>
@@ -1428,7 +1436,6 @@ const handleSave = async (status = 'draft') => {
               </div>
             )}
             
-            {/* Show author details if selected */}
             {selectedAuthorDetails && (
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400">
                 <p>Author information loaded from <span className="font-medium text-blue-600 dark:text-blue-400">Author Management</span></p>
@@ -1731,20 +1738,13 @@ const handleSave = async (status = 'draft') => {
                 </button>
               </div>
               <div className="p-6 space-y-6">
-                {/* Featured Image */}
                 {imagePreview && (
                   <img src={imagePreview} alt={formData.title} className="w-full h-64 object-cover rounded-xl" />
                 )}
-                
-                {/* Title */}
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{formData.title}</h1>
-                
-                {/* Subtitle */}
                 {formData.subtitle && (
                   <p className="text-xl text-gray-600 dark:text-gray-400">{formData.subtitle}</p>
                 )}
-                
-                {/* Author Info */}
                 <div className="flex items-center gap-3">
                   {formData.authorImage ? (
                     <img src={formData.authorImage} alt={formData.authorName || formData.author} className="w-12 h-12 rounded-full object-cover" />
@@ -1758,14 +1758,10 @@ const handleSave = async (status = 'draft') => {
                     <p className="text-sm text-gray-500 dark:text-gray-400">{formData.authorTitle || formData.authorBio || 'Author bio'}</p>
                   </div>
                 </div>
-                
-                {/* Content */}
                 <div
                   className="prose prose-lg prose-blue max-w-none dark:prose-invert"
                   dangerouslySetInnerHTML={{ __html: formData.content }}
                 />
-                
-                {/* Gallery Images */}
                 {galleryPreviews.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {galleryPreviews.map((img, index) => (
@@ -1773,15 +1769,11 @@ const handleSave = async (status = 'draft') => {
                     ))}
                   </div>
                 )}
-                
-                {/* Video */}
                 {formData.videoUrl && (
                   <div className="aspect-video bg-black rounded-lg overflow-hidden">
                     <iframe src={formData.videoUrl} className="w-full h-full" allowFullScreen title="Video" />
                   </div>
                 )}
-                
-                {/* Audio / Podcast */}
                 {formData.audioUrl && (
                   <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Podcast</h3>
@@ -1791,8 +1783,6 @@ const handleSave = async (status = 'draft') => {
                     </audio>
                   </div>
                 )}
-                
-                {/* Statistics */}
                 {formData.statistics.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-8">
                     {formData.statistics.map((stat, index) => (
@@ -1805,8 +1795,6 @@ const handleSave = async (status = 'draft') => {
                     ))}
                   </div>
                 )}
-                
-                {/* Learning Objectives */}
                 {formData.learningObjectives.length > 0 && (
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-6 border border-blue-100 dark:border-blue-800/50">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
@@ -1823,8 +1811,6 @@ const handleSave = async (status = 'draft') => {
                     </ul>
                   </div>
                 )}
-                
-                {/* Related Posts */}
                 {formData.relatedPosts.length > 0 && (
                   <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Related Articles</h3>
@@ -1846,8 +1832,6 @@ const handleSave = async (status = 'draft') => {
                     </div>
                   </div>
                 )}
-                
-                {/* References */}
                 {formData.references.length > 0 && (
                   <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">References</h3>
@@ -1861,8 +1845,6 @@ const handleSave = async (status = 'draft') => {
                     </ul>
                   </div>
                 )}
-                
-                {/* Tags */}
                 {formData.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200 dark:border-gray-800">
                     {formData.tags.map((tag) => (
