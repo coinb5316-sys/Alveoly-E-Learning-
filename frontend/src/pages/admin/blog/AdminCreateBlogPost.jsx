@@ -525,99 +525,115 @@ const AdminCreateBlogPost = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ==================== SAVE / PUBLISH ====================
+  // ==================== SAVE / PUBLISH - FIXED FOR GALLERY IMAGES ====================
 
-  const handleSave = async (status = 'draft') => {
-    if (!validateForm()) {
-      toast.error('Please fix the errors before saving');
-      return;
+const handleSave = async (status = 'draft') => {
+  if (!validateForm()) {
+    toast.error('Please fix the errors before saving');
+    return;
+  }
+
+  try {
+    setSaving(true);
+    
+    const formDataToSend = new FormData();
+    
+    // Basic fields
+    formDataToSend.append('title', formData.title);
+    formDataToSend.append('subtitle', formData.subtitle || '');
+    formDataToSend.append('content', formData.content);
+    formDataToSend.append('category', formData.category);
+    formDataToSend.append('status', status);
+    formDataToSend.append('featured', formData.featured);
+    formDataToSend.append('readingTime', formData.readingTime);
+    formDataToSend.append('allowComments', formData.allowComments);
+    formDataToSend.append('showAuthor', formData.showAuthor);
+    formDataToSend.append('showShareButtons', formData.showShareButtons);
+    
+    // Media fields
+    formDataToSend.append('videoUrl', formData.videoUrl || '');
+    formDataToSend.append('videoEmbed', formData.videoEmbed || '');
+    formDataToSend.append('audioUrl', formData.audioUrl || '');
+    
+    // Author fields - use both ID and direct values
+    if (formData.authorId) {
+      formDataToSend.append('author', formData.authorId);
+    }
+    formDataToSend.append('authorName', formData.authorName || '');
+    formDataToSend.append('authorTitle', formData.authorTitle || '');
+    formDataToSend.append('authorBio', formData.authorBio || '');
+    formDataToSend.append('authorImage', formData.authorImage || '');
+    
+    // SEO
+    formDataToSend.append('metaDescription', formData.metaDescription || '');
+    formDataToSend.append('metaKeywords', formData.metaKeywords || '');
+    
+    // JSON fields
+    formDataToSend.append('tags', JSON.stringify(formData.tags));
+    formDataToSend.append('references', JSON.stringify(formData.references));
+    formDataToSend.append('learningObjectives', JSON.stringify(formData.learningObjectives));
+    formDataToSend.append('statistics', JSON.stringify(formData.statistics));
+    formDataToSend.append('relatedPosts', JSON.stringify(formData.relatedPosts));
+    
+    // ========================================================
+    // FIX: Handle Gallery Images Properly
+    // ========================================================
+    
+    // Separate existing gallery URLs from new file uploads
+    const existingGalleryUrls = formData.galleryImages.filter(img => typeof img === 'string');
+    const newGalleryFiles = formData.galleryImages.filter(img => typeof img === 'object' && img instanceof File);
+    
+    // Send existing gallery URLs as JSON
+    if (existingGalleryUrls.length > 0) {
+      formDataToSend.append('galleryImages', JSON.stringify(existingGalleryUrls));
+      console.log('📸 Existing Gallery URLs:', existingGalleryUrls.length);
+    }
+    
+    // Append each new gallery file with the same field name 'galleryImages'
+    // This allows multer to handle them as an array
+    newGalleryFiles.forEach((file) => {
+      formDataToSend.append('galleryImages', file);
+    });
+    
+    console.log('📸 New Gallery Files to upload:', newGalleryFiles.length);
+    
+    // Publish date
+    if (formData.publishDate) {
+      formDataToSend.append('publishDate', formData.publishDate);
+    }
+    
+    // Featured image - if it's a File object, append it
+    if (formData.featuredImage && typeof formData.featuredImage === 'object') {
+      formDataToSend.append('featuredImage', formData.featuredImage);
     }
 
-    try {
-      setSaving(true);
-      
-      const formDataToSend = new FormData();
-      
-      // Basic fields
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('subtitle', formData.subtitle || '');
-      formDataToSend.append('content', formData.content);
-      formDataToSend.append('category', formData.category);
-      formDataToSend.append('status', status);
-      formDataToSend.append('featured', formData.featured);
-      formDataToSend.append('readingTime', formData.readingTime);
-      formDataToSend.append('allowComments', formData.allowComments);
-      formDataToSend.append('showAuthor', formData.showAuthor);
-      formDataToSend.append('showShareButtons', formData.showShareButtons);
-      
-      // Media fields
-      formDataToSend.append('videoUrl', formData.videoUrl || '');
-      formDataToSend.append('videoEmbed', formData.videoEmbed || '');
-      formDataToSend.append('audioUrl', formData.audioUrl || '');
-      
-      // Author fields - use both ID and direct values
-      if (formData.authorId) {
-        formDataToSend.append('author', formData.authorId);
-      }
-      formDataToSend.append('authorName', formData.authorName || '');
-      formDataToSend.append('authorTitle', formData.authorTitle || '');
-      formDataToSend.append('authorBio', formData.authorBio || '');
-      formDataToSend.append('authorImage', formData.authorImage || '');
-      
-      // SEO
-      formDataToSend.append('metaDescription', formData.metaDescription || '');
-      formDataToSend.append('metaKeywords', formData.metaKeywords || '');
-      
-      // JSON fields
-      formDataToSend.append('tags', JSON.stringify(formData.tags));
-      formDataToSend.append('references', JSON.stringify(formData.references));
-      formDataToSend.append('learningObjectives', JSON.stringify(formData.learningObjectives));
-      formDataToSend.append('statistics', JSON.stringify(formData.statistics));
-      formDataToSend.append('relatedPosts', JSON.stringify(formData.relatedPosts));
-      
-      // Gallery images - handle both URLs and files
-      const galleryUrls = formData.galleryImages.filter(img => typeof img === 'string');
-      if (galleryUrls.length > 0) {
-        formDataToSend.append('galleryImages', JSON.stringify(galleryUrls));
-      }
-      
-      // Publish date
-      if (formData.publishDate) {
-        formDataToSend.append('publishDate', formData.publishDate);
-      }
-      
-      // Featured image - if it's a File object, append it
-      if (formData.featuredImage && typeof formData.featuredImage === 'object') {
-        formDataToSend.append('featuredImage', formData.featuredImage);
-      }
-
-      let response;
-      if (isEditing) {
-        response = await blogAPI.updatePost(id, formDataToSend);
+    let response;
+    if (isEditing) {
+      response = await blogAPI.updatePost(id, formDataToSend);
+    } else {
+      response = await blogAPI.createPost(formDataToSend);
+    }
+    
+    if (response.success) {
+      toast.success(isEditing ? 'Post updated successfully!' : 'Post created successfully!');
+      if (status === 'published') {
+        navigate('/admin/blog/posts');
       } else {
-        response = await blogAPI.createPost(formDataToSend);
-      }
-      
-      if (response.success) {
-        toast.success(isEditing ? 'Post updated successfully!' : 'Post created successfully!');
-        if (status === 'published') {
-          navigate('/admin/blog/posts');
-        } else {
-          toast.info('Draft saved successfully');
-          if (!isEditing) {
-            navigate(`/admin/blog/edit/${response.data._id}`);
-          }
+        toast.info('Draft saved successfully');
+        if (!isEditing) {
+          navigate(`/admin/blog/edit/${response.data._id}`);
         }
-      } else {
-        toast.error(response.message || 'Failed to save post');
       }
-    } catch (error) {
-      console.error('Error saving post:', error);
-      toast.error(error.response?.data?.message || 'Failed to save post');
-    } finally {
-      setSaving(false);
+    } else {
+      toast.error(response.message || 'Failed to save post');
     }
-  };
+  } catch (error) {
+    console.error('Error saving post:', error);
+    toast.error(error.response?.data?.message || 'Failed to save post');
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handlePublish = () => {
     handleSave('published');

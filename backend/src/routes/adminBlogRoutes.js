@@ -47,7 +47,7 @@ import {
 } from "../controllers/adminTagController.js";
 
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
-import { upload, uploadMultiple } from "../../config/multer.js";
+import { uploadFields } from "../../config/multer.js";
 
 const router = express.Router();
 
@@ -59,22 +59,16 @@ router.use(adminOnly);
 router.get("/posts", getAllBlogPosts);
 router.get("/posts/:id", getBlogPostById);
 
-// IMPORTANT: Use upload.fields() to handle both featuredImage and galleryImages
+// IMPORTANT: Use uploadFields to handle both featuredImage and galleryImages
 router.post(
   "/posts",
-  upload.fields([
-    { name: "featuredImage", maxCount: 1 },
-    { name: "galleryImages", maxCount: 10 }
-  ]),
+  uploadFields,
   createBlogPost
 );
 
 router.put(
   "/posts/:id",
-  upload.fields([
-    { name: "featuredImage", maxCount: 1 },
-    { name: "galleryImages", maxCount: 10 }
-  ]),
+  uploadFields,
   updateBlogPost
 );
 

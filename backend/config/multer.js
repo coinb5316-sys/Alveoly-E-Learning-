@@ -23,14 +23,20 @@ const upload = multer({
   fileFilter: imageFilter
 });
 
-// Multiple images upload for gallery
+// Multiple images upload for gallery - handles array of files with field name "galleryImages"
 const uploadMultiple = multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024
+    fileSize: 10 * 1024 * 1024 // 10MB per file
   },
   fileFilter: imageFilter
 }).array("galleryImages", 10);
+
+// Fields upload - handles both featuredImage and galleryImages together
+const uploadFields = upload.fields([
+  { name: 'featuredImage', maxCount: 1 },
+  { name: 'galleryImages', maxCount: 10 }
+]);
 
 // Any file upload (for future use)
 const uploadAny = multer({
@@ -43,5 +49,6 @@ const uploadAny = multer({
 export {
   upload,
   uploadMultiple,
-  uploadAny
+  uploadAny,
+  uploadFields
 };

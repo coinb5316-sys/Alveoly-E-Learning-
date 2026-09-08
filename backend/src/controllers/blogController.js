@@ -1,18 +1,21 @@
-// controllers/blogController.js - COMPLETE FIXED
+// controllers/blogController.js - UPDATED CREATE & UPDATE (Only the relevant parts)
+
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
 import BlogComment from "../models/BlogComment.js";
 import User from "../models/User.js";
+import BlogAuthor from "../models/BlogAuthor.js";
 import { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
 
-// Add this to createBlogPost function in controllers/blogController.js
-
+// ==================== CREATE BLOG POST - FULLY FIXED ====================
 export const createBlogPost = async (req, res) => {
   try {
     console.log("📝 Create blog post request received");
     console.log("📋 Request body:", req.body);
     console.log("📎 Files:", req.files ? "Present" : "None");
+    console.log("📎 Featured Image:", req.files?.featuredImage ? "Present" : "None");
+    console.log("📎 Gallery Images:", req.files?.galleryImages ? `${req.files.galleryImages.length} files` : "None");
     console.log("👤 User:", req.user?.id);
 
     const {
@@ -40,7 +43,8 @@ export const createBlogPost = async (req, res) => {
       showShareButtons,
       galleryImages: galleryImagesBody,
       relatedPosts,
-      readingTime
+      readingTime,
+      author: authorIdFromBody
     } = req.body;
 
     // Validate required fields
@@ -80,7 +84,7 @@ export const createBlogPost = async (req, res) => {
     // Upload gallery images if provided
     let processedGalleryImages = [];
     
-    // First, handle any gallery images from the body (URLs)
+    // First, handle any gallery images from the body (URLs - existing gallery images)
     if (galleryImagesBody) {
       try {
         if (typeof galleryImagesBody === "string") {
@@ -90,14 +94,14 @@ export const createBlogPost = async (req, res) => {
         } else if (typeof galleryImagesBody === "string" && galleryImagesBody.startsWith("http")) {
           processedGalleryImages = [galleryImagesBody];
         }
-        console.log("📸 Processed gallery images from body:", processedGalleryImages);
+        console.log("📸 Processed gallery images from body:", processedGalleryImages.length);
       } catch (e) {
         console.log("⚠️ Failed to parse galleryImages:", e.message);
         processedGalleryImages = [];
       }
     }
 
-    // Handle gallery image file uploads
+    // Handle gallery image file uploads from multer
     if (req.files && req.files.galleryImages && req.files.galleryImages.length > 0) {
       console.log(`📸 Uploading ${req.files.galleryImages.length} gallery images...`);
       
@@ -124,22 +128,40 @@ export const createBlogPost = async (req, res) => {
       // Merge with existing gallery images (from body)
       processedGalleryImages = [...processedGalleryImages, ...validUrls];
       
-      console.log(`✅ Uploaded ${validUrls.length} gallery images`);
+      console.log(`✅ Uploaded ${validUrls.length} new gallery images`);
     }
 
-    // Get author details
-    const author = await User.findById(req.user.id);
-    if (!author) {
-      return res.status(404).json({
-        success: false,
-        message: "Author not found"
-      });
+    // Get author details - try to find from BlogAuthor first, then fallback to User
+    let authorId = authorIdFromBody || req.user.id;
+    let authorName = '';
+    let authorTitleFinal = authorTitle || "Contributor";
+    let authorBioFinal = authorBio || "";
+    let authorImageFinal = authorImage || "";
+
+    // Try to find author in BlogAuthor collection
+    if (authorIdFromBody) {
+      const blogAuthor = await BlogAuthor.findById(authorIdFromBody);
+      if (blogAuthor) {
+        authorName = blogAuthor.name;
+        authorTitleFinal = blogAuthor.title || authorTitleFinal;
+        authorBioFinal = blogAuthor.bio || authorBioFinal;
+        authorImageFinal = blogAuthor.avatar || authorImageFinal;
+        authorId = authorIdFromBody;
+      }
     }
 
-    const authorName = author.name;
-    const authorTitleFinal = authorTitle || author.title || "Contributor";
-    const authorBioFinal = authorBio || author.bio || "";
-    const authorImageFinal = authorImage || author.avatar || "";
+    // If no BlogAuthor found, use User
+    if (!authorName) {
+      const user = await User.findById(authorId);
+      if (user) {
+        authorName = user.name;
+        authorTitleFinal = authorTitle || user.title || "Contributor";
+        authorBioFinal = authorBio || user.bio || "";
+        authorImageFinal = authorImage || user.avatar || "";
+      } else {
+        authorName = "Unknown Author";
+      }
+    }
 
     // Create slug from title
     let slug = title
@@ -167,9 +189,6 @@ export const createBlogPost = async (req, res) => {
       publishDateFinal = new Date();
     }
 
-    // Get author ID from request (if provided)
-    let authorId = req.body.author || req.user.id;
-    
     const newPost = new BlogPost({
       title: title.trim(),
       subtitle: subtitle || "",
@@ -205,6 +224,7 @@ export const createBlogPost = async (req, res) => {
 
     await newPost.save();
     console.log("✅ Post saved with ID:", newPost._id);
+    console.log("✅ Gallery Images saved:", newPost.galleryImages.length);
 
     // Update category count
     await BlogCategory.findOneAndUpdate(
@@ -235,14 +255,15 @@ export const createBlogPost = async (req, res) => {
   }
 };
 
-// Add this to updateBlogPost function in controllers/blogController.js
-
+// ==================== UPDATE BLOG POST - FULLY FIXED ====================
 export const updateBlogPost = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = { ...req.body };
     console.log("📝 Update blog post:", id);
     console.log("📎 Files:", req.files ? "Present" : "None");
+    console.log("📎 Featured Image:", req.files?.featuredImage ? "Present" : "None");
+    console.log("📎 Gallery Images:", req.files?.galleryImages ? `${req.files.galleryImages.length} files` : "None");
 
     const existingPost = await BlogPost.findById(id);
     if (!existingPost) {
@@ -289,7 +310,7 @@ export const updateBlogPost = async (req, res) => {
     // Handle gallery image uploads
     let processedGalleryImages = existingPost.galleryImages || [];
 
-    // First, handle any gallery images from the body (URLs)
+    // First, handle any gallery images from the body (URLs - existing gallery images)
     if (updates.galleryImages) {
       try {
         if (typeof updates.galleryImages === "string") {
@@ -298,7 +319,7 @@ export const updateBlogPost = async (req, res) => {
         } else if (Array.isArray(updates.galleryImages)) {
           processedGalleryImages = updates.galleryImages;
         }
-        console.log("📸 Processed gallery images from body:", processedGalleryImages);
+        console.log("📸 Processed gallery images from body:", processedGalleryImages.length);
       } catch (e) {
         console.log("⚠️ Failed to parse galleryImages:", e.message);
       }
@@ -397,6 +418,8 @@ export const updateBlogPost = async (req, res) => {
       });
     }
 
+    console.log("✅ Gallery Images after update:", updatedPost.galleryImages.length);
+
     res.json({
       success: true,
       message: "Blog post updated successfully",
@@ -411,6 +434,8 @@ export const updateBlogPost = async (req, res) => {
     });
   }
 };
+
+// ... rest of the controller functions remain the same (getAllBlogPosts, getBlogPostBySlug, etc.)
 
 // ==================== GET ALL BLOG POSTS ====================
 export const getAllBlogPosts = async (req, res) => {
