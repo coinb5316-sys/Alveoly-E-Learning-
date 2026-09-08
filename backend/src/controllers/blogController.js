@@ -235,14 +235,15 @@ export const createBlogPost = async (req, res) => {
   }
 };
 
-// ==================== UPDATE BLOG POST - FULLY FIXED ====================
+// Add this to updateBlogPost function in controllers/blogController.js
+
 export const updateBlogPost = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = { ...req.body };
     console.log("📝 Update blog post:", id);
+    console.log("📎 Files:", req.files ? "Present" : "None");
 
-    // Find existing post
     const existingPost = await BlogPost.findById(id);
     if (!existingPost) {
       return res.status(404).json({
@@ -252,8 +253,9 @@ export const updateBlogPost = async (req, res) => {
     }
 
     // Handle featured image upload
-    if (req.file) {
+    if (req.files && req.files.featuredImage && req.files.featuredImage[0]) {
       try {
+        const file = req.files.featuredImage[0];
         // Delete old image from Cloudinary if exists
         if (existingPost.featuredImage) {
           try {
@@ -264,8 +266,7 @@ export const updateBlogPost = async (req, res) => {
           }
         }
 
-        // Upload new image
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadToCloudinary(file.buffer, {
           folder: "blog/featured",
           public_id: `featured_${Date.now()}`,
           transformation: [
@@ -285,8 +286,58 @@ export const updateBlogPost = async (req, res) => {
       }
     }
 
+    // Handle gallery image uploads
+    let processedGalleryImages = existingPost.galleryImages || [];
+
+    // First, handle any gallery images from the body (URLs)
+    if (updates.galleryImages) {
+      try {
+        if (typeof updates.galleryImages === "string") {
+          const parsed = JSON.parse(updates.galleryImages);
+          processedGalleryImages = Array.isArray(parsed) ? parsed : [parsed];
+        } else if (Array.isArray(updates.galleryImages)) {
+          processedGalleryImages = updates.galleryImages;
+        }
+        console.log("📸 Processed gallery images from body:", processedGalleryImages);
+      } catch (e) {
+        console.log("⚠️ Failed to parse galleryImages:", e.message);
+      }
+    }
+
+    // Handle new gallery image file uploads
+    if (req.files && req.files.galleryImages && req.files.galleryImages.length > 0) {
+      console.log(`📸 Uploading ${req.files.galleryImages.length} new gallery images...`);
+      
+      const uploadPromises = req.files.galleryImages.map(async (file, index) => {
+        try {
+          const result = await uploadToCloudinary(file.buffer, {
+            folder: "blog/gallery",
+            public_id: `gallery_${Date.now()}_${index}`,
+            transformation: [
+              { width: 800, height: 600, crop: "fill" },
+              { quality: "auto" }
+            ]
+          });
+          return result.secure_url;
+        } catch (err) {
+          console.error(`❌ Failed to upload gallery image ${index}:`, err);
+          return null;
+        }
+      });
+
+      const uploadedUrls = await Promise.all(uploadPromises);
+      const validUrls = uploadedUrls.filter(url => url !== null);
+      
+      // Merge with existing gallery images
+      processedGalleryImages = [...processedGalleryImages, ...validUrls];
+      
+      console.log(`✅ Uploaded ${validUrls.length} new gallery images`);
+    }
+
+    updates.galleryImages = processedGalleryImages;
+
     // Parse JSON fields
-    const jsonFields = ['galleryImages', 'tags', 'references', 'learningObjectives', 'statistics', 'relatedPosts'];
+    const jsonFields = ['tags', 'references', 'learningObjectives', 'statistics', 'relatedPosts'];
     for (const field of jsonFields) {
       if (updates[field] && typeof updates[field] === "string") {
         try {
@@ -324,6 +375,11 @@ export const updateBlogPost = async (req, res) => {
     // Update reading time if provided
     if (updates.readingTime) {
       updates.readingTime = parseInt(updates.readingTime);
+    }
+
+    // Handle author ID if provided
+    if (updates.author) {
+      updates.author = updates.author;
     }
 
     // Update the post
