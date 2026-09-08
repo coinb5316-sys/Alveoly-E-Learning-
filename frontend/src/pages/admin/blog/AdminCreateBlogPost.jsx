@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE FIXED WITH ALL FEATURES
+// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE WITH AUTHOR SELECTION
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -60,13 +60,25 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
-  Search
+  Search,
+  Users,
+  Check,
+  Mail,
+  Award,
+  GraduationCap,
+  Briefcase,
+  Globe,
+  Twitter,
+  Linkedin,
+  Facebook,
+  Instagram,
+  Youtube
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../../../api/blogApi';
 
 // Custom GraduationCap icon
-const GraduationCap = ({ className }) => (
+const GraduationCapIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422M12 14l-6.16-3.422M12 14v6m-6 0h12" />
   </svg>
@@ -103,9 +115,11 @@ const AdminCreateBlogPost = () => {
     publishDate: null,
     metaDescription: '',
     metaKeywords: '',
-    author: '',
+    authorId: '', // Changed to store author ID
+    authorName: '',
+    authorTitle: '',
     authorBio: '',
-    authorImage: null,
+    authorImage: '',
     references: [],
     learningObjectives: [],
     statistics: [],
@@ -118,6 +132,7 @@ const AdminCreateBlogPost = () => {
   
   const [categories, setCategories] = useState([]);
   const [allPosts, setAllPosts] = useState([]);
+  const [authors, setAuthors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
@@ -136,11 +151,15 @@ const AdminCreateBlogPost = () => {
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [relatedSearch, setRelatedSearch] = useState('');
   const [showRelatedDropdown, setShowRelatedDropdown] = useState(false);
+  const [authorSearch, setAuthorSearch] = useState('');
+  const [showAuthorDropdown, setShowAuthorDropdown] = useState(false);
+  const [selectedAuthorDetails, setSelectedAuthorDetails] = useState(null);
 
   useEffect(() => {
     fetchCategories();
     fetchTags();
     fetchAllPosts();
+    fetchAuthors();
     if (isEditing) {
       fetchPost();
     }
@@ -179,6 +198,26 @@ const AdminCreateBlogPost = () => {
     }
   };
 
+  const fetchAuthors = async () => {
+    try {
+      const response = await blogAPI.getAuthorsForSelect();
+      if (response.success) {
+        setAuthors(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching authors:', error);
+      // Fallback: try the regular authors endpoint
+      try {
+        const fallbackResponse = await blogAPI.getAuthors({ limit: 100 });
+        if (fallbackResponse.success) {
+          setAuthors(fallbackResponse.data || []);
+        }
+      } catch (fallbackError) {
+        console.error('Error fetching authors (fallback):', fallbackError);
+      }
+    }
+  };
+
   const fetchPost = async () => {
     try {
       setLoading(true);
@@ -186,6 +225,31 @@ const AdminCreateBlogPost = () => {
       
       if (response.success) {
         const post = response.data;
+        
+        // Find author if exists
+        let authorId = '';
+        let authorName = post.authorName || '';
+        let authorTitle = post.authorTitle || '';
+        let authorBio = post.authorBio || '';
+        let authorImage = post.authorImage || '';
+        
+        if (post.author && post.author._id) {
+          authorId = post.author._id;
+          authorName = post.author.name || post.authorName || '';
+          authorTitle = post.author.title || post.authorTitle || '';
+          authorBio = post.author.bio || post.authorBio || '';
+          authorImage = post.author.avatar || post.authorImage || '';
+          
+          // Find the author in the authors list
+          const foundAuthor = authors.find(a => a._id === post.author._id);
+          if (foundAuthor) {
+            setSelectedAuthorDetails(foundAuthor);
+            authorTitle = foundAuthor.title || authorTitle;
+            authorBio = foundAuthor.bio || authorBio;
+            authorImage = foundAuthor.avatar || authorImage;
+          }
+        }
+        
         setFormData({
           title: post.title || '',
           subtitle: post.subtitle || '',
@@ -202,9 +266,11 @@ const AdminCreateBlogPost = () => {
           publishDate: post.publishDate ? post.publishDate.split('T')[0] : null,
           metaDescription: post.metaDescription || '',
           metaKeywords: post.metaKeywords || '',
-          author: post.authorName || '',
-          authorBio: post.authorBio || '',
-          authorImage: post.authorImage || null,
+          authorId: authorId,
+          authorName: authorName,
+          authorTitle: authorTitle,
+          authorBio: authorBio,
+          authorImage: authorImage,
           references: post.references || [],
           learningObjectives: post.learningObjectives || [],
           statistics: post.statistics || [],
@@ -280,6 +346,47 @@ const AdminCreateBlogPost = () => {
     }));
   };
 
+  // ==================== AUTHOR SELECTION HANDLERS ====================
+  
+  const handleSelectAuthor = (author) => {
+    setSelectedAuthorDetails(author);
+    setFormData(prev => ({
+      ...prev,
+      authorId: author._id,
+      authorName: author.name,
+      authorTitle: author.title || '',
+      authorBio: author.bio || '',
+      authorImage: author.avatar || ''
+    }));
+    setAuthorSearch('');
+    setShowAuthorDropdown(false);
+  };
+
+  const handleClearAuthor = () => {
+    setSelectedAuthorDetails(null);
+    setFormData(prev => ({
+      ...prev,
+      authorId: '',
+      authorName: '',
+      authorTitle: '',
+      authorBio: '',
+      authorImage: ''
+    }));
+  };
+
+  const getFilteredAuthors = () => {
+    if (!authorSearch.trim()) return [];
+    return authors
+      .filter(a => 
+        a.name.toLowerCase().includes(authorSearch.toLowerCase()) ||
+        a.email.toLowerCase().includes(authorSearch.toLowerCase()) ||
+        (a.title && a.title.toLowerCase().includes(authorSearch.toLowerCase()))
+      )
+      .slice(0, 10);
+  };
+
+  // ==================== TAG HANDLERS ====================
+
   const handleAddTag = (tag) => {
     if (!tag.trim()) return;
     if (formData.tags.includes(tag.trim())) {
@@ -308,6 +415,8 @@ const AdminCreateBlogPost = () => {
     }
   };
 
+  // ==================== REFERENCE HANDLERS ====================
+
   const handleAddReference = () => {
     if (!refInput.trim()) return;
     setFormData(prev => ({
@@ -324,6 +433,8 @@ const AdminCreateBlogPost = () => {
     }));
   };
 
+  // ==================== LEARNING OBJECTIVES HANDLERS ====================
+
   const handleAddObjective = () => {
     if (!objectiveInput.trim()) return;
     setFormData(prev => ({
@@ -339,6 +450,8 @@ const AdminCreateBlogPost = () => {
       learningObjectives: prev.learningObjectives.filter((_, i) => i !== index)
     }));
   };
+
+  // ==================== STATISTICS HANDLERS ====================
 
   const handleAddStatistic = () => {
     if (!statLabel.trim() || !statValue.trim()) return;
@@ -357,13 +470,13 @@ const AdminCreateBlogPost = () => {
     }));
   };
 
-  // Related Posts handlers
+  // ==================== RELATED POSTS HANDLERS ====================
+
   const handleAddRelatedPost = (postId) => {
     if (formData.relatedPosts.includes(postId)) {
       toast.info('Post already added');
       return;
     }
-    // Don't add current post as related
     if (isEditing && postId === id) {
       toast.error('Cannot add current post');
       return;
@@ -399,15 +512,20 @@ const AdminCreateBlogPost = () => {
       .slice(0, 10);
   };
 
+  // ==================== VALIDATION ====================
+
   const validateForm = () => {
     const newErrors = {};
     if (!formData.title.trim()) newErrors.title = 'Title is required';
     if (!formData.content.trim()) newErrors.content = 'Content is required';
     if (!formData.category) newErrors.category = 'Category is required';
+    if (!formData.authorId && !formData.authorName) newErrors.author = 'Author is required';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  // ==================== SAVE / PUBLISH ====================
 
   const handleSave = async (status = 'draft') => {
     if (!validateForm()) {
@@ -437,8 +555,12 @@ const AdminCreateBlogPost = () => {
       formDataToSend.append('videoEmbed', formData.videoEmbed || '');
       formDataToSend.append('audioUrl', formData.audioUrl || '');
       
-      // Author fields
-      formDataToSend.append('authorTitle', formData.author || '');
+      // Author fields - use both ID and direct values
+      if (formData.authorId) {
+        formDataToSend.append('author', formData.authorId);
+      }
+      formDataToSend.append('authorName', formData.authorName || '');
+      formDataToSend.append('authorTitle', formData.authorTitle || '');
       formDataToSend.append('authorBio', formData.authorBio || '');
       formDataToSend.append('authorImage', formData.authorImage || '');
       
@@ -501,6 +623,8 @@ const AdminCreateBlogPost = () => {
     handleSave('published');
   };
 
+  // ==================== CONTENT EDITOR ====================
+
   const insertText = (before, after = '') => {
     const textarea = contentEditorRef.current;
     if (!textarea) return;
@@ -557,6 +681,8 @@ const AdminCreateBlogPost = () => {
       </div>
     );
   }
+
+  // ==================== RENDER ====================
 
   return (
     <div className="space-y-6 pb-20">
@@ -873,7 +999,7 @@ const AdminCreateBlogPost = () => {
             </div>
           </div>
 
-          {/* Related Posts - NEW SECTION */}
+          {/* Related Posts */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Related Posts
@@ -1054,54 +1180,250 @@ const AdminCreateBlogPost = () => {
             </div>
           </div>
 
-          {/* Author Info - Full Section */}
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          {/* Author Selection - UPDATED WITH FULL AUTHOR FETCH */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4">
               <User className="h-4 w-4" />
-              Author Information
+              Author <span className="text-red-500">*</span>
             </h3>
             
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                Author Title
-              </label>
-              <input
-                type="text"
-                name="author"
-                value={formData.author}
-                onChange={handleChange}
-                placeholder="e.g., Chief Nursing Officer"
-                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                Author Bio
-              </label>
-              <textarea
-                name="authorBio"
-                value={formData.authorBio}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Author biography..."
-                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm resize-y"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                Author Image URL
-              </label>
-              <input
-                type="text"
-                name="authorImage"
-                value={formData.authorImage || ''}
-                onChange={handleChange}
-                placeholder="https://example.com/avatar.jpg"
-                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
-              />
-            </div>
+            {selectedAuthorDetails ? (
+              <div className="bg-blue-50 dark:bg-blue-950/30 rounded-xl p-4 border border-blue-200 dark:border-blue-800/50">
+                <div className="flex items-start gap-4">
+                  {selectedAuthorDetails.avatar ? (
+                    <img
+                      src={selectedAuthorDetails.avatar}
+                      alt={selectedAuthorDetails.name}
+                      className="w-16 h-16 rounded-full object-cover border-2 border-blue-100 dark:border-blue-900/50"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+                      {selectedAuthorDetails.name?.charAt(0) || 'A'}
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                          {selectedAuthorDetails.name}
+                        </h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {selectedAuthorDetails.title || 'Contributor'}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1">
+                          <Mail className="h-3.5 w-3.5" />
+                          {selectedAuthorDetails.email}
+                        </p>
+                        {selectedAuthorDetails.bio && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
+                            {selectedAuthorDetails.bio}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {selectedAuthorDetails.expertise && selectedAuthorDetails.expertise.slice(0, 3).map((exp, i) => (
+                            <span key={i} className="px-2 py-0.5 bg-purple-100 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 rounded-full text-xs">
+                              {exp}
+                            </span>
+                          ))}
+                          {selectedAuthorDetails.expertise && selectedAuthorDetails.expertise.length > 3 && (
+                            <span className="px-2 py-0.5 text-xs text-gray-400">
+                              +{selectedAuthorDetails.expertise.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleClearAuthor}
+                        className="p-1.5 text-gray-400 hover:text-red-500 transition rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30"
+                        title="Remove author"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={authorSearch}
+                      onChange={(e) => {
+                        setAuthorSearch(e.target.value);
+                        setShowAuthorDropdown(e.target.value.length > 0);
+                      }}
+                      onFocus={() => setShowAuthorDropdown(authors.length > 0 && authorSearch.length > 0)}
+                      placeholder="Search for an author..."
+                      className={`w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border ${errors.author ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm`}
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      setAuthorSearch('');
+                      setShowAuthorDropdown(false);
+                      // Refresh authors list
+                      fetchAuthors();
+                    }}
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+                    title="Refresh authors"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                </div>
+                
+                {showAuthorDropdown && getFilteredAuthors().length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-64 overflow-y-auto z-20">
+                    {getFilteredAuthors().map(author => (
+                      <button
+                        key={author._id}
+                        onClick={() => handleSelectAuthor(author)}
+                        className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center gap-3 border-b border-gray-100 dark:border-gray-700 last:border-0"
+                      >
+                        {author.avatar ? (
+                          <img
+                            src={author.avatar}
+                            alt={author.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                            {author.name?.charAt(0) || 'A'}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {author.name}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {author.title || 'Contributor'} • {author.email}
+                          </p>
+                          {author.expertise && author.expertise.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {author.expertise.slice(0, 2).map((exp, i) => (
+                                <span key={i} className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 rounded-full text-[10px]">
+                                  {exp}
+                                </span>
+                              ))}
+                              {author.expertise.length > 2 && (
+                                <span className="text-[10px] text-gray-400">+{author.expertise.length - 2}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {showAuthorDropdown && getFilteredAuthors().length === 0 && authorSearch.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 text-center z-20">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No authors found matching "{authorSearch}"</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      <button
+                        onClick={() => {
+                          setShowAuthorDropdown(false);
+                          // Allow manual entry as fallback
+                          setFormData(prev => ({
+                            ...prev,
+                            authorName: authorSearch,
+                            authorTitle: '',
+                            authorBio: '',
+                            authorImage: ''
+                          }));
+                          setAuthorSearch('');
+                          toast.info('You can manually enter author details below');
+                        }}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Enter manually
+                      </button>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {errors.author && (
+              <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
+                <AlertCircle className="h-4 w-4" />
+                {errors.author}
+              </p>
+            )}
+            
+            {/* Manual author fields (shown when no author is selected, or for additional info) */}
+            {!selectedAuthorDetails && (
+              <div className="mt-4 space-y-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                    Author Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="authorName"
+                    value={formData.authorName}
+                    onChange={handleChange}
+                    placeholder="Enter author name..."
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                    Author Title
+                  </label>
+                  <input
+                    type="text"
+                    name="authorTitle"
+                    value={formData.authorTitle}
+                    onChange={handleChange}
+                    placeholder="e.g., Chief Nursing Officer"
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                    Author Bio
+                  </label>
+                  <textarea
+                    name="authorBio"
+                    value={formData.authorBio}
+                    onChange={handleChange}
+                    rows={2}
+                    placeholder="Author biography..."
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm resize-y"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                    Author Image URL
+                  </label>
+                  <input
+                    type="text"
+                    name="authorImage"
+                    value={formData.authorImage || ''}
+                    onChange={handleChange}
+                    placeholder="https://example.com/avatar.jpg"
+                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+                  />
+                </div>
+              </div>
+            )}
+            
+            {/* Show author details if selected */}
+            {selectedAuthorDetails && (
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400">
+                <p>Author information loaded from <span className="font-medium text-blue-600 dark:text-blue-400">Author Management</span></p>
+                <p className="mt-1">To update author details, go to <button 
+                  onClick={() => navigate('/admin/blog/authors')}
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Authors Management
+                </button></p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1355,6 +1677,13 @@ const AdminCreateBlogPost = () => {
               <EyeIcon className="h-4 w-4" />
               {showPreview ? 'Hide Preview' : 'Preview Post'}
             </button>
+            <button
+              onClick={() => navigate('/admin/blog/authors')}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/30 transition text-sm"
+            >
+              <Users className="h-4 w-4" />
+              Manage Authors
+            </button>
           </div>
         </div>
       </div>
@@ -1402,15 +1731,15 @@ const AdminCreateBlogPost = () => {
                 {/* Author Info */}
                 <div className="flex items-center gap-3">
                   {formData.authorImage ? (
-                    <img src={formData.authorImage} alt={formData.author} className="w-12 h-12 rounded-full object-cover" />
+                    <img src={formData.authorImage} alt={formData.authorName || formData.author} className="w-12 h-12 rounded-full object-cover" />
                   ) : (
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-                      {formData.author?.charAt(0) || 'A'}
+                      {(formData.authorName || formData.author)?.charAt(0) || 'A'}
                     </div>
                   )}
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{formData.author || 'Author'}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{formData.authorBio || 'Author bio'}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{formData.authorName || formData.author || 'Author'}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{formData.authorTitle || formData.authorBio || 'Author bio'}</p>
                   </div>
                 </div>
                 
@@ -1465,7 +1794,7 @@ const AdminCreateBlogPost = () => {
                 {formData.learningObjectives.length > 0 && (
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-6 border border-blue-100 dark:border-blue-800/50">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
-                      <GraduationCap className="text-blue-600" />
+                      <GraduationCapIcon className="text-blue-600" />
                       Learning Objectives
                     </h3>
                     <ul className="space-y-2">

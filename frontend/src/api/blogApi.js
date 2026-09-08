@@ -1,11 +1,10 @@
-// src/api/blogApi.js - COMPLETE FIXED
+// src/api/blogApi.js - COMPLETE WITH AUTHOR AND TAG METHODS
 import API from "./axios";
 
 // Base API service for blog operations
 const blogAPI = {
   // ==================== POST OPERATIONS ====================
   
-  // Get all blog posts with pagination and filters - PUBLIC
   getPosts: async (params = {}) => {
     try {
       const response = await API.get("/blog/posts", { params });
@@ -16,7 +15,6 @@ const blogAPI = {
     }
   },
 
-  // Get a single blog post by ID - PUBLIC
   getPostById: async (id) => {
     try {
       const response = await API.get(`/blog/posts/${id}`);
@@ -27,7 +25,6 @@ const blogAPI = {
     }
   },
 
-  // Get a single blog post by slug - PUBLIC
   getPostBySlug: async (slug) => {
     try {
       const response = await API.get(`/blog/posts/slug/${slug}`);
@@ -38,7 +35,6 @@ const blogAPI = {
     }
   },
 
-  // Create a new blog post - ADMIN ONLY
   createPost: async (formData) => {
     try {
       const response = await API.post("/admin/blog/posts", formData, {
@@ -53,7 +49,6 @@ const blogAPI = {
     }
   },
 
-  // Update a blog post - ADMIN ONLY
   updatePost: async (id, formData) => {
     try {
       const response = await API.put(`/admin/blog/posts/${id}`, formData, {
@@ -68,7 +63,6 @@ const blogAPI = {
     }
   },
 
-  // Delete a blog post - ADMIN ONLY
   deletePost: async (id) => {
     try {
       const response = await API.delete(`/admin/blog/posts/${id}`);
@@ -79,7 +73,6 @@ const blogAPI = {
     }
   },
 
-  // Bulk delete posts - ADMIN ONLY
   bulkDeletePosts: async (postIds) => {
     try {
       const response = await API.delete("/admin/blog/posts/bulk", {
@@ -92,7 +85,6 @@ const blogAPI = {
     }
   },
 
-  // Toggle featured status - ADMIN ONLY
   toggleFeatured: async (id) => {
     try {
       const response = await API.patch(`/admin/blog/posts/${id}/featured`);
@@ -103,7 +95,6 @@ const blogAPI = {
     }
   },
 
-  // Publish a blog post - ADMIN ONLY
   publishPost: async (id) => {
     try {
       const response = await API.patch(`/admin/blog/posts/${id}/publish`);
@@ -114,7 +105,6 @@ const blogAPI = {
     }
   },
 
-  // Archive a blog post - ADMIN ONLY
   archivePost: async (id) => {
     try {
       const response = await API.patch(`/admin/blog/posts/${id}/archive`);
@@ -125,7 +115,6 @@ const blogAPI = {
     }
   },
 
-  // Get post stats - ADMIN ONLY
   getPostStats: async () => {
     try {
       const response = await API.get("/admin/blog/posts/stats");
@@ -138,7 +127,6 @@ const blogAPI = {
 
   // ==================== CATEGORY OPERATIONS ====================
 
-  // Get all categories - PUBLIC
   getCategories: async () => {
     try {
       const response = await API.get("/blog/categories");
@@ -149,7 +137,6 @@ const blogAPI = {
     }
   },
 
-  // Get category by slug - PUBLIC
   getCategoryBySlug: async (slug) => {
     try {
       const response = await API.get(`/blog/categories/${slug}`);
@@ -160,7 +147,6 @@ const blogAPI = {
     }
   },
 
-  // Create a new category - ADMIN ONLY
   createCategory: async (data) => {
     try {
       const response = await API.post("/admin/blog/categories", data);
@@ -171,7 +157,6 @@ const blogAPI = {
     }
   },
 
-  // Update a category - ADMIN ONLY
   updateCategory: async (id, data) => {
     try {
       const response = await API.put(`/admin/blog/categories/${id}`, data);
@@ -182,7 +167,6 @@ const blogAPI = {
     }
   },
 
-  // Delete a category - ADMIN ONLY
   deleteCategory: async (id) => {
     try {
       const response = await API.delete(`/admin/blog/categories/${id}`);
@@ -195,7 +179,6 @@ const blogAPI = {
 
   // ==================== COMMENT OPERATIONS ====================
 
-  // Get comments for a post - PUBLIC
   getComments: async (postId, params = {}) => {
     try {
       const response = await API.get(`/blog/comments/${postId}`, { params });
@@ -206,7 +189,6 @@ const blogAPI = {
     }
   },
 
-  // Add a comment - PUBLIC (but requires user auth for better experience)
   addComment: async (postId, data) => {
     try {
       const response = await API.post(`/blog/comments/${postId}`, data);
@@ -217,7 +199,6 @@ const blogAPI = {
     }
   },
 
-  // Approve a comment - ADMIN ONLY
   approveComment: async (id) => {
     try {
       const response = await API.put(`/admin/blog/comments/${id}/approve`);
@@ -228,7 +209,6 @@ const blogAPI = {
     }
   },
 
-  // Reject a comment - ADMIN ONLY
   rejectComment: async (id) => {
     try {
       const response = await API.put(`/admin/blog/comments/${id}/reject`);
@@ -239,7 +219,6 @@ const blogAPI = {
     }
   },
 
-  // Delete a comment - ADMIN ONLY
   deleteComment: async (id) => {
     try {
       const response = await API.delete(`/admin/blog/comments/${id}`);
@@ -250,7 +229,6 @@ const blogAPI = {
     }
   },
 
-  // Get comment stats - ADMIN ONLY
   getCommentStats: async () => {
     try {
       const response = await API.get("/admin/blog/comments/stats");
@@ -261,7 +239,7 @@ const blogAPI = {
     }
   },
 
-  // ==================== AUTHOR OPERATIONS - ADMIN ONLY ====================
+  // ==================== AUTHOR OPERATIONS ====================
 
   getAuthors: async (params = {}) => {
     try {
@@ -273,12 +251,42 @@ const blogAPI = {
     }
   },
 
+  getAuthorsForSelect: async () => {
+    try {
+      const response = await API.get("/admin/blog/authors/select");
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching authors for select:", error);
+      throw error;
+    }
+  },
+
   getAuthorById: async (id) => {
     try {
       const response = await API.get(`/admin/blog/authors/${id}`);
       return response.data;
     } catch (error) {
       console.error("Error fetching author:", error);
+      throw error;
+    }
+  },
+
+  getAuthorBySlug: async (slug) => {
+    try {
+      const response = await API.get(`/admin/blog/authors/slug/${slug}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching author by slug:", error);
+      throw error;
+    }
+  },
+
+  createAuthor: async (data) => {
+    try {
+      const response = await API.post("/admin/blog/authors", data);
+      return response.data;
+    } catch (error) {
+      console.error("Error creating author:", error);
       throw error;
     }
   },
@@ -303,7 +311,17 @@ const blogAPI = {
     }
   },
 
-  // ==================== TAG OPERATIONS - ADMIN ONLY ====================
+  getAuthorStats: async () => {
+    try {
+      const response = await API.get("/admin/blog/authors/stats");
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching author stats:", error);
+      throw error;
+    }
+  },
+
+  // ==================== TAG OPERATIONS ====================
 
   getTags: async (params = {}) => {
     try {
@@ -315,12 +333,22 @@ const blogAPI = {
     }
   },
 
-  getTagBySlug: async (slug) => {
+  getTagById: async (id) => {
     try {
-      const response = await API.get(`/admin/blog/tags/${slug}`);
+      const response = await API.get(`/admin/blog/tags/${id}`);
       return response.data;
     } catch (error) {
       console.error("Error fetching tag:", error);
+      throw error;
+    }
+  },
+
+  getTagBySlug: async (slug) => {
+    try {
+      const response = await API.get(`/admin/blog/tags/slug/${slug}`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching tag by slug:", error);
       throw error;
     }
   },
@@ -355,9 +383,18 @@ const blogAPI = {
     }
   },
 
+  getTagStats: async () => {
+    try {
+      const response = await API.get("/admin/blog/tags/stats");
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching tag stats:", error);
+      throw error;
+    }
+  },
+
   // ==================== SEARCH OPERATIONS ====================
 
-  // Search posts - PUBLIC
   searchPosts: async (query, params = {}) => {
     try {
       const response = await API.get("/blog/posts/search", {
@@ -370,7 +407,6 @@ const blogAPI = {
     }
   },
 
-  // Get posts by category - PUBLIC
   getPostsByCategory: async (category, params = {}) => {
     try {
       const response = await API.get(`/blog/posts/category/${category}`, { params });
@@ -381,7 +417,6 @@ const blogAPI = {
     }
   },
 
-  // Get posts by author - PUBLIC
   getPostsByAuthor: async (authorId, params = {}) => {
     try {
       const response = await API.get(`/blog/posts/author/${authorId}`, { params });
@@ -392,7 +427,6 @@ const blogAPI = {
     }
   },
 
-  // Get related posts - PUBLIC
   getRelatedPosts: async (id) => {
     try {
       const response = await API.get(`/blog/posts/${id}/related`);
@@ -403,7 +437,6 @@ const blogAPI = {
     }
   },
 
-  // Increment views - PUBLIC
   incrementViews: async (id) => {
     try {
       const response = await API.post(`/blog/posts/${id}/view`);
@@ -414,7 +447,6 @@ const blogAPI = {
     }
   },
 
-  // Toggle like - PUBLIC
   toggleLike: async (id) => {
     try {
       const response = await API.post(`/blog/posts/${id}/like`);
