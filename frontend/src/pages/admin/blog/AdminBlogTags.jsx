@@ -1,6 +1,7 @@
 // src/pages/admin/blog/AdminBlogTags.jsx - COMPLETE FIXED
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion';
+// CORRECT
+import { motion } from 'framer-motion';
 import {
   Plus,
   Edit,
