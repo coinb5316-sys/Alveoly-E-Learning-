@@ -6,12 +6,13 @@ import BlogComment from "../models/BlogComment.js";
 import User from "../models/User.js";
 import { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
 
-// ==================== CREATE BLOG POST - FULLY FIXED ====================
+// Add this to createBlogPost function in controllers/blogController.js
+
 export const createBlogPost = async (req, res) => {
   try {
     console.log("📝 Create blog post request received");
     console.log("📋 Request body:", req.body);
-    console.log("📎 File:", req.file ? "Present" : "None");
+    console.log("📎 Files:", req.files ? "Present" : "None");
     console.log("👤 User:", req.user?.id);
 
     const {
@@ -37,7 +38,7 @@ export const createBlogPost = async (req, res) => {
       allowComments,
       showAuthor,
       showShareButtons,
-      galleryImages,
+      galleryImages: galleryImagesBody,
       relatedPosts,
       readingTime
     } = req.body;
@@ -52,10 +53,11 @@ export const createBlogPost = async (req, res) => {
 
     // Upload featured image if provided
     let featuredImage = null;
-    if (req.file) {
+    if (req.files && req.files.featuredImage && req.files.featuredImage[0]) {
       try {
+        const file = req.files.featuredImage[0];
         console.log("📤 Uploading featured image to Cloudinary...");
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadToCloudinary(file.buffer, {
           folder: "blog/featured",
           public_id: `featured_${Date.now()}`,
           transformation: [
@@ -69,33 +71,60 @@ export const createBlogPost = async (req, res) => {
         console.error("❌ Cloudinary upload error:", uploadError);
         return res.status(500).json({
           success: false,
-          message: "Failed to upload image",
+          message: "Failed to upload featured image",
           error: uploadError.message
         });
       }
     }
 
-    // Process gallery images - HANDLE BOTH STRING ARRAY AND FILE UPLOADS
+    // Upload gallery images if provided
     let processedGalleryImages = [];
-    if (galleryImages) {
+    
+    // First, handle any gallery images from the body (URLs)
+    if (galleryImagesBody) {
       try {
-        // If galleryImages is a string, parse it as JSON
-        if (typeof galleryImages === "string") {
-          processedGalleryImages = JSON.parse(galleryImages);
-        } 
-        // If it's already an array, use it directly
-        else if (Array.isArray(galleryImages)) {
-          processedGalleryImages = galleryImages;
+        if (typeof galleryImagesBody === "string") {
+          processedGalleryImages = JSON.parse(galleryImagesBody);
+        } else if (Array.isArray(galleryImagesBody)) {
+          processedGalleryImages = galleryImagesBody;
+        } else if (typeof galleryImagesBody === "string" && galleryImagesBody.startsWith("http")) {
+          processedGalleryImages = [galleryImagesBody];
         }
-        // If it's a string that's not JSON, treat it as a single URL
-        else if (typeof galleryImages === "string" && galleryImages.startsWith("http")) {
-          processedGalleryImages = [galleryImages];
-        }
-        console.log("📸 Processed gallery images:", processedGalleryImages);
+        console.log("📸 Processed gallery images from body:", processedGalleryImages);
       } catch (e) {
         console.log("⚠️ Failed to parse galleryImages:", e.message);
         processedGalleryImages = [];
       }
+    }
+
+    // Handle gallery image file uploads
+    if (req.files && req.files.galleryImages && req.files.galleryImages.length > 0) {
+      console.log(`📸 Uploading ${req.files.galleryImages.length} gallery images...`);
+      
+      const uploadPromises = req.files.galleryImages.map(async (file, index) => {
+        try {
+          const result = await uploadToCloudinary(file.buffer, {
+            folder: "blog/gallery",
+            public_id: `gallery_${Date.now()}_${index}`,
+            transformation: [
+              { width: 800, height: 600, crop: "fill" },
+              { quality: "auto" }
+            ]
+          });
+          return result.secure_url;
+        } catch (err) {
+          console.error(`❌ Failed to upload gallery image ${index}:`, err);
+          return null;
+        }
+      });
+
+      const uploadedUrls = await Promise.all(uploadPromises);
+      const validUrls = uploadedUrls.filter(url => url !== null);
+      
+      // Merge with existing gallery images (from body)
+      processedGalleryImages = [...processedGalleryImages, ...validUrls];
+      
+      console.log(`✅ Uploaded ${validUrls.length} gallery images`);
     }
 
     // Get author details
@@ -118,7 +147,6 @@ export const createBlogPost = async (req, res) => {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    // Check if slug exists
     const existingPost = await BlogPost.findOne({ slug });
     if (existingPost) {
       slug += `-${Date.now()}`;
@@ -139,6 +167,9 @@ export const createBlogPost = async (req, res) => {
       publishDateFinal = new Date();
     }
 
+    // Get author ID from request (if provided)
+    let authorId = req.body.author || req.user.id;
+    
     const newPost = new BlogPost({
       title: title.trim(),
       subtitle: subtitle || "",
@@ -150,8 +181,8 @@ export const createBlogPost = async (req, res) => {
       videoUrl: videoUrl || "",
       videoEmbed: videoEmbed || "",
       audioUrl: audioUrl || "",
-      author: req.user.id,
-      authorName,
+      author: authorId,
+      authorName: authorName,
       authorTitle: authorTitleFinal,
       authorBio: authorBioFinal,
       authorImage: authorImageFinal,

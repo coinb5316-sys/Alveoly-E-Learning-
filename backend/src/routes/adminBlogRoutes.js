@@ -1,7 +1,6 @@
-// routes/adminBlogRoutes.js - COMPLETE FIXED
+// routes/adminBlogRoutes.js - UPDATED FOR GALLERY IMAGES
 import express from "express";
 import {
-  // Posts
   createBlogPost,
   getAllBlogPosts,
   getBlogPostById,
@@ -14,13 +13,11 @@ import {
   getPostStats,
   getPostsByCategory,
   getPostsByAuthor,
-  // Categories
   createCategory,
   getAllCategories,
   getCategoryBySlug,
   updateCategory,
   deleteCategory,
-  // Comments
   getComments,
   approveComment,
   rejectComment,
@@ -29,7 +26,6 @@ import {
 } from "../controllers/blogController.js";
 
 import {
-  // Authors
   getAllAuthors,
   getAuthorById,
   getAuthorBySlug,
@@ -41,7 +37,6 @@ import {
 } from "../controllers/adminAuthorController.js";
 
 import {
-  // Tags
   getAllTags,
   getTagById,
   getTagBySlug,
@@ -52,7 +47,7 @@ import {
 } from "../controllers/adminTagController.js";
 
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
-import { upload } from "../../config/multer.js";
+import { upload, uploadMultiple } from "../../config/multer.js";
 
 const router = express.Router();
 
@@ -63,8 +58,26 @@ router.use(adminOnly);
 // ==================== POST MANAGEMENT ====================
 router.get("/posts", getAllBlogPosts);
 router.get("/posts/:id", getBlogPostById);
-router.post("/posts", upload.single("featuredImage"), createBlogPost);
-router.put("/posts/:id", upload.single("featuredImage"), updateBlogPost);
+
+// IMPORTANT: Use upload.fields() to handle both featuredImage and galleryImages
+router.post(
+  "/posts",
+  upload.fields([
+    { name: "featuredImage", maxCount: 1 },
+    { name: "galleryImages", maxCount: 10 }
+  ]),
+  createBlogPost
+);
+
+router.put(
+  "/posts/:id",
+  upload.fields([
+    { name: "featuredImage", maxCount: 1 },
+    { name: "galleryImages", maxCount: 10 }
+  ]),
+  updateBlogPost
+);
+
 router.delete("/posts/:id", deleteBlogPost);
 router.delete("/posts/bulk", bulkDeletePosts);
 router.patch("/posts/:id/featured", toggleFeatured);
