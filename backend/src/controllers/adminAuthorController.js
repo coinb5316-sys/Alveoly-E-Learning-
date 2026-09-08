@@ -1,8 +1,17 @@
-// controllers/adminAuthorController.js - COMPLETE FIXED
+// controllers/adminAuthorController.js - COMPLETELY FIXED
 import mongoose from "mongoose";
 import BlogAuthor from "../models/BlogAuthor.js";
 import BlogPost from "../models/BlogPost.js";
 import User from "../models/User.js";
+
+// Helper function to generate slug
+const generateSlug = (name) => {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
 
 // ==================== GET ALL AUTHORS ====================
 export const getAllAuthors = async (req, res) => {
@@ -24,7 +33,6 @@ export const getAllAuthors = async (req, res) => {
       ];
     }
 
-    // Sort options
     const sortOptions = {};
     if (sort === "latest") sortOptions.createdAt = -1;
     else if (sort === "oldest") sortOptions.createdAt = 1;
@@ -41,7 +49,6 @@ export const getAllAuthors = async (req, res) => {
       BlogAuthor.countDocuments(filter)
     ]);
 
-    // Get post counts for each author
     const authorsWithStats = await Promise.all(authors.map(async (author) => {
       const [postCount, totalLikes, totalViews] = await Promise.all([
         BlogPost.countDocuments({ author: author._id }),
@@ -63,7 +70,6 @@ export const getAllAuthors = async (req, res) => {
       };
     }));
 
-    // Get stats
     const stats = {
       total: await BlogAuthor.countDocuments(),
       active: await BlogAuthor.countDocuments({ status: "active" }),
@@ -106,7 +112,6 @@ export const getAuthorById = async (req, res) => {
       });
     }
 
-    // Get author's posts
     const posts = await BlogPost.find({ author: id })
       .select("title slug featuredImage publishDate views likes comments status")
       .sort({ publishDate: -1 })
@@ -182,7 +187,7 @@ export const getAuthorBySlug = async (req, res) => {
   }
 };
 
-// controllers/adminAuthorController.js - FIXED CREATE
+// ==================== CREATE AUTHOR - COMPLETELY FIXED ====================
 export const createAuthor = async (req, res) => {
   try {
     console.log("📝 Create author request:", req.body);
@@ -237,11 +242,17 @@ export const createAuthor = async (req, res) => {
     const parsedCertifications = certifications ? (typeof certifications === "string" ? JSON.parse(certifications) : certifications) : [];
     const parsedSocial = social ? (typeof social === "string" ? JSON.parse(social) : social) : {};
 
-    // Generate slug manually
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    // Generate slug explicitly
+    const slug = generateSlug(name);
+
+    // Check if slug already exists
+    const existingSlug = await BlogAuthor.findOne({ slug });
+    if (existingSlug) {
+      return res.status(400).json({
+        success: false,
+        message: "An author with this slug already exists. Please use a different name."
+      });
+    }
 
     const newAuthor = new BlogAuthor({
       name: name.trim(),
@@ -273,7 +284,7 @@ export const createAuthor = async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: "An author with this email or name already exists"
+        message: "An author with this email, name, or slug already exists"
       });
     }
     res.status(500).json({
@@ -317,22 +328,42 @@ export const updateAuthor = async (req, res) => {
     } = req.body;
 
     // Check if email is being changed and if it already exists
-    if (email && email !== author.email) {
-      const existingAuthor = await BlogAuthor.findOne({ email });
+    if (email && email.trim() !== author.email) {
+      const trimmedEmail = email.trim().toLowerCase();
+      const existingAuthor = await BlogAuthor.findOne({ 
+        email: trimmedEmail,
+        _id: { $ne: id }
+      });
       if (existingAuthor) {
         return res.status(400).json({
           success: false,
           message: "Another author with this email already exists"
         });
       }
-      author.email = email.trim().toLowerCase();
+      author.email = trimmedEmail;
     }
 
-    // Update fields
-    if (name) {
-      author.name = name.trim();
-      // Slug will be updated in pre-save hook
+    // Check if name is being changed and update slug
+    if (name && name.trim() !== author.name) {
+      const trimmedName = name.trim();
+      const newSlug = generateSlug(trimmedName);
+      
+      // Check if another author has this slug
+      const existingSlug = await BlogAuthor.findOne({ 
+        slug: newSlug,
+        _id: { $ne: id }
+      });
+      if (existingSlug) {
+        return res.status(400).json({
+          success: false,
+          message: "Another author with this name/slug already exists"
+        });
+      }
+      
+      author.name = trimmedName;
+      author.slug = newSlug;
     }
+
     if (title) author.title = title.trim();
     if (bio) author.bio = bio.trim();
     if (avatar !== undefined) author.avatar = avatar;
@@ -388,7 +419,7 @@ export const updateAuthor = async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: "Another author with this email or name already exists"
+        message: "Another author with this email, name, or slug already exists"
       });
     }
     res.status(500).json({

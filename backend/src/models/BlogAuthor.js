@@ -1,4 +1,4 @@
-// models/BlogAuthor.js - FIXED
+// models/BlogAuthor.js - COMPLETELY FIXED (NO PRE-SAVE MIDDLEWARE)
 import mongoose from "mongoose";
 
 const blogAuthorSchema = new mongoose.Schema({
@@ -81,6 +81,7 @@ const blogAuthorSchema = new mongoose.Schema({
   },
   slug: {
     type: String,
+    required: true, // Make required so validation catches it
     unique: true,
     lowercase: true,
     trim: true
@@ -98,18 +99,9 @@ const blogAuthorSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// FIXED: Properly handle next in pre-save middleware
-blogAuthorSchema.pre("save", function(next) {
-  if (this.isModified('name') && this.name) {
-    this.slug = this.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  }
-  next();
-});
+// NO PRE-SAVE MIDDLEWARE - handle slug generation in the controller
 
-// REMOVED DUPLICATE INDEXES - Only keep one set
+// Indexes
 blogAuthorSchema.index({ slug: 1 });
 blogAuthorSchema.index({ email: 1 });
 blogAuthorSchema.index({ status: 1 });
