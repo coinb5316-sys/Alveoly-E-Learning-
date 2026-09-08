@@ -1,6 +1,15 @@
-// controllers/adminTagController.js - FIXED
+// controllers/adminTagController.js - COMPLETELY FIXED
 import BlogTag from "../models/BlogTag.js";
 import BlogPost from "../models/BlogPost.js";
+
+// Helper function to generate slug
+const generateSlug = (name) => {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
 
 // ==================== GET ALL TAGS ====================
 export const getAllTags = async (req, res) => {
@@ -135,7 +144,7 @@ export const getTagBySlug = async (req, res) => {
   }
 };
 
-// ==================== CREATE TAG - FIXED ====================
+// ==================== CREATE TAG - COMPLETELY FIXED ====================
 export const createTag = async (req, res) => {
   try {
     console.log("📝 Create tag request:", req.body);
@@ -149,8 +158,10 @@ export const createTag = async (req, res) => {
       });
     }
 
-    // Check if tag already exists
-    const existingTag = await BlogTag.findOne({ name: { $regex: new RegExp(`^${name}$`, "i") } });
+    // Check if tag already exists (case insensitive)
+    const existingTag = await BlogTag.findOne({ 
+      name: { $regex: new RegExp(`^${name.trim()}$`, "i") } 
+    });
     if (existingTag) {
       return res.status(400).json({
         success: false,
@@ -158,15 +169,21 @@ export const createTag = async (req, res) => {
       });
     }
 
-    // Generate slug manually to ensure it's set
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    // Generate slug explicitly
+    const slug = generateSlug(name);
+
+    // Check if slug already exists
+    const existingSlug = await BlogTag.findOne({ slug });
+    if (existingSlug) {
+      return res.status(400).json({
+        success: false,
+        message: "A tag with this slug already exists. Please use a different name."
+      });
+    }
 
     const newTag = new BlogTag({
       name: name.trim(),
-      slug: slug, // Explicitly set slug
+      slug: slug,
       color: color || "#3b82f6",
       icon: icon || "",
       description: description || "",
@@ -186,7 +203,7 @@ export const createTag = async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: "A tag with this name already exists"
+        message: "A tag with this name or slug already exists"
       });
     }
     res.status(500).json({
@@ -214,26 +231,44 @@ export const updateTag = async (req, res) => {
 
     const { name, color, icon, description, metaDescription, isActive } = req.body;
 
-    // Check if name is being changed and if it already exists
-    if (name && name !== tag.name) {
-      const existingTag = await BlogTag.findOne({ name: { $regex: new RegExp(`^${name}$`, "i") } });
+    // Check if name is being changed
+    if (name && name.trim() !== tag.name) {
+      const trimmedName = name.trim();
+      
+      // Check if another tag with this name exists
+      const existingTag = await BlogTag.findOne({ 
+        name: { $regex: new RegExp(`^${trimmedName}$`, "i") },
+        _id: { $ne: id }
+      });
       if (existingTag) {
         return res.status(400).json({
           success: false,
           message: "Another tag with this name already exists"
         });
       }
-      tag.name = name.trim();
-      // Update slug
-      tag.slug = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+
+      const newSlug = generateSlug(trimmedName);
       
-      // Update slug in all posts that have this tag
+      // Check if another tag with this slug exists
+      const existingSlug = await BlogTag.findOne({ 
+        slug: newSlug,
+        _id: { $ne: id }
+      });
+      if (existingSlug) {
+        return res.status(400).json({
+          success: false,
+          message: "Another tag with this slug already exists"
+        });
+      }
+
+      // Update tag name and slug
+      tag.name = trimmedName;
+      tag.slug = newSlug;
+      
+      // Update tag in all posts
       await BlogPost.updateMany(
         { tags: tag.name },
-        { $set: { "tags.$": name.trim() } }
+        { $set: { "tags.$": trimmedName } }
       );
     }
 
@@ -259,7 +294,7 @@ export const updateTag = async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: "Another tag with this name already exists"
+        message: "Another tag with this name or slug already exists"
       });
     }
     res.status(500).json({
