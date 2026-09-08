@@ -182,7 +182,7 @@ export const getAuthorBySlug = async (req, res) => {
   }
 };
 
-// ==================== CREATE AUTHOR ====================
+// controllers/adminAuthorController.js - FIXED CREATE
 export const createAuthor = async (req, res) => {
   try {
     console.log("📝 Create author request:", req.body);
@@ -237,6 +237,12 @@ export const createAuthor = async (req, res) => {
     const parsedCertifications = certifications ? (typeof certifications === "string" ? JSON.parse(certifications) : certifications) : [];
     const parsedSocial = social ? (typeof social === "string" ? JSON.parse(social) : social) : {};
 
+    // Generate slug manually
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
     const newAuthor = new BlogAuthor({
       name: name.trim(),
       email: email.trim().toLowerCase(),
@@ -250,7 +256,8 @@ export const createAuthor = async (req, res) => {
       social: parsedSocial,
       status: status || "active",
       userId: userId || null,
-      metaDescription: metaDescription || ""
+      metaDescription: metaDescription || "",
+      slug: slug // Explicitly set slug
     });
 
     await newAuthor.save();

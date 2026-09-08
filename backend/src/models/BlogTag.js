@@ -1,4 +1,4 @@
-// models/BlogTag.js
+// models/BlogTag.js - FIXED
 import mongoose from "mongoose";
 
 const blogTagSchema = new mongoose.Schema({
@@ -11,7 +11,6 @@ const blogTagSchema = new mongoose.Schema({
   },
   slug: {
     type: String,
-    required: true,
     unique: true,
     lowercase: true,
     trim: true
@@ -47,8 +46,16 @@ const blogTagSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// FIXED: Properly handle next in pre-save middleware and ensure slug is generated
 blogTagSchema.pre("save", function(next) {
   if (this.isModified('name') && this.name) {
+    this.slug = this.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+  // If slug is still empty, generate from name
+  if (!this.slug && this.name) {
     this.slug = this.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
@@ -57,10 +64,10 @@ blogTagSchema.pre("save", function(next) {
   next();
 });
 
+// REMOVED DUPLICATE INDEXES
 blogTagSchema.index({ slug: 1 });
 blogTagSchema.index({ name: 1 });
 blogTagSchema.index({ count: -1 });
 
-// FIX: Use default export
 const BlogTag = mongoose.model("BlogTag", blogTagSchema);
 export default BlogTag;

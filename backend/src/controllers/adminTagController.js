@@ -1,4 +1,4 @@
-// controllers/adminTagController.js - COMPLETE FIXED
+// controllers/adminTagController.js - FIXED
 import BlogTag from "../models/BlogTag.js";
 import BlogPost from "../models/BlogPost.js";
 
@@ -19,7 +19,6 @@ export const getAllTags = async (req, res) => {
       ];
     }
 
-    // Sort options
     const sortOptions = {};
     if (sort === "latest") sortOptions.createdAt = -1;
     else if (sort === "oldest") sortOptions.createdAt = 1;
@@ -36,7 +35,6 @@ export const getAllTags = async (req, res) => {
       BlogTag.countDocuments(filter)
     ]);
 
-    // Get stats
     const stats = {
       total: await BlogTag.countDocuments(),
       active: await BlogTag.countDocuments({ isActive: true }),
@@ -78,7 +76,6 @@ export const getTagById = async (req, res) => {
       });
     }
 
-    // Get posts with this tag
     const posts = await BlogPost.find({ tags: tag.name, status: "published" })
       .select("title slug featuredImage publishDate views likes")
       .sort({ publishDate: -1 })
@@ -138,7 +135,7 @@ export const getTagBySlug = async (req, res) => {
   }
 };
 
-// ==================== CREATE TAG ====================
+// ==================== CREATE TAG - FIXED ====================
 export const createTag = async (req, res) => {
   try {
     console.log("📝 Create tag request:", req.body);
@@ -161,8 +158,15 @@ export const createTag = async (req, res) => {
       });
     }
 
+    // Generate slug manually to ensure it's set
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
     const newTag = new BlogTag({
       name: name.trim(),
+      slug: slug, // Explicitly set slug
       color: color || "#3b82f6",
       icon: icon || "",
       description: description || "",
@@ -220,6 +224,12 @@ export const updateTag = async (req, res) => {
         });
       }
       tag.name = name.trim();
+      // Update slug
+      tag.slug = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      
       // Update slug in all posts that have this tag
       await BlogPost.updateMany(
         { tags: tag.name },

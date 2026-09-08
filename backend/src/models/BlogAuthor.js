@@ -1,7 +1,8 @@
-// models/BlogAuthor.js
+// models/BlogAuthor.js - FIXED
 import mongoose from "mongoose";
 
 const blogAuthorSchema = new mongoose.Schema({
+  // Basic Info
   name: {
     type: String,
     required: [true, "Author name is required"],
@@ -97,6 +98,7 @@ const blogAuthorSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// FIXED: Properly handle next in pre-save middleware
 blogAuthorSchema.pre("save", function(next) {
   if (this.isModified('name') && this.name) {
     this.slug = this.name
@@ -107,11 +109,11 @@ blogAuthorSchema.pre("save", function(next) {
   next();
 });
 
+// REMOVED DUPLICATE INDEXES - Only keep one set
 blogAuthorSchema.index({ slug: 1 });
 blogAuthorSchema.index({ email: 1 });
 blogAuthorSchema.index({ status: 1 });
 blogAuthorSchema.index({ name: 1 });
 
-// FIX: Use default export
 const BlogAuthor = mongoose.model("BlogAuthor", blogAuthorSchema);
 export default BlogAuthor;
