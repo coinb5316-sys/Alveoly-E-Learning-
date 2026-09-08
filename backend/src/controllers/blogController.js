@@ -1,4 +1,4 @@
-// controllers/blogController.js - FIXED UPLOAD HANDLING
+// controllers/blogController.js - COMPLETE FIXED
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
@@ -6,7 +6,7 @@ import BlogComment from "../models/BlogComment.js";
 import User from "../models/User.js";
 import { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
 
-// ==================== CREATE BLOG POST - FIXED ====================
+// ==================== CREATE BLOG POST - FULLY FIXED ====================
 export const createBlogPost = async (req, res) => {
   try {
     console.log("📝 Create blog post request received");
@@ -37,7 +37,9 @@ export const createBlogPost = async (req, res) => {
       allowComments,
       showAuthor,
       showShareButtons,
-      galleryImages
+      galleryImages,
+      relatedPosts,
+      readingTime
     } = req.body;
 
     // Validate required fields
@@ -73,13 +75,23 @@ export const createBlogPost = async (req, res) => {
       }
     }
 
-    // Process gallery images
+    // Process gallery images - HANDLE BOTH STRING ARRAY AND FILE UPLOADS
     let processedGalleryImages = [];
     if (galleryImages) {
       try {
-        processedGalleryImages = typeof galleryImages === "string" 
-          ? JSON.parse(galleryImages) 
-          : galleryImages;
+        // If galleryImages is a string, parse it as JSON
+        if (typeof galleryImages === "string") {
+          processedGalleryImages = JSON.parse(galleryImages);
+        } 
+        // If it's already an array, use it directly
+        else if (Array.isArray(galleryImages)) {
+          processedGalleryImages = galleryImages;
+        }
+        // If it's a string that's not JSON, treat it as a single URL
+        else if (typeof galleryImages === "string" && galleryImages.startsWith("http")) {
+          processedGalleryImages = [galleryImages];
+        }
+        console.log("📸 Processed gallery images:", processedGalleryImages);
       } catch (e) {
         console.log("⚠️ Failed to parse galleryImages:", e.message);
         processedGalleryImages = [];
@@ -97,6 +109,8 @@ export const createBlogPost = async (req, res) => {
 
     const authorName = author.name;
     const authorTitleFinal = authorTitle || author.title || "Contributor";
+    const authorBioFinal = authorBio || author.bio || "";
+    const authorImageFinal = authorImage || author.avatar || "";
 
     // Create slug from title
     let slug = title
@@ -115,6 +129,7 @@ export const createBlogPost = async (req, res) => {
     const parsedReferences = references ? (typeof references === "string" ? JSON.parse(references) : references) : [];
     const parsedLearningObjectives = learningObjectives ? (typeof learningObjectives === "string" ? JSON.parse(learningObjectives) : learningObjectives) : [];
     const parsedStatistics = statistics ? (typeof statistics === "string" ? JSON.parse(statistics) : statistics) : [];
+    const parsedRelatedPosts = relatedPosts ? (typeof relatedPosts === "string" ? JSON.parse(relatedPosts) : relatedPosts) : [];
 
     // Determine publish date
     let publishDateFinal = null;
@@ -138,8 +153,8 @@ export const createBlogPost = async (req, res) => {
       author: req.user.id,
       authorName,
       authorTitle: authorTitleFinal,
-      authorBio: authorBio || author.bio || "",
-      authorImage: authorImage || author.avatar || "",
+      authorBio: authorBioFinal,
+      authorImage: authorImageFinal,
       status,
       featured: featured === true || featured === "true",
       publishDate: publishDateFinal,
@@ -148,6 +163,8 @@ export const createBlogPost = async (req, res) => {
       references: parsedReferences,
       learningObjectives: parsedLearningObjectives,
       statistics: parsedStatistics,
+      relatedPosts: parsedRelatedPosts,
+      readingTime: readingTime ? parseInt(readingTime) : 5,
       allowComments: allowComments !== undefined ? (allowComments === true || allowComments === "true") : true,
       showAuthor: showAuthor !== undefined ? (showAuthor === true || showAuthor === "true") : true,
       showShareButtons: showShareButtons !== undefined ? (showShareButtons === true || showShareButtons === "true") : true,
@@ -168,6 +185,7 @@ export const createBlogPost = async (req, res) => {
     // Populate author details for response
     const populatedPost = await BlogPost.findById(newPost._id)
       .populate("author", "name email avatar role")
+      .populate("relatedPosts", "title slug featuredImage readingTime")
       .lean();
 
     res.status(201).json({
@@ -186,7 +204,7 @@ export const createBlogPost = async (req, res) => {
   }
 };
 
-// ==================== UPDATE BLOG POST - FIXED ====================
+// ==================== UPDATE BLOG POST - FULLY FIXED ====================
 export const updateBlogPost = async (req, res) => {
   try {
     const { id } = req.params;
@@ -237,12 +255,13 @@ export const updateBlogPost = async (req, res) => {
     }
 
     // Parse JSON fields
-    const jsonFields = ['galleryImages', 'tags', 'references', 'learningObjectives', 'statistics'];
+    const jsonFields = ['galleryImages', 'tags', 'references', 'learningObjectives', 'statistics', 'relatedPosts'];
     for (const field of jsonFields) {
       if (updates[field] && typeof updates[field] === "string") {
         try {
           updates[field] = JSON.parse(updates[field]);
         } catch (e) {
+          console.log(`⚠️ Failed to parse ${field}:`, e.message);
           updates[field] = [];
         }
       }
@@ -271,12 +290,18 @@ export const updateBlogPost = async (req, res) => {
       updates.isPublished = true;
     }
 
+    // Update reading time if provided
+    if (updates.readingTime) {
+      updates.readingTime = parseInt(updates.readingTime);
+    }
+
     // Update the post
     const updatedPost = await BlogPost.findByIdAndUpdate(
       id,
       { $set: updates },
       { new: true, runValidators: true }
-    ).populate("author", "name email avatar role title");
+    ).populate("author", "name email avatar role title")
+     .populate("relatedPosts", "title slug featuredImage readingTime");
 
     if (!updatedPost) {
       return res.status(404).json({
@@ -357,6 +382,7 @@ export const getAllBlogPosts = async (req, res) => {
     const [posts, total] = await Promise.all([
       BlogPost.find(filter)
         .populate("author", "name email avatar role title")
+        .populate("relatedPosts", "title slug featuredImage readingTime")
         .sort(sortOptions)
         .skip(skip)
         .limit(limitNum)
@@ -369,6 +395,7 @@ export const getAllBlogPosts = async (req, res) => {
     if (pageNum === 1 && !search && !category && !status) {
       featuredPost = await BlogPost.findOne({ featured: true, status: "published" })
         .populate("author", "name email avatar role title")
+        .populate("relatedPosts", "title slug featuredImage readingTime")
         .sort({ publishDate: -1 })
         .lean();
     }
@@ -452,7 +479,7 @@ export const getBlogPostBySlug = async (req, res) => {
 
     const post = await BlogPost.findOne({ slug, status: "published" })
       .populate("author", "name email avatar role title bio")
-      .populate("relatedPosts", "title slug featuredImage readTime")
+      .populate("relatedPosts", "title slug featuredImage readingTime publishDate")
       .lean();
 
     if (!post) {
@@ -474,7 +501,7 @@ export const getBlogPostBySlug = async (req, res) => {
       .limit(50)
       .lean();
 
-    // Get related posts
+    // Get related posts if not already set
     let relatedPosts = post.relatedPosts || [];
     if (relatedPosts.length === 0) {
       relatedPosts = await BlogPost.find({
@@ -482,7 +509,7 @@ export const getBlogPostBySlug = async (req, res) => {
         category: post.category,
         status: "published"
       })
-        .select("title slug featuredImage readTime")
+        .select("title slug featuredImage readingTime publishDate")
         .limit(3)
         .lean();
     }
@@ -512,7 +539,7 @@ export const getBlogPostById = async (req, res) => {
 
     const post = await BlogPost.findById(id)
       .populate("author", "name email avatar role title bio")
-      .populate("relatedPosts", "title slug featuredImage readTime")
+      .populate("relatedPosts", "title slug featuredImage readingTime publishDate")
       .lean();
 
     if (!post) {
@@ -928,11 +955,29 @@ export const searchPosts = async (req, res) => {
       BlogPost.countDocuments(filter)
     ]);
 
+    // Get suggestions
+    const suggestionAggregation = await BlogPost.aggregate([
+      { $match: { status: "published" } },
+      { $project: { 
+        title: 1,
+        tags: 1,
+        category: 1
+      }},
+      { $limit: 20 }
+    ]);
+
+    const suggestions = {
+      titles: [...new Set(suggestionAggregation.map(p => p.title).filter(t => t.toLowerCase().includes(q.toLowerCase())))].slice(0, 5),
+      tags: [...new Set(suggestionAggregation.flatMap(p => p.tags).filter(t => t && t.toLowerCase().includes(q.toLowerCase())))].slice(0, 5),
+      categories: [...new Set(suggestionAggregation.map(p => p.category).filter(c => c && c.toLowerCase().includes(q.toLowerCase())))].slice(0, 5)
+    };
+
     res.json({
       success: true,
       data: {
         posts,
         query: q,
+        suggestions,
         pagination: {
           page: pageNum,
           limit: limitNum,
@@ -1479,7 +1524,7 @@ export const toggleLike = async (req, res) => {
 
     if (userId) {
       const likedBy = post.likedBy || [];
-      const hasLiked = likedBy.includes(userId);
+      const hasLiked = likedBy.some(id => id.toString() === userId);
 
       if (hasLiked) {
         post.likes = Math.max(0, post.likes - 1);

@@ -1,7 +1,8 @@
-// models/BlogPost.js - SIMPLIFIED (No pre-save middleware)
+// models/BlogPost.js - UNIFIED COMPLETE MODEL (NO PRE-SAVE)
 import mongoose from "mongoose";
 
 const blogPostSchema = new mongoose.Schema({
+  // ===== BASIC INFO =====
   title: {
     type: String,
     required: [true, "Title is required"],
@@ -17,6 +18,14 @@ const blogPostSchema = new mongoose.Schema({
     type: String,
     required: [true, "Content is required"]
   },
+  slug: {
+    type: String,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+
+  // ===== CATEGORY & TAGS =====
   category: {
     type: String,
     required: [true, "Category is required"],
@@ -26,21 +35,30 @@ const blogPostSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
+
+  // ===== MEDIA =====
   featuredImage: {
-    type: String
+    type: String,
+    default: null
   },
   galleryImages: [{
-    type: String
+    type: String,
+    default: []
   }],
   videoUrl: {
-    type: String
+    type: String,
+    default: ""
   },
   videoEmbed: {
-    type: String
+    type: String,
+    default: ""
   },
   audioUrl: {
-    type: String
+    type: String,
+    default: ""
   },
+
+  // ===== AUTHOR INFO =====
   author: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
@@ -51,44 +69,45 @@ const blogPostSchema = new mongoose.Schema({
     required: true
   },
   authorTitle: {
-    type: String
+    type: String,
+    default: "Contributor"
   },
   authorBio: {
-    type: String
+    type: String,
+    default: ""
   },
   authorImage: {
-    type: String
+    type: String,
+    default: ""
   },
+
+  // ===== STATUS & PUBLISHING =====
   status: {
     type: String,
     enum: ["draft", "pending", "published", "archived"],
     default: "draft"
+  },
+  isPublished: {
+    type: Boolean,
+    default: false
   },
   featured: {
     type: Boolean,
     default: false
   },
   publishDate: {
-    type: Date
+    type: Date,
+    default: null
   },
   scheduledDate: {
-    type: Date
+    type: Date,
+    default: null
   },
+
+  // ===== SETTINGS =====
   readingTime: {
     type: Number,
     default: 5
-  },
-  views: {
-    type: Number,
-    default: 0
-  },
-  likes: {
-    type: Number,
-    default: 0
-  },
-  comments: {
-    type: Number,
-    default: 0
   },
   allowComments: {
     type: Boolean,
@@ -102,18 +121,26 @@ const blogPostSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+
+  // ===== SEO =====
   metaDescription: {
     type: String,
-    maxlength: [160, "Meta description cannot exceed 160 characters"]
+    maxlength: [160, "Meta description cannot exceed 160 characters"],
+    default: ""
   },
   metaKeywords: {
-    type: String
+    type: String,
+    default: ""
   },
+
+  // ===== ENHANCED CONTENT =====
   references: [{
-    type: String
+    type: String,
+    default: []
   }],
   learningObjectives: [{
-    type: String
+    type: String,
+    default: []
   }],
   statistics: [{
     value: String,
@@ -121,26 +148,39 @@ const blogPostSchema = new mongoose.Schema({
   }],
   relatedPosts: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: "BlogPost"
+    ref: "BlogPost",
+    default: []
   }],
-  slug: {
-    type: String,
-    unique: true,
-    lowercase: true,
-    trim: true
+
+  // ===== STATS =====
+  views: {
+    type: Number,
+    default: 0
   },
-  isPublished: {
-    type: Boolean,
-    default: false
-  }
+  likes: {
+    type: Number,
+    default: 0
+  },
+  comments: {
+    type: Number,
+    default: 0
+  },
+  likedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: []
+  }],
+  bookmarkedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: []
+  }]
+
 }, {
   timestamps: true
 });
 
-// ================= NO MIDDLEWARE - Handle slug and reading time in controller =================
-// This avoids the "next is not a function" error entirely
-
-// ================= FIXED: Remove duplicate indexes =================
+// ===== INDEXES =====
 blogPostSchema.index({ slug: 1 });
 blogPostSchema.index({ category: 1 });
 blogPostSchema.index({ tags: 1 });
@@ -149,6 +189,17 @@ blogPostSchema.index({ publishDate: -1 });
 blogPostSchema.index({ createdAt: -1 });
 blogPostSchema.index({ author: 1 });
 blogPostSchema.index({ featured: 1, status: 1 });
+
+// ===== VIRTUAL for comment count =====
+blogPostSchema.virtual('commentCount', {
+  ref: 'BlogComment',
+  localField: '_id',
+  foreignField: 'postId',
+  count: true
+});
+
+blogPostSchema.set('toJSON', { virtuals: true });
+blogPostSchema.set('toObject', { virtuals: true });
 
 const BlogPost = mongoose.model("BlogPost", blogPostSchema);
 export default BlogPost;

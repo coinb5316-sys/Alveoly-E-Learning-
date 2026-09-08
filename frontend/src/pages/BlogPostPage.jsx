@@ -1,4 +1,4 @@
-// src/pages/BlogPostPage.jsx - FIXED (public access)
+// src/pages/BlogPostPage.jsx - FIXED WITH AUDIO/PODCAST DISPLAY
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -32,7 +32,12 @@ import {
   FaChartLine,
   FaUserCircle,
   FaSpinner,
-  FaFire
+  FaFire,
+  FaHeadphones,
+  FaPlay,
+  FaPause,
+  FaVolumeUp,
+  FaVolumeMute
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../api/blogApi';
@@ -44,7 +49,7 @@ const ReactPlayer = lazy(() => import('react-player'));
 const BlogPostPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth(); // Get auth state
+  const { user, isAuthenticated } = useAuth();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [liked, setLiked] = useState(false);
@@ -60,13 +65,14 @@ const BlogPostPage = () => {
   const [likesCount, setLikesCount] = useState(0);
   const [viewsCount, setViewsCount] = useState(0);
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const audioRef = React.useRef(null);
 
   useEffect(() => {
     const fetchPost = async () => {
       try {
         setLoading(true);
         
-        // Fetch post by slug or ID - PUBLIC endpoint
         const response = await blogAPI.getPostBySlug(id);
         
         if (response.success) {
@@ -77,17 +83,14 @@ const BlogPostPage = () => {
           setLikesCount(data.likes || 0);
           setViewsCount(data.views || 0);
           
-          // Check if user has liked this post (only if authenticated)
           if (isAuthenticated && user && data.likedBy) {
             setLiked(data.likedBy.includes(user._id));
           }
           
-          // Check if user has bookmarked this post (only if authenticated)
           if (isAuthenticated && user && data.bookmarkedBy) {
             setBookmarked(data.bookmarkedBy.includes(user._id));
           }
           
-          // Increment view count
           await blogAPI.incrementViews(data._id);
         } else {
           toast.error(response.message || 'Failed to load blog post');
@@ -133,7 +136,6 @@ const BlogPostPage = () => {
     }
     
     try {
-      // Toggle locally
       setBookmarked(!bookmarked);
       toast.success(bookmarked ? 'Removed from bookmarks' : 'Added to bookmarks');
     } catch (error) {
@@ -191,6 +193,17 @@ const BlogPostPage = () => {
     } else {
       navigator.clipboard.writeText(url);
       toast.success('Link copied to clipboard!');
+    }
+  };
+
+  const toggleAudio = () => {
+    if (audioRef.current) {
+      if (audioPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setAudioPlaying(!audioPlaying);
     }
   };
 
@@ -284,20 +297,20 @@ const BlogPostPage = () => {
 
               <div className="flex flex-wrap items-center gap-6 text-white/90">
                 <div className="flex items-center gap-3">
-                  {post.author?.avatar || post.author?.image ? (
+                  {post.author?.avatar || post.author?.image || post.authorImage ? (
                     <img
-                      src={post.author.avatar || post.author.image}
-                      alt={post.author.name}
+                      src={post.author?.avatar || post.author?.image || post.authorImage}
+                      alt={post.author?.name || post.authorName}
                       className="w-12 h-12 rounded-full border-2 border-white/30 object-cover"
                     />
                   ) : (
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 border-2 border-white/30 flex items-center justify-center text-white text-lg font-bold">
-                      {post.author?.name?.charAt(0) || 'A'}
+                      {(post.author?.name || post.authorName)?.charAt(0) || 'A'}
                     </div>
                   )}
                   <div>
-                    <p className="font-semibold">{post.author?.name || 'Unknown'}</p>
-                    <p className="text-sm text-white/70">{post.author?.title || 'Contributor'}</p>
+                    <p className="font-semibold">{post.author?.name || post.authorName || 'Unknown'}</p>
+                    <p className="text-sm text-white/70">{post.author?.title || post.authorTitle || 'Contributor'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-sm">
@@ -307,7 +320,7 @@ const BlogPostPage = () => {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <FaClock className="text-white/60" />
-                    {post.readTime || 5} min read
+                    {post.readingTime || 5} min read
                   </span>
                   <span className="flex items-center gap-1.5">
                     <FaEye className="text-white/60" />
@@ -335,7 +348,7 @@ const BlogPostPage = () => {
               animate={{ opacity: 1 }}
               className="flex flex-wrap gap-2 bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-1.5 border border-gray-100 dark:border-gray-800"
             >
-              {['content', 'videos', 'references'].map((tab) => (
+              {['content', 'videos', 'audio', 'references'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -347,6 +360,7 @@ const BlogPostPage = () => {
                 >
                   {tab === 'content' && <FaFileAlt />}
                   {tab === 'videos' && <FaVideo />}
+                  {tab === 'audio' && <FaHeadphones />}
                   {tab === 'references' && <FaBookmark />}
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </button>
@@ -383,6 +397,42 @@ const BlogPostPage = () => {
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Audio/Podcast Player - Show in content tab too */}
+                {post.audioUrl && (
+                  <div className="mb-8 p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl border border-blue-100 dark:border-blue-800/50">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white">
+                          <FaHeadphones className="text-xl" />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Listen to this article</p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <button
+                            onClick={toggleAudio}
+                            className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition"
+                          >
+                            {audioPlaying ? <FaPause className="h-4 w-4" /> : <FaPlay className="h-4 w-4" />}
+                          </button>
+                          <audio
+                            ref={audioRef}
+                            src={post.audioUrl}
+                            onEnded={() => setAudioPlaying(false)}
+                            className="hidden"
+                          />
+                          <div className="flex-1">
+                            <div className="h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-600 rounded-full" style={{ width: '0%' }} />
+                            </div>
+                          </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Podcast</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -478,18 +528,58 @@ const BlogPostPage = () => {
                       }}
                     />
                   </Suspense>
-                  <div className="absolute bottom-4 left-4 right-4 flex items-center gap-4">
-                    <button
-                      onClick={() => setIsPlaying(!isPlaying)}
-                      className="p-3 bg-white/20 backdrop-blur-sm rounded-full hover:bg-white/30 transition"
-                    >
-                      {isPlaying ? <FaSpinner className="text-white" /> : <FaVideo className="text-white" />}
-                    </button>
-                  </div>
                 </div>
                 <div className="p-6">
                   <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Video Presentation</h3>
                   <p className="text-gray-600 dark:text-gray-400 mt-1">Watch this comprehensive overview of {post.title}.</p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Audio Tab - Full podcast player */}
+            {activeTab === 'audio' && post.audioUrl && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-800"
+              >
+                <div className="text-center">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white text-4xl mx-auto mb-4">
+                    <FaHeadphones />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Podcast Episode</h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">Listen to the audio version of this article</p>
+                  
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-6 border border-blue-100 dark:border-blue-800/50">
+                    <div className="flex items-center justify-center gap-6">
+                      <button
+                        onClick={toggleAudio}
+                        className="w-16 h-16 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white flex items-center justify-center hover:shadow-lg transition-all duration-300"
+                      >
+                        {audioPlaying ? <FaPause className="text-2xl" /> : <FaPlay className="text-2xl ml-1" />}
+                      </button>
+                      <audio
+                        ref={audioRef}
+                        src={post.audioUrl}
+                        onEnded={() => setAudioPlaying(false)}
+                        className="hidden"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-sm text-gray-500 dark:text-gray-400">0:00</span>
+                          <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden cursor-pointer">
+                            <div className="h-full bg-gradient-to-r from-blue-600 to-purple-600 rounded-full" style={{ width: '0%' }} />
+                          </div>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">3:45</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+                          <span>Podcast</span>
+                          <span>{post.title}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -607,7 +697,6 @@ const BlogPostPage = () => {
                   Comments ({comments.length})
                 </h3>
 
-                {/* Comment Form - Only show if authenticated */}
                 {isAuthenticated ? (
                   <form onSubmit={handleCommentSubmit} className="mb-8">
                     <div className="flex gap-3">
@@ -661,7 +750,6 @@ const BlogPostPage = () => {
                   </div>
                 )}
 
-                {/* Comments List */}
                 <div className="space-y-4">
                   {comments.length === 0 ? (
                     <p className="text-center text-gray-500 dark:text-gray-400 py-8">No comments yet. Be the first to comment!</p>
@@ -720,20 +808,26 @@ const BlogPostPage = () => {
               className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800"
             >
               <div className="text-center">
-                {post.author?.avatar || post.author?.image ? (
+                {post.author?.avatar || post.author?.image || post.authorImage ? (
                   <img
-                    src={post.author.avatar || post.author.image}
-                    alt={post.author.name}
+                    src={post.author?.avatar || post.author?.image || post.authorImage}
+                    alt={post.author?.name || post.authorName}
                     className="w-24 h-24 rounded-full mx-auto object-cover border-4 border-blue-100 dark:border-blue-900/50"
                   />
                 ) : (
                   <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 mx-auto border-4 border-blue-100 dark:border-blue-900/50 flex items-center justify-center text-white text-3xl font-bold">
-                    {post.author?.name?.charAt(0) || 'A'}
+                    {(post.author?.name || post.authorName)?.charAt(0) || 'A'}
                   </div>
                 )}
-                <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mt-4">{post.author?.name || 'Unknown'}</h4>
-                <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{post.author?.title || 'Contributor'}</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{post.author?.bio || 'No bio available'}</p>
+                <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mt-4">
+                  {post.author?.name || post.authorName || 'Unknown'}
+                </h4>
+                <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+                  {post.author?.title || post.authorTitle || 'Contributor'}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                  {post.author?.bio || post.authorBio || 'No bio available'}
+                </p>
                 <Link
                   to={`/blog/author/${post.author?._id || post.author?.id}`}
                   className="inline-block mt-4 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition"
@@ -784,16 +878,18 @@ const BlogPostPage = () => {
                   relatedPosts.map((related) => (
                     <Link key={related._id || related.id} to={`/blog/post/${related.slug || related._id}`} className="block group">
                       <div className="flex gap-3 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition">
-                        <img
-                          src={related.featuredImage || related.image}
-                          alt={related.title}
-                          className="w-20 h-20 object-cover rounded-xl flex-shrink-0"
-                        />
+                        {related.featuredImage && (
+                          <img
+                            src={related.featuredImage}
+                            alt={related.title}
+                            className="w-20 h-20 object-cover rounded-xl flex-shrink-0"
+                          />
+                        )}
                         <div>
                           <h5 className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition line-clamp-2">
                             {related.title}
                           </h5>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{related.readTime || 5} min read</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{related.readingTime || 5} min read</p>
                         </div>
                       </div>
                     </Link>

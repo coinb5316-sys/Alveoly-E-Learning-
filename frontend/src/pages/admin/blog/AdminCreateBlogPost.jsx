@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE FULL UI
+// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE FIXED WITH ALL FEATURES
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -58,7 +58,9 @@ import {
   Camera,
   Loader2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../../../api/blogApi';
@@ -115,6 +117,7 @@ const AdminCreateBlogPost = () => {
   });
   
   const [categories, setCategories] = useState([]);
+  const [allPosts, setAllPosts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
@@ -131,10 +134,13 @@ const AdminCreateBlogPost = () => {
   const [activeSection, setActiveSection] = useState('general');
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [relatedSearch, setRelatedSearch] = useState('');
+  const [showRelatedDropdown, setShowRelatedDropdown] = useState(false);
 
   useEffect(() => {
     fetchCategories();
     fetchTags();
+    fetchAllPosts();
     if (isEditing) {
       fetchPost();
     }
@@ -159,6 +165,17 @@ const AdminCreateBlogPost = () => {
       }
     } catch (error) {
       console.error('Error fetching tags:', error);
+    }
+  };
+
+  const fetchAllPosts = async () => {
+    try {
+      const response = await blogAPI.getPosts({ limit: 100, publishedOnly: false });
+      if (response.success) {
+        setAllPosts(response.data.posts || []);
+      }
+    } catch (error) {
+      console.error('Error fetching posts:', error);
     }
   };
 
@@ -191,7 +208,7 @@ const AdminCreateBlogPost = () => {
           references: post.references || [],
           learningObjectives: post.learningObjectives || [],
           statistics: post.statistics || [],
-          relatedPosts: post.relatedPosts || [],
+          relatedPosts: post.relatedPosts ? post.relatedPosts.map(p => p._id || p) : [],
           readingTime: post.readingTime || 5,
           allowComments: post.allowComments !== undefined ? post.allowComments : true,
           showAuthor: post.showAuthor !== undefined ? post.showAuthor : true,
@@ -340,6 +357,48 @@ const AdminCreateBlogPost = () => {
     }));
   };
 
+  // Related Posts handlers
+  const handleAddRelatedPost = (postId) => {
+    if (formData.relatedPosts.includes(postId)) {
+      toast.info('Post already added');
+      return;
+    }
+    // Don't add current post as related
+    if (isEditing && postId === id) {
+      toast.error('Cannot add current post');
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      relatedPosts: [...prev.relatedPosts, postId]
+    }));
+    setRelatedSearch('');
+    setShowRelatedDropdown(false);
+  };
+
+  const handleRemoveRelatedPost = (postId) => {
+    setFormData(prev => ({
+      ...prev,
+      relatedPosts: prev.relatedPosts.filter(id => id !== postId)
+    }));
+  };
+
+  const getRelatedPostTitle = (postId) => {
+    const post = allPosts.find(p => p._id === postId);
+    return post ? post.title : 'Unknown Post';
+  };
+
+  const getFilteredRelatedPosts = () => {
+    if (!relatedSearch.trim()) return [];
+    return allPosts
+      .filter(p => 
+        p._id !== id && 
+        !formData.relatedPosts.includes(p._id) &&
+        p.title.toLowerCase().includes(relatedSearch.toLowerCase())
+      )
+      .slice(0, 10);
+  };
+
   const validateForm = () => {
     const newErrors = {};
     if (!formData.title.trim()) newErrors.title = 'Title is required';
@@ -360,42 +419,54 @@ const AdminCreateBlogPost = () => {
       setSaving(true);
       
       const formDataToSend = new FormData();
+      
+      // Basic fields
       formDataToSend.append('title', formData.title);
       formDataToSend.append('subtitle', formData.subtitle || '');
       formDataToSend.append('content', formData.content);
       formDataToSend.append('category', formData.category);
-      formDataToSend.append('tags', JSON.stringify(formData.tags));
-      formDataToSend.append('videoUrl', formData.videoUrl || '');
-      formDataToSend.append('videoEmbed', formData.videoEmbed || '');
-      formDataToSend.append('audioUrl', formData.audioUrl || '');
       formDataToSend.append('status', status);
       formDataToSend.append('featured', formData.featured);
-      formDataToSend.append('metaDescription', formData.metaDescription || '');
-      formDataToSend.append('metaKeywords', formData.metaKeywords || '');
-      formDataToSend.append('authorBio', formData.authorBio || '');
-      formDataToSend.append('authorTitle', formData.author || '');
-      formDataToSend.append('authorImage', formData.authorImage || '');
-      formDataToSend.append('references', JSON.stringify(formData.references));
-      formDataToSend.append('learningObjectives', JSON.stringify(formData.learningObjectives));
-      formDataToSend.append('statistics', JSON.stringify(formData.statistics));
+      formDataToSend.append('readingTime', formData.readingTime);
       formDataToSend.append('allowComments', formData.allowComments);
       formDataToSend.append('showAuthor', formData.showAuthor);
       formDataToSend.append('showShareButtons', formData.showShareButtons);
-      formDataToSend.append('readingTime', formData.readingTime);
       
+      // Media fields
+      formDataToSend.append('videoUrl', formData.videoUrl || '');
+      formDataToSend.append('videoEmbed', formData.videoEmbed || '');
+      formDataToSend.append('audioUrl', formData.audioUrl || '');
+      
+      // Author fields
+      formDataToSend.append('authorTitle', formData.author || '');
+      formDataToSend.append('authorBio', formData.authorBio || '');
+      formDataToSend.append('authorImage', formData.authorImage || '');
+      
+      // SEO
+      formDataToSend.append('metaDescription', formData.metaDescription || '');
+      formDataToSend.append('metaKeywords', formData.metaKeywords || '');
+      
+      // JSON fields
+      formDataToSend.append('tags', JSON.stringify(formData.tags));
+      formDataToSend.append('references', JSON.stringify(formData.references));
+      formDataToSend.append('learningObjectives', JSON.stringify(formData.learningObjectives));
+      formDataToSend.append('statistics', JSON.stringify(formData.statistics));
+      formDataToSend.append('relatedPosts', JSON.stringify(formData.relatedPosts));
+      
+      // Gallery images - handle both URLs and files
+      const galleryUrls = formData.galleryImages.filter(img => typeof img === 'string');
+      if (galleryUrls.length > 0) {
+        formDataToSend.append('galleryImages', JSON.stringify(galleryUrls));
+      }
+      
+      // Publish date
       if (formData.publishDate) {
         formDataToSend.append('publishDate', formData.publishDate);
       }
       
+      // Featured image - if it's a File object, append it
       if (formData.featuredImage && typeof formData.featuredImage === 'object') {
         formDataToSend.append('featuredImage', formData.featuredImage);
-      }
-      
-      if (formData.galleryImages && formData.galleryImages.length > 0) {
-        const imageUrls = formData.galleryImages.filter(img => typeof img === 'string');
-        if (imageUrls.length > 0) {
-          formDataToSend.append('galleryImages', JSON.stringify(imageUrls));
-        }
       }
 
       let response;
@@ -411,6 +482,9 @@ const AdminCreateBlogPost = () => {
           navigate('/admin/blog/posts');
         } else {
           toast.info('Draft saved successfully');
+          if (!isEditing) {
+            navigate(`/admin/blog/edit/${response.data._id}`);
+          }
         }
       } else {
         toast.error(response.message || 'Failed to save post');
@@ -708,31 +782,14 @@ const AdminCreateBlogPost = () => {
                     title="Video preview"
                   />
                 </div>
-                <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                  <button 
-                    onClick={() => setIsVideoPlaying(!isVideoPlaying)}
-                    className="flex items-center gap-1 hover:text-gray-700 transition"
-                  >
-                    {isVideoPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                    {isVideoPlaying ? 'Pause' : 'Play'}
-                  </button>
-                  <button className="flex items-center gap-1 hover:text-gray-700 transition">
-                    <Volume2 className="h-4 w-4" />
-                    Volume
-                  </button>
-                  <button className="flex items-center gap-1 hover:text-gray-700 transition">
-                    <Expand className="h-4 w-4" />
-                    Expand
-                  </button>
-                </div>
               </div>
             )}
           </div>
 
-          {/* Audio Section */}
+          {/* Audio / Podcast Section */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-3">
-              <Music className="h-4 w-4" />
+              <Music2 className="h-4 w-4" />
               Audio / Podcast
             </h3>
             <input
@@ -813,6 +870,69 @@ const AdminCreateBlogPost = () => {
                   </button>
                 </span>
               ))}
+            </div>
+          </div>
+
+          {/* Related Posts - NEW SECTION */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Related Posts
+            </label>
+            <p className="text-xs text-gray-400 mb-3">
+              Select posts that are related to this article
+            </p>
+            <div className="relative">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={relatedSearch}
+                    onChange={(e) => {
+                      setRelatedSearch(e.target.value);
+                      setShowRelatedDropdown(e.target.value.length > 0);
+                    }}
+                    onFocus={() => setShowRelatedDropdown(true)}
+                    placeholder="Search for related posts..."
+                    className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+                  />
+                </div>
+              </div>
+              
+              {showRelatedDropdown && getFilteredRelatedPosts().length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
+                  {getFilteredRelatedPosts().map(post => (
+                    <button
+                      key={post._id}
+                      onClick={() => handleAddRelatedPost(post._id)}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center gap-2"
+                    >
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{post.title}</span>
+                      <span className="text-xs text-gray-400 ml-auto">{post.category}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex flex-wrap gap-2 mt-3">
+              {formData.relatedPosts.map(postId => {
+                const post = allPosts.find(p => p._id === postId);
+                return (
+                  <span
+                    key={postId}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 rounded-full text-sm"
+                  >
+                    {post ? post.title : 'Unknown Post'}
+                    <button
+                      onClick={() => handleRemoveRelatedPost(postId)}
+                      className="hover:text-purple-800 dark:hover:text-purple-300 transition"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                );
+              })}
             </div>
           </div>
 
@@ -933,6 +1053,56 @@ const AdminCreateBlogPost = () => {
               ))}
             </div>
           </div>
+
+          {/* Author Info - Full Section */}
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Author Information
+            </h3>
+            
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Author Title
+              </label>
+              <input
+                type="text"
+                name="author"
+                value={formData.author}
+                onChange={handleChange}
+                placeholder="e.g., Chief Nursing Officer"
+                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Author Bio
+              </label>
+              <textarea
+                name="authorBio"
+                value={formData.authorBio}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Author biography..."
+                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm resize-y"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Author Image URL
+              </label>
+              <input
+                type="text"
+                name="authorImage"
+                value={formData.authorImage || ''}
+                onChange={handleChange}
+                placeholder="https://example.com/avatar.jpg"
+                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Sidebar - Right Side */}
@@ -979,56 +1149,6 @@ const AdminCreateBlogPost = () => {
                 />
               </label>
             )}
-          </div>
-
-          {/* Author Info */}
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-              <User className="h-4 w-4" />
-              Author Information
-            </h3>
-            
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                Author Name
-              </label>
-              <input
-                type="text"
-                name="author"
-                value={formData.author}
-                onChange={handleChange}
-                placeholder="Author name..."
-                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                Author Bio
-              </label>
-              <textarea
-                name="authorBio"
-                value={formData.authorBio}
-                onChange={handleChange}
-                rows={3}
-                placeholder="Author biography..."
-                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm resize-y"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-                Author Image URL
-              </label>
-              <input
-                type="text"
-                name="authorImage"
-                value={formData.authorImage || ''}
-                onChange={handleChange}
-                placeholder="https://example.com/avatar.jpg"
-                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-sm"
-              />
-            </div>
           </div>
 
           {/* Category */}
@@ -1316,6 +1436,17 @@ const AdminCreateBlogPost = () => {
                   </div>
                 )}
                 
+                {/* Audio / Podcast */}
+                {formData.audioUrl && (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Podcast</h3>
+                    <audio controls className="w-full">
+                      <source src={formData.audioUrl} type="audio/mpeg" />
+                      Your browser does not support the audio element.
+                    </audio>
+                  </div>
+                )}
+                
                 {/* Statistics */}
                 {formData.statistics.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-8">
@@ -1345,6 +1476,29 @@ const AdminCreateBlogPost = () => {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+                
+                {/* Related Posts */}
+                {formData.relatedPosts.length > 0 && (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Related Articles</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {formData.relatedPosts.map(postId => {
+                        const post = allPosts.find(p => p._id === postId);
+                        return post ? (
+                          <div key={postId} className="flex items-center gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg shadow-sm">
+                            {post.featuredImage && (
+                              <img src={post.featuredImage} alt={post.title} className="w-16 h-16 object-cover rounded-lg" />
+                            )}
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{post.title}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{post.category}</p>
+                            </div>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
                   </div>
                 )}
                 
