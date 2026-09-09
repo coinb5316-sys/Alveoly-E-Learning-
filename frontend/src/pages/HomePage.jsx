@@ -201,18 +201,15 @@ const HomePage = () => {
       try {
         setLoading(true);
         
-        // Fetch from the public /testimonials endpoint
         const response = await API.get("/testimonials");
         console.log("Fetched testimonials:", response.data);
         
-        // Filter only approved testimonials
         const data = Array.isArray(response.data) ? response.data : [];
         const approvedTestimonials = data.filter(t => t.status === "approved");
         
         console.log("Approved testimonials:", approvedTestimonials);
         setTestimonials(approvedTestimonials);
         
-        // If we have testimonials, start the carousel
         if (approvedTestimonials.length > 0) {
           setCurrentTestimonial(0);
         }
@@ -228,19 +225,28 @@ const HomePage = () => {
   }, []);
 
   /* ----------------------------------------------------------
-     Testimonial Auto-Slide
+     Testimonial Auto-Slide - FIXED: Only auto-slide if not paused
   ---------------------------------------------------------- */
 
   useEffect(() => {
-    if (isPaused || testimonials.length === 0) return;
+    // Clear any existing interval first
+    let interval = null;
+    
+    if (!isPaused && testimonials.length > 0) {
+      interval = setInterval(() => {
+        setCurrentTestimonial((prev) =>
+          prev === testimonials.length - 1 ? 0 : prev + 1
+        );
+      }, 5000);
+    }
 
-    const interval = setInterval(() => {
-      setCurrentTestimonial((prev) =>
-        prev === testimonials.length - 1 ? 0 : prev + 1
-      );
-    }, 5000);
-
-    return () => clearInterval(interval);
+    // Cleanup function to clear interval
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
   }, [isPaused, testimonials.length]);
 
   const goToTestimonial = (index) => {
@@ -311,7 +317,6 @@ const HomePage = () => {
     );
   };
 
-  // Determine if we have testimonials to show
   const hasTestimonials = testimonials.length > 0;
 
   return (
@@ -330,7 +335,6 @@ const HomePage = () => {
 
       <section className="relative h-[560px] md:h-[600px] overflow-hidden">
 
-        {/* Background image */}
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
@@ -338,10 +342,8 @@ const HomePage = () => {
           }}
         />
 
-        {/* Reference-style dark gradient */}
         <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/45 to-black/15" />
 
-        {/* Hero content */}
         <div className="relative z-10 h-full max-w-[1180px] mx-auto px-6 flex items-center">
 
           <motion.div
@@ -436,22 +438,23 @@ const HomePage = () => {
               flex
               items-center
               gap-2
+              flex-wrap
             "
           >
             <span className="uppercase font-bold tracking-wide">
               What's New
             </span>
 
-            <span className="w-px h-3 bg-white/30" />
+            <span className="w-px h-3 bg-white/30 hidden sm:inline-block" />
 
-            <span>
+            <span className="flex-1 min-w-[150px]">
               Explore the latest educational resources,
               programs, and learning tools at Alveoly.
             </span>
 
             <button
               onClick={() => navigate("/blog")}
-              className="text-[#f7c928] font-semibold hover:underline ml-1"
+              className="text-[#f7c928] font-semibold hover:underline ml-1 whitespace-nowrap"
             >
               Read More
             </button>
@@ -462,7 +465,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          PRODUCT CATEGORIES - ENLARGED FONTS & ICONS
+          PRODUCT CATEGORIES
       ======================================================= */}
 
       <section className="bg-white py-10 md:py-14">
@@ -501,7 +504,6 @@ const HomePage = () => {
                   "
                 >
 
-                  {/* Icon - ENLARGED */}
                   <div className="flex justify-center mb-3">
 
                     <Icon
@@ -516,7 +518,6 @@ const HomePage = () => {
 
                   </div>
 
-                  {/* Title - ENLARGED */}
                   <h3
                     className="
                       text-[#1687df]
@@ -528,7 +529,6 @@ const HomePage = () => {
                     {product.title}
                   </h3>
 
-                  {/* Description - ENLARGED */}
                   <p
                     className="
                       mt-2
@@ -544,7 +544,6 @@ const HomePage = () => {
                     {product.description}
                   </p>
 
-                  {/* CTA - ENLARGED */}
                   <span
                     className="
                       inline-flex
@@ -573,7 +572,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          STUDENT TESTIMONIALS - FETCHED FROM API (FIXED)
+          STUDENT TESTIMONIALS
       ======================================================= */}
 
       <section className="bg-white py-16 md:py-20">
@@ -597,14 +596,12 @@ const HomePage = () => {
             Real stories from students across Ghana who achieved their goals with Alveoly
           </p>
 
-          {/* Loading State */}
           {loading && (
             <div className="flex justify-center items-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1687df]"></div>
             </div>
           )}
 
-          {/* No Testimonials State */}
           {!loading && !hasTestimonials && (
             <div className="text-center py-12">
               <div className="text-6xl mb-4">🌟</div>
@@ -614,7 +611,6 @@ const HomePage = () => {
             </div>
           )}
 
-          {/* Testimonial Carousel */}
           {hasTestimonials && (
             <div
               className="relative"
@@ -622,7 +618,6 @@ const HomePage = () => {
               onMouseLeave={() => setIsPaused(false)}
             >
 
-              {/* Dots indicator - ABOVE the testimonials */}
               <div className="flex justify-center items-center gap-2 mb-8">
                 {testimonials.map((_, index) => (
                   <button
@@ -640,19 +635,17 @@ const HomePage = () => {
                 ))}
               </div>
 
-              {/* Testimonial Card */}
               <AnimatePresence mode="wait">
                 <motion.div
                   key={currentTestimonial}
-                  initial={{ opacity: 0, x: 50 }}
+                  initial={{ opacity: 0, x: 30 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -50 }}
-                  transition={{ duration: 0.5 }}
+                  exit={{ opacity: 0, x: -30 }}
+                  transition={{ duration: 0.4 }}
                   className="bg-[#f8f9fa] rounded-xl p-8 md:p-10 shadow-sm border border-gray-100"
                 >
                   <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
 
-                    {/* Avatar - Name Abbreviation with Color */}
                     <div className="flex-shrink-0">
                       <div
                         className={`
@@ -666,10 +659,8 @@ const HomePage = () => {
                       </div>
                     </div>
 
-                    {/* Content */}
                     <div className="flex-1 text-center md:text-left">
 
-                      {/* Quote icons */}
                       <div className="text-[#1687df] opacity-30 mb-2">
                         <FaQuoteLeft className="inline text-xl" />
                       </div>
@@ -682,7 +673,6 @@ const HomePage = () => {
                         <FaQuoteRight className="inline text-xl" />
                       </div>
 
-                      {/* Rating stars */}
                       <div className="flex justify-center md:justify-start gap-1 mb-2">
                         {[...Array(5)].map((_, i) => (
                           <FaStar
@@ -707,7 +697,6 @@ const HomePage = () => {
                     </div>
                   </div>
 
-                  {/* Navigation arrows */}
                   <div className="flex justify-center gap-4 mt-6">
                     <button
                       onClick={prevTestimonial}
@@ -735,7 +724,7 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          MAIN VALUE SECTION
+          MAIN VALUE SECTION - FIXED RESPONSIVE TEXT
       ======================================================= */}
 
       <section className="bg-[#f7f7f7] py-20 md:py-28">
@@ -749,15 +738,17 @@ const HomePage = () => {
             className="
               text-[#555]
               font-normal
-              text-[23px]
+              text-[20px]
+              sm:text-[23px]
               md:text-[29px]
+              leading-[1.4]
+              sm:leading-[1.3]
+              md:leading-[1.2]
             "
           >
-            Empowering students and professionals
-            <br className="hidden md:block" />
-            with the tools they need to excel
-            <br className="hidden md:block" />
-            in their academic journey.
+            <span className="block">Empowering students and professionals</span>
+            <span className="block">with the tools they need to excel</span>
+            <span className="block">in their academic journey.</span>
           </motion.h2>
 
           <motion.p
@@ -768,11 +759,15 @@ const HomePage = () => {
             className="
               mt-6
               text-[11px]
-              md:text-[12px]
+              sm:text-[12px]
+              md:text-[13px]
               leading-5
+              md:leading-6
               text-[#777]
               max-w-[670px]
               mx-auto
+              px-4
+              sm:px-0
             "
           >
             At Alveoly, we offer comprehensive learning tools,
@@ -788,63 +783,56 @@ const HomePage = () => {
 
 
       {/* ======================================================
-    JOIN US SECTION - FIXED MOBILE TEXT WRAPPING
-====================================================== */}
+          JOIN US SECTION - FIXED MOBILE TEXT WRAPPING
+      ======================================================= */}
 
-<section className="bg-[#edf4f7]">
-  <div className="max-w-[1180px] mx-auto grid md:grid-cols-2">
-    
-    {/* Image - African nursing students */}
-    <div className="min-h-[300px] md:min-h-[380px]">
-      <img
-        src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1400&q=85"
-        alt="African nursing students learning together"
-        className="w-full h-full object-cover"
-      />
-    </div>
+      <section className="bg-[#edf4f7]">
+        <div className="max-w-[1180px] mx-auto grid md:grid-cols-2">
+          
+          <div className="min-h-[300px] md:min-h-[380px]">
+            <img
+              src="https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1400&q=85"
+              alt="African nursing students learning together"
+              className="w-full h-full object-cover"
+            />
+          </div>
 
-    {/* Dark panel - FIXED TEXT WRAPPING */}
-    <div className="bg-[#17364d] text-white flex items-center px-6 sm:px-8 py-10 md:px-12 md:py-12">
-      <div className="w-full max-w-[430px]">
-        
-        {/* Heading - Fixed with proper breakpoints */}
-        <h2 className="text-xl sm:text-2xl md:text-[25px] font-normal leading-[1.3] md:leading-[1.25]">
-          <span className="block">Ready to Make Your Learning</span>
-          <span className="block">and Exam Practice Easy</span>
-          <span className="block">at Your Doorsteps?</span>
-        </h2>
+          <div className="bg-[#17364d] text-white flex items-center px-6 sm:px-8 py-10 md:px-12 md:py-12">
+            <div className="w-full max-w-[430px]">
+              
+              <h2 className="text-xl sm:text-2xl md:text-[25px] font-normal leading-[1.3] md:leading-[1.25]">
+                <span className="block">Ready to Make Your Learning</span>
+                <span className="block">and Exam Practice Easy</span>
+                <span className="block">at Your Doorsteps?</span>
+              </h2>
 
-        {/* Description - Fixed with proper text wrapping */}
-        <p className="mt-4 md:mt-5 text-xs sm:text-sm md:text-[12px] leading-relaxed md:leading-5 text-white/75 max-w-full break-words">
-          Join our passionate team of educators and innovators who are dedicated to creating meaningful learning experiences for students across Ghana and beyond.
-        </p>
+              <p className="mt-4 md:mt-5 text-xs sm:text-sm md:text-[12px] leading-relaxed md:leading-5 text-white/75 max-w-full break-words">
+                Join our passionate team of educators and innovators who are dedicated to creating meaningful learning experiences for students across Ghana and beyond.
+              </p>
 
-        {/* Button Container */}
-        <div className="mt-5 md:mt-6 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
-          {/* Contact Us Button */}
-          <button
-            onClick={() => navigate("/contact_us")}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f7c928] hover:bg-[#eab900] text-[#222] px-5 sm:px-6 py-2.5 text-xs sm:text-[11px] font-medium transition-colors w-full sm:w-auto whitespace-nowrap"
-          >
-            <FaEnvelope className="text-xs sm:text-[12px]" />
-            Contact Us
-          </button>
+              <div className="mt-5 md:mt-6 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+                <button
+                  onClick={() => navigate("/contact_us")}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#f7c928] hover:bg-[#eab900] text-[#222] px-5 sm:px-6 py-2.5 text-xs sm:text-[11px] font-medium transition-colors w-full sm:w-auto whitespace-nowrap"
+                >
+                  <FaEnvelope className="text-xs sm:text-[12px]" />
+                  Contact Us
+                </button>
 
-          {/* Join Our Team Button */}
-          <button
-            onClick={() => navigate("/careers")}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#1687df] hover:bg-[#0d76c8] px-5 sm:px-6 py-2.5 text-xs sm:text-[11px] font-medium transition-colors w-full sm:w-auto whitespace-nowrap"
-          >
-            Join Our Team
-            <FaArrowRight className="text-[8px]" />
-          </button>
+                <button
+                  onClick={() => navigate("/careers")}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#1687df] hover:bg-[#0d76c8] px-5 sm:px-6 py-2.5 text-xs sm:text-[11px] font-medium transition-colors w-full sm:w-auto whitespace-nowrap"
+                >
+                  Join Our Team
+                  <FaArrowRight className="text-[8px]" />
+                </button>
+              </div>
+
+            </div>
+          </div>
+
         </div>
-
-      </div>
-    </div>
-
-  </div>
-</section>
+      </section>
 
 
       {/* ======================================================
@@ -872,7 +860,6 @@ const HomePage = () => {
             </p>
 
           </div>
-
 
           <div
             className="
@@ -943,10 +930,9 @@ const HomePage = () => {
 
 
       {/* ======================================================
-          SMART CHAT & WHATSAPP - IMPROVED VISIBILITY
+          SMART CHAT & WHATSAPP
       ======================================================= */}
 
-      {/* WhatsApp Button - Higher z-index with pulse animation */}
       <motion.button
         initial={{ opacity: 0, scale: 0.5 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -974,13 +960,11 @@ const HomePage = () => {
           duration-300
         "
       >
-        {/* Pulse ring animation */}
         <span className="absolute inset-0 rounded-full animate-ping bg-[#25D366] opacity-75" />
         <span className="absolute inset-0 rounded-full animate-pulse bg-[#25D366] opacity-50" />
         <FaWhatsapp className="text-2xl relative z-10" />
       </motion.button>
 
-      {/* SmartChatBot with proper positioning */}
       <div className="fixed bottom-20 md:bottom-24 right-0 z-[9998]">
         <SmartChatBot
           userId={userInfo.userId}

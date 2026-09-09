@@ -318,23 +318,39 @@ const AdminCreateBlogPost = () => {
       };
       reader.readAsDataURL(file);
     }
+    // Reset input
+    e.target.value = '';
   };
 
+  // FIXED: Gallery upload handler - properly handles multiple files
   const handleGalleryUpload = (e) => {
     const files = Array.from(e.target.files);
+    
+    if (files.length === 0) return;
+    
+    // Create preview URLs for all files
+    const newPreviews = [];
+    const newFiles = [];
+    
     files.forEach(file => {
-      // Store the File object in formData
-      setFormData(prev => ({
-        ...prev,
-        galleryImages: [...prev.galleryImages, file]
-      }));
-      // Create preview URL for display
+      newFiles.push(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setGalleryPreviews(prev => [...prev, reader.result]);
+        newPreviews.push(reader.result);
+        // When all previews are ready, update state
+        if (newPreviews.length === files.length) {
+          setGalleryPreviews(prev => [...prev, ...newPreviews]);
+          setFormData(prev => ({
+            ...prev,
+            galleryImages: [...prev.galleryImages, ...newFiles]
+          }));
+        }
       };
       reader.readAsDataURL(file);
     });
+    
+    // Reset input
+    e.target.value = '';
   };
 
   const removeGalleryImage = (index) => {
@@ -639,10 +655,13 @@ const AdminCreateBlogPost = () => {
         }
       } else {
         toast.error(response.message || 'Failed to save post');
+        // Re-enable buttons if there's an error
+        setSaving(false);
       }
     } catch (error) {
       console.error('Error saving post:', error);
       toast.error(error.response?.data?.message || 'Failed to save post');
+      setSaving(false);
     } finally {
       setSaving(false);
     }
@@ -853,7 +872,7 @@ const AdminCreateBlogPost = () => {
             </div>
           </div>
 
-          {/* Gallery Images */}
+          {/* Gallery Images - FIXED */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Gallery Images
@@ -878,6 +897,7 @@ const AdminCreateBlogPost = () => {
                 <div className="flex flex-col items-center gap-1">
                   <Plus className="h-8 w-8 text-gray-400" />
                   <span className="text-xs text-gray-500 dark:text-gray-400">Add images</span>
+                  <span className="text-[10px] text-gray-400">({formData.galleryImages.length} uploaded)</span>
                 </div>
                 <input
                   type="file"
