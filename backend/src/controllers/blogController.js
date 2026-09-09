@@ -1,11 +1,9 @@
-// controllers/blogController.js - UPDATED CREATE & UPDATE (Only the relevant parts)
-
+// controllers/blogController.js - COMPLETE FIXED
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
 import BlogComment from "../models/BlogComment.js";
 import User from "../models/User.js";
-import BlogAuthor from "../models/BlogAuthor.js";
 import { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
 
 // ==================== CREATE BLOG POST - FULLY FIXED ====================
@@ -13,9 +11,7 @@ export const createBlogPost = async (req, res) => {
   try {
     console.log("📝 Create blog post request received");
     console.log("📋 Request body:", req.body);
-    console.log("📎 Files:", req.files ? "Present" : "None");
-    console.log("📎 Featured Image:", req.files?.featuredImage ? "Present" : "None");
-    console.log("📎 Gallery Images:", req.files?.galleryImages ? `${req.files.galleryImages.length} files` : "None");
+    console.log("📎 File:", req.file ? "Present" : "None");
     console.log("👤 User:", req.user?.id);
 
     const {
@@ -41,10 +37,9 @@ export const createBlogPost = async (req, res) => {
       allowComments,
       showAuthor,
       showShareButtons,
-      galleryImages: galleryImagesBody,
+      galleryImages,
       relatedPosts,
-      readingTime,
-      author: authorIdFromBody
+      readingTime
     } = req.body;
 
     // Validate required fields
@@ -57,11 +52,10 @@ export const createBlogPost = async (req, res) => {
 
     // Upload featured image if provided
     let featuredImage = null;
-    if (req.files && req.files.featuredImage && req.files.featuredImage[0]) {
+    if (req.file) {
       try {
-        const file = req.files.featuredImage[0];
         console.log("📤 Uploading featured image to Cloudinary...");
-        const result = await uploadToCloudinary(file.buffer, {
+        const result = await uploadToCloudinary(req.file.buffer, {
           folder: "blog/featured",
           public_id: `featured_${Date.now()}`,
           transformation: [
@@ -75,93 +69,48 @@ export const createBlogPost = async (req, res) => {
         console.error("❌ Cloudinary upload error:", uploadError);
         return res.status(500).json({
           success: false,
-          message: "Failed to upload featured image",
+          message: "Failed to upload image",
           error: uploadError.message
         });
       }
     }
 
-    // Upload gallery images if provided
+    // Process gallery images - HANDLE BOTH STRING ARRAY AND FILE UPLOADS
     let processedGalleryImages = [];
-    
-    // First, handle any gallery images from the body (URLs - existing gallery images)
-    if (galleryImagesBody) {
+    if (galleryImages) {
       try {
-        if (typeof galleryImagesBody === "string") {
-          processedGalleryImages = JSON.parse(galleryImagesBody);
-        } else if (Array.isArray(galleryImagesBody)) {
-          processedGalleryImages = galleryImagesBody;
-        } else if (typeof galleryImagesBody === "string" && galleryImagesBody.startsWith("http")) {
-          processedGalleryImages = [galleryImagesBody];
+        // If galleryImages is a string, parse it as JSON
+        if (typeof galleryImages === "string") {
+          processedGalleryImages = JSON.parse(galleryImages);
+        } 
+        // If it's already an array, use it directly
+        else if (Array.isArray(galleryImages)) {
+          processedGalleryImages = galleryImages;
         }
-        console.log("📸 Processed gallery images from body:", processedGalleryImages.length);
+        // If it's a string that's not JSON, treat it as a single URL
+        else if (typeof galleryImages === "string" && galleryImages.startsWith("http")) {
+          processedGalleryImages = [galleryImages];
+        }
+        console.log("📸 Processed gallery images:", processedGalleryImages);
       } catch (e) {
         console.log("⚠️ Failed to parse galleryImages:", e.message);
         processedGalleryImages = [];
       }
     }
 
-    // Handle gallery image file uploads from multer
-    if (req.files && req.files.galleryImages && req.files.galleryImages.length > 0) {
-      console.log(`📸 Uploading ${req.files.galleryImages.length} gallery images...`);
-      
-      const uploadPromises = req.files.galleryImages.map(async (file, index) => {
-        try {
-          const result = await uploadToCloudinary(file.buffer, {
-            folder: "blog/gallery",
-            public_id: `gallery_${Date.now()}_${index}`,
-            transformation: [
-              { width: 800, height: 600, crop: "fill" },
-              { quality: "auto" }
-            ]
-          });
-          return result.secure_url;
-        } catch (err) {
-          console.error(`❌ Failed to upload gallery image ${index}:`, err);
-          return null;
-        }
+    // Get author details
+    const author = await User.findById(req.user.id);
+    if (!author) {
+      return res.status(404).json({
+        success: false,
+        message: "Author not found"
       });
-
-      const uploadedUrls = await Promise.all(uploadPromises);
-      const validUrls = uploadedUrls.filter(url => url !== null);
-      
-      // Merge with existing gallery images (from body)
-      processedGalleryImages = [...processedGalleryImages, ...validUrls];
-      
-      console.log(`✅ Uploaded ${validUrls.length} new gallery images`);
     }
 
-    // Get author details - try to find from BlogAuthor first, then fallback to User
-    let authorId = authorIdFromBody || req.user.id;
-    let authorName = '';
-    let authorTitleFinal = authorTitle || "Contributor";
-    let authorBioFinal = authorBio || "";
-    let authorImageFinal = authorImage || "";
-
-    // Try to find author in BlogAuthor collection
-    if (authorIdFromBody) {
-      const blogAuthor = await BlogAuthor.findById(authorIdFromBody);
-      if (blogAuthor) {
-        authorName = blogAuthor.name;
-        authorTitleFinal = blogAuthor.title || authorTitleFinal;
-        authorBioFinal = blogAuthor.bio || authorBioFinal;
-        authorImageFinal = blogAuthor.avatar || authorImageFinal;
-        authorId = authorIdFromBody;
-      }
-    }
-
-    // If no BlogAuthor found, use User
-    if (!authorName) {
-      const user = await User.findById(authorId);
-      if (user) {
-        authorName = user.name;
-        authorTitleFinal = authorTitle || user.title || "Contributor";
-        authorBioFinal = authorBio || user.bio || "";
-        authorImageFinal = authorImage || user.avatar || "";
-      } else {
-        authorName = "Unknown Author";
-      }
-    }
+    const authorName = author.name;
+    const authorTitleFinal = authorTitle || author.title || "Contributor";
+    const authorBioFinal = authorBio || author.bio || "";
+    const authorImageFinal = authorImage || author.avatar || "";
 
     // Create slug from title
     let slug = title
@@ -169,6 +118,7 @@ export const createBlogPost = async (req, res) => {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
+    // Check if slug exists
     const existingPost = await BlogPost.findOne({ slug });
     if (existingPost) {
       slug += `-${Date.now()}`;
@@ -200,8 +150,8 @@ export const createBlogPost = async (req, res) => {
       videoUrl: videoUrl || "",
       videoEmbed: videoEmbed || "",
       audioUrl: audioUrl || "",
-      author: authorId,
-      authorName: authorName,
+      author: req.user.id,
+      authorName,
       authorTitle: authorTitleFinal,
       authorBio: authorBioFinal,
       authorImage: authorImageFinal,
@@ -224,7 +174,6 @@ export const createBlogPost = async (req, res) => {
 
     await newPost.save();
     console.log("✅ Post saved with ID:", newPost._id);
-    console.log("✅ Gallery Images saved:", newPost.galleryImages.length);
 
     // Update category count
     await BlogCategory.findOneAndUpdate(
@@ -261,10 +210,8 @@ export const updateBlogPost = async (req, res) => {
     const { id } = req.params;
     const updates = { ...req.body };
     console.log("📝 Update blog post:", id);
-    console.log("📎 Files:", req.files ? "Present" : "None");
-    console.log("📎 Featured Image:", req.files?.featuredImage ? "Present" : "None");
-    console.log("📎 Gallery Images:", req.files?.galleryImages ? `${req.files.galleryImages.length} files` : "None");
 
+    // Find existing post
     const existingPost = await BlogPost.findById(id);
     if (!existingPost) {
       return res.status(404).json({
@@ -274,9 +221,8 @@ export const updateBlogPost = async (req, res) => {
     }
 
     // Handle featured image upload
-    if (req.files && req.files.featuredImage && req.files.featuredImage[0]) {
+    if (req.file) {
       try {
-        const file = req.files.featuredImage[0];
         // Delete old image from Cloudinary if exists
         if (existingPost.featuredImage) {
           try {
@@ -287,7 +233,8 @@ export const updateBlogPost = async (req, res) => {
           }
         }
 
-        const result = await uploadToCloudinary(file.buffer, {
+        // Upload new image
+        const result = await uploadToCloudinary(req.file.buffer, {
           folder: "blog/featured",
           public_id: `featured_${Date.now()}`,
           transformation: [
@@ -307,58 +254,8 @@ export const updateBlogPost = async (req, res) => {
       }
     }
 
-    // Handle gallery image uploads
-    let processedGalleryImages = existingPost.galleryImages || [];
-
-    // First, handle any gallery images from the body (URLs - existing gallery images)
-    if (updates.galleryImages) {
-      try {
-        if (typeof updates.galleryImages === "string") {
-          const parsed = JSON.parse(updates.galleryImages);
-          processedGalleryImages = Array.isArray(parsed) ? parsed : [parsed];
-        } else if (Array.isArray(updates.galleryImages)) {
-          processedGalleryImages = updates.galleryImages;
-        }
-        console.log("📸 Processed gallery images from body:", processedGalleryImages.length);
-      } catch (e) {
-        console.log("⚠️ Failed to parse galleryImages:", e.message);
-      }
-    }
-
-    // Handle new gallery image file uploads
-    if (req.files && req.files.galleryImages && req.files.galleryImages.length > 0) {
-      console.log(`📸 Uploading ${req.files.galleryImages.length} new gallery images...`);
-      
-      const uploadPromises = req.files.galleryImages.map(async (file, index) => {
-        try {
-          const result = await uploadToCloudinary(file.buffer, {
-            folder: "blog/gallery",
-            public_id: `gallery_${Date.now()}_${index}`,
-            transformation: [
-              { width: 800, height: 600, crop: "fill" },
-              { quality: "auto" }
-            ]
-          });
-          return result.secure_url;
-        } catch (err) {
-          console.error(`❌ Failed to upload gallery image ${index}:`, err);
-          return null;
-        }
-      });
-
-      const uploadedUrls = await Promise.all(uploadPromises);
-      const validUrls = uploadedUrls.filter(url => url !== null);
-      
-      // Merge with existing gallery images
-      processedGalleryImages = [...processedGalleryImages, ...validUrls];
-      
-      console.log(`✅ Uploaded ${validUrls.length} new gallery images`);
-    }
-
-    updates.galleryImages = processedGalleryImages;
-
     // Parse JSON fields
-    const jsonFields = ['tags', 'references', 'learningObjectives', 'statistics', 'relatedPosts'];
+    const jsonFields = ['galleryImages', 'tags', 'references', 'learningObjectives', 'statistics', 'relatedPosts'];
     for (const field of jsonFields) {
       if (updates[field] && typeof updates[field] === "string") {
         try {
@@ -398,11 +295,6 @@ export const updateBlogPost = async (req, res) => {
       updates.readingTime = parseInt(updates.readingTime);
     }
 
-    // Handle author ID if provided
-    if (updates.author) {
-      updates.author = updates.author;
-    }
-
     // Update the post
     const updatedPost = await BlogPost.findByIdAndUpdate(
       id,
@@ -418,8 +310,6 @@ export const updateBlogPost = async (req, res) => {
       });
     }
 
-    console.log("✅ Gallery Images after update:", updatedPost.galleryImages.length);
-
     res.json({
       success: true,
       message: "Blog post updated successfully",
@@ -434,8 +324,6 @@ export const updateBlogPost = async (req, res) => {
     });
   }
 };
-
-// ... rest of the controller functions remain the same (getAllBlogPosts, getBlogPostBySlug, etc.)
 
 // ==================== GET ALL BLOG POSTS ====================
 export const getAllBlogPosts = async (req, res) => {

@@ -1,4 +1,4 @@
-// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE FIXED
+// src/pages/admin/blog/AdminCreateBlogPost.jsx - COMPLETE WITH AUTHOR SELECTION
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -115,7 +115,7 @@ const AdminCreateBlogPost = () => {
     publishDate: null,
     metaDescription: '',
     metaKeywords: '',
-    authorId: '',
+    authorId: '', // Changed to store author ID
     authorName: '',
     authorTitle: '',
     authorBio: '',
@@ -206,6 +206,7 @@ const AdminCreateBlogPost = () => {
       }
     } catch (error) {
       console.error('Error fetching authors:', error);
+      // Fallback: try the regular authors endpoint
       try {
         const fallbackResponse = await blogAPI.getAuthors({ limit: 100 });
         if (fallbackResponse.success) {
@@ -225,6 +226,7 @@ const AdminCreateBlogPost = () => {
       if (response.success) {
         const post = response.data;
         
+        // Find author if exists
         let authorId = '';
         let authorName = post.authorName || '';
         let authorTitle = post.authorTitle || '';
@@ -238,6 +240,7 @@ const AdminCreateBlogPost = () => {
           authorBio = post.author.bio || post.authorBio || '';
           authorImage = post.author.avatar || post.authorImage || '';
           
+          // Find the author in the authors list
           const foundAuthor = authors.find(a => a._id === post.author._id);
           if (foundAuthor) {
             setSelectedAuthorDetails(foundAuthor);
@@ -318,39 +321,21 @@ const AdminCreateBlogPost = () => {
       };
       reader.readAsDataURL(file);
     }
-    // Reset input
-    e.target.value = '';
   };
 
-  // FIXED: Gallery upload handler - properly handles multiple files
   const handleGalleryUpload = (e) => {
     const files = Array.from(e.target.files);
-    
-    if (files.length === 0) return;
-    
-    // Create preview URLs for all files
-    const newPreviews = [];
-    const newFiles = [];
-    
     files.forEach(file => {
-      newFiles.push(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        newPreviews.push(reader.result);
-        // When all previews are ready, update state
-        if (newPreviews.length === files.length) {
-          setGalleryPreviews(prev => [...prev, ...newPreviews]);
-          setFormData(prev => ({
-            ...prev,
-            galleryImages: [...prev.galleryImages, ...newFiles]
-          }));
-        }
+        setGalleryPreviews(prev => [...prev, reader.result]);
+        setFormData(prev => ({
+          ...prev,
+          galleryImages: [...prev.galleryImages, file]
+        }));
       };
       reader.readAsDataURL(file);
     });
-    
-    // Reset input
-    e.target.value = '';
   };
 
   const removeGalleryImage = (index) => {
@@ -540,10 +525,9 @@ const AdminCreateBlogPost = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ==================== SAVE / PUBLISH - FIXED ====================
+  // ==================== SAVE / PUBLISH ====================
 
   const handleSave = async (status = 'draft') => {
-    // Validate form
     if (!validateForm()) {
       toast.error('Please fix the errors before saving');
       return;
@@ -571,7 +555,7 @@ const AdminCreateBlogPost = () => {
       formDataToSend.append('videoEmbed', formData.videoEmbed || '');
       formDataToSend.append('audioUrl', formData.audioUrl || '');
       
-      // Author fields
+      // Author fields - use both ID and direct values
       if (formData.authorId) {
         formDataToSend.append('author', formData.authorId);
       }
@@ -591,40 +575,11 @@ const AdminCreateBlogPost = () => {
       formDataToSend.append('statistics', JSON.stringify(formData.statistics));
       formDataToSend.append('relatedPosts', JSON.stringify(formData.relatedPosts));
       
-      // ========================================================
-      // FIXED: Handle Gallery Images Properly
-      // ========================================================
-      
-      // Separate existing gallery URLs from new file uploads
-      const existingGalleryUrls = [];
-      const newGalleryFiles = [];
-      
-      formData.galleryImages.forEach(img => {
-        if (typeof img === 'string') {
-          // This is an existing URL
-          existingGalleryUrls.push(img);
-        } else if (img instanceof File) {
-          // This is a new file
-          newGalleryFiles.push(img);
-        } else if (img && typeof img === 'object' && img.name && img.size) {
-          // This might be a File-like object
-          newGalleryFiles.push(img);
-        }
-      });
-      
-      // Send existing gallery URLs as JSON
-      if (existingGalleryUrls.length > 0) {
-        formDataToSend.append('galleryImages', JSON.stringify(existingGalleryUrls));
-        console.log('📸 Existing Gallery URLs:', existingGalleryUrls.length);
+      // Gallery images - handle both URLs and files
+      const galleryUrls = formData.galleryImages.filter(img => typeof img === 'string');
+      if (galleryUrls.length > 0) {
+        formDataToSend.append('galleryImages', JSON.stringify(galleryUrls));
       }
-      
-      // Append each new gallery file with the same field name 'galleryImages'
-      newGalleryFiles.forEach((file) => {
-        formDataToSend.append('galleryImages', file);
-      });
-      
-      console.log('📸 New Gallery Files to upload:', newGalleryFiles.length);
-      console.log('📸 Total Gallery Images:', formData.galleryImages.length);
       
       // Publish date
       if (formData.publishDate) {
@@ -632,7 +587,7 @@ const AdminCreateBlogPost = () => {
       }
       
       // Featured image - if it's a File object, append it
-      if (formData.featuredImage && typeof formData.featuredImage === 'object' && formData.featuredImage instanceof File) {
+      if (formData.featuredImage && typeof formData.featuredImage === 'object') {
         formDataToSend.append('featuredImage', formData.featuredImage);
       }
 
@@ -655,13 +610,10 @@ const AdminCreateBlogPost = () => {
         }
       } else {
         toast.error(response.message || 'Failed to save post');
-        // Re-enable buttons if there's an error
-        setSaving(false);
       }
     } catch (error) {
       console.error('Error saving post:', error);
       toast.error(error.response?.data?.message || 'Failed to save post');
-      setSaving(false);
     } finally {
       setSaving(false);
     }
@@ -729,6 +681,8 @@ const AdminCreateBlogPost = () => {
       </div>
     );
   }
+
+  // ==================== RENDER ====================
 
   return (
     <div className="space-y-6 pb-20">
@@ -872,7 +826,7 @@ const AdminCreateBlogPost = () => {
             </div>
           </div>
 
-          {/* Gallery Images - FIXED */}
+          {/* Gallery Images */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Gallery Images
@@ -897,7 +851,6 @@ const AdminCreateBlogPost = () => {
                 <div className="flex flex-col items-center gap-1">
                   <Plus className="h-8 w-8 text-gray-400" />
                   <span className="text-xs text-gray-500 dark:text-gray-400">Add images</span>
-                  <span className="text-[10px] text-gray-400">({formData.galleryImages.length} uploaded)</span>
                 </div>
                 <input
                   type="file"
@@ -1227,7 +1180,7 @@ const AdminCreateBlogPost = () => {
             </div>
           </div>
 
-          {/* Author Selection */}
+          {/* Author Selection - UPDATED WITH FULL AUTHOR FETCH */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4">
               <User className="h-4 w-4" />
@@ -1311,6 +1264,7 @@ const AdminCreateBlogPost = () => {
                     onClick={() => {
                       setAuthorSearch('');
                       setShowAuthorDropdown(false);
+                      // Refresh authors list
                       fetchAuthors();
                     }}
                     className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition"
@@ -1372,6 +1326,7 @@ const AdminCreateBlogPost = () => {
                       <button
                         onClick={() => {
                           setShowAuthorDropdown(false);
+                          // Allow manual entry as fallback
                           setFormData(prev => ({
                             ...prev,
                             authorName: authorSearch,
@@ -1399,6 +1354,7 @@ const AdminCreateBlogPost = () => {
               </p>
             )}
             
+            {/* Manual author fields (shown when no author is selected, or for additional info) */}
             {!selectedAuthorDetails && (
               <div className="mt-4 space-y-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                 <div>
@@ -1456,6 +1412,7 @@ const AdminCreateBlogPost = () => {
               </div>
             )}
             
+            {/* Show author details if selected */}
             {selectedAuthorDetails && (
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400">
                 <p>Author information loaded from <span className="font-medium text-blue-600 dark:text-blue-400">Author Management</span></p>
@@ -1758,13 +1715,20 @@ const AdminCreateBlogPost = () => {
                 </button>
               </div>
               <div className="p-6 space-y-6">
+                {/* Featured Image */}
                 {imagePreview && (
                   <img src={imagePreview} alt={formData.title} className="w-full h-64 object-cover rounded-xl" />
                 )}
+                
+                {/* Title */}
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{formData.title}</h1>
+                
+                {/* Subtitle */}
                 {formData.subtitle && (
                   <p className="text-xl text-gray-600 dark:text-gray-400">{formData.subtitle}</p>
                 )}
+                
+                {/* Author Info */}
                 <div className="flex items-center gap-3">
                   {formData.authorImage ? (
                     <img src={formData.authorImage} alt={formData.authorName || formData.author} className="w-12 h-12 rounded-full object-cover" />
@@ -1778,10 +1742,14 @@ const AdminCreateBlogPost = () => {
                     <p className="text-sm text-gray-500 dark:text-gray-400">{formData.authorTitle || formData.authorBio || 'Author bio'}</p>
                   </div>
                 </div>
+                
+                {/* Content */}
                 <div
                   className="prose prose-lg prose-blue max-w-none dark:prose-invert"
                   dangerouslySetInnerHTML={{ __html: formData.content }}
                 />
+                
+                {/* Gallery Images */}
                 {galleryPreviews.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {galleryPreviews.map((img, index) => (
@@ -1789,11 +1757,15 @@ const AdminCreateBlogPost = () => {
                     ))}
                   </div>
                 )}
+                
+                {/* Video */}
                 {formData.videoUrl && (
                   <div className="aspect-video bg-black rounded-lg overflow-hidden">
                     <iframe src={formData.videoUrl} className="w-full h-full" allowFullScreen title="Video" />
                   </div>
                 )}
+                
+                {/* Audio / Podcast */}
                 {formData.audioUrl && (
                   <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Podcast</h3>
@@ -1803,6 +1775,8 @@ const AdminCreateBlogPost = () => {
                     </audio>
                   </div>
                 )}
+                
+                {/* Statistics */}
                 {formData.statistics.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-8">
                     {formData.statistics.map((stat, index) => (
@@ -1815,6 +1789,8 @@ const AdminCreateBlogPost = () => {
                     ))}
                   </div>
                 )}
+                
+                {/* Learning Objectives */}
                 {formData.learningObjectives.length > 0 && (
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-6 border border-blue-100 dark:border-blue-800/50">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
@@ -1831,6 +1807,8 @@ const AdminCreateBlogPost = () => {
                     </ul>
                   </div>
                 )}
+                
+                {/* Related Posts */}
                 {formData.relatedPosts.length > 0 && (
                   <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Related Articles</h3>
@@ -1852,6 +1830,8 @@ const AdminCreateBlogPost = () => {
                     </div>
                   </div>
                 )}
+                
+                {/* References */}
                 {formData.references.length > 0 && (
                   <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">References</h3>
@@ -1865,6 +1845,8 @@ const AdminCreateBlogPost = () => {
                     </ul>
                   </div>
                 )}
+                
+                {/* Tags */}
                 {formData.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200 dark:border-gray-800">
                     {formData.tags.map((tag) => (
