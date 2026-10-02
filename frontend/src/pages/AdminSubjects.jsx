@@ -1,4 +1,4 @@
-// AdminSubjects.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
+// AdminSubjects.jsx - COMPLETE FIXED VERSION (USD to GHS Conversion)
 import { useState, useEffect } from "react";
 import { 
   FaPlus, 
@@ -22,7 +22,7 @@ import {
   FaSave,
   FaTimesCircle,
   FaSync,
-  FaBanknote
+  FaCediSign
 } from "react-icons/fa";
 import axios from "../api/axios";
 import initializeSocket, { getSocket } from "../config/socket";
@@ -737,7 +737,7 @@ const AdminSubjects = () => {
                   {/* GHS Conversion Preview */}
                   {form.price && parseFloat(form.price) > 0 && exchangeRate && (
                     <div className="flex items-center gap-1.5 text-xs">
-                      <FaBanknote className="h-3 w-3 text-green-600 dark:text-green-400" />
+                      <FaCediSign className="h-3 w-3 text-green-600 dark:text-green-400" />
                       <span className="font-semibold text-green-600 dark:text-green-400">
                         {formatGHS(convertToGHS(form.price))}
                       </span>
@@ -1350,7 +1350,7 @@ const AdminSubjects = () => {
                   {/* GHS Conversion Preview */}
                   {form.price && parseFloat(form.price) > 0 && exchangeRate && (
                     <div className="mt-1.5 flex items-center gap-2">
-                      <FaBanknote className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                      <FaCediSign className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
                       <span className="text-sm font-semibold text-green-600 dark:text-green-400">
                         ≈ {formatGHS(convertToGHS(form.price))}
                       </span>
