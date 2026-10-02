@@ -115,6 +115,7 @@ import AdminBlogAuthors from "./pages/admin/blog/AdminBlogAuthors";
 import AdminBlogTags from "./pages/admin/blog/AdminBlogTags";
 import AdminBlogComments from "./pages/admin/blog/AdminBlogComments";
 import AdminBlogPosts from "./pages/admin/blog/AdminBlogPosts";
+import AdminNotifications from "./pages/admin/AdminNotifications";
 
 function App() {
   useEffect(() => {
@@ -278,6 +279,7 @@ function App() {
 <Route path="blog/authors" element={<AdminBlogAuthors />} />
 <Route path="blog/tags" element={<AdminBlogTags />} />
 <Route path="blog/comments" element={<AdminBlogComments />} />
+<Route path="notifications" element={<AdminNotifications />} />
           </Route>
 
           {/* ==================== LECTURER ROUTES ==================== */}

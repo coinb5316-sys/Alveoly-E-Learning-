@@ -100,26 +100,80 @@ export const createBulkNotifications = async (users, notificationData) => {
 };
 
 // ================= GET USER NOTIFICATIONS =================
+// ================= GET USER NOTIFICATIONS (ENHANCED) =================
 export const getUserNotifications = async (req, res) => {
   try {
-    const { page = 1, limit = 20, unreadOnly = false } = req.query;
+    const { 
+      page = 1, 
+      limit = 20, 
+      unreadOnly = false,
+      type,
+      search,
+      dateRange,
+      sort = "newest"
+    } = req.query;
+    
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
+    // Build filter object
     const filter = { userId: req.user._id };
+    
+    // Unread filter
     if (unreadOnly === "true") filter.read = false;
     
-    const [notifications, total] = await Promise.all([
-      Notification.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Notification.countDocuments(filter)
-    ]);
+    // Type filter
+    if (type && type !== "all") filter.type = type;
     
-    const unreadCount = await Notification.countDocuments({
-      userId: req.user._id,
-      read: false
-    });
+    // Search filter (title or message)
+    if (search && search.trim()) {
+      filter.$or = [
+        { title: { $regex: search.trim(), $options: "i" } },
+        { message: { $regex: search.trim(), $options: "i" } }
+      ];
+    }
+    
+    // Date range filter
+    if (dateRange && dateRange !== "all") {
+      const now = new Date();
+      let startDate;
+      
+      switch (dateRange) {
+        case "today":
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case "week":
+          startDate = new Date(now.setDate(now.getDate() - 7));
+          break;
+        case "month":
+          startDate = new Date(now.setMonth(now.getMonth() - 1));
+          break;
+        case "year":
+          startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+          break;
+        default:
+          startDate = null;
+      }
+      
+      if (startDate) {
+        filter.createdAt = { $gte: startDate };
+      }
+    }
+    
+    // Sort order
+    const sortOrder = sort === "oldest" ? 1 : -1;
+    
+    const [notifications, total, unreadCount] = await Promise.all([
+      Notification.find(filter)
+        .sort({ createdAt: sortOrder })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Notification.countDocuments(filter),
+      Notification.countDocuments({
+        userId: req.user._id,
+        read: false
+      })
+    ]);
     
     // Format notifications for frontend
     const formattedNotifications = notifications.map(notif => ({
@@ -317,3 +371,4 @@ export const sendTestNotification = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
