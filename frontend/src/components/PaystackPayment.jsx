@@ -1,11 +1,11 @@
-// components/PaystackPayment.jsx - COMPLETE FIXED VERSION (Server-Verified Rate)
+// components/PaystackPayment.jsx - COMPLETE UPDATED VERSION
 import React, { useState, useEffect } from "react";
 import { FaSpinner, FaLock, FaDollarSign } from "react-icons/fa";
 import axios from "../api/axios";
 import toast from "react-hot-toast";
 
 // ================= CONSTANTS =================
-const FALLBACK_USD_TO_GHS = 15.50;
+const FALLBACK_USD_TO_GHS = 11.74;   // ← Updated to current live rate
 const MIN_REASONABLE_RATE = 5.0;
 const MAX_REASONABLE_RATE = 30.0;
 
@@ -20,13 +20,11 @@ const PaystackPayment = ({
   const [rateLoading, setRateLoading] = useState(false);
   const [rateError, setRateError] = useState(null);
 
-  // ================= FETCH EXCHANGE RATE (FIXED) =================
-  // Only fetches if not provided as prop — parents already fetch and pass it.
+  // ================= FETCH EXCHANGE RATE =================
   useEffect(() => {
     if (!propExchangeRate) {
       fetchExchangeRate();
     } else {
-      // Ensure state stays in sync if prop changes
       setExchangeRate(propExchangeRate);
     }
   }, [propExchangeRate]);
@@ -36,8 +34,6 @@ const PaystackPayment = ({
       setRateLoading(true);
       setRateError(null);
 
-      // Removed frankfurter.app (doesn't support GHS)
-      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
           url: "https://open.er-api.com/v6/latest/USD",
@@ -54,7 +50,7 @@ const PaystackPayment = ({
 
       for (const api of apis) {
         try {
-          const response = await fetch(api.url);
+          const response = await fetch(api.url, { cache: "no-store" });
           if (!response.ok) {
             failedApis.push(`${api.url} (HTTP ${response.status})`);
             continue;
@@ -64,7 +60,6 @@ const PaystackPayment = ({
 
           console.log(`📡 [PaystackPayment] ${api.url} → GHS = ${extractedRate}`);
 
-          // Range validation — reject garbage values
           if (
             extractedRate &&
             extractedRate >= MIN_REASONABLE_RATE &&
@@ -104,12 +99,9 @@ const PaystackPayment = ({
 
   // ================= CALCULATE GHS AMOUNT =================
   const calculateGHSAmount = () => {
-    // Priority 1: Direct GHS amount from parent (most trusted)
     if (propAmountInGHS && parseFloat(propAmountInGHS) > 0) {
       return parseFloat(propAmountInGHS);
     }
-
-    // Priority 2: Convert from USD using current rate
     const usdPrice = parseFloat(plan?.price) || 0;
     const rate = exchangeRate || FALLBACK_USD_TO_GHS;
     return usdPrice * rate;
@@ -139,7 +131,6 @@ const PaystackPayment = ({
       const ghsAmount = calculateGHSAmount();
       const rate = exchangeRate || FALLBACK_USD_TO_GHS;
 
-      // Validate amount
       if (ghsAmount <= 0) {
         toast.error("Invalid payment amount");
         setLoading(false);
@@ -153,30 +144,21 @@ const PaystackPayment = ({
         rate,
       });
 
-      // Send payment initiation with both USD and GHS info.
-      // NOTE: Backend will independently verify with its own live rate,
-      // so these values are hints — the backend decides the final charge.
       const res = await axios.post("/payments/initiate-plan", {
         planId: plan._id,
-        // Send the GHS amount for reference
         amountInGHS: parseFloat(ghsAmount.toFixed(2)),
-        // Send exchange rate used for record keeping
         exchangeRate: parseFloat(rate.toFixed(4)),
-        // Send USD price for reference
         priceUSD: parseFloat(plan.price),
         currency: "GHS",
       });
 
-      // Log what backend actually charged
       if (res.data?.amountChargedGHS) {
         console.log(
           `✅ [PaystackPayment] Backend charged GH₵${res.data.amountChargedGHS} (rate: ${res.data.exchangeRateUsed})`
         );
       }
 
-      // Check if we got an authorization URL
       if (res.data.authorizationUrl) {
-        // Redirect to Paystack checkout
         window.location.href = res.data.authorizationUrl;
       } else if (res.data.success && res.data.redirectUrl) {
         window.location.href = res.data.redirectUrl;
@@ -256,7 +238,6 @@ const PaystackPayment = ({
         )}
       </button>
 
-      {/* Secure note */}
       <p className="text-xs text-center text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1">
         <FaLock className="h-3 w-3" />
         Secure payment powered by Paystack • Charged in GHS

@@ -1,4 +1,4 @@
-// controllers/paymentController.js - COMPLETE FIXED VERSION (USD to GHS Conversion)
+// controllers/paymentController.js - COMPLETE UPDATED VERSION
 import axios from "axios";
 import Payment from "../models/Payment.js";
 import Subject from "../models/Subject.js";
@@ -8,7 +8,9 @@ import Plan from "../models/Plan.js";
 import { createNotification } from "./notificationController.js";
 
 // ================= CONSTANTS =================
-const FALLBACK_USD_TO_GHS = 15.50;
+const FALLBACK_USD_TO_GHS = 11.74;   // ← Updated to current live rate
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
 // ================= HELPER: CALCULATE EXPIRY =================
 const calculateExpiry = (duration, unit) => {
@@ -47,33 +49,100 @@ const calculateExpiry = (duration, unit) => {
   return expiry;
 };
 
-// ================= HELPER: RESOLVE GHS AMOUNT =================
-// This is the CORE FIX. It uses the frontend-sent GHS amount
-// or converts from USD using the frontend-sent exchange rate.
-const resolveGHSAmount = ({ amountInGHS, exchangeRate, priceUSD }) => {
-  const usdPrice = parseFloat(priceUSD) || 0;
-  const rate = parseFloat(exchangeRate) || FALLBACK_USD_TO_GHS;
-  const ghsFromFrontend = parseFloat(amountInGHS) || 0;
+// ================= HELPER: FETCH LIVE RATE (SERVER-SIDE) =================
+// The backend fetches its OWN rate to prevent tampering with frontend values.
+const fetchServerExchangeRate = async () => {
+  const apis = [
+    {
+      url: "https://open.er-api.com/v6/latest/USD",
+      extract: (data) => data?.rates?.GHS,
+    },
+    {
+      url: "https://api.exchangerate-api.com/v4/latest/USD",
+      extract: (data) => data?.rates?.GHS,
+    },
+    {
+      url: "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
+      extract: (data) => data?.usd?.ghs,
+    },
+  ];
 
-  let ghsAmount;
-  let source;
+  for (const api of apis) {
+    try {
+      const url = `${api.url}${api.url.includes("?") ? "&" : "?"}_t=${Date.now()}`;
+      const response = await axios.get(url, {
+        timeout: 5000,
+        headers: { "Cache-Control": "no-cache" },
+      });
+      const rate = api.extract(response.data);
 
-  if (ghsFromFrontend > 0) {
-    ghsAmount = ghsFromFrontend;
-    source = "frontend amountInGHS";
-  } else if (usdPrice > 0 && rate > 0) {
-    ghsAmount = usdPrice * rate;
-    source = "computed from USD × rate";
-  } else {
-    ghsAmount = 0;
-    source = "invalid inputs";
+      if (rate && rate >= MIN_REASONABLE_RATE && rate <= MAX_REASONABLE_RATE) {
+        console.log(`💱 [Server Rate] ${api.url} → 1 USD = ${rate} GHS`);
+        return rate;
+      } else if (rate) {
+        console.warn(
+          `⚠️ [Server Rate] ${api.url} returned out-of-range rate: ${rate}`
+        );
+      }
+    } catch (err) {
+      console.warn(`⚠️ [Server Rate] ${api.url} failed: ${err.message}`);
+    }
   }
 
-  // Round to 2 decimals to avoid floating point noise
-  ghsAmount = Math.round(ghsAmount * 100) / 100;
-  const pesewas = Math.round(ghsAmount * 100);
+  console.warn(
+    `⚠️ [Server Rate] All APIs failed — using fallback ${FALLBACK_USD_TO_GHS}`
+  );
+  return FALLBACK_USD_TO_GHS;
+};
 
-  return { ghsAmount, pesewas, rateUsed: rate, usdPrice, source };
+// ================= HELPER: RESOLVE GHS AMOUNT (SERVER-VERIFIED) =================
+const resolveGHSAmount = async ({ amountInGHS, exchangeRate, priceUSD }) => {
+  const usdPrice = parseFloat(priceUSD) || 0;
+  const frontendRate = parseFloat(exchangeRate) || 0;
+  const ghsFromFrontend = parseFloat(amountInGHS) || 0;
+
+  // Priority 1: If USD price is available, fetch the server-side rate and compute
+  if (usdPrice > 0) {
+    const serverRate = await fetchServerExchangeRate();
+
+    if (frontendRate > 0 && Math.abs(frontendRate - serverRate) > 0.5) {
+      console.warn(
+        `⚠️ [Rate Mismatch] Frontend: ${frontendRate}, Server: ${serverRate}. Using server rate.`
+      );
+    }
+
+    const ghsAmount = Math.round(usdPrice * serverRate * 100) / 100;
+    const pesewas = Math.round(ghsAmount * 100);
+
+    return {
+      ghsAmount,
+      pesewas,
+      rateUsed: serverRate,
+      usdPrice,
+      source: "server-verified conversion",
+    };
+  }
+
+  // Priority 2: Fall back to the frontend-provided GHS amount
+  if (ghsFromFrontend > 0) {
+    const ghsAmount = Math.round(ghsFromFrontend * 100) / 100;
+    return {
+      ghsAmount,
+      pesewas: Math.round(ghsAmount * 100),
+      rateUsed: frontendRate || FALLBACK_USD_TO_GHS,
+      usdPrice: 0,
+      source: "frontend-only (no USD provided)",
+    };
+  }
+
+  // Nothing usable
+  return {
+    ghsAmount: 0,
+    pesewas: 0,
+    rateUsed: 0,
+    usdPrice: 0,
+    source: "invalid inputs",
+  };
 };
 
 // ================= INITIATE SUBJECT PAYMENT =================
@@ -98,7 +167,6 @@ export const initiatePayment = async (req, res) => {
       return res.status(404).json({ message: "Subject not found" });
     }
 
-    // Prevent buying active subject again
     const existing = await Payment.findOne({
       userId: user._id,
       subjectId,
@@ -113,12 +181,12 @@ export const initiatePayment = async (req, res) => {
     }
 
     // ============================================================
-    // CALCULATE GHS AMOUNT
+    // CALCULATE GHS AMOUNT (with server-side rate verification)
     // ============================================================
     const usdPriceFinal =
       parseFloat(priceUSD) > 0 ? parseFloat(priceUSD) : parseFloat(subject.price);
 
-    const { ghsAmount, pesewas, rateUsed, source } = resolveGHSAmount({
+    const { ghsAmount, pesewas, rateUsed, source } = await resolveGHSAmount({
       amountInGHS,
       exchangeRate,
       priceUSD: usdPriceFinal,
@@ -143,13 +211,12 @@ export const initiatePayment = async (req, res) => {
 
     const reference = `subject_${Date.now()}_${user._id}_${subjectId}`;
 
-    // Save pending payment WITH GHS info
     await Payment.create({
       userId: user._id,
       subjectId,
-      amount: ghsAmount,          // ← Store the GHS amount actually charged
-      amountUSD: usdPriceFinal,   // ← Keep original USD price for records
-      exchangeRateUsed: rateUsed, // ← Keep exchange rate for audit
+      amount: ghsAmount,
+      amountUSD: usdPriceFinal,
+      exchangeRateUsed: rateUsed,
       currency: "GHS",
       reference,
       status: "pending",
@@ -162,8 +229,8 @@ export const initiatePayment = async (req, res) => {
       "https://api.paystack.co/transaction/initialize",
       {
         email: user.email,
-        amount: pesewas,             // ← Paystack expects pesewas
-        currency: "GHS",             // ← Force GHS
+        amount: pesewas,
+        currency: "GHS",
         reference,
         callback_url: callbackUrl,
         metadata: {
@@ -216,7 +283,7 @@ export const initiatePayment = async (req, res) => {
   }
 };
 
-// ================= PLAN PAYMENT - FIXED =================
+// ================= PLAN PAYMENT =================
 export const initiatePlanPayment = async (req, res) => {
   try {
     const {
@@ -235,9 +302,7 @@ export const initiatePlanPayment = async (req, res) => {
       exchangeRate,
       priceUSD,
     });
-    console.log("🔑 [Plan Payment] req.user:", req.user?._id);
 
-    // Get user - prioritize req.user (from auth middleware), then userId param
     let user = req.user;
     if (!user && userId) {
       user = await User.findById(userId);
@@ -264,7 +329,6 @@ export const initiatePlanPayment = async (req, res) => {
       return res.status(404).json({ message: "Plan not found" });
     }
 
-    // Check if user already has an active plan (User model)
     if (user.isPlanActive && user.planId) {
       const existingPlan = await Plan.findById(user.planId);
       if (existingPlan) {
@@ -274,7 +338,6 @@ export const initiatePlanPayment = async (req, res) => {
       }
     }
 
-    // Check Payment model too
     const existingActivePlan = await Payment.findOne({
       userId: user._id,
       planId,
@@ -289,12 +352,12 @@ export const initiatePlanPayment = async (req, res) => {
     }
 
     // ============================================================
-    // CALCULATE GHS AMOUNT
+    // CALCULATE GHS AMOUNT (with server-side rate verification)
     // ============================================================
     const usdPriceFinal =
       parseFloat(priceUSD) > 0 ? parseFloat(priceUSD) : parseFloat(plan.price);
 
-    const { ghsAmount, pesewas, rateUsed, source } = resolveGHSAmount({
+    const { ghsAmount, pesewas, rateUsed, source } = await resolveGHSAmount({
       amountInGHS,
       exchangeRate,
       priceUSD: usdPriceFinal,
@@ -319,13 +382,12 @@ export const initiatePlanPayment = async (req, res) => {
 
     const reference = `plan_${Date.now()}_${user._id}`;
 
-    // Save pending payment WITH GHS info
     await Payment.create({
       userId: user._id,
       planId,
-      amount: ghsAmount,          // ← GHS amount actually charged
-      amountUSD: usdPriceFinal,   // ← Original USD price
-      exchangeRateUsed: rateUsed, // ← Rate used
+      amount: ghsAmount,
+      amountUSD: usdPriceFinal,
+      exchangeRateUsed: rateUsed,
       currency: "GHS",
       reference,
       status: "pending",
@@ -339,8 +401,8 @@ export const initiatePlanPayment = async (req, res) => {
       "https://api.paystack.co/transaction/initialize",
       {
         email: user.email,
-        amount: pesewas,             // ← Paystack expects pesewas
-        currency: "GHS",             // ← Force GHS
+        amount: pesewas,
+        currency: "GHS",
         reference,
         callback_url: callbackUrl,
         metadata: {
@@ -419,14 +481,12 @@ export const verifyPayment = async (req, res) => {
       return res.status(400).json({ message: "Payment not successful" });
     }
 
-    // Verify currency
     if (data.currency && data.currency !== "GHS") {
       console.warn(
         `⚠️ Payment currency is ${data.currency}, expected GHS for reference ${reference}`
       );
     }
 
-    // Amount is in pesewas from Paystack
     const paidGHS = data.amount / 100;
 
     const payment = await Payment.findOne({ reference })
@@ -441,9 +501,6 @@ export const verifyPayment = async (req, res) => {
       return res.json({ message: "Already verified", alreadyVerified: true });
     }
 
-    // ============================================================
-    // OPTIONAL: verify the amount matches what we recorded
-    // ============================================================
     const expectedGHS = parseFloat(payment.amount) || 0;
     if (expectedGHS > 0 && Math.abs(paidGHS - expectedGHS) > 0.01) {
       console.warn("⚠️ [Verify] Amount mismatch:", {
@@ -452,8 +509,6 @@ export const verifyPayment = async (req, res) => {
         expectedGHS,
         difference: paidGHS - expectedGHS,
       });
-      // We still proceed — Paystack wouldn't let the user pay a different amount
-      // than what we initialized, so this is only for logging.
     }
 
     payment.status = "success";
@@ -473,7 +528,6 @@ export const verifyPayment = async (req, res) => {
       payment.expiresAt = expiresAt;
       await payment.save();
 
-      // Update user with plan
       const user = await User.findById(payment.userId);
       if (user) {
         user.planId = plan._id;
@@ -483,7 +537,6 @@ export const verifyPayment = async (req, res) => {
         user.subscriptionStatus = "active";
         user.subscriptionExpiry = expiresAt;
 
-        // If non-alveoly student, auto-approve
         if (user.userType === "non_alveoly_student") {
           user.isApproved = true;
           user.registrationCompleted = true;
@@ -492,7 +545,6 @@ export const verifyPayment = async (req, res) => {
         await user.save();
       }
 
-      // Send notification to student
       await createNotification(
         payment.userId,
         "student",
@@ -508,7 +560,6 @@ export const verifyPayment = async (req, res) => {
         }
       );
 
-      // Notify admins about payment
       const adminUsers = await User.find({ role: "admin" });
       for (const admin of adminUsers) {
         await createNotification(
@@ -549,7 +600,6 @@ export const verifyPayment = async (req, res) => {
       payment.expiresAt = expiresAt;
       await payment.save();
 
-      // Subject unlock
       if (!subject.studentsUnlocked) {
         subject.studentsUnlocked = [];
       }
@@ -565,7 +615,6 @@ export const verifyPayment = async (req, res) => {
 
       io.emit("subject:updated", subject);
 
-      // Send notification to student
       await createNotification(
         payment.userId,
         "student",
@@ -580,7 +629,6 @@ export const verifyPayment = async (req, res) => {
         }
       );
 
-      // Notify admins about subject purchase
       const adminUsers = await User.find({ role: "admin" });
       for (const admin of adminUsers) {
         await createNotification(
@@ -628,11 +676,10 @@ export const getPublicPlans = async (req, res) => {
       .populate("subjects", "name isPaid price")
       .sort({ price: 1, createdAt: -1 });
 
-    // Format plans for public display — include USD price (frontend converts to GHS)
     const formattedPlans = plans.map((plan) => ({
       _id: plan._id,
       title: plan.title,
-      price: plan.price, // ← USD price (frontend converts)
+      price: plan.price,
       duration: plan.duration,
       durationUnit: plan.durationUnit,
       subjects: plan.subjects || [],
@@ -662,8 +709,8 @@ export const getMyPayments = async (req, res) => {
       planId: p.planId?._id || null,
       planTitle: p.planId?.title || null,
       subject: p.subjectId?.name || null,
-      amount: p.amount,                 // ← GHS amount
-      amountUSD: p.amountUSD || null,   // ← Original USD (if stored)
+      amount: p.amount,
+      amountUSD: p.amountUSD || null,
       exchangeRateUsed: p.exchangeRateUsed || null,
       currency: p.currency || "GHS",
       status: p.status,
@@ -696,7 +743,7 @@ export const getAllPayments = async (req, res) => {
       email: p.userId?.email || "N/A",
       type: p.planId ? "Plan" : "Subject",
       title: p.planId?.title || p.subjectId?.name || "N/A",
-      amount: p.amount,                 // ← GHS
+      amount: p.amount,
       amountUSD: p.amountUSD || null,
       exchangeRateUsed: p.exchangeRateUsed || null,
       currency: p.currency || "GHS",

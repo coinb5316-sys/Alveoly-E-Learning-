@@ -1,4 +1,4 @@
-// controllers/aiSubscriptionController.js - COMPLETE FIXED VERSION
+// controllers/aiSubscriptionController.js - COMPLETE UPDATED VERSION
 import axios from "axios";
 import AISubscription from "../models/AISubscription.js";
 import AISubscriptionPlan from "../models/AISubscriptionPlan.js";
@@ -6,97 +6,9 @@ import User from "../models/User.js";
 import { createNotification } from "./notificationController.js";
 
 // ================= CONSTANTS =================
-const FALLBACK_USD_TO_GHS = 15.50;
-const MIN_REASONABLE_RATE = 5.0;   // sanity floor
-const MAX_REASONABLE_RATE = 30.0;  // sanity ceiling
-
-// ================= HELPER: FETCH LIVE RATE (SERVER-SIDE) =================
-// This is the KEY FIX. The backend fetches its OWN rate.
-// Never trust the frontend rate for charging real money.
-const fetchServerExchangeRate = async () => {
-  const apis = [
-    {
-      url: "https://api.exchangerate-api.com/v4/latest/USD",
-      extract: (data) => data?.rates?.GHS,
-    },
-    {
-      url: "https://open.er-api.com/v6/latest/USD",
-      extract: (data) => data?.rates?.GHS,
-    },
-  ];
-
-  for (const api of apis) {
-    try {
-      const response = await axios.get(api.url, { timeout: 5000 });
-      const rate = api.extract(response.data);
-      if (rate && rate >= MIN_REASONABLE_RATE && rate <= MAX_REASONABLE_RATE) {
-        console.log(`💱 [Server Rate] ${api.url} → 1 USD = ${rate} GHS`);
-        return rate;
-      }
-      if (rate) {
-        console.warn(`⚠️ [Server Rate] Unreasonable rate from ${api.url}: ${rate}`);
-      }
-    } catch (err) {
-      console.warn(`⚠️ [Server Rate] ${api.url} failed: ${err.message}`);
-    }
-  }
-
-  console.warn(`⚠️ [Server Rate] All APIs failed — using fallback ${FALLBACK_USD_TO_GHS}`);
-  return FALLBACK_USD_TO_GHS;
-};
-
-// ================= HELPER: RESOLVE GHS AMOUNT (SERVER-VERIFIED) =================
-const resolveGHSAmount = async ({ amountInGHS, exchangeRate, priceUSD }) => {
-  const usdPrice = parseFloat(priceUSD) || 0;
-  const frontendRate = parseFloat(exchangeRate) || 0;
-  const ghsFromFrontend = parseFloat(amountInGHS) || 0;
-
-  // 1. If USD price is provided, ALWAYS convert server-side.
-  //    This is the only safe way to charge real money.
-  if (usdPrice > 0) {
-    const serverRate = await fetchServerExchangeRate();
-
-    // Compare frontend rate to server rate
-    if (frontendRate > 0 && Math.abs(frontendRate - serverRate) > 0.5) {
-      console.warn(
-        `⚠️ [Rate Mismatch] Frontend: ${frontendRate}, Server: ${serverRate}. Using server rate.`
-      );
-    }
-
-    const ghsAmount = Math.round(usdPrice * serverRate * 100) / 100;
-    const pesewas = Math.round(ghsAmount * 100);
-
-    return {
-      ghsAmount,
-      pesewas,
-      rateUsed: serverRate,
-      usdPrice,
-      source: "server-verified conversion",
-    };
-  }
-
-  // 2. If no USD but frontend GHS is provided, sanity-check it.
-  if (ghsFromFrontend > 0 && frontendRate > 0) {
-    const expectedGHS = Math.round(ghsFromFrontend * 100) / 100;
-    const pesewas = Math.round(expectedGHS * 100);
-    return {
-      ghsAmount: expectedGHS,
-      pesewas,
-      rateUsed: frontendRate,
-      usdPrice: 0,
-      source: "frontend-only (no USD provided)",
-    };
-  }
-
-  // 3. Nothing usable
-  return {
-    ghsAmount: 0,
-    pesewas: 0,
-    rateUsed: 0,
-    usdPrice: 0,
-    source: "invalid inputs",
-  };
-};
+const FALLBACK_USD_TO_GHS = 11.74;   // ← Updated to current live rate
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
 // ================= HELPER: CALCULATE EXPIRY =================
 const calculateExpiry = (durationValue, durationUnit) => {
@@ -114,7 +26,93 @@ const calculateExpiry = (durationValue, durationUnit) => {
   return expiry;
 };
 
-// ================= CREATE SUBSCRIPTION (Paystack Init) =================
+// ================= HELPER: FETCH LIVE RATE (SERVER-SIDE) =================
+const fetchServerExchangeRate = async () => {
+  const apis = [
+    {
+      url: "https://open.er-api.com/v6/latest/USD",
+      extract: (data) => data?.rates?.GHS,
+    },
+    {
+      url: "https://api.exchangerate-api.com/v4/latest/USD",
+      extract: (data) => data?.rates?.GHS,
+    },
+    {
+      url: "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
+      extract: (data) => data?.usd?.ghs,
+    },
+  ];
+
+  for (const api of apis) {
+    try {
+      const url = `${api.url}${api.url.includes("?") ? "&" : "?"}_t=${Date.now()}`;
+      const response = await axios.get(url, {
+        timeout: 5000,
+        headers: { "Cache-Control": "no-cache" },
+      });
+      const rate = api.extract(response.data);
+
+      if (rate && rate >= MIN_REASONABLE_RATE && rate <= MAX_REASONABLE_RATE) {
+        console.log(`💱 [AI Server Rate] ${api.url} → 1 USD = ${rate} GHS`);
+        return rate;
+      }
+    } catch (err) {
+      console.warn(`⚠️ [AI Server Rate] ${api.url} failed: ${err.message}`);
+    }
+  }
+
+  console.warn(
+    `⚠️ [AI Server Rate] All APIs failed — using fallback ${FALLBACK_USD_TO_GHS}`
+  );
+  return FALLBACK_USD_TO_GHS;
+};
+
+// ================= HELPER: RESOLVE GHS AMOUNT =================
+const resolveGHSAmount = async ({ amountInGHS, exchangeRate, priceUSD }) => {
+  const usdPrice = parseFloat(priceUSD) || 0;
+  const frontendRate = parseFloat(exchangeRate) || 0;
+  const ghsFromFrontend = parseFloat(amountInGHS) || 0;
+
+  if (usdPrice > 0) {
+    const serverRate = await fetchServerExchangeRate();
+
+    if (frontendRate > 0 && Math.abs(frontendRate - serverRate) > 0.5) {
+      console.warn(
+        `⚠️ [AI Rate Mismatch] Frontend: ${frontendRate}, Server: ${serverRate}. Using server rate.`
+      );
+    }
+
+    const ghsAmount = Math.round(usdPrice * serverRate * 100) / 100;
+    return {
+      ghsAmount,
+      pesewas: Math.round(ghsAmount * 100),
+      rateUsed: serverRate,
+      usdPrice,
+      source: "server-verified conversion",
+    };
+  }
+
+  if (ghsFromFrontend > 0) {
+    const ghsAmount = Math.round(ghsFromFrontend * 100) / 100;
+    return {
+      ghsAmount,
+      pesewas: Math.round(ghsAmount * 100),
+      rateUsed: frontendRate || FALLBACK_USD_TO_GHS,
+      usdPrice: 0,
+      source: "frontend-only",
+    };
+  }
+
+  return {
+    ghsAmount: 0,
+    pesewas: 0,
+    rateUsed: 0,
+    usdPrice: 0,
+    source: "invalid inputs",
+  };
+};
+
+// ================= CREATE SUBSCRIPTION =================
 export const createSubscription = async (req, res) => {
   try {
     const { planId, amountInGHS, exchangeRate, priceUSD, currency } = req.body;
@@ -133,7 +131,6 @@ export const createSubscription = async (req, res) => {
       return res.status(404).json({ message: "Plan not found" });
     }
 
-    // Check existing active subscription
     const existing = await AISubscription.findOne({
       userId: user._id,
       status: "active",
@@ -148,11 +145,7 @@ export const createSubscription = async (req, res) => {
       });
     }
 
-    // ============================================================
-    // SERVER-VERIFIED GHS CALCULATION
-    // The backend fetches its own rate — never trusts frontend for money.
-    // ============================================================
-    const usdPriceFinal = parseFloat(plan.price); // Always use DB price as source of truth
+    const usdPriceFinal = parseFloat(plan.price);
 
     const { ghsAmount, pesewas, rateUsed, source } = await resolveGHSAmount({
       amountInGHS,
@@ -179,7 +172,7 @@ export const createSubscription = async (req, res) => {
 
     const reference = `ai_sub_${Date.now()}_${user._id}`;
 
-    const subscription = await AISubscription.create({
+    await AISubscription.create({
       userId: user._id,
       planId: plan._id,
       amount: ghsAmount,

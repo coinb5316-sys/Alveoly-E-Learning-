@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 
 // ================= CONSTANTS =================
-const FALLBACK_USD_TO_GHS = 15.50;
+const FALLBACK_USD_TO_GHS = 11.74;
 const MIN_REASONABLE_RATE = 5.0;
 const MAX_REASONABLE_RATE = 30.0;
 
