@@ -1,29 +1,35 @@
-// pages/AdminPlans.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
+// pages/AdminPlans.jsx - COMPLETE FIXED VERSION (Server-Verified Rate + FA6)
 import React, { useState, useEffect } from "react";
 import {
   FaPlus,
-  FaEdit,
+  FaPenToSquare,
   FaTrash,
   FaCrown,
   FaSpinner,
-  FaTimes,
-  FaSave,
+  FaXmark,
+  FaFloppyDisk,
   FaCheck,
   FaClock,
-  FaCalendarAlt,
+  FaCalendarDays,
   FaDollarSign,
   FaTag,
   FaRocket,
   FaLock,
   FaUnlock,
-  FaCheckCircle,
-  FaExclamationTriangle,
+  FaCircleCheck,
+  FaTriangleExclamation,
   FaUsers,
-  FaSync,
-  FaUserTimes,
-} from "react-icons/fa";
+  FaArrowsRotate,
+  FaUserXmark,
+  FaCediSign,
+} from "react-icons/fa6";
 import API from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
+
+// ================= CONSTANTS =================
+const FALLBACK_USD_TO_GHS = 15.50;
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
 const AdminPlans = () => {
   const [plans, setPlans] = useState([]);
@@ -35,13 +41,13 @@ const AdminPlans = () => {
   const [programs, setPrograms] = useState([]);
   const [updatingAll, setUpdatingAll] = useState(false);
   const [deletingPlan, setDeletingPlan] = useState(null);
-  
-  // Exchange rate state
+
+  // ================= EXCHANGE RATE STATE =================
   const [exchangeRate, setExchangeRate] = useState(null);
   const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
   const [exchangeRateError, setExchangeRateError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -57,13 +63,10 @@ const AdminPlans = () => {
     programs: [],
     accessLevel: "full",
     freeAccess: false,
-    programAccess: []
+    programAccess: [],
   });
-  
-  const [featureInput, setFeatureInput] = useState("");
 
-  // Fallback exchange rate (approximate - will be replaced by live rate)
-  const FALLBACK_USD_TO_GHS = 15.50;
+  const [featureInput, setFeatureInput] = useState("");
 
   useEffect(() => {
     fetchPlans();
@@ -71,66 +74,80 @@ const AdminPlans = () => {
     fetchCourses();
     fetchPrograms();
     fetchExchangeRate();
-    
+
     // Refresh exchange rate every 30 minutes
     const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch live USD to GHS exchange rate
+  // ================= FETCH EXCHANGE RATE (FIXED) =================
   const fetchExchangeRate = async () => {
     try {
       setExchangeRateLoading(true);
       setExchangeRateError(null);
-      
-      // Try multiple free exchange rate APIs for reliability
+
+      // Removed frankfurter.app (doesn't support GHS)
+      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
-          url: "https://api.exchangerate-api.com/v4/latest/USD",
-          extract: (data) => data.rates?.GHS
-        },
-        {
           url: "https://open.er-api.com/v6/latest/USD",
-          extract: (data) => data.rates?.GHS
+          extract: (data) => data?.rates?.GHS,
         },
         {
-          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
-          extract: (data) => data.rates?.GHS
-        }
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data?.rates?.GHS,
+        },
       ];
-      
+
       let rate = null;
-      let lastError = null;
-      
+      let failedApis = [];
+
       for (const api of apis) {
         try {
           const response = await fetch(api.url);
-          if (response.ok) {
-            const data = await response.json();
-            const extractedRate = api.extract(data);
-            if (extractedRate && extractedRate > 0) {
-              rate = extractedRate;
-              break;
-            }
+          if (!response.ok) {
+            failedApis.push(`${api.url} (HTTP ${response.status})`);
+            continue;
+          }
+          const data = await response.json();
+          const extractedRate = api.extract(data);
+
+          console.log(`📡 ${api.url} → GHS = ${extractedRate}`);
+
+          // Range validation — reject garbage values
+          if (
+            extractedRate &&
+            extractedRate >= MIN_REASONABLE_RATE &&
+            extractedRate <= MAX_REASONABLE_RATE
+          ) {
+            rate = extractedRate;
+            break;
+          } else if (extractedRate) {
+            failedApis.push(`${api.url} (rate ${extractedRate} out of range)`);
+          } else {
+            failedApis.push(`${api.url} (no GHS in response)`);
           }
         } catch (err) {
-          lastError = err;
+          failedApis.push(`${api.url} (${err.message})`);
           continue;
         }
       }
-      
+
       if (rate) {
         setExchangeRate(rate);
         setLastUpdated(new Date().toLocaleString());
-        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+        console.log(`✅ Exchange rate loaded: 1 USD = ${rate} GHS`);
       } else {
-        // Use fallback rate if all APIs fail
+        console.warn(
+          `⚠️ All exchange rate APIs failed. Failed: ${failedApis.join(
+            ", "
+          )}. Using fallback ${FALLBACK_USD_TO_GHS}`
+        );
         setExchangeRate(FALLBACK_USD_TO_GHS);
         setExchangeRateError("Using fallback rate - live rate unavailable");
-        console.warn("All exchange rate APIs failed, using fallback rate");
       }
     } catch (err) {
-      console.error("Error fetching exchange rate:", err);
+      console.error("❌ Exchange rate fetch error:", err);
       setExchangeRate(FALLBACK_USD_TO_GHS);
       setExchangeRateError("Using fallback rate - live rate unavailable");
     } finally {
@@ -138,7 +155,7 @@ const AdminPlans = () => {
     }
   };
 
-  // Convert USD to GHS
+  // ================= CURRENCY CONVERSION =================
   const convertToGHS = (usdAmount) => {
     if (!exchangeRate || usdAmount === 0 || usdAmount === "0") return 0;
     const amount = parseFloat(usdAmount);
@@ -146,7 +163,6 @@ const AdminPlans = () => {
     return (amount * exchangeRate).toFixed(2);
   };
 
-  // Format currency for display
   const formatUSD = (amount) => {
     const num = parseFloat(amount);
     if (isNaN(num)) return "$0.00";
@@ -156,7 +172,10 @@ const AdminPlans = () => {
   const formatGHS = (amount) => {
     const num = parseFloat(amount);
     if (isNaN(num)) return "GH₵0.00";
-    return `GH₵${num.toFixed(2)}`;
+    return `GH₵${num.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   const fetchPlans = async () => {
@@ -211,13 +230,14 @@ const AdminPlans = () => {
         isFree: plan.isFree || false,
         isActive: plan.isActive !== undefined ? plan.isActive : true,
         features: plan.features || [],
-        unlocksAllContent: plan.unlocksAllContent !== undefined ? plan.unlocksAllContent : true,
-        subjects: plan.subjects?.map(s => s._id || s) || [],
-        courses: plan.courses?.map(c => c._id || c) || [],
-        programs: plan.programs?.map(p => p._id || p) || [],
+        unlocksAllContent:
+          plan.unlocksAllContent !== undefined ? plan.unlocksAllContent : true,
+        subjects: plan.subjects?.map((s) => s._id || s) || [],
+        courses: plan.courses?.map((c) => c._id || c) || [],
+        programs: plan.programs?.map((p) => p._id || p) || [],
         accessLevel: plan.accessLevel || "full",
         freeAccess: plan.freeAccess || false,
-        programAccess: plan.programAccess?.map(p => p._id || p) || []
+        programAccess: plan.programAccess?.map((p) => p._id || p) || [],
       });
     } else {
       setEditingPlan(null);
@@ -236,7 +256,7 @@ const AdminPlans = () => {
         programs: [],
         accessLevel: "full",
         freeAccess: false,
-        programAccess: []
+        programAccess: [],
       });
     }
     setFeatureInput("");
@@ -251,9 +271,9 @@ const AdminPlans = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
@@ -265,55 +285,65 @@ const AdminPlans = () => {
         selected.push(options[i].value);
       }
     }
-    setFormData(prev => ({ ...prev, [name]: selected }));
+    setFormData((prev) => ({ ...prev, [name]: selected }));
   };
 
   const handleAddFeature = () => {
     if (featureInput.trim()) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        features: [...prev.features, featureInput.trim()]
+        features: [...prev.features, featureInput.trim()],
       }));
       setFeatureInput("");
     }
   };
 
   const handleRemoveFeature = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      features: prev.features.filter((_, i) => i !== index)
+      features: prev.features.filter((_, i) => i !== index),
     }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       setLoading(true);
-      
+
       // Store price in USD in the database
       const submitData = {
         ...formData,
-        price: formData.isFree || formData.freeAccess ? 0 : parseFloat(formData.price) || 0,
-        // Optionally store the exchange rate used for reference
+        price:
+          formData.isFree || formData.freeAccess
+            ? 0
+            : parseFloat(formData.price) || 0,
+        // Store GHS equivalent and rate used for audit
         exchangeRateAtCreation: exchangeRate || FALLBACK_USD_TO_GHS,
-        priceInGHS: formData.isFree || formData.freeAccess ? 0 : convertToGHS(formData.price)
+        priceInGHS:
+          formData.isFree || formData.freeAccess
+            ? 0
+            : convertToGHS(formData.price),
       };
-      
+
       let response;
       if (editingPlan) {
         response = await API.put(`/plans/${editingPlan._id}`, submitData);
         toast.success("Plan updated successfully!");
-        
+
         // Ask if user wants to update all users with this plan
-        if (window.confirm("Do you want to update all users who have this plan with the new changes?")) {
+        if (
+          window.confirm(
+            "Do you want to update all users who have this plan with the new changes?"
+          )
+        ) {
           await updateAllUsersWithPlan(editingPlan._id);
         }
       } else {
         response = await API.post("/plans", submitData);
         toast.success("Plan created successfully!");
       }
-      
+
       handleCloseModal();
       fetchPlans();
     } catch (err) {
@@ -334,9 +364,9 @@ const AdminPlans = () => {
         isFree: formData.isFree,
         unlocksAllContent: formData.unlocksAllContent,
         accessLevel: formData.accessLevel,
-        programAccess: formData.programAccess
+        programAccess: formData.programAccess,
       });
-      
+
       if (response.data.success) {
         toast.success(`Updated ${response.data.updatedCount} users`);
       }
@@ -349,16 +379,28 @@ const AdminPlans = () => {
   };
 
   const handleDeletePlan = async (plan) => {
-    if (!window.confirm(`Are you sure you want to delete the plan "${plan.title}"? This will remove the plan from all users and lock their content.`)) return;
-    
-    if (!window.confirm(`WARNING: ${plan.title} will be removed from all users. All premium content will be locked for them. Are you sure?`)) return;
-    
+    if (
+      !window.confirm(
+        `Are you sure you want to delete the plan "${plan.title}"? This will remove the plan from all users and lock their content.`
+      )
+    )
+      return;
+
+    if (
+      !window.confirm(
+        `WARNING: ${plan.title} will be removed from all users. All premium content will be locked for them. Are you sure?`
+      )
+    )
+      return;
+
     try {
       setDeletingPlan(plan._id);
       const response = await API.delete(`/auth/plan/delete/${plan._id}`);
-      
+
       if (response.data.success) {
-        toast.success(`Plan "${plan.title}" deleted. ${response.data.affectedUsers} users affected.`);
+        toast.success(
+          `Plan "${plan.title}" deleted. ${response.data.affectedUsers} users affected.`
+        );
         fetchPlans();
       } else {
         toast.error(response.data.message || "Failed to delete plan");
@@ -376,9 +418,9 @@ const AdminPlans = () => {
       day: "Day",
       week: "Week",
       month: "Month",
-      year: "Year"
+      year: "Year",
     };
-    return `${duration} ${units[unit] || unit}${duration > 1 ? 's' : ''}`;
+    return `${duration} ${units[unit] || unit}${duration > 1 ? "s" : ""}`;
   };
 
   const getUserCount = (planId) => {
@@ -389,7 +431,7 @@ const AdminPlans = () => {
   return (
     <div className="space-y-6">
       <Toaster position="top-right" />
-      
+
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -403,11 +445,18 @@ const AdminPlans = () => {
         <div className="flex items-center gap-3">
           {/* Exchange Rate Display */}
           <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
-            <FaSync 
-              className={`h-3.5 w-3.5 text-gray-500 ${exchangeRateLoading ? 'animate-spin' : 'cursor-pointer hover:text-yellow-500'}`}
+            <button
               onClick={fetchExchangeRate}
+              disabled={exchangeRateLoading}
+              className="p-0.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               title="Refresh exchange rate"
-            />
+            >
+              <FaArrowsRotate
+                className={`h-3.5 w-3.5 text-gray-500 dark:text-gray-400 ${
+                  exchangeRateLoading ? "animate-spin" : ""
+                }`}
+              />
+            </button>
             <div className="text-xs">
               {exchangeRate ? (
                 <div>
@@ -424,11 +473,13 @@ const AdminPlans = () => {
                 <span className="text-gray-500">Loading rate...</span>
               )}
               {exchangeRateError && (
-                <span className="text-amber-500 text-[10px] block">{exchangeRateError}</span>
+                <span className="text-amber-500 text-[10px] block">
+                  {exchangeRateError}
+                </span>
               )}
             </div>
           </div>
-          
+
           <button
             onClick={() => handleOpenModal()}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
@@ -443,7 +494,9 @@ const AdminPlans = () => {
       {loading && (
         <div className="flex flex-col items-center justify-center py-12">
           <FaSpinner className="h-8 w-8 text-yellow-500 animate-spin" />
-          <p className="text-gray-500 dark:text-gray-400 mt-3">Loading plans...</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-3">
+            Loading plans...
+          </p>
         </div>
       )}
 
@@ -451,7 +504,9 @@ const AdminPlans = () => {
       {!loading && plans.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
           <FaCrown className="h-12 w-12 text-yellow-400 mb-3" />
-          <p className="text-gray-500 dark:text-gray-400">No plans created yet</p>
+          <p className="text-gray-500 dark:text-gray-400">
+            No plans created yet
+          </p>
           <button
             onClick={() => handleOpenModal()}
             className="mt-4 text-yellow-600 dark:text-yellow-400 font-medium hover:underline"
@@ -467,7 +522,7 @@ const AdminPlans = () => {
           {plans.map((plan) => {
             const isDeleting = deletingPlan === plan._id;
             const priceInGHS = convertToGHS(plan.price);
-            
+
             return (
               <div
                 key={plan._id}
@@ -478,7 +533,13 @@ const AdminPlans = () => {
                 }`}
               >
                 {/* Plan Header */}
-                <div className={`p-4 ${plan.isFree ? "bg-gradient-to-r from-green-500 to-emerald-600" : "bg-gradient-to-r from-yellow-500 to-orange-600"} text-white`}>
+                <div
+                  className={`p-4 ${
+                    plan.isFree
+                      ? "bg-gradient-to-r from-green-500 to-emerald-600"
+                      : "bg-gradient-to-r from-yellow-500 to-orange-600"
+                  } text-white`}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {plan.isFree ? (
@@ -497,7 +558,7 @@ const AdminPlans = () => {
                       <span className="text-2xl font-bold">
                         {formatUSD(plan.price)}
                       </span>
-                      {!plan.isFree && exchangeRate && (
+                      {!plan.isFree && exchangeRate && priceInGHS > 0 && (
                         <span className="text-sm opacity-90 bg-white/20 px-2 py-0.5 rounded">
                           ≈ {formatGHS(priceInGHS)}
                         </span>
@@ -523,7 +584,10 @@ const AdminPlans = () => {
                       </p>
                       <ul className="space-y-1">
                         {plan.features.slice(0, 3).map((feature, idx) => (
-                          <li key={idx} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                          <li
+                            key={idx}
+                            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
+                          >
                             <FaCheck className="h-3 w-3 text-green-500" />
                             {feature}
                           </li>
@@ -542,12 +606,16 @@ const AdminPlans = () => {
                     {plan.unlocksAllContent || plan.accessLevel === "full" ? (
                       <>
                         <FaUnlock className="h-3 w-3 text-green-500" />
-                        <span className="text-green-600 dark:text-green-400 font-medium">Unlocks All Content</span>
+                        <span className="text-green-600 dark:text-green-400 font-medium">
+                          Unlocks All Content
+                        </span>
                       </>
                     ) : (
                       <>
                         <FaLock className="h-3 w-3 text-yellow-500" />
-                        <span className="text-yellow-600 dark:text-yellow-400 font-medium">Limited Access</span>
+                        <span className="text-yellow-600 dark:text-yellow-400 font-medium">
+                          Limited Access
+                        </span>
                       </>
                     )}
                   </div>
@@ -577,7 +645,7 @@ const AdminPlans = () => {
                       onClick={() => handleOpenModal(plan)}
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
                     >
-                      <FaEdit className="h-3.5 w-3.5" />
+                      <FaPenToSquare className="h-3.5 w-3.5" />
                       Edit
                     </button>
                     <button
@@ -614,7 +682,9 @@ const AdminPlans = () => {
                     {editingPlan ? "Edit Plan" : "Create New Plan"}
                   </h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {editingPlan ? "Update plan details" : "Configure a new subscription plan"}
+                    {editingPlan
+                      ? "Update plan details"
+                      : "Configure a new subscription plan"}
                   </p>
                 </div>
               </div>
@@ -622,7 +692,7 @@ const AdminPlans = () => {
                 onClick={handleCloseModal}
                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               >
-                <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                <FaXmark className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
 
@@ -673,17 +743,20 @@ const AdminPlans = () => {
                     className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   {/* GHS Conversion Preview */}
-                  {!formData.isFree && !formData.freeAccess && formData.price > 0 && exchangeRate && (
-                    <div className="mt-1.5 flex items-center gap-2 text-sm">
-                      <span className="text-gray-500 dark:text-gray-400">≈</span>
-                      <span className="font-semibold text-green-600 dark:text-green-400">
-                        {formatGHS(convertToGHS(formData.price))}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        (at {exchangeRate.toFixed(2)} GHS/USD)
-                      </span>
-                    </div>
-                  )}
+                  {!formData.isFree &&
+                    !formData.freeAccess &&
+                    formData.price > 0 &&
+                    exchangeRate && (
+                      <div className="mt-1.5 flex items-center gap-2 text-sm">
+                        <FaCediSign className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                        <span className="font-semibold text-green-600 dark:text-green-400">
+                          {formatGHS(convertToGHS(formData.price))}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          (at {exchangeRate.toFixed(2)} GHS/USD)
+                        </span>
+                      </div>
+                    )}
                 </div>
               </div>
 
@@ -800,7 +873,10 @@ const AdminPlans = () => {
                     onChange={(e) => setFeatureInput(e.target.value)}
                     placeholder="Add a feature..."
                     className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all"
-                    onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), handleAddFeature())}
+                    onKeyPress={(e) =>
+                      e.key === "Enter" &&
+                      (e.preventDefault(), handleAddFeature())
+                    }
                   />
                   <button
                     type="button"
@@ -822,7 +898,7 @@ const AdminPlans = () => {
                         onClick={() => handleRemoveFeature(index)}
                         className="text-gray-400 hover:text-red-500 transition-colors"
                       >
-                        <FaTimes className="h-3 w-3" />
+                        <FaXmark className="h-3 w-3" />
                       </button>
                     </span>
                   ))}
@@ -835,7 +911,7 @@ const AdminPlans = () => {
                   <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                     Specific Access Control
                   </p>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Access Level
@@ -872,7 +948,9 @@ const AdminPlans = () => {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Hold Ctrl/Cmd to select multiple
+                      </p>
                     </div>
                   )}
 
@@ -894,7 +972,9 @@ const AdminPlans = () => {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Hold Ctrl/Cmd to select multiple
+                      </p>
                     </div>
                   )}
 
@@ -916,7 +996,9 @@ const AdminPlans = () => {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Hold Ctrl/Cmd to select multiple
+                      </p>
                     </div>
                   )}
 
@@ -939,7 +1021,9 @@ const AdminPlans = () => {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Select programs to grant full access to</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Select programs to grant full access to
+                      </p>
                     </div>
                   )}
                 </div>
@@ -949,13 +1033,14 @@ const AdminPlans = () => {
               {editingPlan && (
                 <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
                   <div className="flex items-start gap-3">
-                    <FaExclamationTriangle className="h-5 w-5 text-amber-500 mt-0.5" />
+                    <FaTriangleExclamation className="h-5 w-5 text-amber-500 mt-0.5" />
                     <div>
                       <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
                         Editing this plan will affect all users assigned to it
                       </p>
                       <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-                        After saving, you'll have the option to update all users with these changes.
+                        After saving, you'll have the option to update all users
+                        with these changes.
                       </p>
                     </div>
                   </div>
@@ -979,9 +1064,13 @@ const AdminPlans = () => {
                   {loading || updatingAll ? (
                     <FaSpinner className="h-4 w-4 animate-spin" />
                   ) : (
-                    <FaSave className="h-4 w-4" />
+                    <FaFloppyDisk className="h-4 w-4" />
                   )}
-                  {updatingAll ? "Updating Users..." : (editingPlan ? "Update Plan" : "Create Plan")}
+                  {updatingAll
+                    ? "Updating Users..."
+                    : editingPlan
+                    ? "Update Plan"
+                    : "Create Plan"}
                 </button>
               </div>
             </form>

@@ -1,32 +1,37 @@
-// AdminSubjects.jsx - COMPLETE FIXED VERSION (USD to GHS Conversion)
+// AdminSubjects.jsx - COMPLETE FIXED VERSION (Server-Verified Rate + FA6)
 import { useState, useEffect } from "react";
 import { 
   FaPlus, 
-  FaEdit, 
+  FaPenToSquare,
   FaTrash, 
-  FaTimes, 
+  FaXmark,
   FaBook, 
-  FaSearch,
+  FaMagnifyingGlass,
   FaChalkboardTeacher,
   FaDollarSign,
   FaUnlockAlt,
   FaClock,
   FaUserGraduate,
   FaSpinner,
-  FaCheckCircle,
-  FaExclamationCircle,
+  FaCircleCheck,
+  FaCircleExclamation,
   FaBuilding,
   FaList,
   FaChevronDown,
   FaChevronUp,
-  FaSave,
-  FaTimesCircle,
-  FaSync
-} from "react-icons/fa";
-import { FaCediSign } from "react-icons/fa6"; 
+  FaFloppyDisk,
+  FaCircleXmark,
+  FaArrowsRotate,
+  FaCediSign
+} from "react-icons/fa6";
 import axios from "../api/axios";
 import initializeSocket, { getSocket } from "../config/socket";
 import toast, { Toaster } from "react-hot-toast";
+
+// ================= CONSTANTS =================
+const FALLBACK_USD_TO_GHS = 15.50;
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
 const AdminSubjects = () => {
   const [socket, setSocket] = useState(null);
@@ -50,14 +55,11 @@ const AdminSubjects = () => {
   const [newTopicDescription, setNewTopicDescription] = useState("");
   const [topicFormSubject, setTopicFormSubject] = useState(null);
 
-  // Exchange rate state
+  // ================= EXCHANGE RATE STATE =================
   const [exchangeRate, setExchangeRate] = useState(null);
   const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
   const [exchangeRateError, setExchangeRateError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-
-  // Fallback exchange rate
-  const FALLBACK_USD_TO_GHS = 15.50;
 
   const [form, setForm] = useState({
     name: "",
@@ -71,7 +73,7 @@ const AdminSubjects = () => {
   useEffect(() => {
     const newSocket = initializeSocket();
     setSocket(newSocket);
-    
+
     fetchData();
     fetchExchangeRate();
 
@@ -104,41 +106,55 @@ const AdminSubjects = () => {
     };
   }, []);
 
-  // ================= FETCH EXCHANGE RATE =================
+  // ================= FETCH EXCHANGE RATE (FIXED) =================
   const fetchExchangeRate = async () => {
     try {
       setExchangeRateLoading(true);
       setExchangeRateError(null);
 
+      // Removed frankfurter.app (doesn't support GHS)
+      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
-          url: "https://api.exchangerate-api.com/v4/latest/USD",
-          extract: (data) => data.rates?.GHS
-        },
-        {
           url: "https://open.er-api.com/v6/latest/USD",
-          extract: (data) => data.rates?.GHS
+          extract: (data) => data?.rates?.GHS,
         },
         {
-          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
-          extract: (data) => data.rates?.GHS
-        }
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data?.rates?.GHS,
+        },
       ];
 
       let rate = null;
+      let failedApis = [];
 
       for (const api of apis) {
         try {
           const response = await fetch(api.url);
-          if (response.ok) {
-            const data = await response.json();
-            const extractedRate = api.extract(data);
-            if (extractedRate && extractedRate > 0) {
-              rate = extractedRate;
-              break;
-            }
+          if (!response.ok) {
+            failedApis.push(`${api.url} (HTTP ${response.status})`);
+            continue;
+          }
+          const data = await response.json();
+          const extractedRate = api.extract(data);
+
+          console.log(`📡 ${api.url} → GHS = ${extractedRate}`);
+
+          // Range validation — reject garbage values
+          if (
+            extractedRate &&
+            extractedRate >= MIN_REASONABLE_RATE &&
+            extractedRate <= MAX_REASONABLE_RATE
+          ) {
+            rate = extractedRate;
+            break;
+          } else if (extractedRate) {
+            failedApis.push(`${api.url} (rate ${extractedRate} out of range)`);
+          } else {
+            failedApis.push(`${api.url} (no GHS in response)`);
           }
         } catch (err) {
+          failedApis.push(`${api.url} (${err.message})`);
           continue;
         }
       }
@@ -146,14 +162,16 @@ const AdminSubjects = () => {
       if (rate) {
         setExchangeRate(rate);
         setLastUpdated(new Date().toLocaleString());
-        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+        console.log(`✅ Exchange rate loaded: 1 USD = ${rate} GHS`);
       } else {
+        console.warn(
+          `⚠️ All exchange rate APIs failed. Failed: ${failedApis.join(", ")}. Using fallback ${FALLBACK_USD_TO_GHS}`
+        );
         setExchangeRate(FALLBACK_USD_TO_GHS);
         setExchangeRateError("Using fallback rate");
-        console.warn("All exchange rate APIs failed, using fallback rate");
       }
     } catch (err) {
-      console.error("Error fetching exchange rate:", err);
+      console.error("❌ Exchange rate fetch error:", err);
       setExchangeRate(FALLBACK_USD_TO_GHS);
       setExchangeRateError("Using fallback rate");
     } finally {
@@ -178,21 +196,22 @@ const AdminSubjects = () => {
   const formatGHS = (amount) => {
     const num = parseFloat(amount);
     if (isNaN(num)) return "GH₵0.00";
-    return `GH₵${num.toLocaleString('en-US', {
+    return `GH₵${num.toLocaleString("en-US", {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     })}`;
   };
 
   const fetchData = async () => {
     try {
-      const [programsRes, coursesRes, subjectsRes, usersRes, manualRes] = await Promise.all([
-        axios.get("/programs"),
-        axios.get("/courses"),
-        axios.get("/subjects"),
-        axios.get("/users"),
-        axios.get("/manual-access/all"),
-      ]);
+      const [programsRes, coursesRes, subjectsRes, usersRes, manualRes] =
+        await Promise.all([
+          axios.get("/programs"),
+          axios.get("/courses"),
+          axios.get("/subjects"),
+          axios.get("/users"),
+          axios.get("/manual-access/all"),
+        ]);
       setPrograms(programsRes.data || []);
       setCourses(coursesRes.data || []);
       setSubjects(subjectsRes.data || []);
@@ -227,9 +246,9 @@ const AdminSubjects = () => {
 
   // ================= TOPIC MANAGEMENT =================
   const toggleTopics = (subjectId) => {
-    setExpandedSubjects(prev => ({
+    setExpandedSubjects((prev) => ({
       ...prev,
-      [subjectId]: !prev[subjectId]
+      [subjectId]: !prev[subjectId],
     }));
   };
 
@@ -313,7 +332,7 @@ const AdminSubjects = () => {
       setLoading(true);
       const priceUSD = form.isPaid ? parseFloat(form.price) : 0;
       const priceGHS = form.isPaid ? parseFloat(convertToGHS(priceUSD)) : 0;
-      
+
       await axios.post("/subjects", {
         name: form.name,
         programId: form.programId,
@@ -324,7 +343,13 @@ const AdminSubjects = () => {
         priceInGHS: priceGHS,
         exchangeRateAtCreation: exchangeRate || FALLBACK_USD_TO_GHS,
       });
-      setForm({ name: "", programId: "", courseId: "", isPaid: false, price: "" });
+      setForm({
+        name: "",
+        programId: "",
+        courseId: "",
+        isPaid: false,
+        price: "",
+      });
       setEditing(null);
       await fetchData();
       toast.success("Subject added successfully!");
@@ -422,12 +447,15 @@ const AdminSubjects = () => {
       isPaid: subject.isPaid,
       price: subject.price || "",
     });
-    
+
     const progId = subject.programId?._id || subject.programId;
     if (progId) {
-      axios.get(`/courses/program/${progId}`).then(res => {
-        setFilteredCourses(res.data || []);
-      }).catch(err => console.error(err));
+      axios
+        .get(`/courses/program/${progId}`)
+        .then((res) => {
+          setFilteredCourses(res.data || []);
+        })
+        .catch((err) => console.error(err));
     }
   };
 
@@ -453,7 +481,7 @@ const AdminSubjects = () => {
       setLoading(true);
       const priceUSD = form.isPaid ? parseFloat(form.price) : 0;
       const priceGHS = form.isPaid ? parseFloat(convertToGHS(priceUSD)) : 0;
-      
+
       await axios.put(`/subjects/${editing._id}`, {
         name: form.name,
         programId: form.programId,
@@ -464,7 +492,13 @@ const AdminSubjects = () => {
         exchangeRateAtCreation: exchangeRate || FALLBACK_USD_TO_GHS,
       });
       setEditing(null);
-      setForm({ name: "", programId: "", courseId: "", isPaid: false, price: "" });
+      setForm({
+        name: "",
+        programId: "",
+        courseId: "",
+        isPaid: false,
+        price: "",
+      });
       setFilteredCourses([]);
       await fetchData();
       toast.success("Subject updated successfully!");
@@ -491,20 +525,23 @@ const AdminSubjects = () => {
     return user?.name || "Unknown User";
   };
 
-  const filteredSubjects = subjects.filter(subject =>
+  const filteredSubjects = subjects.filter((subject) =>
     subject.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Stats
-  const paidSubjects = subjects.filter(s => s.isPaid).length;
-  const freeSubjects = subjects.filter(s => !s.isPaid).length;
-  const activeAccess = manualAccessList.filter(m => m.isActive).length;
-  const totalTopics = subjects.reduce((acc, s) => acc + (s.topics?.length || 0), 0);
+  const paidSubjects = subjects.filter((s) => s.isPaid).length;
+  const freeSubjects = subjects.filter((s) => !s.isPaid).length;
+  const activeAccess = manualAccessList.filter((m) => m.isActive).length;
+  const totalTopics = subjects.reduce(
+    (acc, s) => acc + (s.topics?.length || 0),
+    0
+  );
 
   return (
     <div className="w-full px-3 sm:px-4 md:px-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       <Toaster position="top-right" />
-      
+
       {/* Page Header */}
       <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0 flex-1">
@@ -560,11 +597,15 @@ const AdminSubjects = () => {
             className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors disabled:opacity-50"
             title="Refresh exchange rate"
           >
-            <FaSync className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+            <FaArrowsRotate
+              className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${
+                exchangeRateLoading ? "animate-spin" : ""
+              }`}
+            />
           </button>
         </div>
       </div>
-      
+
       {exchangeRateError && (
         <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
           <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
@@ -578,7 +619,9 @@ const AdminSubjects = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Total Subjects</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                Total Subjects
+              </p>
               <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1 break-words">
                 {subjects.length}
               </p>
@@ -592,13 +635,15 @@ const AdminSubjects = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Free Subjects</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                Free Subjects
+              </p>
               <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1 break-words">
                 {freeSubjects}
               </p>
             </div>
             <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center flex-shrink-0 ml-2">
-              <FaCheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 dark:text-green-400" />
+              <FaCircleCheck className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 dark:text-green-400" />
             </div>
           </div>
         </div>
@@ -606,7 +651,9 @@ const AdminSubjects = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Paid Subjects</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                Paid Subjects
+              </p>
               <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1 break-words">
                 {paidSubjects}
               </p>
@@ -620,7 +667,9 @@ const AdminSubjects = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 sm:p-4">
           <div className="flex items-center justify-between">
             <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Active Access</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                Active Access
+              </p>
               <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1 break-words">
                 {activeAccess}
               </p>
@@ -689,11 +738,13 @@ const AdminSubjects = () => {
                 className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               >
                 <option value="">Select Program</option>
-                {programs.filter(p => p.isActive !== false).map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.name} {p.code ? `(${p.code})` : ""}
-                  </option>
-                ))}
+                {programs
+                  .filter((p) => p.isActive !== false)
+                  .map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.name} {p.code ? `(${p.code})` : ""}
+                    </option>
+                  ))}
               </select>
 
               <select
@@ -758,15 +809,23 @@ const AdminSubjects = () => {
                     <FaSpinner className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
                     <span>Processing...</span>
                   </div>
+                ) : editing ? (
+                  "Update Subject"
                 ) : (
-                  editing ? "Update Subject" : "Add Subject"
+                  "Add Subject"
                 )}
               </button>
               {editing && (
                 <button
                   onClick={() => {
                     setEditing(null);
-                    setForm({ name: "", programId: "", courseId: "", isPaid: false, price: "" });
+                    setForm({
+                      name: "",
+                      programId: "",
+                      courseId: "",
+                      isPaid: false,
+                      price: "",
+                    });
                     setFilteredCourses([]);
                   }}
                   className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all text-sm sm:text-base"
@@ -781,7 +840,7 @@ const AdminSubjects = () => {
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
             <div className="p-3 sm:p-4 border-b border-gray-200 dark:border-gray-800">
               <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <FaMagnifyingGlass className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 <input
                   type="text"
                   placeholder="Search subjects..."
@@ -797,7 +856,9 @@ const AdminSubjects = () => {
                 <div className="flex flex-col items-center justify-center py-12 px-4">
                   <FaBook className="h-10 w-10 sm:h-12 sm:w-12 text-gray-300 dark:text-gray-700 mb-3" />
                   <p className="text-gray-500 dark:text-gray-400 text-center text-sm break-words">
-                    {searchTerm ? "No subjects match your search" : "No subjects found. Add your first subject!"}
+                    {searchTerm
+                      ? "No subjects match your search"
+                      : "No subjects found. Add your first subject!"}
                   </p>
                 </div>
               ) : (
@@ -805,21 +866,25 @@ const AdminSubjects = () => {
                   const isExpanded = expandedSubjects[subject._id];
                   const topicCount = subject.topics?.length || 0;
                   const priceInGHS = convertToGHS(subject.price);
-                  
+
                   return (
                     <div key={subject._id} className="group">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200">
                         <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                          <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                            subject.isPaid 
-                              ? 'bg-yellow-50 dark:bg-yellow-950/30' 
-                              : 'bg-green-50 dark:bg-green-950/30'
-                          }`}>
-                            <FaChalkboardTeacher className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
-                              subject.isPaid 
-                                ? 'text-yellow-600 dark:text-yellow-400' 
-                                : 'text-green-600 dark:text-green-400'
-                            }`} />
+                          <div
+                            className={`h-8 w-8 sm:h-10 sm:w-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              subject.isPaid
+                                ? "bg-yellow-50 dark:bg-yellow-950/30"
+                                : "bg-green-50 dark:bg-green-950/30"
+                            }`}
+                          >
+                            <FaChalkboardTeacher
+                              className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
+                                subject.isPaid
+                                  ? "text-yellow-600 dark:text-yellow-400"
+                                  : "text-green-600 dark:text-green-400"
+                              }`}
+                            />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -836,12 +901,16 @@ const AdminSubjects = () => {
                             <div className="flex flex-wrap items-center gap-2 mt-1">
                               <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                                 <FaBuilding className="w-3 h-3" />
-                                {getProgramName(subject.programId?._id || subject.programId)}
+                                {getProgramName(
+                                  subject.programId?._id || subject.programId
+                                )}
                               </span>
                               <span className="text-xs text-gray-400">→</span>
                               <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                                 <FaBook className="w-3 h-3" />
-                                {getCourseName(subject.courseId?._id || subject.courseId)}
+                                {getCourseName(
+                                  subject.courseId?._id || subject.courseId
+                                )}
                               </span>
                             </div>
                           </div>
@@ -851,7 +920,7 @@ const AdminSubjects = () => {
                                 <span className="text-xs px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full font-medium whitespace-nowrap bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400">
                                   {formatUSD(subject.price)}
                                 </span>
-                                {exchangeRate && (
+                                {exchangeRate && priceInGHS > 0 && (
                                   <span className="text-[10px] sm:text-xs font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
                                     ≈ {formatGHS(priceInGHS)}
                                   </span>
@@ -873,7 +942,10 @@ const AdminSubjects = () => {
                             {isExpanded ? (
                               <FaChevronUp size={14} className="sm:w-4 sm:h-4" />
                             ) : (
-                              <FaChevronDown size={14} className="sm:w-4 sm:h-4" />
+                              <FaChevronDown
+                                size={14}
+                                className="sm:w-4 sm:h-4"
+                              />
                             )}
                           </button>
                           <button
@@ -892,7 +964,10 @@ const AdminSubjects = () => {
                             className="p-1.5 sm:p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
                             title="Edit Subject"
                           >
-                            <FaEdit size={14} className="sm:w-4 sm:h-4" />
+                            <FaPenToSquare
+                              size={14}
+                              className="sm:w-4 sm:h-4"
+                            />
                           </button>
                           <button
                             onClick={() => handleDelete(subject._id)}
@@ -915,14 +990,18 @@ const AdminSubjects = () => {
                                   <input
                                     type="text"
                                     value={newTopicName}
-                                    onChange={(e) => setNewTopicName(e.target.value)}
+                                    onChange={(e) =>
+                                      setNewTopicName(e.target.value)
+                                    }
                                     placeholder="Topic name"
                                     className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                   />
                                   <input
                                     type="text"
                                     value={newTopicDescription}
-                                    onChange={(e) => setNewTopicDescription(e.target.value)}
+                                    onChange={(e) =>
+                                      setNewTopicDescription(e.target.value)
+                                    }
                                     placeholder="Description (optional)"
                                     className="flex-1 px-3 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                   />
@@ -945,30 +1024,47 @@ const AdminSubjects = () => {
                             {/* Topics List */}
                             {topicCount === 0 ? (
                               <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
-                                No topics added yet. Click the + button to add topics.
+                                No topics added yet. Click the + button to add
+                                topics.
                               </p>
                             ) : (
                               <div className="space-y-2">
                                 {subject.topics?.map((topic) => {
-                                  const isEditing = editingTopic && 
-                                    editingTopic.subjectId === subject._id && 
+                                  const isEditing =
+                                    editingTopic &&
+                                    editingTopic.subjectId === subject._id &&
                                     editingTopic.topicId === topic._id;
 
                                   return (
-                                    <div key={topic._id} className="flex items-start gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <div
+                                      key={topic._id}
+                                      className="flex items-start gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+                                    >
                                       {isEditing ? (
                                         // Edit Topic Form
                                         <div className="flex-1 flex flex-col sm:flex-row gap-2">
                                           <input
                                             type="text"
                                             value={editingTopic.name}
-                                            onChange={(e) => setEditingTopic({...editingTopic, name: e.target.value})}
+                                            onChange={(e) =>
+                                              setEditingTopic({
+                                                ...editingTopic,
+                                                name: e.target.value,
+                                              })
+                                            }
                                             className="flex-1 px-2 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded"
                                           />
                                           <input
                                             type="text"
-                                            value={editingTopic.description || ""}
-                                            onChange={(e) => setEditingTopic({...editingTopic, description: e.target.value})}
+                                            value={
+                                              editingTopic.description || ""
+                                            }
+                                            onChange={(e) =>
+                                              setEditingTopic({
+                                                ...editingTopic,
+                                                description: e.target.value,
+                                              })
+                                            }
                                             placeholder="Description"
                                             className="flex-1 px-2 py-1 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded"
                                           />
@@ -977,32 +1073,43 @@ const AdminSubjects = () => {
                                               <input
                                                 type="checkbox"
                                                 checked={editingTopic.isActive}
-                                                onChange={(e) => setEditingTopic({...editingTopic, isActive: e.target.checked})}
+                                                onChange={(e) =>
+                                                  setEditingTopic({
+                                                    ...editingTopic,
+                                                    isActive: e.target.checked,
+                                                  })
+                                                }
                                                 className="rounded"
                                               />
                                               Active
                                             </label>
                                           </div>
                                           <button
-                                            onClick={() => handleUpdateTopic(
-                                              editingTopic.subjectId,
-                                              editingTopic.topicId,
-                                              {
-                                                name: editingTopic.name,
-                                                description: editingTopic.description,
-                                                order: editingTopic.order,
-                                                isActive: editingTopic.isActive
-                                              }
-                                            )}
+                                            onClick={() =>
+                                              handleUpdateTopic(
+                                                editingTopic.subjectId,
+                                                editingTopic.topicId,
+                                                {
+                                                  name: editingTopic.name,
+                                                  description:
+                                                    editingTopic.description,
+                                                  order: editingTopic.order,
+                                                  isActive:
+                                                    editingTopic.isActive,
+                                                }
+                                              )
+                                            }
                                             className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
                                           >
-                                            <FaSave className="h-3 w-3" />
+                                            <FaFloppyDisk className="h-3 w-3" />
                                           </button>
                                           <button
-                                            onClick={() => setEditingTopic(null)}
+                                            onClick={() =>
+                                              setEditingTopic(null)
+                                            }
                                             className="px-2 py-1 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded text-xs font-medium transition-colors"
                                           >
-                                            <FaTimesCircle className="h-3 w-3" />
+                                            <FaCircleXmark className="h-3 w-3" />
                                           </button>
                                         </div>
                                       ) : (
@@ -1027,13 +1134,23 @@ const AdminSubjects = () => {
                                           </div>
                                           <div className="flex items-center gap-1 flex-shrink-0">
                                             <button
-                                              onClick={() => startEditTopic(subject._id, topic)}
+                                              onClick={() =>
+                                                startEditTopic(
+                                                  subject._id,
+                                                  topic
+                                                )
+                                              }
                                               className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded transition-colors"
                                             >
-                                              <FaEdit className="h-3 w-3" />
+                                              <FaPenToSquare className="h-3 w-3" />
                                             </button>
                                             <button
-                                              onClick={() => handleDeleteTopic(subject._id, topic._id)}
+                                              onClick={() =>
+                                                handleDeleteTopic(
+                                                  subject._id,
+                                                  topic._id
+                                                )
+                                              }
                                               className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
                                             >
                                               <FaTrash className="h-3 w-3" />
@@ -1157,23 +1274,38 @@ const AdminSubjects = () => {
             {manualAccessList.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-4">
                 <FaUserGraduate className="h-10 w-10 sm:h-12 sm:w-12 text-gray-300 dark:text-gray-700 mb-3" />
-                <p className="text-gray-500 dark:text-gray-400 text-center text-sm">No manual unlocks yet</p>
+                <p className="text-gray-500 dark:text-gray-400 text-center text-sm">
+                  No manual unlocks yet
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs sm:text-sm">
                   <thead className="bg-gray-50 dark:bg-gray-800/50">
                     <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
-                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Student</th>
-                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Subject</th>
-                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left hidden sm:table-cell">Expiry Date</th>
-                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Status</th>
-                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">Actions</th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">
+                        Student
+                      </th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">
+                        Subject
+                      </th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left hidden sm:table-cell">
+                        Expiry Date
+                      </th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">
+                        Status
+                      </th>
+                      <th className="px-3 sm:px-4 py-2 sm:py-3 text-left">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                     {manualAccessList.map((m) => (
-                      <tr key={m._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <tr
+                        key={m._id}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                      >
                         <td className="px-3 sm:px-4 py-2 sm:py-3">
                           <div className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm break-words max-w-[150px] sm:max-w-none">
                             {m.userId?.name}
@@ -1194,15 +1326,17 @@ const AdminSubjects = () => {
                           {new Date(m.expiresAt).toLocaleDateString()}
                         </td>
                         <td className="px-3 sm:px-4 py-2 sm:py-3">
-                          <span className={`inline-flex items-center gap-1 text-xs px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full font-medium whitespace-nowrap ${
-                            m.isActive
-                              ? "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400"
-                              : "bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400"
-                          }`}>
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full font-medium whitespace-nowrap ${
+                              m.isActive
+                                ? "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400"
+                                : "bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400"
+                            }`}
+                          >
                             {m.isActive ? (
-                              <FaCheckCircle className="h-2 w-2 sm:h-3 sm:w-3" />
+                              <FaCircleCheck className="h-2 w-2 sm:h-3 sm:w-3" />
                             ) : (
-                              <FaExclamationCircle className="h-2 w-2 sm:h-3 sm:w-3" />
+                              <FaCircleExclamation className="h-2 w-2 sm:h-3 sm:w-3" />
                             )}
                             {m.isActive ? "Active" : "Expired"}
                           </span>
@@ -1250,7 +1384,7 @@ const AdminSubjects = () => {
             <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white dark:bg-gray-900 z-10">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                  <FaEdit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+                  <FaPenToSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 truncate">
@@ -1267,7 +1401,7 @@ const AdminSubjects = () => {
                 onClick={() => setEditing(null)}
                 className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0 ml-2"
               >
-                <FaTimes size={18} className="sm:w-5 sm:h-5" />
+                <FaXmark size={18} className="sm:w-5 sm:h-5" />
               </button>
             </div>
 
@@ -1375,7 +1509,7 @@ const AdminSubjects = () => {
                     <span>Saving...</span>
                   </div>
                 ) : (
-                  'Save Changes'
+                  "Save Changes"
                 )}
               </button>
               <button

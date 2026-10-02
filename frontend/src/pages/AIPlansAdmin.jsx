@@ -1,4 +1,4 @@
-// AIPlansAdmin.jsx - COMPLETE FIXED VERSION (USD → GHS Conversion)
+// AIPlansAdmin.jsx - COMPLETE FIXED VERSION (Server-Verified Rate + FA6)
 import { useState, useEffect } from "react";
 import axios from "../api/axios";
 import { 
@@ -21,9 +21,12 @@ import {
 } from "react-icons/fa6";
 import toast, { Toaster } from "react-hot-toast";
 
-// ================= CURRENCY HELPERS =================
+// ================= CONSTANTS =================
 const FALLBACK_USD_TO_GHS = 15.50;
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
+// ================= CURRENCY HELPERS =================
 const formatUSD = (amount) => {
   const num = parseFloat(amount);
   if (isNaN(num)) return "$0.00";
@@ -56,41 +59,55 @@ const AIPlansAdmin = () => {
   const [exchangeRateError, setExchangeRateError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  // ================= FETCH EXCHANGE RATE =================
+  // ================= FETCH EXCHANGE RATE (FIXED) =================
   const fetchExchangeRate = async () => {
     try {
       setExchangeRateLoading(true);
       setExchangeRateError(null);
 
+      // Removed frankfurter.app (doesn't support GHS)
+      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
-          url: "https://api.exchangerate-api.com/v4/latest/USD",
-          extract: (data) => data.rates?.GHS,
-        },
-        {
           url: "https://open.er-api.com/v6/latest/USD",
-          extract: (data) => data.rates?.GHS,
+          extract: (data) => data?.rates?.GHS,
         },
         {
-          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
-          extract: (data) => data.rates?.GHS,
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data?.rates?.GHS,
         },
       ];
 
       let rate = null;
+      let failedApis = [];
 
       for (const api of apis) {
         try {
           const response = await fetch(api.url);
-          if (response.ok) {
-            const data = await response.json();
-            const extractedRate = api.extract(data);
-            if (extractedRate && extractedRate > 0) {
-              rate = extractedRate;
-              break;
-            }
+          if (!response.ok) {
+            failedApis.push(`${api.url} (HTTP ${response.status})`);
+            continue;
+          }
+          const data = await response.json();
+          const extractedRate = api.extract(data);
+
+          console.log(`📡 ${api.url} → GHS = ${extractedRate}`);
+
+          // Range validation — reject garbage values
+          if (
+            extractedRate &&
+            extractedRate >= MIN_REASONABLE_RATE &&
+            extractedRate <= MAX_REASONABLE_RATE
+          ) {
+            rate = extractedRate;
+            break;
+          } else if (extractedRate) {
+            failedApis.push(`${api.url} (rate ${extractedRate} out of range)`);
+          } else {
+            failedApis.push(`${api.url} (no GHS in response)`);
           }
         } catch (err) {
+          failedApis.push(`${api.url} (${err.message})`);
           continue;
         }
       }
@@ -98,13 +115,16 @@ const AIPlansAdmin = () => {
       if (rate) {
         setExchangeRate(rate);
         setLastUpdated(new Date().toLocaleString());
-        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+        console.log(`✅ Exchange rate loaded: 1 USD = ${rate} GHS`);
       } else {
+        console.warn(
+          `⚠️ All exchange rate APIs failed. Failed: ${failedApis.join(", ")}. Using fallback ${FALLBACK_USD_TO_GHS}`
+        );
         setExchangeRate(FALLBACK_USD_TO_GHS);
         setExchangeRateError("Using fallback rate");
       }
     } catch (err) {
-      console.error("Error fetching exchange rate:", err);
+      console.error("❌ Exchange rate fetch error:", err);
       setExchangeRate(FALLBACK_USD_TO_GHS);
       setExchangeRateError("Using fallback rate");
     } finally {
@@ -123,7 +143,9 @@ const AIPlansAdmin = () => {
   // ================= DARK MODE =================
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
-    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const systemPrefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    ).matches;
     const isDark = savedTheme === "dark" || (!savedTheme && systemPrefersDark);
     setDarkMode(isDark);
     if (isDark) {
@@ -170,10 +192,10 @@ const AIPlansAdmin = () => {
       const data = {
         name,
         description,
-        price: priceUSD,                              // ← USD price
-        priceInGHS: priceGHS,                         // ← GHS equivalent
-        exchangeRateAtCreation: rate,                 // ← Rate used
-        currency: "USD",                              // ← Base currency
+        price: priceUSD, // ← USD price
+        priceInGHS: priceGHS, // ← GHS equivalent
+        exchangeRateAtCreation: rate, // ← Rate used
+        currency: "USD", // ← Base currency
         durationValue: parseInt(durationValue),
         durationUnit,
       };
@@ -233,24 +255,38 @@ const AIPlansAdmin = () => {
 
   const getDurationLabel = (value, unit) => {
     if (value === 1) {
-      switch(unit) {
-        case "minutes": return "Minute";
-        case "hours": return "Hour";
-        case "days": return "Day";
-        case "weeks": return "Week";
-        case "months": return "Month";
-        case "years": return "Year";
-        default: return unit;
+      switch (unit) {
+        case "minutes":
+          return "Minute";
+        case "hours":
+          return "Hour";
+        case "days":
+          return "Day";
+        case "weeks":
+          return "Week";
+        case "months":
+          return "Month";
+        case "years":
+          return "Year";
+        default:
+          return unit;
       }
     }
-    switch(unit) {
-      case "minutes": return "Minutes";
-      case "hours": return "Hours";
-      case "days": return "Days";
-      case "weeks": return "Weeks";
-      case "months": return "Months";
-      case "years": return "Years";
-      default: return unit;
+    switch (unit) {
+      case "minutes":
+        return "Minutes";
+      case "hours":
+        return "Hours";
+      case "days":
+        return "Days";
+      case "weeks":
+        return "Weeks";
+      case "months":
+        return "Months";
+      case "years":
+        return "Years";
+      default:
+        return unit;
     }
   };
 
@@ -270,13 +306,14 @@ const AIPlansAdmin = () => {
   };
 
   // Live preview of GHS price in form
-  const formPriceGHS = price && parseFloat(price) > 0 && exchangeRate
-    ? convertToGHS(price)
-    : null;
+  const formPriceGHS =
+    price && parseFloat(price) > 0 && exchangeRate
+      ? convertToGHS(price)
+      : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <Toaster 
+      <Toaster
         position="top-right"
         toastOptions={{
           duration: 4000,
@@ -289,12 +326,13 @@ const AIPlansAdmin = () => {
       />
 
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-full mb-4 backdrop-blur-sm">
             <FaCrown className="text-indigo-600 dark:text-indigo-400 text-sm" />
-            <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Admin Dashboard</span>
+            <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+              Admin Dashboard
+            </span>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
             AI Subscription Plans
@@ -333,7 +371,11 @@ const AIPlansAdmin = () => {
               className="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
               title="Refresh exchange rate"
             >
-              <FaArrowsRotate className={`h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+              <FaArrowsRotate
+                className={`h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 ${
+                  exchangeRateLoading ? "animate-spin" : ""
+                }`}
+              />
             </button>
           </div>
         </div>
@@ -347,21 +389,26 @@ const AIPlansAdmin = () => {
         )}
 
         <div className="grid lg:grid-cols-2 gap-8">
-          
           {/* LEFT: FORM - Premium Card */}
           <div className="lg:sticky lg:top-6 h-fit">
             <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
               <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                    {editingId ? <FaPenToSquare className="text-white text-lg" /> : <FaPlus className="text-white text-lg" />}
+                    {editingId ? (
+                      <FaPenToSquare className="text-white text-lg" />
+                    ) : (
+                      <FaPlus className="text-white text-lg" />
+                    )}
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-white">
                       {editingId ? "Edit Plan" : "Create New Plan"}
                     </h2>
                     <p className="text-white/70 text-sm">
-                      {editingId ? "Modify existing subscription plan" : "Add a new subscription plan"}
+                      {editingId
+                        ? "Modify existing subscription plan"
+                        : "Add a new subscription plan"}
                     </p>
                   </div>
                 </div>
@@ -476,7 +523,7 @@ const AIPlansAdmin = () => {
                       </>
                     )}
                   </button>
-                  
+
                   {editingId && (
                     <button
                       onClick={handleCancelEdit}
@@ -494,15 +541,22 @@ const AIPlansAdmin = () => {
           <div>
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">All Plans</h3>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                  All Plans
+                </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  {plans.length} active subscription{plans.length !== 1 ? 's' : ''}
+                  {plans.length} active subscription
+                  {plans.length !== 1 ? "s" : ""}
                 </p>
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800">
                 <FaTag className="text-indigo-500 text-xs" />
-                <span className="text-xs text-slate-600 dark:text-slate-400">Total Plans</span>
-                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{plans.length}</span>
+                <span className="text-xs text-slate-600 dark:text-slate-400">
+                  Total Plans
+                </span>
+                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                  {plans.length}
+                </span>
               </div>
             </div>
 
@@ -511,8 +565,12 @@ const AIPlansAdmin = () => {
                 <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-950/50 dark:to-purple-950/50 flex items-center justify-center mx-auto mb-4">
                   <FaCrown className="w-10 h-10 text-indigo-500" />
                 </div>
-                <p className="text-slate-500 dark:text-slate-400">No plans created yet</p>
-                <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Create your first subscription plan</p>
+                <p className="text-slate-500 dark:text-slate-400">
+                  No plans created yet
+                </p>
+                <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+                  Create your first subscription plan
+                </p>
               </div>
             )}
 
@@ -521,7 +579,7 @@ const AIPlansAdmin = () => {
                 const PlanIcon = getPlanIcon(index);
                 const gradient = getPlanGradient(index);
                 const priceInGHS = convertToGHS(plan.price);
-                
+
                 return (
                   <div
                     key={plan._id}
@@ -532,7 +590,9 @@ const AIPlansAdmin = () => {
                         {/* Left - Plan Info */}
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-3">
-                            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}>
+                            <div
+                              className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}
+                            >
                               <PlanIcon className="text-white text-xl" />
                             </div>
                             <div>
@@ -545,7 +605,11 @@ const AIPlansAdmin = () => {
                                   {formatUSD(plan.price)}
                                 </span>
                                 <span className="text-sm text-slate-500 dark:text-slate-400">
-                                  / {getDurationLabel(plan.durationValue, plan.durationUnit)}
+                                  /{" "}
+                                  {getDurationLabel(
+                                    plan.durationValue,
+                                    plan.durationUnit
+                                  )}
                                 </span>
                               </div>
                               {/* GHS Equivalent Badge */}
@@ -569,7 +633,13 @@ const AIPlansAdmin = () => {
                           <div className="flex items-center gap-4 mt-3 flex-wrap">
                             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
                               <FaCalendarDays className="w-3 h-3" />
-                              <span>{plan.durationValue} {getDurationLabel(plan.durationValue, plan.durationUnit)}</span>
+                              <span>
+                                {plan.durationValue}{" "}
+                                {getDurationLabel(
+                                  plan.durationValue,
+                                  plan.durationUnit
+                                )}
+                              </span>
                             </div>
                             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
                               <FaTag className="w-3 h-3" />
@@ -577,7 +647,10 @@ const AIPlansAdmin = () => {
                             </div>
                             {plan.exchangeRateAtCreation && (
                               <div className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                                <span>Rate: {plan.exchangeRateAtCreation.toFixed(2)}</span>
+                                <span>
+                                  Rate:{" "}
+                                  {plan.exchangeRateAtCreation.toFixed(2)}
+                                </span>
                               </div>
                             )}
                           </div>

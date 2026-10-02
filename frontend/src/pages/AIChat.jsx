@@ -1,4 +1,4 @@
-// AIChat.jsx - COMPLETE FIXED VERSION (USD → GHS Conversion)
+// AIChat.jsx - COMPLETE FIXED VERSION (Server-Verified Rate + FA6)
 import { useState, useEffect, useRef } from "react";
 import axios from "../api/axios";
 import { io } from "socket.io-client";
@@ -21,9 +21,12 @@ import {
 import { useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
 
-// ================= CURRENCY HELPERS =================
+// ================= CONSTANTS =================
 const FALLBACK_USD_TO_GHS = 15.50;
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
+// ================= CURRENCY HELPERS =================
 const formatUSD = (amount) => {
   const num = parseFloat(amount);
   if (isNaN(num)) return "$0.00";
@@ -61,41 +64,57 @@ const AIChat = () => {
   const [exchangeRateError, setExchangeRateError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  // ================= FETCH EXCHANGE RATE =================
+  // ================= FETCH EXCHANGE RATE (FIXED) =================
   const fetchExchangeRate = async () => {
     try {
       setExchangeRateLoading(true);
       setExchangeRateError(null);
 
+      // Removed frankfurter.app (doesn't support GHS)
+      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
-          url: "https://api.exchangerate-api.com/v4/latest/USD",
-          extract: (data) => data.rates?.GHS,
-        },
-        {
           url: "https://open.er-api.com/v6/latest/USD",
-          extract: (data) => data.rates?.GHS,
+          extract: (data) => data?.rates?.GHS,
         },
         {
-          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
-          extract: (data) => data.rates?.GHS,
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data?.rates?.GHS,
         },
       ];
 
       let rate = null;
+      let failedApis = [];
 
       for (const api of apis) {
         try {
           const response = await fetch(api.url);
-          if (response.ok) {
-            const data = await response.json();
-            const extractedRate = api.extract(data);
-            if (extractedRate && extractedRate > 0) {
-              rate = extractedRate;
-              break;
-            }
+          if (!response.ok) {
+            failedApis.push(`${api.url} (HTTP ${response.status})`);
+            continue;
+          }
+          const data = await response.json();
+          const extractedRate = api.extract(data);
+
+          console.log(`📡 ${api.url} → GHS = ${extractedRate}`);
+
+          // Range validation — reject garbage values
+          if (
+            extractedRate &&
+            extractedRate >= MIN_REASONABLE_RATE &&
+            extractedRate <= MAX_REASONABLE_RATE
+          ) {
+            rate = extractedRate;
+            break;
+          } else if (extractedRate) {
+            failedApis.push(
+              `${api.url} (rate ${extractedRate} out of range)`
+            );
+          } else {
+            failedApis.push(`${api.url} (no GHS in response)`);
           }
         } catch (err) {
+          failedApis.push(`${api.url} (${err.message})`);
           continue;
         }
       }
@@ -103,13 +122,16 @@ const AIChat = () => {
       if (rate) {
         setExchangeRate(rate);
         setLastUpdated(new Date().toLocaleString());
-        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+        console.log(`✅ Exchange rate loaded: 1 USD = ${rate} GHS`);
       } else {
+        console.warn(
+          `⚠️ All exchange rate APIs failed. Failed: ${failedApis.join(", ")}. Using fallback ${FALLBACK_USD_TO_GHS}`
+        );
         setExchangeRate(FALLBACK_USD_TO_GHS);
         setExchangeRateError("Using fallback rate");
       }
     } catch (err) {
-      console.error("Error fetching exchange rate:", err);
+      console.error("❌ Exchange rate fetch error:", err);
       setExchangeRate(FALLBACK_USD_TO_GHS);
       setExchangeRateError("Using fallback rate");
     } finally {
@@ -134,10 +156,14 @@ const AIChat = () => {
 
   // ================= SOCKET =================
   useEffect(() => {
-    const newSocket = io(process.env.REACT_APP_SOCKET_URL || "https://alveoly-e-learning-755w.onrender.com", {
-      transports: ["websocket"],
-      withCredentials: true,
-    });
+    const newSocket = io(
+      process.env.REACT_APP_SOCKET_URL ||
+        "https://alveoly-e-learning-755w.onrender.com",
+      {
+        transports: ["websocket"],
+        withCredentials: true,
+      }
+    );
 
     console.log("🟢 Connected:", newSocket.id);
     setSocket(newSocket);
@@ -194,12 +220,14 @@ const AIChat = () => {
       setQaList((prev) => [qa, ...prev]);
       toast.success("New QA added to knowledge base");
     };
-    
+
     const handleUpdateQA = (qa) => {
-      setQaList((prev) => prev.map((item) => (item.id === qa.id ? qa : item)));
+      setQaList((prev) =>
+        prev.map((item) => (item.id === qa.id ? qa : item))
+      );
       toast.success("QA updated");
     };
-    
+
     const handleDeleteQA = (id) => {
       setQaList((prev) => prev.filter((item) => item.id !== id));
       toast.success("QA deleted");
@@ -222,14 +250,17 @@ const AIChat = () => {
       try {
         const [plansRes, subRes] = await Promise.all([
           axios.get("/ai-plans"),
-          axios.get("/ai-subscriptions").catch(() => ({ data: { active: false } }))
+          axios
+            .get("/ai-subscriptions")
+            .catch(() => ({ data: { active: false } })),
         ]);
-        
+
         setPlans(plansRes.data || []);
-        
+
         if (subRes.data.active && subRes.data.subscription) {
           setSubscription(subRes.data.subscription);
-          const remaining = new Date(subRes.data.subscription.expiryDate) - new Date();
+          const remaining =
+            new Date(subRes.data.subscription.expiryDate) - new Date();
           setTimeLeft(Math.max(remaining, 0));
         }
       } catch (err) {
@@ -243,7 +274,7 @@ const AIChat = () => {
   // ================= TIMER =================
   useEffect(() => {
     if (!timeLeft || timeLeft <= 0) return;
-    
+
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1000) {
@@ -255,7 +286,7 @@ const AIChat = () => {
         return prev - 1000;
       });
     }, 1000);
-    
+
     return () => clearInterval(timer);
   }, [timeLeft]);
 
@@ -293,7 +324,7 @@ const AIChat = () => {
       toast.error("Please enter a question");
       return;
     }
-    
+
     if (!subscription) {
       toast.error("You must have an active AI subscription!");
       return;
@@ -307,7 +338,7 @@ const AIChat = () => {
       });
 
       const { answer: aiAnswer, fromDB: isFromDB, chatId } = response.data;
-      
+
       setAnswer(aiAnswer);
       setFromDB(isFromDB || false);
 
@@ -344,7 +375,8 @@ const AIChat = () => {
       toast.success("Response received!");
     } catch (err) {
       console.error("Ask error:", err);
-      const errorMessage = err.response?.data?.message || "Failed to get AI response";
+      const errorMessage =
+        err.response?.data?.message || "Failed to get AI response";
       setAnswer(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -354,16 +386,16 @@ const AIChat = () => {
 
   const handleDeleteChat = async (chatId) => {
     if (!chatId) return;
-    
+
     try {
       await axios.delete(`/ai/student-history/${chatId}`);
       const updatedChats = chats.filter((c) => c._id !== chatId);
       setChats(updatedChats);
-      
+
       if (activeChatId === chatId) {
         setActiveChatId(updatedChats.length > 0 ? updatedChats[0]._id : null);
       }
-      
+
       toast.success("Chat deleted successfully");
     } catch (err) {
       console.error("Delete error:", err);
@@ -387,29 +419,45 @@ const AIChat = () => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
     if (minutes > 0) return `${minutes}m ${secs}s`;
     return `${secs}s`;
   };
 
   // ================= SUBSCRIBE WITH USD + GHS =================
+  // NOTE: Frontend sends values only as hints. Backend independently
+  // fetches the live exchange rate and computes the final GHS amount.
   const handleSubscribe = async (plan) => {
     if (!plan?._id) return;
-    
+
     try {
       const ghsAmount = convertToGHS(plan.price);
       const rate = exchangeRate || FALLBACK_USD_TO_GHS;
-      
+
+      console.log("💳 [Subscribe] Sending to backend:", {
+        planName: plan.name,
+        priceUSD: plan.price,
+        amountInGHS: ghsAmount,
+        rate,
+      });
+
       const response = await axios.post("/ai-subscriptions", {
         planId: plan._id,
-        // ============== SEND GHS INFO TO BACKEND ==============
+        // Frontend hints (backend may override with server-verified rate)
         amountInGHS: parseFloat(ghsAmount),
         exchangeRate: parseFloat(rate.toFixed(4)),
         priceUSD: parseFloat(plan.price),
         currency: "GHS",
       });
-      
+
+      // Log what backend actually charged
+      if (response.data?.amountChargedGHS) {
+        console.log(
+          `✅ Backend charged GH₵${response.data.amountChargedGHS} (rate: ${response.data.exchangeRateUsed})`
+        );
+      }
+
       if (response.data?.authorization_url) {
         window.location.href = response.data.authorization_url;
       } else if (response.data?.authorizationUrl) {
@@ -419,13 +467,15 @@ const AIChat = () => {
       }
     } catch (err) {
       console.error("Subscription error:", err);
-      toast.error(err.response?.data?.message || "Subscription failed. Try again.");
+      toast.error(
+        err.response?.data?.message || "Subscription failed. Try again."
+      );
     }
   };
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <Toaster 
+      <Toaster
         position="top-right"
         toastOptions={{
           duration: 4000,
@@ -445,8 +495,18 @@ const AIChat = () => {
             className="md:hidden text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
             aria-label="Open menu"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
             </svg>
           </button>
 
@@ -458,7 +518,9 @@ const AIChat = () => {
               <h2 className="font-bold text-slate-900 dark:text-white text-lg">
                 AI Nursing Tutor
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Powered by Advanced AI</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Powered by Advanced AI
+              </p>
             </div>
           </div>
         </div>
@@ -477,7 +539,11 @@ const AIChat = () => {
                 className="p-0.5 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
                 title="Refresh exchange rate"
               >
-                <FaArrowsRotate className={`w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+                <FaArrowsRotate
+                  className={`w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 ${
+                    exchangeRateLoading ? "animate-spin" : ""
+                  }`}
+                />
               </button>
             </div>
           )}
@@ -504,7 +570,9 @@ const AIChat = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FaComments className="text-purple-500" />
-                <span className="font-semibold text-slate-700 dark:text-slate-300">Chat History</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  Chat History
+                </span>
               </div>
               <button
                 onClick={handleNewChat}
@@ -520,8 +588,12 @@ const AIChat = () => {
             {chats.length === 0 && (
               <div className="text-center py-12">
                 <FaComments className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
-                <p className="text-sm text-slate-500 dark:text-slate-400">No chats yet</p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Start a new conversation</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  No chats yet
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                  Start a new conversation
+                </p>
               </div>
             )}
             {chats.map((chat) => (
@@ -550,7 +622,9 @@ const AIChat = () => {
                   </button>
                 </div>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  {chat.updatedAt ? new Date(chat.updatedAt).toLocaleDateString() : "New"}
+                  {chat.updatedAt
+                    ? new Date(chat.updatedAt).toLocaleDateString()
+                    : "New"}
                 </p>
               </div>
             ))}
@@ -560,12 +634,17 @@ const AIChat = () => {
         {/* MOBILE SIDEBAR */}
         {sidebarOpen && (
           <>
-            <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+            <div
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              onClick={() => setSidebarOpen(false)}
+            />
             <div className="fixed left-0 top-0 z-50 w-80 h-full bg-white dark:bg-slate-900 shadow-2xl animate-in slide-in-from-left duration-300">
               <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <FaComments className="text-purple-500" />
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">Chat History</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    Chat History
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -575,7 +654,11 @@ const AIChat = () => {
                   >
                     <FaPlus className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setSidebarOpen(false)} className="p-2 text-slate-500" aria-label="Close menu">
+                  <button
+                    onClick={() => setSidebarOpen(false)}
+                    className="p-2 text-slate-500"
+                    aria-label="Close menu"
+                  >
                     ✕
                   </button>
                 </div>
@@ -614,7 +697,8 @@ const AIChat = () => {
                     Unlock AI Access
                   </h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                    Get personalized AI tutoring and instant answers to your nursing questions
+                    Get personalized AI tutoring and instant answers to your
+                    nursing questions
                   </p>
 
                   {/* Exchange Rate Banner */}
@@ -630,7 +714,11 @@ const AIChat = () => {
                         className="p-0.5 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
                         title="Refresh exchange rate"
                       >
-                        <FaArrowsRotate className={`w-3 h-3 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+                        <FaArrowsRotate
+                          className={`w-3 h-3 text-emerald-600 dark:text-emerald-400 ${
+                            exchangeRateLoading ? "animate-spin" : ""
+                          }`}
+                        />
                       </button>
                     </div>
                   )}
@@ -646,16 +734,22 @@ const AIChat = () => {
                           className="w-full flex flex-col gap-2 px-5 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
                         >
                           <div className="flex items-center justify-between w-full">
-                            <span className="font-semibold text-base">{plan.name}</span>
+                            <span className="font-semibold text-base">
+                              {plan.name}
+                            </span>
                             <div className="flex items-baseline gap-1">
                               <FaDollarSign className="w-3 h-3 opacity-80" />
-                              <span className="text-lg font-bold">{parseFloat(plan.price).toFixed(2)}</span>
+                              <span className="text-lg font-bold">
+                                {parseFloat(plan.price).toFixed(2)}
+                              </span>
                             </div>
                           </div>
                           {/* GHS Conversion Row */}
                           {exchangeRate && priceInGHS > 0 && (
                             <div className="flex items-center justify-between w-full pt-2 border-t border-white/20">
-                              <span className="text-xs opacity-90">You pay</span>
+                              <span className="text-xs opacity-90">
+                                You pay
+                              </span>
                               <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
                                 <FaCediSign className="w-3 h-3" />
                                 <span className="text-sm font-bold">
@@ -672,7 +766,9 @@ const AIChat = () => {
                   {plans.length === 0 && (
                     <div className="text-center py-8">
                       <FaSpinner className="w-6 h-6 text-slate-400 animate-spin mx-auto" />
-                      <p className="text-xs text-slate-400 mt-2">Loading plans...</p>
+                      <p className="text-xs text-slate-400 mt-2">
+                        Loading plans...
+                      </p>
                     </div>
                   )}
                 </div>
@@ -688,12 +784,19 @@ const AIChat = () => {
                   Welcome to AI Nursing Tutor
                 </h3>
                 <p className="text-slate-500 dark:text-slate-400 max-w-md">
-                  Ask me anything about nursing, healthcare, or medical topics. I'm here to help you learn!
+                  Ask me anything about nursing, healthcare, or medical topics.
+                  I'm here to help you learn!
                 </p>
                 <div className="mt-6 flex gap-2 flex-wrap justify-center">
-                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">💊 Pharmacology</span>
-                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">🫀 Anatomy</span>
-                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">📋 NCLEX Prep</span>
+                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">
+                    💊 Pharmacology
+                  </span>
+                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">
+                    🫀 Anatomy
+                  </span>
+                  <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">
+                    📋 NCLEX Prep
+                  </span>
                 </div>
               </div>
             )}
@@ -743,9 +846,18 @@ const AIChat = () => {
                 </div>
                 <div className="bg-white dark:bg-slate-800 rounded-2xl rounded-bl-none px-4 py-3 shadow-md">
                   <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    <div
+                      className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
+                      style={{ animationDelay: "0ms" }}
+                    />
+                    <div
+                      className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
+                      style={{ animationDelay: "150ms" }}
+                    />
+                    <div
+                      className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
+                      style={{ animationDelay: "300ms" }}
+                    />
                   </div>
                 </div>
               </div>
@@ -761,7 +873,9 @@ const AIChat = () => {
                 className="flex-1 h-12 px-5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-base focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all shadow-sm"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !loading && handleAsk()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && !loading && handleAsk()
+                }
                 placeholder="Ask a nursing question..."
                 disabled={!subscription || loading}
               />
@@ -770,7 +884,11 @@ const AIChat = () => {
                 disabled={!subscription || loading || !question.trim()}
                 className="flex-shrink-0 h-12 px-6 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-lg flex items-center gap-2"
               >
-                {loading ? <FaSpinner className="animate-spin" /> : <FaPaperPlane />}
+                {loading ? (
+                  <FaSpinner className="animate-spin" />
+                ) : (
+                  <FaPaperPlane />
+                )}
                 <span className="hidden sm:inline">Send</span>
               </button>
             </div>

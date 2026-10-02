@@ -1,4 +1,4 @@
-// StudentSubjects.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
+// StudentSubjects.jsx - COMPLETE FIXED VERSION (Server-Verified Rate)
 import { useEffect, useState } from "react"; 
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -32,6 +32,11 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
+// ================= CONSTANTS =================
+const FALLBACK_USD_TO_GHS = 15.50;
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
+
 const StudentSubjects = () => {
   const navigate = useNavigate();
   const { search } = useLocation();
@@ -55,14 +60,11 @@ const StudentSubjects = () => {
   const [now, setNow] = useState(new Date());
   const [manualAccess, setManualAccess] = useState([]);
 
-  // Exchange rate state
+  // ================= EXCHANGE RATE STATE =================
   const [exchangeRate, setExchangeRate] = useState(null);
   const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
   const [exchangeRateError, setExchangeRateError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-
-  // Fallback exchange rate
-  const FALLBACK_USD_TO_GHS = 15.50;
 
   // ================= EXCHANGE RATE =================
   useEffect(() => {
@@ -71,40 +73,55 @@ const StudentSubjects = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // ================= FETCH EXCHANGE RATE (FIXED) =================
   const fetchExchangeRate = async () => {
     try {
       setExchangeRateLoading(true);
       setExchangeRateError(null);
 
+      // Removed frankfurter.app (doesn't support GHS)
+      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
-          url: "https://api.exchangerate-api.com/v4/latest/USD",
-          extract: (data) => data.rates?.GHS
-        },
-        {
           url: "https://open.er-api.com/v6/latest/USD",
-          extract: (data) => data.rates?.GHS
+          extract: (data) => data?.rates?.GHS,
         },
         {
-          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
-          extract: (data) => data.rates?.GHS
-        }
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data?.rates?.GHS,
+        },
       ];
 
       let rate = null;
+      let failedApis = [];
 
       for (const api of apis) {
         try {
           const response = await fetch(api.url);
-          if (response.ok) {
-            const data = await response.json();
-            const extractedRate = api.extract(data);
-            if (extractedRate && extractedRate > 0) {
-              rate = extractedRate;
-              break;
-            }
+          if (!response.ok) {
+            failedApis.push(`${api.url} (HTTP ${response.status})`);
+            continue;
+          }
+          const data = await response.json();
+          const extractedRate = api.extract(data);
+
+          console.log(`📡 ${api.url} → GHS = ${extractedRate}`);
+
+          // Range validation — reject garbage values
+          if (
+            extractedRate &&
+            extractedRate >= MIN_REASONABLE_RATE &&
+            extractedRate <= MAX_REASONABLE_RATE
+          ) {
+            rate = extractedRate;
+            break;
+          } else if (extractedRate) {
+            failedApis.push(`${api.url} (rate ${extractedRate} out of range)`);
+          } else {
+            failedApis.push(`${api.url} (no GHS in response)`);
           }
         } catch (err) {
+          failedApis.push(`${api.url} (${err.message})`);
           continue;
         }
       }
@@ -112,13 +129,16 @@ const StudentSubjects = () => {
       if (rate) {
         setExchangeRate(rate);
         setLastUpdated(new Date().toLocaleString());
-        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+        console.log(`✅ Exchange rate loaded: 1 USD = ${rate} GHS`);
       } else {
+        console.warn(
+          `⚠️ All exchange rate APIs failed. Failed: ${failedApis.join(", ")}. Using fallback ${FALLBACK_USD_TO_GHS}`
+        );
         setExchangeRate(FALLBACK_USD_TO_GHS);
         setExchangeRateError("Using fallback rate");
       }
     } catch (err) {
-      console.error("Error fetching exchange rate:", err);
+      console.error("❌ Exchange rate fetch error:", err);
       setExchangeRate(FALLBACK_USD_TO_GHS);
       setExchangeRateError("Using fallback rate");
     } finally {
@@ -143,9 +163,9 @@ const StudentSubjects = () => {
   const formatGHS = (amount) => {
     const num = parseFloat(amount);
     if (isNaN(num)) return "GH₵0.00";
-    return `GH₵${num.toLocaleString('en-US', {
+    return `GH₵${num.toLocaleString("en-US", {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     })}`;
   };
 
@@ -190,16 +210,18 @@ const StudentSubjects = () => {
     try {
       const userRes = await axios.get("/auth/me");
       const userData = userRes.data;
-      
+
       if (userData.programId) {
         setProgramId(userData.programId?._id || userData.programId);
         setProgramName(userData.programId?.name || "");
-        
+
         const programIdValue = userData.programId?._id || userData.programId;
         if (programIdValue) {
-          const coursesRes = await axios.get(`/courses/program/${programIdValue}`);
+          const coursesRes = await axios.get(
+            `/courses/program/${programIdValue}`
+          );
           setUserCourses(coursesRes.data || []);
-          
+
           if (userData.courseId) {
             const userCourseId = userData.courseId?._id || userData.courseId;
             const userCourseName = userData.courseId?.name || "";
@@ -239,7 +261,7 @@ const StudentSubjects = () => {
         }
       }
     };
-    
+
     loadCourse();
   }, [user, search]);
 
@@ -259,7 +281,7 @@ const StudentSubjects = () => {
   // ================= ACCESS LOGIC =================
   const hasActivePlan = () => {
     if (planDeactivated) return false;
-    
+
     return payments.some(
       (p) =>
         p.status === "success" &&
@@ -271,7 +293,7 @@ const StudentSubjects = () => {
 
   const isSubjectUnlocked = (subject) => {
     if (planDeactivated) return false;
-    
+
     if (subject.isUnlocked !== undefined) {
       return subject.isUnlocked;
     }
@@ -312,7 +334,7 @@ const StudentSubjects = () => {
         const res = await axios.get(`/subjects?course=${courseId}`);
         const subjectsData = res.data || [];
         if (planDeactivated) {
-          subjectsData.forEach(s => s.isUnlocked = false);
+          subjectsData.forEach((s) => (s.isUnlocked = false));
         }
         setSubjects(subjectsData);
       } catch (err) {
@@ -352,7 +374,7 @@ const StudentSubjects = () => {
         axios.get(`/subjects?course=${courseId}`).then((res) => {
           const subjectsData = res.data || [];
           if (planDeactivated) {
-            subjectsData.forEach(s => s.isUnlocked = false);
+            subjectsData.forEach((s) => (s.isUnlocked = false));
           }
           setSubjects(subjectsData);
         });
@@ -371,33 +393,48 @@ const StudentSubjects = () => {
 
   // ================= TOGGLE TOPICS =================
   const toggleTopics = (subjectId) => {
-    setExpandedTopics(prev => ({
+    setExpandedTopics((prev) => ({
       ...prev,
-      [subjectId]: !prev[subjectId]
+      [subjectId]: !prev[subjectId],
     }));
   };
 
   // ================= PAYMENT =================
+  // NOTE: Frontend sends values only as hints. Backend independently
+  // fetches the live exchange rate and computes the final GHS amount.
   const handleUnlock = async (subject) => {
     if (planDeactivated) {
       toast.error("Your plan has been deactivated. Please contact support.");
       return;
     }
-    
+
     try {
       setLoading(true);
-      
+
       const ghsAmount = convertToGHS(subject.price);
       const rate = exchangeRate || FALLBACK_USD_TO_GHS;
-      
+
+      console.log("💳 [Subject Unlock] Sending to backend:", {
+        subjectName: subject.name,
+        priceUSD: subject.price,
+        amountInGHS: ghsAmount,
+        rate,
+      });
+
       const res = await axios.post("/payments/initiate", {
         subjectId: subject._id,
         amountInGHS: parseFloat(ghsAmount),
         exchangeRate: parseFloat(rate.toFixed(4)),
         priceUSD: parseFloat(subject.price),
-        currency: "GHS"
+        currency: "GHS",
       });
-      
+
+      if (res.data?.amountChargedGHS) {
+        console.log(
+          `✅ Backend charged GH₵${res.data.amountChargedGHS} (rate: ${res.data.exchangeRateUsed})`
+        );
+      }
+
       if (res.data?.authorizationUrl) {
         window.location.href = res.data.authorizationUrl;
       } else if (res.data?.redirectUrl) {
@@ -407,7 +444,9 @@ const StudentSubjects = () => {
       }
     } catch (err) {
       console.error("Payment error:", err);
-      toast.error(err.response?.data?.message || "Payment failed. Please try again.");
+      toast.error(
+        err.response?.data?.message || "Payment failed. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -422,10 +461,15 @@ const StudentSubjects = () => {
   };
 
   // Calculate stats
-  const unlockedCount = subjects.filter(s => isSubjectUnlocked(s)).length;
-  const lockedCount = subjects.filter(s => !isSubjectUnlocked(s) && s.isPaid).length;
-  const freeCount = subjects.filter(s => !s.isPaid).length;
-  const totalTopics = subjects.reduce((acc, s) => acc + (s.topics?.length || 0), 0);
+  const unlockedCount = subjects.filter((s) => isSubjectUnlocked(s)).length;
+  const lockedCount = subjects.filter(
+    (s) => !isSubjectUnlocked(s) && s.isPaid
+  ).length;
+  const freeCount = subjects.filter((s) => !s.isPaid).length;
+  const totalTopics = subjects.reduce(
+    (acc, s) => acc + (s.topics?.length || 0),
+    0
+  );
 
   // Show course selector when no course is selected
   if (showCourseSelector) {
@@ -452,7 +496,8 @@ const StudentSubjects = () => {
                 No Course Assigned
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-md">
-                You haven't been assigned to any course yet. Please contact your administrator.
+                You haven't been assigned to any course yet. Please contact your
+                administrator.
               </p>
               <button
                 onClick={() => navigate("/student/dashboard")}
@@ -536,8 +581,8 @@ const StudentSubjects = () => {
             Plan Deactivated
           </h2>
           <p className="text-red-700 dark:text-red-500 max-w-md mx-auto">
-            Your subscription plan has been deactivated by an administrator. 
-            You no longer have access to premium content.
+            Your subscription plan has been deactivated by an administrator. You
+            no longer have access to premium content.
           </p>
           <button
             onClick={() => navigate("/student/dashboard")}
@@ -574,7 +619,8 @@ const StudentSubjects = () => {
             Subjects & Topics
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Select a subject to view topics, start learning, practice, or take exams
+            Select a subject to view topics, start learning, practice, or take
+            exams
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -633,7 +679,11 @@ const StudentSubjects = () => {
             className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors disabled:opacity-50"
             title="Refresh exchange rate"
           >
-            <RefreshCw className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${
+                exchangeRateLoading ? "animate-spin" : ""
+              }`}
+            />
           </button>
         </div>
       </div>
@@ -644,7 +694,9 @@ const StudentSubjects = () => {
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Subjects</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Total Subjects
+                </p>
                 <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
                   {subjects.length}
                 </p>
@@ -658,7 +710,9 @@ const StudentSubjects = () => {
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Unlocked</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Unlocked
+                </p>
                 <p className="text-2xl font-semibold text-green-600 dark:text-green-400 mt-1">
                   {unlockedCount}
                 </p>
@@ -672,7 +726,9 @@ const StudentSubjects = () => {
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Locked</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Locked
+                </p>
                 <p className="text-2xl font-semibold text-red-600 dark:text-red-400 mt-1">
                   {lockedCount}
                 </p>
@@ -686,7 +742,9 @@ const StudentSubjects = () => {
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Free Access</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Free Access
+                </p>
                 <p className="text-2xl font-semibold text-yellow-600 dark:text-yellow-400 mt-1">
                   {freeCount}
                 </p>
@@ -703,7 +761,9 @@ const StudentSubjects = () => {
       {fetching && (
         <div className="flex flex-col items-center justify-center py-12">
           <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-          <p className="text-gray-500 dark:text-gray-400 mt-3">Loading subjects...</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-3">
+            Loading subjects...
+          </p>
         </div>
       )}
 
@@ -738,7 +798,7 @@ const StudentSubjects = () => {
             const isExpanded = expandedTopics[subject._id];
             const topicCount = subject.topics?.length || 0;
             const priceInGHS = convertToGHS(subject.price);
-            
+
             return (
               <div
                 key={subject._id}
@@ -776,7 +836,7 @@ const StudentSubjects = () => {
                   {topicCount > 0 && (
                     <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-purple-500 text-white rounded-full shadow-lg whitespace-nowrap">
                       <List className="h-3 w-3" />
-                      {topicCount} {topicCount === 1 ? 'Topic' : 'Topics'}
+                      {topicCount} {topicCount === 1 ? "Topic" : "Topics"}
                     </span>
                   )}
                 </div>
@@ -784,21 +844,29 @@ const StudentSubjects = () => {
                 <div className="p-5 relative z-10 flex-1 flex flex-col">
                   {/* Icon and Title */}
                   <div className="flex items-start gap-3 mb-3 pr-16">
-                    <div className={`flex-shrink-0 ${!unlocked && 'opacity-50'}`}>
-                      <div className={`h-12 w-12 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-300 ${
-                        unlocked 
-                          ? "bg-gradient-to-br from-blue-500 to-purple-600 group-hover:scale-110" 
-                          : "bg-gradient-to-br from-gray-400 to-gray-500"
-                      }`}>
+                    <div className={`flex-shrink-0 ${!unlocked && "opacity-50"}`}>
+                      <div
+                        className={`h-12 w-12 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-300 ${
+                          unlocked
+                            ? "bg-gradient-to-br from-blue-500 to-purple-600 group-hover:scale-110"
+                            : "bg-gradient-to-br from-gray-400 to-gray-500"
+                        }`}
+                      >
                         <GraduationCap className="h-5 w-5 text-white" />
                       </div>
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
-                      <h3 className={`font-semibold text-base leading-tight break-words ${unlocked ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
+                      <h3
+                        className={`font-semibold text-base leading-tight break-words ${
+                          unlocked
+                            ? "text-gray-900 dark:text-gray-100"
+                            : "text-gray-500 dark:text-gray-400"
+                        }`}
+                      >
                         {subject.name}
                       </h3>
-                      
+
                       {/* Price Display with USD → GHS */}
                       {subject.isPaid && (
                         <div className="mt-1.5 space-y-1">
@@ -806,7 +874,7 @@ const StudentSubjects = () => {
                             <CreditCard className="h-3 w-3 flex-shrink-0" />
                             <span>{formatUSD(subject.price)}</span>
                           </p>
-                          {exchangeRate && (
+                          {exchangeRate && priceInGHS > 0 && (
                             <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded">
                               <Banknote className="h-3 w-3 text-green-600 dark:text-green-400" />
                               <span className="text-xs font-bold text-green-700 dark:text-green-400">
@@ -816,10 +884,11 @@ const StudentSubjects = () => {
                           )}
                         </div>
                       )}
-                      
+
                       {topicCount > 0 && (
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                          {topicCount} {topicCount === 1 ? 'topic' : 'topics'} available
+                          {topicCount} {topicCount === 1 ? "topic" : "topics"}{" "}
+                          available
                         </p>
                       )}
                     </div>
@@ -834,9 +903,9 @@ const StudentSubjects = () => {
                           if (unlocked) toggleTopics(subject._id);
                         }}
                         className={`flex items-center gap-1 text-xs font-medium transition-colors ${
-                          unlocked 
-                            ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300' 
-                            : 'text-gray-400 cursor-not-allowed'
+                          unlocked
+                            ? "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                            : "text-gray-400 cursor-not-allowed"
                         }`}
                         disabled={!unlocked}
                       >
@@ -852,11 +921,11 @@ const StudentSubjects = () => {
                           </>
                         )}
                       </button>
-                      
+
                       {isExpanded && unlocked && (
                         <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto">
                           {subject.topics?.map((topic, index) => (
-                            <div 
+                            <div
                               key={topic._id || index}
                               className="flex items-start gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
                             >
@@ -894,7 +963,12 @@ const StudentSubjects = () => {
                           ) : (
                             <>
                               <CreditCard className="h-4 w-4" />
-                              <span>Unlock for {exchangeRate ? formatGHS(priceInGHS) : formatUSD(subject.price)}</span>
+                              <span>
+                                Unlock for{" "}
+                                {exchangeRate && priceInGHS > 0
+                                  ? formatGHS(priceInGHS)
+                                  : formatUSD(subject.price)}
+                              </span>
                             </>
                           )}
                         </button>
@@ -908,7 +982,9 @@ const StudentSubjects = () => {
                       </div>
                     ) : !unlocked && !subject.isPaid ? (
                       <button
-                        onClick={() => navigate(`/student/lessons/${subject._id}`)}
+                        onClick={() =>
+                          navigate(`/student/lessons/${subject._id}`)
+                        }
                         className="w-full py-2.5 rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-medium transition-all flex items-center justify-center gap-2 text-sm"
                       >
                         <Play className="h-4 w-4" />
@@ -917,7 +993,9 @@ const StudentSubjects = () => {
                     ) : (
                       <div className="grid grid-cols-3 gap-2">
                         <button
-                          onClick={() => navigate(`/student/lessons/${subject._id}`)}
+                          onClick={() =>
+                            navigate(`/student/lessons/${subject._id}`)
+                          }
                           className="py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-all flex items-center justify-center gap-1"
                         >
                           <BookOpen className="h-3 w-3" />
@@ -925,14 +1003,22 @@ const StudentSubjects = () => {
                           <span className="sm:hidden">Learn</span>
                         </button>
                         <button
-                          onClick={() => navigate(`/student/exams/${courseId}/${subject._id}`)}
+                          onClick={() =>
+                            navigate(
+                              `/student/exams/${courseId}/${subject._id}`
+                            )
+                          }
                           className="py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-all flex items-center justify-center gap-1"
                         >
                           <Play className="h-3 w-3" />
                           Exam
                         </button>
                         <button
-                          onClick={() => navigate(`/student/trial/${courseId}/${subject._id}`)}
+                          onClick={() =>
+                            navigate(
+                              `/student/trial/${courseId}/${subject._id}`
+                            )
+                          }
                           className="py-1.5 rounded-lg bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 text-white text-xs font-medium transition-all flex items-center justify-center gap-1"
                         >
                           <Zap className="h-3 w-3" />
@@ -961,7 +1047,7 @@ const StudentSubjects = () => {
         <div className="mt-8 rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 p-6 text-white overflow-hidden relative">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-24 -mb-24" />
-          
+
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -970,7 +1056,8 @@ const StudentSubjects = () => {
               <div>
                 <h3 className="text-lg font-semibold">Unlock All Subjects</h3>
                 <p className="text-blue-100 text-sm mt-1">
-                  Get access to all {lockedCount} premium subjects with our subscription plans
+                  Get access to all {lockedCount} premium subjects with our
+                  subscription plans
                 </p>
               </div>
             </div>

@@ -1,4 +1,4 @@
-// StudentLessons.jsx - COMPLETE UPDATED VERSION (USD → GHS Conversion)
+// StudentLessons.jsx - COMPLETE FIXED VERSION (Server-Verified Rate)
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -50,9 +50,12 @@ import {
   Banknote,
 } from "lucide-react";
 
-// ================= CURRENCY FORMATTERS =================
+// ================= CONSTANTS =================
 const FALLBACK_USD_TO_GHS = 15.50;
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
+// ================= CURRENCY FORMATTERS =================
 const formatUSD = (amount) => {
   const num = parseFloat(amount);
   if (isNaN(num)) return "$0.00";
@@ -62,9 +65,9 @@ const formatUSD = (amount) => {
 const formatGHS = (amount) => {
   const num = parseFloat(amount);
   if (isNaN(num)) return "GH₵0.00";
-  return `GH₵${num.toLocaleString('en-US', {
+  return `GH₵${num.toLocaleString("en-US", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 2,
   })}`;
 };
 
@@ -81,7 +84,7 @@ const StudentLessons = () => {
   const [subject, setSubject] = useState(null);
   const [expandedTopics, setExpandedTopics] = useState({});
   const [selectedTopic, setSelectedTopic] = useState(null);
-  const [viewMode, setViewMode] = useState('all');
+  const [viewMode, setViewMode] = useState("all");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pdfScale, setPdfScale] = useState(1);
   const [isPdfLoading, setIsPdfLoading] = useState(true);
@@ -133,41 +136,55 @@ const StudentLessons = () => {
   const [viewerGradientIndex, setViewerGradientIndex] = useState(0);
   const [viewerPatternIndex, setViewerPatternIndex] = useState(0);
 
-  // ================= FETCH EXCHANGE RATE =================
+  // ================= FETCH EXCHANGE RATE (FIXED) =================
   const fetchExchangeRate = async () => {
     try {
       setExchangeRateLoading(true);
       setExchangeRateError(null);
 
+      // Removed frankfurter.app (doesn't support GHS)
+      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
-          url: "https://api.exchangerate-api.com/v4/latest/USD",
-          extract: (data) => data.rates?.GHS
-        },
-        {
           url: "https://open.er-api.com/v6/latest/USD",
-          extract: (data) => data.rates?.GHS
+          extract: (data) => data?.rates?.GHS,
         },
         {
-          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
-          extract: (data) => data.rates?.GHS
-        }
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data?.rates?.GHS,
+        },
       ];
 
       let rate = null;
+      let failedApis = [];
 
       for (const api of apis) {
         try {
           const response = await fetch(api.url);
-          if (response.ok) {
-            const data = await response.json();
-            const extractedRate = api.extract(data);
-            if (extractedRate && extractedRate > 0) {
-              rate = extractedRate;
-              break;
-            }
+          if (!response.ok) {
+            failedApis.push(`${api.url} (HTTP ${response.status})`);
+            continue;
+          }
+          const data = await response.json();
+          const extractedRate = api.extract(data);
+
+          console.log(`📡 ${api.url} → GHS = ${extractedRate}`);
+
+          // Range validation — reject garbage values
+          if (
+            extractedRate &&
+            extractedRate >= MIN_REASONABLE_RATE &&
+            extractedRate <= MAX_REASONABLE_RATE
+          ) {
+            rate = extractedRate;
+            break;
+          } else if (extractedRate) {
+            failedApis.push(`${api.url} (rate ${extractedRate} out of range)`);
+          } else {
+            failedApis.push(`${api.url} (no GHS in response)`);
           }
         } catch (err) {
+          failedApis.push(`${api.url} (${err.message})`);
           continue;
         }
       }
@@ -175,13 +192,16 @@ const StudentLessons = () => {
       if (rate) {
         setExchangeRate(rate);
         setLastUpdated(new Date().toLocaleString());
-        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+        console.log(`✅ Exchange rate loaded: 1 USD = ${rate} GHS`);
       } else {
+        console.warn(
+          `⚠️ All exchange rate APIs failed. Failed: ${failedApis.join(", ")}. Using fallback ${FALLBACK_USD_TO_GHS}`
+        );
         setExchangeRate(FALLBACK_USD_TO_GHS);
         setExchangeRateError("Using fallback rate");
       }
     } catch (err) {
-      console.error("Error fetching exchange rate:", err);
+      console.error("❌ Exchange rate fetch error:", err);
       setExchangeRate(FALLBACK_USD_TO_GHS);
       setExchangeRateError("Using fallback rate");
     } finally {
@@ -212,7 +232,9 @@ const StudentLessons = () => {
         setUserPlanStatus(res.data);
         if (res.data.planDeactivatedByAdmin) {
           setPlanDeactivated(true);
-          toast.error("Your plan has been deactivated by an administrator. Premium content is locked.");
+          toast.error(
+            "Your plan has been deactivated by an administrator. Premium content is locked."
+          );
         }
       } catch (err) {
         console.error("Error checking plan status:", err);
@@ -255,15 +277,17 @@ const StudentLessons = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const res = await axios.get(`/content?subjectId=${subjectId}`);
       const contentsData = res.data;
-      
+
       const unlockedIds = [];
       for (const content of contentsData) {
         if (content.isPaid) {
           try {
-            const accessRes = await axios.get(`/content-payments/check/${content._id}`);
+            const accessRes = await axios.get(
+              `/content-payments/check/${content._id}`
+            );
             if (accessRes.data.hasAccess) {
               unlockedIds.push(content._id);
             }
@@ -273,22 +297,26 @@ const StudentLessons = () => {
         }
       }
       setUnlockedContents(unlockedIds);
-      
+
       // If plan is deactivated, lock all paid content
-      const contentsWithUnlockStatus = contentsData.map(content => ({
+      const contentsWithUnlockStatus = contentsData.map((content) => ({
         ...content,
-        isUnlocked: planDeactivated ? false : (!content.isPaid || unlockedIds.includes(content._id))
+        isUnlocked: planDeactivated
+          ? false
+          : !content.isPaid || unlockedIds.includes(content._id),
       }));
-      
+
       setContents(contentsWithUnlockStatus);
-      
+
       const quizStatus = {};
       for (const lesson of contentsWithUnlockStatus) {
         if (lesson.type === "quiz") {
           quizStatus[lesson._id] = true;
         } else {
           try {
-            const quizRes = await axios.get(`/lesson-quiz/lesson/${lesson._id}`);
+            const quizRes = await axios.get(
+              `/lesson-quiz/lesson/${lesson._id}`
+            );
             const hasQuiz = quizRes.data && quizRes.data.length > 0;
             quizStatus[lesson._id] = hasQuiz;
           } catch (err) {
@@ -297,7 +325,6 @@ const StudentLessons = () => {
         }
       }
       setLessonQuizzes(quizStatus);
-      
     } catch (err) {
       console.error("Error fetching contents:", err);
       setError("Failed to load lessons. Please try again later.");
@@ -317,20 +344,20 @@ const StudentLessons = () => {
   }, [subjectId, planDeactivated]);
 
   const toggleTopics = () => {
-    setExpandedTopics(prev => ({
+    setExpandedTopics((prev) => ({
       ...prev,
-      [subjectId]: !prev[subjectId]
+      [subjectId]: !prev[subjectId],
     }));
   };
 
   const filterByTopic = (topicId) => {
     setSelectedTopic(topicId === selectedTopic ? null : topicId);
-    setViewMode(topicId === selectedTopic ? 'all' : 'topic');
+    setViewMode(topicId === selectedTopic ? "all" : "topic");
   };
 
   const getFilteredContents = () => {
-    if (selectedTopic && viewMode === 'topic') {
-      return contents.filter(c => c.topicId === selectedTopic);
+    if (selectedTopic && viewMode === "topic") {
+      return contents.filter((c) => c.topicId === selectedTopic);
     }
     return contents;
   };
@@ -339,50 +366,61 @@ const StudentLessons = () => {
 
   useEffect(() => {
     const checkRecentPayment = async () => {
-      const reference = localStorage.getItem('pending_payment_reference');
+      const reference = localStorage.getItem("pending_payment_reference");
       if (reference) {
         console.log("Recent payment detected, waiting for verification");
       }
     };
-    
+
     checkRecentPayment();
   }, []);
 
   useEffect(() => {
     const checkPaymentCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search);
-      const reference = urlParams.get('reference');
-      const contentId = urlParams.get('contentId');
-      const sessionId = localStorage.getItem('payment_session_id');
-      
+      const reference = urlParams.get("reference");
+      const contentId = urlParams.get("contentId");
+      const sessionId = localStorage.getItem("payment_session_id");
+
       if (reference) {
         setProcessingPayment(true);
         toast.loading("Verifying payment...", { id: "payment-verification" });
-        
+
         try {
           const verifyRes = await axios.post("/content-payments/verify", {
             reference: reference,
             contentId: contentId || sessionId,
           });
-          
+
           if (verifyRes.data.success) {
-            toast.success("Payment verified! Content unlocked.", { id: "payment-verification" });
+            toast.success("Payment verified! Content unlocked.", {
+              id: "payment-verification",
+            });
             await fetchContentsAndQuizzes();
           } else {
-            toast.error("Payment verification failed. Please contact support.", { id: "payment-verification" });
+            toast.error(
+              "Payment verification failed. Please contact support.",
+              { id: "payment-verification" }
+            );
           }
         } catch (err) {
           console.error("Payment verification error:", err);
-          toast.error("Failed to verify payment. Please contact support.", { id: "payment-verification" });
+          toast.error("Failed to verify payment. Please contact support.", {
+            id: "payment-verification",
+          });
         } finally {
           setProcessingPayment(false);
-          window.history.replaceState({}, document.title, window.location.pathname);
-          localStorage.removeItem('payment_session_id');
-          localStorage.removeItem('current_subject_id');
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname
+          );
+          localStorage.removeItem("payment_session_id");
+          localStorage.removeItem("current_subject_id");
         }
       }
     };
-    
+
     checkPaymentCallback();
   }, []);
 
@@ -411,8 +449,12 @@ const StudentLessons = () => {
         triggerBlur(3000);
         toast.error("⚠️ Screenshot is blocked", { position: "top-center" });
       }
-      if ((e.ctrlKey && ["s", "u", "c", "p"].includes(e.key.toLowerCase())) ||
-          (e.ctrlKey && e.shiftKey && ["i", "j", "c"].includes(e.key.toLowerCase()))) {
+      if (
+        (e.ctrlKey && ["s", "u", "c", "p"].includes(e.key.toLowerCase())) ||
+        (e.ctrlKey &&
+          e.shiftKey &&
+          ["i", "j", "c"].includes(e.key.toLowerCase()))
+      ) {
         e.preventDefault();
         triggerBlur(2000);
         toast.error("⚠️ Action not allowed", { position: "top-center" });
@@ -426,8 +468,10 @@ const StudentLessons = () => {
     const detectDevTools = () => {
       if (!getViewer()) return;
       const threshold = 160;
-      if (window.outerWidth - window.innerWidth > threshold ||
-          window.outerHeight - window.innerHeight > threshold) {
+      if (
+        window.outerWidth - window.innerWidth > threshold ||
+        window.outerHeight - window.innerHeight > threshold
+      ) {
         triggerBlur(5000);
       }
     };
@@ -447,20 +491,29 @@ const StudentLessons = () => {
   }, [viewer.open]);
 
   // ================= UNLOCK CONTENT (SEND GHS AMOUNT) =================
+  // NOTE: Frontend sends values only as hints. Backend independently
+  // fetches the live exchange rate and computes the final GHS amount.
   const handleUnlock = async (c) => {
     if (planDeactivated) {
       toast.error("Your plan has been deactivated. Please contact support.");
       return;
     }
-    
+
     try {
-      localStorage.setItem('current_subject_id', subjectId);
-      localStorage.setItem('current_content_id', c._id);
-      localStorage.setItem('current_content_title', c.title);
-      
+      localStorage.setItem("current_subject_id", subjectId);
+      localStorage.setItem("current_content_id", c._id);
+      localStorage.setItem("current_content_title", c.title);
+
       const ghsAmount = convertToGHS(c.price);
       const rate = exchangeRate || FALLBACK_USD_TO_GHS;
-      
+
+      console.log("💳 [Content Unlock] Sending to backend:", {
+        contentTitle: c.title,
+        priceUSD: c.price,
+        amountInGHS: ghsAmount,
+        rate,
+      });
+
       const res = await axios.post("/content-payments/initiate", {
         contentId: c._id,
         // ============== USD + GHS PAYLOAD ==============
@@ -469,20 +522,33 @@ const StudentLessons = () => {
         priceUSD: parseFloat(c.price),
         currency: "GHS",
       });
-      
+
+      // Log what backend actually charged
+      if (res.data?.amountChargedGHS) {
+        console.log(
+          `✅ Backend charged GH₵${res.data.amountChargedGHS} (rate: ${res.data.exchangeRateUsed})`
+        );
+      }
+
       if (res.data.authorizationUrl) {
         if (res.data.reference) {
-          localStorage.setItem('pending_payment_reference', res.data.reference);
+          localStorage.setItem(
+            "pending_payment_reference",
+            res.data.reference
+          );
         }
         window.location.href = res.data.authorizationUrl;
       }
     } catch (err) {
       console.error(err);
-      toast.error("Payment failed: " + (err.response?.data?.message || "Please try again"));
-      localStorage.removeItem('current_subject_id');
-      localStorage.removeItem('current_content_id');
-      localStorage.removeItem('current_content_title');
-      localStorage.removeItem('pending_payment_reference');
+      toast.error(
+        "Payment failed: " +
+          (err.response?.data?.message || "Please try again")
+      );
+      localStorage.removeItem("current_subject_id");
+      localStorage.removeItem("current_content_id");
+      localStorage.removeItem("current_content_title");
+      localStorage.removeItem("pending_payment_reference");
     }
   };
 
@@ -491,22 +557,22 @@ const StudentLessons = () => {
       toast.error("Your plan has been deactivated. Premium content is locked.");
       return;
     }
-    
+
     if (c.isPaid && !c.isUnlocked) {
       toast.error("This content is locked. Please purchase to unlock.");
       return;
     }
-    
+
     if (c.type === "quiz") {
       navigate(`/student/lessons/${c._id}/quiz`);
       return;
     }
-    
+
     setPdfScale(1);
     setIsPdfLoading(true);
     setPdfError(false);
     setShowPdfControls(true);
-    
+
     setViewer({
       open: true,
       type: c.type,
@@ -548,7 +614,7 @@ const StudentLessons = () => {
   };
 
   const zoomIn = () => {
-    setPdfScale(prev => Math.min(prev + 0.2, 3));
+    setPdfScale((prev) => Math.min(prev + 0.2, 3));
     setShowPdfControls(true);
     clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => {
@@ -557,7 +623,7 @@ const StudentLessons = () => {
   };
 
   const zoomOut = () => {
-    setPdfScale(prev => Math.max(prev - 0.2, 0.5));
+    setPdfScale((prev) => Math.max(prev - 0.2, 0.5));
     setShowPdfControls(true);
     clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => {
@@ -575,7 +641,7 @@ const StudentLessons = () => {
   };
 
   const toggleControls = () => {
-    setShowPdfControls(prev => !prev);
+    setShowPdfControls((prev) => !prev);
     if (showPdfControls) {
       clearTimeout(controlsTimeoutRef.current);
       controlsTimeoutRef.current = setTimeout(() => {
@@ -585,28 +651,40 @@ const StudentLessons = () => {
   };
 
   const getTypeIcon = (type) => {
-    switch(type) {
-      case "video": return <Video className="h-5 w-5" />;
-      case "pdf": return <FileText className="h-5 w-5" />;
-      case "image": return <Image className="h-5 w-5" />;
-      case "quiz": return <FileQuestion className="h-5 w-5" />;
-      default: return <BookOpen className="h-5 w-5" />;
+    switch (type) {
+      case "video":
+        return <Video className="h-5 w-5" />;
+      case "pdf":
+        return <FileText className="h-5 w-5" />;
+      case "image":
+        return <Image className="h-5 w-5" />;
+      case "quiz":
+        return <FileQuestion className="h-5 w-5" />;
+      default:
+        return <BookOpen className="h-5 w-5" />;
     }
   };
 
   const getTypeColor = (type) => {
-    switch(type) {
-      case "video": return "from-blue-500 to-cyan-600";
-      case "pdf": return "from-red-500 to-rose-600";
-      case "image": return "from-green-500 to-emerald-600";
-      case "quiz": return "from-purple-500 to-indigo-600";
-      default: return "from-gray-500 to-gray-600";
+    switch (type) {
+      case "video":
+        return "from-blue-500 to-cyan-600";
+      case "pdf":
+        return "from-red-500 to-rose-600";
+      case "image":
+        return "from-green-500 to-emerald-600";
+      case "quiz":
+        return "from-purple-500 to-indigo-600";
+      default:
+        return "from-gray-500 to-gray-600";
     }
   };
 
-  const unlockedCount = contents.filter(c => c.isUnlocked).length;
-  const lockedCount = contents.filter(c => c.isPaid && !c.isUnlocked).length;
-  const freeCount = contents.filter(c => !c.isPaid).length;
+  const unlockedCount = contents.filter((c) => c.isUnlocked).length;
+  const lockedCount = contents.filter(
+    (c) => c.isPaid && !c.isUnlocked
+  ).length;
+  const freeCount = contents.filter((c) => !c.isPaid).length;
   const topics = subject?.topics || [];
   const totalTopics = topics.length;
 
@@ -631,7 +709,10 @@ const StudentLessons = () => {
             <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded mb-8" />
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm overflow-hidden">
+                <div
+                  key={i}
+                  className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm overflow-hidden"
+                >
                   <div className="h-44 bg-gray-200 dark:bg-gray-800" />
                   <div className="p-4 space-y-3">
                     <div className="h-5 bg-gray-200 dark:bg-gray-800 rounded w-3/4" />
@@ -653,7 +734,9 @@ const StudentLessons = () => {
           <div className="h-20 w-20 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center mb-4">
             <AlertCircle className="h-10 w-10 text-red-600 dark:text-red-400" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Error</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Error
+          </h2>
           <p className="text-gray-500 dark:text-gray-400 mt-2">{error}</p>
           <button
             onClick={() => window.location.reload()}
@@ -680,8 +763,8 @@ const StudentLessons = () => {
         <div className="relative container mx-auto px-4 py-8">
           {/* Breadcrumb Navigation */}
           <nav className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-6">
-            <button 
-              onClick={() => navigate('/student/subjects')} 
+            <button
+              onClick={() => navigate("/student/subjects")}
               className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm"
             >
               <Home className="h-3.5 w-3.5" />
@@ -701,8 +784,8 @@ const StudentLessons = () => {
                 Plan Deactivated
               </h3>
               <p className="text-red-700 dark:text-red-500 text-sm max-w-md mx-auto">
-                Your subscription plan has been deactivated. Premium content is locked. 
-                Please contact support for assistance.
+                Your subscription plan has been deactivated. Premium content is
+                locked. Please contact support for assistance.
               </p>
               <button
                 onClick={() => navigate("/student/dashboard")}
@@ -742,7 +825,11 @@ const StudentLessons = () => {
                 className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors disabled:opacity-50"
                 title="Refresh exchange rate"
               >
-                <RefreshCw className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${
+                    exchangeRateLoading ? "animate-spin" : ""
+                  }`}
+                />
               </button>
             </div>
           </div>
@@ -755,13 +842,15 @@ const StudentLessons = () => {
                 <Sparkles className="h-6 w-6 text-yellow-500" />
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
-                <span>Access videos, documents, and quizzes for this subject</span>
+                <span>
+                  Access videos, documents, and quizzes for this subject
+                </span>
                 {totalTopics > 0 && (
                   <>
                     <span className="text-gray-300 dark:text-gray-600">•</span>
                     <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
                       <List className="h-3 w-3" />
-                      {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'}
+                      {totalTopics} {totalTopics === 1 ? "topic" : "topics"}
                     </span>
                   </>
                 )}
@@ -796,7 +885,9 @@ const StudentLessons = () => {
             <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Items</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Total Items
+                  </p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
                     {contents.length}
                   </p>
@@ -810,7 +901,9 @@ const StudentLessons = () => {
             <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Unlocked</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Unlocked
+                  </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
                     {unlockedCount}
                   </p>
@@ -824,7 +917,9 @@ const StudentLessons = () => {
             <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Locked</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Locked
+                  </p>
                   <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
                     {lockedCount}
                   </p>
@@ -838,7 +933,9 @@ const StudentLessons = () => {
             <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Free Access</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Free Access
+                  </p>
                   <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">
                     {freeCount}
                   </p>
@@ -866,12 +963,15 @@ const StudentLessons = () => {
                       Topics in this Subject
                     </h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {totalTopics} {totalTopics === 1 ? 'topic' : 'topics'} • Click to explore
+                      {totalTopics} {totalTopics === 1 ? "topic" : "topics"} •
+                      Click to explore
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                  <span className="text-sm">{expandedTopics[subjectId] ? 'Hide' : 'Show'}</span>
+                  <span className="text-sm">
+                    {expandedTopics[subjectId] ? "Hide" : "Show"}
+                  </span>
                   {expandedTopics[subjectId] ? (
                     <ChevronUp className="h-4 w-4" />
                   ) : (
@@ -879,31 +979,43 @@ const StudentLessons = () => {
                   )}
                 </div>
               </button>
-              
+
               {expandedTopics[subjectId] && (
                 <div className="px-6 pb-6 pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {topics.map((topic) => {
-                      const topicContentCount = contents.filter(c => c.topicId === topic._id).length;
+                      const topicContentCount = contents.filter(
+                        (c) => c.topicId === topic._id
+                      ).length;
                       const isActive = selectedTopic === topic._id;
-                      
+
                       return (
-                        <div 
-                          key={topic._id} 
+                        <div
+                          key={topic._id}
                           onClick={() => filterByTopic(topic._id)}
                           className={`flex items-start gap-3 p-4 rounded-xl transition-all duration-200 cursor-pointer ${
                             isActive
-                              ? 'bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/30 border-2 border-purple-400 dark:border-purple-600 shadow-lg shadow-purple-500/10'
-                              : 'bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600'
+                              ? "bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/40 dark:to-purple-900/30 border-2 border-purple-400 dark:border-purple-600 shadow-lg shadow-purple-500/10"
+                              : "bg-gray-50/50 dark:bg-gray-800/30 hover:bg-gray-100/50 dark:hover:bg-gray-700/50 border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600"
                           }`}
                         >
                           <div className="flex-shrink-0 mt-1">
-                            <div className={`h-3 w-3 rounded-full ${isActive ? 'bg-purple-600 shadow-lg shadow-purple-500/50' : 'bg-purple-400'}`} />
+                            <div
+                              className={`h-3 w-3 rounded-full ${
+                                isActive
+                                  ? "bg-purple-600 shadow-lg shadow-purple-500/50"
+                                  : "bg-purple-400"
+                              }`}
+                            />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-semibold break-words ${
-                              isActive ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-300'
-                            }`}>
+                            <p
+                              className={`text-sm font-semibold break-words ${
+                                isActive
+                                  ? "text-purple-700 dark:text-purple-400"
+                                  : "text-gray-700 dark:text-gray-300"
+                              }`}
+                            >
                               {topic.name}
                             </p>
                             {topic.description && (
@@ -912,12 +1024,15 @@ const StudentLessons = () => {
                               </p>
                             )}
                             <div className="flex items-center gap-2 mt-2">
-                              <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                                isActive 
-                                  ? 'bg-purple-200 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400'
-                                  : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                              }`}>
-                                {topicContentCount} item{topicContentCount !== 1 ? 's' : ''}
+                              <span
+                                className={`text-xs px-3 py-1 rounded-full font-medium ${
+                                  isActive
+                                    ? "bg-purple-200 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400"
+                                    : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                                }`}
+                              >
+                                {topicContentCount} item
+                                {topicContentCount !== 1 ? "s" : ""}
                               </span>
                               {isActive && (
                                 <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold flex items-center gap-1">
@@ -947,12 +1062,17 @@ const StudentLessons = () => {
                   <BookOpen className="h-10 w-10 text-gray-400" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                  {selectedTopic ? 'No Content in this Topic' : 'No Lessons Available'}
+                  {selectedTopic
+                    ? "No Content in this Topic"
+                    : "No Lessons Available"}
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400 max-w-md">
-                  {selectedTopic 
-                    ? `There are no learning materials in "${topics.find(t => t._id === selectedTopic)?.name || 'this topic'}" yet.`
-                    : 'Check back later for new content!'}
+                  {selectedTopic
+                    ? `There are no learning materials in "${
+                        topics.find((t) => t._id === selectedTopic)?.name ||
+                        "this topic"
+                      }" yet.`
+                    : "Check back later for new content!"}
                 </p>
                 {selectedTopic && (
                   <button
@@ -972,9 +1092,11 @@ const StudentLessons = () => {
                 const hasQuiz = lessonQuizzes[content._id];
                 const isUnlocked = planDeactivated ? false : content.isUnlocked;
                 const isPaid = content.isPaid;
-                const topicName = topics.find(t => t._id === content.topicId)?.name;
+                const topicName = topics.find(
+                  (t) => t._id === content.topicId
+                )?.name;
                 const priceInGHS = convertToGHS(content.price);
-                
+
                 return (
                   <div
                     key={content._id}
@@ -988,19 +1110,30 @@ const StudentLessons = () => {
                     }`}
                   >
                     {/* Thumbnail */}
-                    <div className={`relative h-48 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
+                    <div
+                      className={`relative h-48 w-full bg-gradient-to-br ${getTypeColor(
+                        content.type
+                      )}`}
+                    >
                       {content.type === "quiz" ? (
                         <div className="w-full h-full flex flex-col items-center justify-center">
                           <HelpCircle className="text-white/80 text-6xl mb-3" />
-                          <span className="text-white font-semibold text-sm">Interactive Quiz</span>
+                          <span className="text-white font-semibold text-sm">
+                            Interactive Quiz
+                          </span>
                         </div>
                       ) : (
                         <>
                           <img
-                            src={content.thumbnailUrl || "/api/placeholder/400/200"}
+                            src={
+                              content.thumbnailUrl ||
+                              "/api/placeholder/400/200"
+                            }
                             className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-500"
                             alt={content.title}
-                            onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
+                            onError={(e) => {
+                              e.target.src = "/api/placeholder/400/200";
+                            }}
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <Eye className="h-14 w-14 text-white drop-shadow-2xl" />
@@ -1050,7 +1183,9 @@ const StudentLessons = () => {
                       {isPaid && !isUnlocked && (
                         <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center px-4">
                           <Lock className="h-12 w-12 text-white mb-3 drop-shadow-2xl" />
-                          <p className="text-white text-sm font-semibold mb-1">Premium Content</p>
+                          <p className="text-white text-sm font-semibold mb-1">
+                            Premium Content
+                          </p>
                           {/* Show both currencies in overlay */}
                           <div className="flex flex-col items-center gap-1 mb-3">
                             <p className="text-white/90 text-xs">
@@ -1069,15 +1204,12 @@ const StudentLessons = () => {
                             }}
                             disabled={planDeactivated}
                             className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all shadow-xl hover:shadow-2xl ${
-                              planDeactivated 
-                                ? "bg-gray-500 cursor-not-allowed text-white" 
+                              planDeactivated
+                                ? "bg-gray-500 cursor-not-allowed text-white"
                                 : "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-purple-500/25"
                             }`}
                           >
-                            {planDeactivated 
-                              ? "Locked" 
-                              : `Unlock Now`
-                            }
+                            {planDeactivated ? "Locked" : `Unlock Now`}
                           </button>
                         </div>
                       )}
@@ -1085,11 +1217,13 @@ const StudentLessons = () => {
 
                     {/* Content Info */}
                     <div className="p-5">
-                      <h3 className={`font-semibold text-base line-clamp-2 mb-2 transition-colors ${
-                        isUnlocked 
-                          ? "text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400" 
-                          : "text-gray-500 dark:text-gray-400"
-                      }`}>
+                      <h3
+                        className={`font-semibold text-base line-clamp-2 mb-2 transition-colors ${
+                          isUnlocked
+                            ? "text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400"
+                            : "text-gray-500 dark:text-gray-400"
+                        }`}
+                      >
                         {content.title}
                       </h3>
 
@@ -1097,26 +1231,38 @@ const StudentLessons = () => {
                         <User className="h-3.5 w-3.5" />
                         <span>By: {content.lecturerName || "Admin"}</span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200/50 dark:border-gray-700/50 flex-wrap">
                         <Clock className="h-3.5 w-3.5" />
                         <span>Self-paced</span>
                         {hasQuiz && content.type !== "quiz" && (
                           <>
-                            <span className="text-gray-300 dark:text-gray-600">•</span>
-                            <span className="text-green-600 dark:text-green-400 font-medium">Includes assessment</span>
+                            <span className="text-gray-300 dark:text-gray-600">
+                              •
+                            </span>
+                            <span className="text-green-600 dark:text-green-400 font-medium">
+                              Includes assessment
+                            </span>
                           </>
                         )}
                         {isUnlocked && isPaid && (
                           <>
-                            <span className="text-gray-300 dark:text-gray-600">•</span>
-                            <span className="text-green-600 dark:text-green-400 font-medium">Unlocked</span>
+                            <span className="text-gray-300 dark:text-gray-600">
+                              •
+                            </span>
+                            <span className="text-green-600 dark:text-green-400 font-medium">
+                              Unlocked
+                            </span>
                           </>
                         )}
                         {planDeactivated && isPaid && (
                           <>
-                            <span className="text-gray-300 dark:text-gray-600">•</span>
-                            <span className="text-red-600 dark:text-red-400 font-medium">Locked</span>
+                            <span className="text-gray-300 dark:text-gray-600">
+                              •
+                            </span>
+                            <span className="text-red-600 dark:text-red-400 font-medium">
+                              Locked
+                            </span>
                           </>
                         )}
                       </div>
@@ -1131,24 +1277,26 @@ const StudentLessons = () => {
 
       {/* Secure Viewer Modal */}
       {viewer.open && (
-        <div 
-          id="secure-viewer" 
+        <div
+          id="secure-viewer"
           className="fixed inset-0 z-50 flex flex-col"
           onContextMenu={(e) => e.preventDefault()}
           onClick={viewer.type === "pdf" ? toggleControls : undefined}
         >
           {/* Animated Gradient Background */}
-          <div className={`absolute inset-0 ${viewerGradients[viewerGradientIndex]} transition-all duration-1000 ease-in-out`}>
-            <div 
+          <div
+            className={`absolute inset-0 ${viewerGradients[viewerGradientIndex]} transition-all duration-1000 ease-in-out`}
+          >
+            <div
               className="absolute inset-0 opacity-30 transition-all duration-1000"
               style={{ backgroundImage: viewerPatterns[viewerPatternIndex] }}
             ></div>
-            
+
             <div className="absolute inset-0 overflow-hidden">
               <div className="absolute -top-40 -right-40 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
               <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl animate-pulse delay-2000"></div>
-              
+
               <div className="absolute inset-0">
                 <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-white/20 rounded-full animate-float"></div>
                 <div className="absolute top-3/4 left-1/3 w-3 h-3 bg-white/15 rounded-full animate-float-delay"></div>
@@ -1162,7 +1310,11 @@ const StudentLessons = () => {
           <div className="relative z-10 flex flex-col gap-2 p-3 text-white bg-black/50 backdrop-blur-lg flex-shrink-0 border-b border-white/10">
             <div className="flex items-start gap-2 w-full">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-purple-500/25">
-                {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                {viewer.type === "video" ? (
+                  <PlayCircle className="h-4 w-4" />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-sm sm:text-base md:text-lg text-white drop-shadow-lg break-words leading-tight whitespace-normal w-full">
@@ -1170,7 +1322,7 @@ const StudentLessons = () => {
                 </h3>
               </div>
             </div>
-            
+
             <div className="flex gap-1 justify-end w-full">
               {lessonQuizzes[viewer.lessonId] && viewer.type !== "quiz" && (
                 <button
@@ -1181,8 +1333,8 @@ const StudentLessons = () => {
                   <span className="hidden sm:inline">Take Quiz</span>
                 </button>
               )}
-              <button 
-                onClick={closeViewer} 
+              <button
+                onClick={closeViewer}
                 className="p-2 rounded-lg hover:bg-white/20 transition-colors flex-shrink-0"
               >
                 <X className="h-5 w-5" />
@@ -1199,7 +1351,9 @@ const StudentLessons = () => {
                     <div className="absolute inset-0 bg-blue-500/30 blur-2xl rounded-full animate-pulse"></div>
                     <Loader2 className="h-12 w-12 text-blue-400 animate-spin relative z-10" />
                   </div>
-                  <p className="text-white/80 text-sm font-medium drop-shadow-lg">Loading document...</p>
+                  <p className="text-white/80 text-sm font-medium drop-shadow-lg">
+                    Loading document...
+                  </p>
                 </div>
               </div>
             )}
@@ -1211,15 +1365,18 @@ const StudentLessons = () => {
                     <div className="absolute inset-0 bg-red-500/30 blur-2xl rounded-full animate-pulse"></div>
                     <AlertCircle className="h-16 w-16 text-red-400 relative z-10" />
                   </div>
-                  <h3 className="text-white font-semibold text-lg drop-shadow-lg">Unable to Load PDF</h3>
+                  <h3 className="text-white font-semibold text-lg drop-shadow-lg">
+                    Unable to Load PDF
+                  </h3>
                   <p className="text-white/70 text-sm drop-shadow">
-                    The document couldn't be loaded. Please try again or contact support.
+                    The document couldn't be loaded. Please try again or
+                    contact support.
                   </p>
                   <button
                     onClick={() => {
                       setIsPdfLoading(true);
                       setPdfError(false);
-                      const iframe = document.querySelector('#pdf-viewer');
+                      const iframe = document.querySelector("#pdf-viewer");
                       if (iframe) {
                         iframe.src = iframe.src;
                       }
@@ -1257,20 +1414,22 @@ const StudentLessons = () => {
             )}
 
             {viewer.type === "pdf" && (
-              <div 
+              <div
                 ref={pdfContainerRef}
                 className="w-full h-full flex items-center justify-center"
                 style={{
                   transform: `scale(${pdfScale})`,
-                  transformOrigin: 'center center',
-                  transition: 'transform 0.2s ease',
-                  maxWidth: '100%',
-                  maxHeight: '100%',
+                  transformOrigin: "center center",
+                  transition: "transform 0.2s ease",
+                  maxWidth: "100%",
+                  maxHeight: "100%",
                 }}
               >
                 <iframe
                   id="pdf-viewer"
-                  src={`https://docs.google.com/gview?url=${encodeURIComponent(viewer.url)}&embedded=true`}
+                  src={`https://docs.google.com/gview?url=${encodeURIComponent(
+                    viewer.url
+                  )}&embedded=true`}
                   title={viewer.title}
                   className="w-full h-full min-h-[400px] sm:min-h-[500px] rounded-2xl shadow-2xl bg-white border-2 border-white/10 backdrop-blur-sm"
                   onContextMenu={(e) => e.preventDefault()}
@@ -1278,11 +1437,11 @@ const StudentLessons = () => {
                   onLoad={handlePdfLoad}
                   onError={handlePdfError}
                   style={{
-                    width: '100%',
-                    height: '100%',
-                    minHeight: '500px',
-                    border: 'none',
-                    touchAction: 'pinch-zoom'
+                    width: "100%",
+                    height: "100%",
+                    minHeight: "500px",
+                    border: "none",
+                    touchAction: "pinch-zoom",
                   }}
                 />
               </div>
@@ -1291,48 +1450,66 @@ const StudentLessons = () => {
 
           {/* PDF Controls */}
           {viewer.type === "pdf" && (
-            <div 
+            <div
               className={`relative z-30 transition-all duration-300 ${
-                showPdfControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+                showPdfControls
+                  ? "opacity-100 translate-y-0"
+                  : "opacity-0 translate-y-4 pointer-events-none"
               }`}
             >
               <div className="flex items-center gap-2 bg-black/80 backdrop-blur-lg rounded-full px-4 py-2.5 border border-white/20 shadow-2xl mx-auto mb-4 w-fit">
                 <button
-                  onClick={(e) => { e.stopPropagation(); zoomOut(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    zoomOut();
+                  }}
                   className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
                   title="Zoom Out"
                 >
                   <ZoomOut className="h-5 w-5" />
                 </button>
-                
+
                 <span className="text-white text-sm font-mono min-w-[50px] text-center font-medium">
                   {Math.round(pdfScale * 100)}%
                 </span>
-                
+
                 <button
-                  onClick={(e) => { e.stopPropagation(); zoomIn(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    zoomIn();
+                  }}
                   className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
                   title="Zoom In"
                 >
                   <ZoomIn className="h-5 w-5" />
                 </button>
-                
+
                 <div className="w-px h-6 bg-white/20" />
-                
+
                 <button
-                  onClick={(e) => { e.stopPropagation(); resetZoom(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resetZoom();
+                  }}
                   className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
                   title="Reset Zoom"
                 >
                   <Move className="h-5 w-5" />
                 </button>
-                
+
                 <button
-                  onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
                   className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
                   title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
                 >
-                  {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                  {isFullscreen ? (
+                    <Minimize2 className="h-5 w-5" />
+                  ) : (
+                    <Maximize2 className="h-5 w-5" />
+                  )}
                 </button>
               </div>
             </div>
@@ -1340,9 +1517,11 @@ const StudentLessons = () => {
 
           {/* Mobile Instructions */}
           {viewer.type === "pdf" && (
-            <div className={`relative z-10 flex-shrink-0 p-2 text-center text-white/60 text-xs border-t border-white/10 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
-              showPdfControls ? 'opacity-100' : 'opacity-0'
-            }`}>
+            <div
+              className={`relative z-10 flex-shrink-0 p-2 text-center text-white/60 text-xs border-t border-white/10 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
+                showPdfControls ? "opacity-100" : "opacity-0"
+              }`}
+            >
               <span className="flex items-center justify-center gap-2 drop-shadow-lg">
                 <ZoomIn className="h-3 w-3" />
                 Tap screen to show/hide controls • Pinch to zoom
@@ -1356,7 +1535,11 @@ const StudentLessons = () => {
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-8 rotate-[-30deg]">
                 {[...Array(9)].map((_, i) => (
-                  <p key={i} className="text-white/10 text-base sm:text-lg font-bold whitespace-nowrap drop-shadow-2xl" style={{ textShadow: '0 0 20px rgba(255,255,255,0.1)' }}>
+                  <p
+                    key={i}
+                    className="text-white/10 text-base sm:text-lg font-bold whitespace-nowrap drop-shadow-2xl"
+                    style={{ textShadow: "0 0 20px rgba(255,255,255,0.1)" }}
+                  >
                     PROTECTED • ALVEOLY
                   </p>
                 ))}

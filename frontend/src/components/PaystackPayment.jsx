@@ -1,8 +1,13 @@
-// components/PaystackPayment.jsx - COMPLETE UPDATED VERSION (GHS Conversion)
+// components/PaystackPayment.jsx - COMPLETE FIXED VERSION (Server-Verified Rate)
 import React, { useState, useEffect } from "react";
 import { FaSpinner, FaLock, FaDollarSign } from "react-icons/fa";
 import axios from "../api/axios";
 import toast from "react-hot-toast";
+
+// ================= CONSTANTS =================
+const FALLBACK_USD_TO_GHS = 15.50;
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
 const PaystackPayment = ({ 
   plan, 
@@ -15,13 +20,14 @@ const PaystackPayment = ({
   const [rateLoading, setRateLoading] = useState(false);
   const [rateError, setRateError] = useState(null);
 
-  // Fallback exchange rate
-  const FALLBACK_USD_TO_GHS = 15.50;
-
-  // Fetch exchange rate if not provided as prop
+  // ================= FETCH EXCHANGE RATE (FIXED) =================
+  // Only fetches if not provided as prop — parents already fetch and pass it.
   useEffect(() => {
     if (!propExchangeRate) {
       fetchExchangeRate();
+    } else {
+      // Ensure state stays in sync if prop changes
+      setExchangeRate(propExchangeRate);
     }
   }, [propExchangeRate]);
 
@@ -30,47 +36,65 @@ const PaystackPayment = ({
       setRateLoading(true);
       setRateError(null);
 
+      // Removed frankfurter.app (doesn't support GHS)
+      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
-          url: "https://api.exchangerate-api.com/v4/latest/USD",
-          extract: (data) => data.rates?.GHS
-        },
-        {
           url: "https://open.er-api.com/v6/latest/USD",
-          extract: (data) => data.rates?.GHS
+          extract: (data) => data?.rates?.GHS,
         },
         {
-          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
-          extract: (data) => data.rates?.GHS
-        }
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data?.rates?.GHS,
+        },
       ];
 
       let rate = null;
+      let failedApis = [];
 
       for (const api of apis) {
         try {
           const response = await fetch(api.url);
-          if (response.ok) {
-            const data = await response.json();
-            const extractedRate = api.extract(data);
-            if (extractedRate && extractedRate > 0) {
-              rate = extractedRate;
-              break;
-            }
+          if (!response.ok) {
+            failedApis.push(`${api.url} (HTTP ${response.status})`);
+            continue;
+          }
+          const data = await response.json();
+          const extractedRate = api.extract(data);
+
+          console.log(`📡 [PaystackPayment] ${api.url} → GHS = ${extractedRate}`);
+
+          // Range validation — reject garbage values
+          if (
+            extractedRate &&
+            extractedRate >= MIN_REASONABLE_RATE &&
+            extractedRate <= MAX_REASONABLE_RATE
+          ) {
+            rate = extractedRate;
+            break;
+          } else if (extractedRate) {
+            failedApis.push(`${api.url} (rate ${extractedRate} out of range)`);
+          } else {
+            failedApis.push(`${api.url} (no GHS in response)`);
           }
         } catch (err) {
+          failedApis.push(`${api.url} (${err.message})`);
           continue;
         }
       }
 
       if (rate) {
         setExchangeRate(rate);
+        console.log(`✅ [PaystackPayment] Exchange rate loaded: 1 USD = ${rate} GHS`);
       } else {
+        console.warn(
+          `⚠️ [PaystackPayment] All exchange rate APIs failed. Failed: ${failedApis.join(", ")}. Using fallback ${FALLBACK_USD_TO_GHS}`
+        );
         setExchangeRate(FALLBACK_USD_TO_GHS);
         setRateError("Using fallback rate");
       }
     } catch (err) {
-      console.error("Error fetching exchange rate:", err);
+      console.error("❌ [PaystackPayment] Exchange rate fetch error:", err);
       setExchangeRate(FALLBACK_USD_TO_GHS);
       setRateError("Using fallback rate");
     } finally {
@@ -78,36 +102,36 @@ const PaystackPayment = ({
     }
   };
 
-  // Calculate GHS amount
+  // ================= CALCULATE GHS AMOUNT =================
   const calculateGHSAmount = () => {
-    // If amountInGHS provided directly, use it
-    if (propAmountInGHS) {
+    // Priority 1: Direct GHS amount from parent (most trusted)
+    if (propAmountInGHS && parseFloat(propAmountInGHS) > 0) {
       return parseFloat(propAmountInGHS);
     }
-    
-    // Otherwise convert from USD
+
+    // Priority 2: Convert from USD using current rate
     const usdPrice = parseFloat(plan?.price) || 0;
     const rate = exchangeRate || FALLBACK_USD_TO_GHS;
     return usdPrice * rate;
   };
 
-  // Format GHS for display
+  // ================= FORMATTERS =================
   const formatGHS = (amount) => {
     const num = parseFloat(amount);
     if (isNaN(num)) return "GH₵0.00";
-    return `GH₵${num.toLocaleString('en-US', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
+    return `GH₵${num.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     })}`;
   };
 
-  // Format USD for display
   const formatUSD = (amount) => {
     const num = parseFloat(amount);
     if (isNaN(num)) return "$0.00";
     return `$${num.toFixed(2)}`;
   };
 
+  // ================= HANDLE PAYMENT =================
   const handlePayment = async () => {
     try {
       setLoading(true);
@@ -118,20 +142,37 @@ const PaystackPayment = ({
       // Validate amount
       if (ghsAmount <= 0) {
         toast.error("Invalid payment amount");
+        setLoading(false);
         return;
       }
 
-      // Send payment initiation with both USD and GHS info
+      console.log("💳 [PaystackPayment] Sending to backend:", {
+        planName: plan?.title || plan?.name,
+        priceUSD: plan?.price,
+        amountInGHS: ghsAmount,
+        rate,
+      });
+
+      // Send payment initiation with both USD and GHS info.
+      // NOTE: Backend will independently verify with its own live rate,
+      // so these values are hints — the backend decides the final charge.
       const res = await axios.post("/payments/initiate-plan", {
         planId: plan._id,
-        // Send the GHS amount for accurate charging
+        // Send the GHS amount for reference
         amountInGHS: parseFloat(ghsAmount.toFixed(2)),
         // Send exchange rate used for record keeping
         exchangeRate: parseFloat(rate.toFixed(4)),
         // Send USD price for reference
         priceUSD: parseFloat(plan.price),
-        currency: "GHS"
+        currency: "GHS",
       });
+
+      // Log what backend actually charged
+      if (res.data?.amountChargedGHS) {
+        console.log(
+          `✅ [PaystackPayment] Backend charged GH₵${res.data.amountChargedGHS} (rate: ${res.data.exchangeRateUsed})`
+        );
+      }
 
       // Check if we got an authorization URL
       if (res.data.authorizationUrl) {
@@ -141,14 +182,13 @@ const PaystackPayment = ({
         window.location.href = res.data.redirectUrl;
       } else {
         toast.error(res.data.message || "Failed to initiate payment");
+        setLoading(false);
       }
     } catch (err) {
       console.error("Payment error:", err);
       toast.error(
-        err.response?.data?.message || 
-        "Payment failed: Please try again"
+        err.response?.data?.message || "Payment failed: Please try again"
       );
-    } finally {
       setLoading(false);
     }
   };
@@ -166,11 +206,13 @@ const PaystackPayment = ({
             {formatUSD(plan?.price)}
           </span>
         </div>
-        
+
         {exchangeRate && (
           <>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">Exchange Rate</span>
+              <span className="text-gray-500 dark:text-gray-400">
+                Exchange Rate
+              </span>
               <span className="font-medium text-gray-600 dark:text-gray-300">
                 1 USD = {exchangeRate.toFixed(2)} GHS
               </span>
@@ -185,7 +227,7 @@ const PaystackPayment = ({
             </div>
           </>
         )}
-        
+
         {rateError && (
           <p className="text-xs text-amber-500 text-center pt-1">
             ⚠ {rateError}
@@ -217,7 +259,7 @@ const PaystackPayment = ({
       {/* Secure note */}
       <p className="text-xs text-center text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1">
         <FaLock className="h-3 w-3" />
-        Secure payment powered by Paystack
+        Secure payment powered by Paystack • Charged in GHS
       </p>
     </div>
   );

@@ -1,4 +1,4 @@
-// AdminContent.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
+// AdminContent.jsx - COMPLETE FIXED VERSION (Server-Verified Rate)
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -44,6 +44,8 @@ import {
 
 // ================= CONSTANTS =================
 const FALLBACK_USD_TO_GHS = 15.50;
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
 // ================= HELPER: CURRENCY FORMATTERS =================
 const formatUSD = (amount) => {
@@ -55,9 +57,9 @@ const formatUSD = (amount) => {
 const formatGHS = (amount) => {
   const num = parseFloat(amount);
   if (isNaN(num)) return "GH₵0.00";
-  return `GH₵${num.toLocaleString('en-US', {
+  return `GH₵${num.toLocaleString("en-US", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 2,
   })}`;
 };
 
@@ -65,7 +67,9 @@ const formatGHS = (amount) => {
 const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [timerMinutes, setTimerMinutes] = useState(content?.quizTimerMinutes || 0);
+  const [timerMinutes, setTimerMinutes] = useState(
+    content?.quizTimerMinutes || 0
+  );
   const [passMark, setPassMark] = useState(content?.quizPassMark || 70);
   const [editingIndex, setEditingIndex] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState({
@@ -118,7 +122,9 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
       points: questionToEdit.points || 1,
     });
     setEditingIndex(index);
-    document.getElementById('question-form')?.scrollIntoView({ behavior: 'smooth' });
+    document
+      .getElementById("question-form")
+      ?.scrollIntoView({ behavior: "smooth" });
   };
 
   const addOrUpdateQuestion = () => {
@@ -126,7 +132,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
       toast.error("Please enter a question");
       return;
     }
-    if (currentQuestion.options.some(opt => !opt.trim())) {
+    if (currentQuestion.options.some((opt) => !opt.trim())) {
       toast.error("Please fill all options");
       return;
     }
@@ -151,7 +157,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
       setQuestions([...questions, { ...currentQuestion, id: Date.now() }]);
       toast.success("Question added successfully!");
     }
-    
+
     resetForm();
   };
 
@@ -175,7 +181,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
 
     setLoading(true);
     try {
-      const formattedQuestions = questions.map(q => ({
+      const formattedQuestions = questions.map((q) => ({
         question: q.question,
         options: q.options,
         correctAnswer: q.correctAnswer,
@@ -195,13 +201,17 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
         timerMinutes: timerMinutes,
       });
 
-      toast.success(`✅ Saved ${questions.length} questions for "${content.title}"!`);
+      toast.success(
+        `✅ Saved ${questions.length} questions for "${content.title}"!`
+      );
       onSave?.();
       if (refreshContents) refreshContents();
       onClose();
     } catch (err) {
       console.error("Save error:", err);
-      toast.error("Failed to save quiz: " + (err.response?.data?.message || err.message));
+      toast.error(
+        "Failed to save quiz: " + (err.response?.data?.message || err.message)
+      );
     } finally {
       setLoading(false);
     }
@@ -214,12 +224,17 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
       <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-6 flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Quiz Editor: {content?.title}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              Quiz Editor: {content?.title}
+            </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               {questions.length} question(s) | Total Points: {totalPoints}
             </p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -260,7 +275,11 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
                 <input
                   type="number"
                   value={passMark}
-                  onChange={(e) => setPassMark(Math.min(100, Math.max(0, parseInt(e.target.value) || 70)))}
+                  onChange={(e) =>
+                    setPassMark(
+                      Math.min(100, Math.max(0, parseInt(e.target.value) || 70))
+                    )
+                  }
                   className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   min="0"
                   max="100"
@@ -270,15 +289,27 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
           </div>
 
           {/* Question Form */}
-          <div id="question-form" className="bg-gray-50 dark:bg-gray-800/30 rounded-xl p-5">
+          <div
+            id="question-form"
+            className="bg-gray-50 dark:bg-gray-800/30 rounded-xl p-5"
+          >
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-              {editingIndex !== null ? <Edit className="h-5 w-5 text-yellow-500" /> : <Plus className="h-5 w-5 text-blue-500" />}
+              {editingIndex !== null ? (
+                <Edit className="h-5 w-5 text-yellow-500" />
+              ) : (
+                <Plus className="h-5 w-5 text-blue-500" />
+              )}
               {editingIndex !== null ? "Edit Question" : "Add New Question"}
             </h3>
-            
+
             <textarea
               value={currentQuestion.question}
-              onChange={(e) => setCurrentQuestion({ ...currentQuestion, question: e.target.value })}
+              onChange={(e) =>
+                setCurrentQuestion({
+                  ...currentQuestion,
+                  question: e.target.value,
+                })
+              }
               placeholder="Enter your question here..."
               rows={2}
               className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none mb-3"
@@ -295,7 +326,10 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
                     onChange={(e) => {
                       const newOpts = [...currentQuestion.options];
                       newOpts[idx] = e.target.value;
-                      setCurrentQuestion({ ...currentQuestion, options: newOpts });
+                      setCurrentQuestion({
+                        ...currentQuestion,
+                        options: newOpts,
+                      });
                     }}
                     placeholder={`Option ${String.fromCharCode(65 + idx)}`}
                     className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -307,7 +341,12 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
             <div className="grid md:grid-cols-2 gap-3 mb-3">
               <select
                 value={currentQuestion.correctAnswer}
-                onChange={(e) => setCurrentQuestion({ ...currentQuestion, correctAnswer: e.target.value })}
+                onChange={(e) =>
+                  setCurrentQuestion({
+                    ...currentQuestion,
+                    correctAnswer: e.target.value,
+                  })
+                }
                 className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               >
                 <option value="">Select Correct Answer</option>
@@ -321,7 +360,12 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
               <input
                 type="number"
                 value={currentQuestion.points}
-                onChange={(e) => setCurrentQuestion({ ...currentQuestion, points: parseInt(e.target.value) || 1 })}
+                onChange={(e) =>
+                  setCurrentQuestion({
+                    ...currentQuestion,
+                    points: parseInt(e.target.value) || 1,
+                  })
+                }
                 placeholder="Points"
                 className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 min="1"
@@ -330,7 +374,12 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
 
             <textarea
               value={currentQuestion.rationale}
-              onChange={(e) => setCurrentQuestion({ ...currentQuestion, rationale: e.target.value })}
+              onChange={(e) =>
+                setCurrentQuestion({
+                  ...currentQuestion,
+                  rationale: e.target.value,
+                })
+              }
               placeholder="Rationale (explanation for correct answer)"
               rows={2}
               className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none mb-3"
@@ -340,15 +389,19 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
               <button
                 onClick={addOrUpdateQuestion}
                 className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
-                  editingIndex !== null 
-                    ? "bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700" 
+                  editingIndex !== null
+                    ? "bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700"
                     : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
                 } text-white shadow-lg`}
               >
-                {editingIndex !== null ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {editingIndex !== null ? (
+                  <Save className="h-4 w-4" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
                 {editingIndex !== null ? "Update Question" : "Add Question"}
               </button>
-              
+
               {editingIndex !== null && (
                 <button
                   onClick={resetForm}
@@ -363,34 +416,58 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
           {/* Questions List */}
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Questions List</h3>
-              <span className="text-sm text-gray-500 dark:text-gray-400">Total Points: {totalPoints}</span>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                Questions List
+              </h3>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                Total Points: {totalPoints}
+              </span>
             </div>
-            
+
             {questions.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
                 <HelpCircle className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-500 dark:text-gray-400">No questions added yet</p>
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Add your first question above</p>
+                <p className="text-gray-500 dark:text-gray-400">
+                  No questions added yet
+                </p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                  Add your first question above
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
                 {questions.map((q, idx) => (
-                  <div key={idx} className="border border-gray-200 dark:border-gray-800 rounded-xl p-4 hover:shadow-md transition-all">
+                  <div
+                    key={idx}
+                    className="border border-gray-200 dark:border-gray-800 rounded-xl p-4 hover:shadow-md transition-all"
+                  >
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <span className="font-bold text-lg text-gray-900 dark:text-gray-100">{idx + 1}.</span>
-                          <span className="font-medium text-gray-800 dark:text-gray-200">{q.question}</span>
+                          <span className="font-bold text-lg text-gray-900 dark:text-gray-100">
+                            {idx + 1}.
+                          </span>
+                          <span className="font-medium text-gray-800 dark:text-gray-200">
+                            {q.question}
+                          </span>
                           <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-full text-gray-600 dark:text-gray-400">
-                            {q.points || 1} pt{(q.points || 1) !== 1 ? 's' : ''}
+                            {q.points || 1} pt
+                            {(q.points || 1) !== 1 ? "s" : ""}
                           </span>
                         </div>
                         <div className="ml-6 space-y-1">
                           {q.options.map((opt, i) => (
-                            <p key={i} className={`text-sm ${String.fromCharCode(65 + i) === q.correctAnswer ? "text-green-600 dark:text-green-400 font-semibold" : "text-gray-600 dark:text-gray-400"}`}>
+                            <p
+                              key={i}
+                              className={`text-sm ${
+                                String.fromCharCode(65 + i) === q.correctAnswer
+                                  ? "text-green-600 dark:text-green-400 font-semibold"
+                                  : "text-gray-600 dark:text-gray-400"
+                              }`}
+                            >
                               {String.fromCharCode(65 + i)}. {opt}
-                              {String.fromCharCode(65 + i) === q.correctAnswer && " ✓"}
+                              {String.fromCharCode(65 + i) === q.correctAnswer &&
+                                " ✓"}
                             </p>
                           ))}
                         </div>
@@ -425,7 +502,10 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
         </div>
 
         <div className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 p-4 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-all"
+          >
             Cancel
           </button>
           <button
@@ -433,8 +513,14 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
             disabled={loading || questions.length === 0}
             className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {loading ? "Saving..." : `Save Quiz (${questions.length} questions)`}
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {loading
+              ? "Saving..."
+              : `Save Quiz (${questions.length} questions)`}
           </button>
         </div>
       </div>
@@ -443,29 +529,34 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
 };
 
 // ================= CONTENT CARD COMPONENT =================
-const ContentCard = ({ 
-  content, 
-  onView, 
-  onEdit, 
-  onDelete, 
-  getTypeIcon, 
-  getTypeColor, 
+const ContentCard = ({
+  content,
+  onView,
+  onEdit,
+  onDelete,
+  getTypeIcon,
+  getTypeColor,
   getTopicName,
   onAddQuiz,
-  exchangeRate 
+  exchangeRate,
 }) => {
   const subjectId = content.subjectId?._id || content.subjectId;
-  const priceInGHS = exchangeRate && content.price
-    ? (parseFloat(content.price) * exchangeRate).toFixed(2)
-    : null;
-  
+  const priceInGHS =
+    exchangeRate && content.price
+      ? (parseFloat(content.price) * exchangeRate).toFixed(2)
+      : null;
+
   return (
     <div
       onClick={() => onView(content)}
       className="group cursor-pointer rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
     >
       {/* Thumbnail */}
-      <div className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(content.type)}`}>
+      <div
+        className={`relative h-44 w-full bg-gradient-to-br ${getTypeColor(
+          content.type
+        )}`}
+      >
         {content.type === "quiz" ? (
           <div className="w-full h-full flex flex-col items-center justify-center">
             <HelpCircle className="text-white/80 text-5xl mb-2" />
@@ -477,7 +568,9 @@ const ContentCard = ({
               src={content.thumbnailUrl || "/api/placeholder/400/200"}
               className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
               alt={content.title}
-              onError={(e) => { e.target.src = "/api/placeholder/400/200"; }}
+              onError={(e) => {
+                e.target.src = "/api/placeholder/400/200";
+              }}
             />
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <Eye className="h-12 w-12 text-white" />
@@ -500,8 +593,7 @@ const ContentCard = ({
             </div>
             {priceInGHS && (
               <div className="px-2 py-0.5 bg-green-600 rounded-lg text-white text-[10px] font-semibold flex items-center gap-1 shadow-lg">
-                <Banknote className="h-2.5 w-2.5" />
-                ≈ {formatGHS(priceInGHS)}
+                <Banknote className="h-2.5 w-2.5" />≈ {formatGHS(priceInGHS)}
               </div>
             )}
           </div>
@@ -513,7 +605,7 @@ const ContentCard = ({
         <h3 className="font-semibold text-gray-900 dark:text-gray-100 line-clamp-2 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
           {content.title}
         </h3>
-        
+
         {/* Meta Info */}
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3 flex-wrap">
           <span className="capitalize">{content.type}</span>
@@ -578,23 +670,23 @@ const AdminContent = () => {
   const [subjects, setSubjects] = useState([]);
   const [contents, setContents] = useState([]);
   const [loading, setLoading] = useState(false);
-  
+
   // UI state
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showQuizEditor, setShowQuizEditor] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [file, setFile] = useState(null);
-  
+
   // Navigation state - hierarchical browsing
   const [navigation, setNavigation] = useState({
-    view: 'subjects',
+    view: "subjects",
     programId: null,
     courseId: null,
     subjectId: null,
     topicId: null,
   });
-  
+
   // Expanded state for UI
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [expandedTopics, setExpandedTopics] = useState({});
@@ -626,41 +718,55 @@ const AdminContent = () => {
     title: "",
   });
 
-  // ================= FETCH EXCHANGE RATE =================
+  // ================= FETCH EXCHANGE RATE (FIXED) =================
   const fetchExchangeRate = async () => {
     try {
       setExchangeRateLoading(true);
       setExchangeRateError(null);
 
+      // Removed frankfurter.app (doesn't support GHS)
+      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
-          url: "https://api.exchangerate-api.com/v4/latest/USD",
-          extract: (data) => data.rates?.GHS
-        },
-        {
           url: "https://open.er-api.com/v6/latest/USD",
-          extract: (data) => data.rates?.GHS
+          extract: (data) => data?.rates?.GHS,
         },
         {
-          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
-          extract: (data) => data.rates?.GHS
-        }
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data?.rates?.GHS,
+        },
       ];
 
       let rate = null;
+      let failedApis = [];
 
       for (const api of apis) {
         try {
           const response = await fetch(api.url);
-          if (response.ok) {
-            const data = await response.json();
-            const extractedRate = api.extract(data);
-            if (extractedRate && extractedRate > 0) {
-              rate = extractedRate;
-              break;
-            }
+          if (!response.ok) {
+            failedApis.push(`${api.url} (HTTP ${response.status})`);
+            continue;
+          }
+          const data = await response.json();
+          const extractedRate = api.extract(data);
+
+          console.log(`📡 ${api.url} → GHS = ${extractedRate}`);
+
+          // Range validation — reject garbage values
+          if (
+            extractedRate &&
+            extractedRate >= MIN_REASONABLE_RATE &&
+            extractedRate <= MAX_REASONABLE_RATE
+          ) {
+            rate = extractedRate;
+            break;
+          } else if (extractedRate) {
+            failedApis.push(`${api.url} (rate ${extractedRate} out of range)`);
+          } else {
+            failedApis.push(`${api.url} (no GHS in response)`);
           }
         } catch (err) {
+          failedApis.push(`${api.url} (${err.message})`);
           continue;
         }
       }
@@ -668,13 +774,16 @@ const AdminContent = () => {
       if (rate) {
         setExchangeRate(rate);
         setLastUpdated(new Date().toLocaleString());
-        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+        console.log(`✅ Exchange rate loaded: 1 USD = ${rate} GHS`);
       } else {
+        console.warn(
+          `⚠️ All exchange rate APIs failed. Failed: ${failedApis.join(", ")}. Using fallback ${FALLBACK_USD_TO_GHS}`
+        );
         setExchangeRate(FALLBACK_USD_TO_GHS);
         setExchangeRateError("Using fallback rate");
       }
     } catch (err) {
-      console.error("Error fetching exchange rate:", err);
+      console.error("❌ Exchange rate fetch error:", err);
       setExchangeRate(FALLBACK_USD_TO_GHS);
       setExchangeRateError("Using fallback rate");
     } finally {
@@ -729,40 +838,40 @@ const AdminContent = () => {
 
   // ================= NAVIGATION HELPERS =================
   const getProgramName = (id) => {
-    const program = programs.find(p => p._id === id);
+    const program = programs.find((p) => p._id === id);
     return program?.name || "Unknown Program";
   };
 
   const getCourseName = (id) => {
-    const course = courses.find(c => c._id === id);
+    const course = courses.find((c) => c._id === id);
     return course?.name || "Unknown Course";
   };
 
   const getSubjectName = (id) => {
-    const subject = subjects.find(s => s._id === id);
+    const subject = subjects.find((s) => s._id === id);
     return subject?.name || "Unknown Subject";
   };
 
   const getTopicName = (subjectId, topicId) => {
-    const subject = subjects.find(s => s._id === subjectId);
-    const topic = subject?.topics?.find(t => t._id === topicId);
+    const subject = subjects.find((s) => s._id === subjectId);
+    const topic = subject?.topics?.find((t) => t._id === topicId);
     return topic?.name || "Unknown Topic";
   };
 
   const getSubjectTopics = (subjectId) => {
-    const subject = subjects.find(s => s._id === subjectId);
+    const subject = subjects.find((s) => s._id === subjectId);
     return subject?.topics || [];
   };
 
   const getContentsForTopic = (subjectId, topicId) => {
-    return contents.filter(c => {
+    return contents.filter((c) => {
       const contentSubjectId = c.subjectId?._id || c.subjectId;
       return contentSubjectId === subjectId && c.topicId === topicId;
     });
   };
 
   const getContentsForSubject = (subjectId) => {
-    return contents.filter(c => {
+    return contents.filter((c) => {
       const contentSubjectId = c.subjectId?._id || c.subjectId;
       return contentSubjectId === subjectId;
     });
@@ -771,7 +880,7 @@ const AdminContent = () => {
   // ================= NAVIGATION ACTIONS =================
   const navigateToSubjects = () => {
     setNavigation({
-      view: 'subjects',
+      view: "subjects",
       programId: null,
       courseId: null,
       subjectId: null,
@@ -781,7 +890,7 @@ const AdminContent = () => {
 
   const navigateToTopics = (subjectId) => {
     setNavigation({
-      view: 'topics',
+      view: "topics",
       programId: navigation.programId,
       courseId: navigation.courseId,
       subjectId: subjectId,
@@ -791,7 +900,7 @@ const AdminContent = () => {
 
   const navigateToContent = (subjectId, topicId = null) => {
     setNavigation({
-      view: 'content',
+      view: "content",
       programId: navigation.programId,
       courseId: navigation.courseId,
       subjectId: subjectId,
@@ -801,7 +910,13 @@ const AdminContent = () => {
 
   // ================= FORM HANDLING =================
   const handleProgramChange = async (programId) => {
-    setForm(prev => ({ ...prev, programId, courseId: "", subjectId: "", topicId: "" }));
+    setForm((prev) => ({
+      ...prev,
+      programId,
+      courseId: "",
+      subjectId: "",
+      topicId: "",
+    }));
     if (programId) {
       try {
         const res = await axios.get(`/courses/program/${programId}`);
@@ -817,22 +932,22 @@ const AdminContent = () => {
 
   const extractId = (value) => {
     if (!value) return null;
-    if (typeof value === 'string') return value;
-    if (typeof value === 'object' && value._id) return value._id;
+    if (typeof value === "string") return value;
+    if (typeof value === "object" && value._id) return value._id;
     return value;
   };
 
   const toggleSubjectExpanded = (subjectId) => {
-    setExpandedSubjects(prev => ({
+    setExpandedSubjects((prev) => ({
       ...prev,
-      [subjectId]: !prev[subjectId]
+      [subjectId]: !prev[subjectId],
     }));
   };
 
   const toggleTopicExpanded = (topicId) => {
-    setExpandedTopics(prev => ({
+    setExpandedTopics((prev) => ({
       ...prev,
-      [topicId]: !prev[topicId]
+      [topicId]: !prev[topicId],
     }));
   };
 
@@ -862,11 +977,11 @@ const AdminContent = () => {
     const formData = new FormData();
     formData.append("title", form.title);
     formData.append("type", form.type);
-    
+
     if (file && form.type !== "quiz") {
       formData.append("file", file);
     }
-    
+
     if (form.thumbnail) formData.append("thumbnail", form.thumbnail);
 
     // Add subject and topic
@@ -877,7 +992,7 @@ const AdminContent = () => {
     }
 
     // Get course from subject
-    const selectedSubject = subjects.find(s => s._id === form.subjectId);
+    const selectedSubject = subjects.find((s) => s._id === form.subjectId);
     if (selectedSubject && selectedSubject.courseId) {
       const courseIdValue = extractId(selectedSubject.courseId);
       formData.append("courseId", courseIdValue);
@@ -894,9 +1009,12 @@ const AdminContent = () => {
     const priceGHS = form.isPaid ? parseFloat(convertToGHS(priceUSD)) : 0;
 
     formData.append("isPaid", form.isPaid);
-    formData.append("price", priceUSD);              // ← USD price
-    formData.append("priceInGHS", priceGHS);         // ← GHS equivalent
-    formData.append("exchangeRateAtCreation", exchangeRate || FALLBACK_USD_TO_GHS);  // ← Rate used
+    formData.append("price", priceUSD); // ← USD price
+    formData.append("priceInGHS", priceGHS); // ← GHS equivalent
+    formData.append(
+      "exchangeRateAtCreation",
+      exchangeRate || FALLBACK_USD_TO_GHS
+    ); // ← Rate used
 
     if (form.type === "quiz") {
       formData.append("quizTimerMinutes", "0");
@@ -909,7 +1027,9 @@ const AdminContent = () => {
         res = await axios.put(`/content/${editingId}`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-        setContents((prev) => prev.map((c) => (c._id === editingId ? res.data : c)));
+        setContents((prev) =>
+          prev.map((c) => (c._id === editingId ? res.data : c))
+        );
         toast.success("Content updated");
       } else {
         res = await axios.post("/content/upload", formData, {
@@ -929,7 +1049,9 @@ const AdminContent = () => {
       }
     } catch (err) {
       console.error("Upload error:", err);
-      toast.error("Operation failed: " + (err.response?.data?.message || err.message));
+      toast.error(
+        "Operation failed: " + (err.response?.data?.message || err.message)
+      );
     } finally {
       setLoading(false);
     }
@@ -954,7 +1076,12 @@ const AdminContent = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this content? This action cannot be undone.")) return;
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this content? This action cannot be undone."
+      )
+    )
+      return;
     try {
       await axios.delete(`/content/${id}`);
       setContents((prev) => prev.filter((c) => c._id !== id));
@@ -969,8 +1096,8 @@ const AdminContent = () => {
   const handleEdit = (content) => {
     setEditingId(content._id);
     const subjectId = content.subjectId?._id || content.subjectId;
-    const subject = subjects.find(s => s._id === subjectId);
-    
+    const subject = subjects.find((s) => s._id === subjectId);
+
     setForm({
       title: content.title,
       type: content.type,
@@ -982,15 +1109,15 @@ const AdminContent = () => {
       price: content.price,
       thumbnail: null,
     });
-    
+
     if (subject?.programId) {
       const programId = subject.programId._id || subject.programId;
       handleProgramChange(programId);
     }
-    
+
     setFile(null);
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const openViewer = (c) => {
@@ -1013,31 +1140,41 @@ const AdminContent = () => {
 
   // ================= UI HELPERS =================
   const getTypeIcon = (type) => {
-    switch(type) {
-      case "video": return <Video className="h-4 w-4" />;
-      case "pdf": return <FileText className="h-4 w-4" />;
-      case "image": return <Image className="h-4 w-4" />;
-      case "quiz": return <HelpCircle className="h-4 w-4" />;
-      default: return <File className="h-4 w-4" />;
+    switch (type) {
+      case "video":
+        return <Video className="h-4 w-4" />;
+      case "pdf":
+        return <FileText className="h-4 w-4" />;
+      case "image":
+        return <Image className="h-4 w-4" />;
+      case "quiz":
+        return <HelpCircle className="h-4 w-4" />;
+      default:
+        return <File className="h-4 w-4" />;
     }
   };
 
   const getTypeColor = (type) => {
-    switch(type) {
-      case "video": return "from-blue-500 to-cyan-600";
-      case "pdf": return "from-red-500 to-rose-600";
-      case "image": return "from-green-500 to-emerald-600";
-      case "quiz": return "from-purple-500 to-indigo-600";
-      default: return "from-gray-500 to-gray-600";
+    switch (type) {
+      case "video":
+        return "from-blue-500 to-cyan-600";
+      case "pdf":
+        return "from-red-500 to-rose-600";
+      case "image":
+        return "from-green-500 to-emerald-600";
+      case "quiz":
+        return "from-purple-500 to-indigo-600";
+      default:
+        return "from-gray-500 to-gray-600";
     }
   };
 
   // ================= RENDER FUNCTIONS =================
-  
+
   // Render subjects view
   const renderSubjectsView = () => {
-    const subjectsWithContent = subjects.filter(s => {
-      return contents.some(c => {
+    const subjectsWithContent = subjects.filter((s) => {
+      return contents.some((c) => {
         const contentSubjectId = c.subjectId?._id || c.subjectId;
         return contentSubjectId === s._id;
       });
@@ -1052,7 +1189,8 @@ const AdminContent = () => {
               No Content Yet
             </h3>
             <p className="text-gray-500 dark:text-gray-400 max-w-md">
-              Upload your first learning material to get started. Content will be organized by subject and topic.
+              Upload your first learning material to get started. Content will
+              be organized by subject and topic.
             </p>
             <button
               onClick={() => setShowForm(true)}
@@ -1111,7 +1249,7 @@ const AdminContent = () => {
 
   // Render topics view
   const renderTopicsView = () => {
-    const subject = subjects.find(s => s._id === navigation.subjectId);
+    const subject = subjects.find((s) => s._id === navigation.subjectId);
     if (!subject) {
       return (
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-12 text-center">
@@ -1121,7 +1259,9 @@ const AdminContent = () => {
     }
 
     const topics = subject.topics || [];
-    const uncategorizedContent = getContentsForSubject(subject._id).filter(c => !c.topicId);
+    const uncategorizedContent = getContentsForSubject(subject._id).filter(
+      (c) => !c.topicId
+    );
 
     return (
       <div className="space-y-4">
@@ -1133,7 +1273,8 @@ const AdminContent = () => {
                 {subject.name}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {topics.length} topics • {getContentsForSubject(subject._id).length} content items
+                {topics.length} topics •{" "}
+                {getContentsForSubject(subject._id).length} content items
               </p>
             </div>
             <button
@@ -1157,7 +1298,7 @@ const AdminContent = () => {
                 key={topic._id}
                 className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden hover:shadow-md transition-all"
               >
-                <div 
+                <div
                   className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                   onClick={() => toggleTopicExpanded(topic._id)}
                 >
@@ -1222,8 +1363,10 @@ const AdminContent = () => {
                           ...form,
                           subjectId: subject._id,
                           topicId: topic._id,
-                          programId: subject.programId?._id || subject.programId || "",
-                          courseId: subject.courseId?._id || subject.courseId || "",
+                          programId:
+                            subject.programId?._id || subject.programId || "",
+                          courseId:
+                            subject.courseId?._id || subject.courseId || "",
                         });
                         setShowForm(true);
                       }}
@@ -1273,10 +1416,11 @@ const AdminContent = () => {
                 No Topics Yet
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-md">
-                This subject doesn't have any topics. Add topics in the Subject Management section.
+                This subject doesn't have any topics. Add topics in the Subject
+                Management section.
               </p>
               <button
-                onClick={() => window.location.href = "/admin/subjects"}
+                onClick={() => (window.location.href = "/admin/subjects")}
                 className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all"
               >
                 Manage Subjects
@@ -1290,12 +1434,16 @@ const AdminContent = () => {
 
   // Render content list view
   const renderContentView = () => {
-    const subject = subjects.find(s => s._id === navigation.subjectId);
-    const topicName = navigation.topicId ? getTopicName(navigation.subjectId, navigation.topicId) : null;
-    
+    const subject = subjects.find((s) => s._id === navigation.subjectId);
+    const topicName = navigation.topicId
+      ? getTopicName(navigation.subjectId, navigation.topicId)
+      : null;
+
     let filteredContents = getContentsForSubject(navigation.subjectId);
     if (navigation.topicId) {
-      filteredContents = filteredContents.filter(c => c.topicId === navigation.topicId);
+      filteredContents = filteredContents.filter(
+        (c) => c.topicId === navigation.topicId
+      );
     }
 
     return (
@@ -1331,7 +1479,8 @@ const AdminContent = () => {
                     ...form,
                     subjectId: navigation.subjectId,
                     topicId: navigation.topicId || "",
-                    programId: subject?.programId?._id || subject?.programId || "",
+                    programId:
+                      subject?.programId?._id || subject?.programId || "",
                     courseId: subject?.courseId?._id || subject?.courseId || "",
                   });
                   setShowForm(true);
@@ -1354,7 +1503,7 @@ const AdminContent = () => {
                 No Content Here
               </h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-md">
-                {topicName 
+                {topicName
                   ? `No content in "${topicName}" yet. Upload your first learning material.`
                   : "No content in this subject yet. Upload your first learning material."}
               </p>
@@ -1364,7 +1513,8 @@ const AdminContent = () => {
                     ...form,
                     subjectId: navigation.subjectId,
                     topicId: navigation.topicId || "",
-                    programId: subject?.programId?._id || subject?.programId || "",
+                    programId:
+                      subject?.programId?._id || subject?.programId || "",
                     courseId: subject?.courseId?._id || subject?.courseId || "",
                   });
                   setShowForm(true);
@@ -1402,7 +1552,7 @@ const AdminContent = () => {
   return (
     <div className="space-y-6">
       <Toaster position="top-right" />
-      
+
       {/* Page Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -1460,7 +1610,11 @@ const AdminContent = () => {
             className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors disabled:opacity-50"
             title="Refresh exchange rate"
           >
-            <RefreshCw className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${
+                exchangeRateLoading ? "animate-spin" : ""
+              }`}
+            />
           </button>
         </div>
       </div>
@@ -1475,14 +1629,17 @@ const AdminContent = () => {
 
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-        <button onClick={navigateToSubjects} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+        <button
+          onClick={navigateToSubjects}
+          className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+        >
           Subjects
         </button>
         {navigation.subjectId && (
           <>
             <ChevronRight className="h-3 w-3" />
-            <button 
-              onClick={() => navigateToTopics(navigation.subjectId)} 
+            <button
+              onClick={() => navigateToTopics(navigation.subjectId)}
               className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
             >
               {getSubjectName(navigation.subjectId)}
@@ -1497,12 +1654,14 @@ const AdminContent = () => {
             </span>
           </>
         )}
-        {navigation.view === 'content' && !navigation.topicId && navigation.subjectId && (
-          <>
-            <ChevronRight className="h-3 w-3" />
-            <span>All Content</span>
-          </>
-        )}
+        {navigation.view === "content" &&
+          !navigation.topicId &&
+          navigation.subjectId && (
+            <>
+              <ChevronRight className="h-3 w-3" />
+              <span>All Content</span>
+            </>
+          )}
       </div>
 
       {/* Upload Form */}
@@ -1517,7 +1676,9 @@ const AdminContent = () => {
                 {editingId ? "Edit Content" : "Upload New Content"}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {editingId ? "Update your existing content" : "Add new learning materials to the platform"}
+                {editingId
+                  ? "Update your existing content"
+                  : "Add new learning materials to the platform"}
               </p>
             </div>
           </div>
@@ -1564,12 +1725,13 @@ const AdminContent = () => {
                   value={form.subjectId}
                   onChange={(e) => {
                     const subjectId = e.target.value;
-                    const subject = subjects.find(s => s._id === subjectId);
+                    const subject = subjects.find((s) => s._id === subjectId);
                     setForm({
                       ...form,
                       subjectId,
                       topicId: "",
-                      programId: subject?.programId?._id || subject?.programId || "",
+                      programId:
+                        subject?.programId?._id || subject?.programId || "",
                       courseId: subject?.courseId?._id || subject?.courseId || "",
                     });
                   }}
@@ -1580,7 +1742,10 @@ const AdminContent = () => {
                     const topicCount = s.topics?.length || 0;
                     return (
                       <option key={s._id} value={s._id}>
-                        {s.name} {topicCount > 0 ? `(${topicCount} topics)` : '(No topics)'}
+                        {s.name}{" "}
+                        {topicCount > 0
+                          ? `(${topicCount} topics)`
+                          : "(No topics)"}
                       </option>
                     );
                   })}
@@ -1588,7 +1753,8 @@ const AdminContent = () => {
               </div>
               {form.subjectId && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Course: {getCourseName(form.courseId)} • Program: {getProgramName(form.programId)}
+                  Course: {getCourseName(form.courseId)} • Program:{" "}
+                  {getProgramName(form.programId)}
                 </p>
               )}
             </div>
@@ -1603,19 +1769,25 @@ const AdminContent = () => {
                   <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <select
                     value={form.topicId}
-                    onChange={(e) => setForm({ ...form, topicId: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, topicId: e.target.value })
+                    }
                     className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   >
-                    <option value="">No specific topic (uncategorized)</option>
+                    <option value="">
+                      No specific topic (uncategorized)
+                    </option>
                     {getSubjectTopics(form.subjectId).map((topic) => (
                       <option key={topic._id} value={topic._id}>
-                        {topic.name} {topic.description ? `- ${topic.description}` : ''}
+                        {topic.name}{" "}
+                        {topic.description ? `- ${topic.description}` : ""}
                       </option>
                     ))}
                   </select>
                 </div>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                  Tip: Assigning content to a topic makes it easier for students to find
+                  Tip: Assigning content to a topic makes it easier for students
+                  to find
                 </p>
               </div>
             )}
@@ -1626,7 +1798,9 @@ const AdminContent = () => {
                 <input
                   type="checkbox"
                   checked={form.isPaid}
-                  onChange={(e) => setForm({ ...form, isPaid: e.target.checked })}
+                  onChange={(e) =>
+                    setForm({ ...form, isPaid: e.target.checked })
+                  }
                   className="rounded border-gray-300 dark:border-gray-600"
                 />
                 Premium Content
@@ -1645,7 +1819,9 @@ const AdminContent = () => {
                       step="0.01"
                       min="0"
                       value={form.price}
-                      onChange={(e) => setForm({ ...form, price: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, price: e.target.value })
+                      }
                       className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     />
                   </div>
@@ -1677,11 +1853,18 @@ const AdminContent = () => {
                     onChange={(e) => {
                       const selectedFile = e.target.files[0];
                       if (selectedFile) {
-                        const maxSize = form.type === 'video' ? 100 * 1024 * 1024 : 
-                                       form.type === 'pdf' ? 50 * 1024 * 1024 : 
-                                       10 * 1024 * 1024;
+                        const maxSize =
+                          form.type === "video"
+                            ? 100 * 1024 * 1024
+                            : form.type === "pdf"
+                            ? 50 * 1024 * 1024
+                            : 10 * 1024 * 1024;
                         if (selectedFile.size > maxSize) {
-                          toast.error(`${form.type.toUpperCase()} file too large! Maximum ${maxSize / (1024 * 1024)}MB`);
+                          toast.error(
+                            `${form.type.toUpperCase()} file too large! Maximum ${
+                              maxSize / (1024 * 1024)
+                            }MB`
+                          );
                           e.target.value = null;
                           return;
                         }
@@ -1700,8 +1883,13 @@ const AdminContent = () => {
                     accept="image/*"
                     onChange={(e) => {
                       const selectedFile = e.target.files[0];
-                      if (selectedFile && selectedFile.size > 5 * 1024 * 1024) {
-                        toast.error("Thumbnail too large! Maximum size is 5MB");
+                      if (
+                        selectedFile &&
+                        selectedFile.size > 5 * 1024 * 1024
+                      ) {
+                        toast.error(
+                          "Thumbnail too large! Maximum size is 5MB"
+                        );
                         e.target.value = null;
                         return;
                       }
@@ -1724,7 +1912,8 @@ const AdminContent = () => {
                       Quiz Content Created
                     </p>
                     <p className="text-xs text-purple-600 dark:text-purple-500 mt-0.5">
-                      After creating the quiz, you'll be able to add questions, set timer, and configure pass mark.
+                      After creating the quiz, you'll be able to add questions,
+                      set timer, and configure pass mark.
                     </p>
                   </div>
                 </div>
@@ -1737,8 +1926,16 @@ const AdminContent = () => {
                 disabled={loading}
                 className="flex-1 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                {loading ? "Processing..." : (editingId ? "Update Content" : "Upload Content")}
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                {loading
+                  ? "Processing..."
+                  : editingId
+                  ? "Update Content"
+                  : "Upload Content"}
               </button>
               <button
                 onClick={resetForm}
@@ -1752,29 +1949,43 @@ const AdminContent = () => {
       )}
 
       {/* Content Display based on navigation */}
-      {navigation.view === 'subjects' && renderSubjectsView()}
-      {navigation.view === 'topics' && renderTopicsView()}
-      {navigation.view === 'content' && renderContentView()}
+      {navigation.view === "subjects" && renderSubjectsView()}
+      {navigation.view === "topics" && renderTopicsView()}
+      {navigation.view === "content" && renderContentView()}
 
       {/* Media Viewer */}
       {viewer.open && viewer.type !== "quiz" && (
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col">
           <div className="flex justify-between items-center p-4 text-white bg-black/50 flex-shrink-0">
             <h3 className="text-lg font-semibold">{viewer.title}</h3>
-            <button onClick={closeViewer} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
+            <button
+              onClick={closeViewer}
+              className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
           <div className="flex-1 flex items-center justify-center p-4 min-h-0">
             {viewer.type === "video" && (
-              <video src={viewer.url} controls autoPlay className="max-w-full max-h-full rounded-lg" />
+              <video
+                src={viewer.url}
+                controls
+                autoPlay
+                className="max-w-full max-h-full rounded-lg"
+              />
             )}
             {viewer.type === "image" && (
-              <img src={viewer.url} alt={viewer.title} className="max-w-full max-h-full rounded-lg" />
+              <img
+                src={viewer.url}
+                alt={viewer.title}
+                className="max-w-full max-h-full rounded-lg"
+              />
             )}
             {viewer.type === "pdf" && (
               <iframe
-                src={`https://docs.google.com/gview?url=${encodeURIComponent(viewer.url)}&embedded=true`}
+                src={`https://docs.google.com/gview?url=${encodeURIComponent(
+                  viewer.url
+                )}&embedded=true`}
                 title={viewer.title}
                 className="w-full h-full rounded-lg"
               />

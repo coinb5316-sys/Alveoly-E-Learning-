@@ -1,4 +1,4 @@
-// StudentDashboard.jsx - COMPLETE UPDATED VERSION (USD → GHS Conversion)
+// StudentDashboard.jsx - COMPLETE FIXED VERSION (Server-Verified Rate)
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -38,9 +38,12 @@ import { useAuth } from "../context/AuthContext";
 import PaystackPayment from "../pages/PaystackPayment";
 import toast, { Toaster } from "react-hot-toast";
 
-// ================= CURRENCY HELPERS =================
+// ================= CONSTANTS =================
 const FALLBACK_USD_TO_GHS = 15.50;
+const MIN_REASONABLE_RATE = 5.0;
+const MAX_REASONABLE_RATE = 30.0;
 
+// ================= CURRENCY HELPERS =================
 const formatUSD = (amount) => {
   const num = parseFloat(amount);
   if (isNaN(num)) return "$0.00";
@@ -85,41 +88,55 @@ const StudentDashboard = () => {
   const [exchangeRateError, setExchangeRateError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  // ================= FETCH EXCHANGE RATE =================
+  // ================= FETCH EXCHANGE RATE (FIXED) =================
   const fetchExchangeRate = async () => {
     try {
       setExchangeRateLoading(true);
       setExchangeRateError(null);
 
+      // Removed frankfurter.app (doesn't support GHS)
+      // Reordered: open.er-api.com first (most reliable for African currencies)
       const apis = [
         {
-          url: "https://api.exchangerate-api.com/v4/latest/USD",
-          extract: (data) => data.rates?.GHS,
-        },
-        {
           url: "https://open.er-api.com/v6/latest/USD",
-          extract: (data) => data.rates?.GHS,
+          extract: (data) => data?.rates?.GHS,
         },
         {
-          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
-          extract: (data) => data.rates?.GHS,
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data?.rates?.GHS,
         },
       ];
 
       let rate = null;
+      let failedApis = [];
 
       for (const api of apis) {
         try {
           const response = await fetch(api.url);
-          if (response.ok) {
-            const data = await response.json();
-            const extractedRate = api.extract(data);
-            if (extractedRate && extractedRate > 0) {
-              rate = extractedRate;
-              break;
-            }
+          if (!response.ok) {
+            failedApis.push(`${api.url} (HTTP ${response.status})`);
+            continue;
+          }
+          const data = await response.json();
+          const extractedRate = api.extract(data);
+
+          console.log(`📡 ${api.url} → GHS = ${extractedRate}`);
+
+          // Range validation — reject garbage values
+          if (
+            extractedRate &&
+            extractedRate >= MIN_REASONABLE_RATE &&
+            extractedRate <= MAX_REASONABLE_RATE
+          ) {
+            rate = extractedRate;
+            break;
+          } else if (extractedRate) {
+            failedApis.push(`${api.url} (rate ${extractedRate} out of range)`);
+          } else {
+            failedApis.push(`${api.url} (no GHS in response)`);
           }
         } catch (err) {
+          failedApis.push(`${api.url} (${err.message})`);
           continue;
         }
       }
@@ -127,13 +144,16 @@ const StudentDashboard = () => {
       if (rate) {
         setExchangeRate(rate);
         setLastUpdated(new Date().toLocaleString());
-        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+        console.log(`✅ Exchange rate loaded: 1 USD = ${rate} GHS`);
       } else {
+        console.warn(
+          `⚠️ All exchange rate APIs failed. Failed: ${failedApis.join(", ")}. Using fallback ${FALLBACK_USD_TO_GHS}`
+        );
         setExchangeRate(FALLBACK_USD_TO_GHS);
         setExchangeRateError("Using fallback rate");
       }
     } catch (err) {
-      console.error("Error fetching exchange rate:", err);
+      console.error("❌ Exchange rate fetch error:", err);
       setExchangeRate(FALLBACK_USD_TO_GHS);
       setExchangeRateError("Using fallback rate");
     } finally {
@@ -170,7 +190,7 @@ const StudentDashboard = () => {
       const res = await API.get("/auth/me");
       console.log("Student data:", res.data);
       setStudent(res.data);
-      
+
       if (res.data.planDeactivatedByAdmin) {
         setIsPlanDeactivated(true);
         setPlanStatusMessage("Your plan has been deactivated by an administrator.");
@@ -375,7 +395,7 @@ const StudentDashboard = () => {
   return (
     <div className="space-y-6 pb-8">
       <Toaster position="top-right" />
-      
+
       {/* Header with Refresh */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between sticky top-0 z-10 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm -mx-4 px-4 py-3 md:-mx-6 md:px-6 border-b border-gray-200/50 dark:border-gray-800/50">
         <div>
@@ -406,7 +426,11 @@ const StudentDashboard = () => {
                 className="p-0.5 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
                 title="Refresh exchange rate"
               >
-                <RefreshCw className={`h-3 w-3 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  className={`h-3 w-3 text-emerald-600 dark:text-emerald-400 ${
+                    exchangeRateLoading ? "animate-spin" : ""
+                  }`}
+                />
               </button>
             </div>
           )}
@@ -415,20 +439,22 @@ const StudentDashboard = () => {
             disabled={refreshing}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all disabled:opacity-50"
           >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             Refresh
           </button>
         </div>
       </div>
 
       {/* Welcome Header - Premium */}
-      <div className={`relative overflow-hidden rounded-2xl p-6 md:p-8 text-white ${
-        isPlanDeactivated 
-          ? "bg-gradient-to-r from-red-600 via-red-700 to-red-800"
-          : student?.isPlanActive 
+      <div
+        className={`relative overflow-hidden rounded-2xl p-6 md:p-8 text-white ${
+          isPlanDeactivated
+            ? "bg-gradient-to-r from-red-600 via-red-700 to-red-800"
+            : student?.isPlanActive
             ? "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600"
             : "bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800"
-      }`}>
+        }`}
+      >
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
             <Zap className="h-5 w-5 text-yellow-300" />
@@ -438,7 +464,7 @@ const StudentDashboard = () => {
             Welcome back, {student?.name?.split(" ")[0]}! 👋
           </h1>
           <p className="text-indigo-100 max-w-md">
-            {programName 
+            {programName
               ? `Program: ${programName}`
               : "Ready to start your learning journey?"}
           </p>
@@ -447,16 +473,18 @@ const StudentDashboard = () => {
               Course: {courseName}
             </p>
           )}
-          
+
           {/* Plan Status Message */}
           {planStatusMessage && (
-            <div className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${
-              isPlanDeactivated 
-                ? "bg-red-500/30 text-red-100"
-                : student?.isPlanActive 
+            <div
+              className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${
+                isPlanDeactivated
+                  ? "bg-red-500/30 text-red-100"
+                  : student?.isPlanActive
                   ? "bg-green-500/30 text-green-100"
                   : "bg-yellow-500/30 text-yellow-100"
-            }`}>
+              }`}
+            >
               {isPlanDeactivated ? (
                 <Ban className="h-4 w-4" />
               ) : student?.isPlanActive ? (
@@ -477,11 +505,15 @@ const StudentDashboard = () => {
         {statCards.map((card, idx) => {
           const Icon = card.icon;
           const colorMap = {
-            indigo: "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400",
+            indigo:
+              "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400",
             blue: "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400",
-            green: "bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400",
-            purple: "bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400",
-            yellow: "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400",
+            green:
+              "bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400",
+            purple:
+              "bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400",
+            yellow:
+              "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400",
           };
           return (
             <div
@@ -501,7 +533,9 @@ const StudentDashboard = () => {
                     {card.subtitle}
                   </p>
                 </div>
-                <div className={`rounded-lg p-2 md:p-3 flex-shrink-0 ${colorMap[card.color]}`}>
+                <div
+                  className={`rounded-lg p-2 md:p-3 flex-shrink-0 ${colorMap[card.color]}`}
+                >
                   <Icon className="h-4 w-4 md:h-5 md:w-5" />
                 </div>
               </div>
@@ -531,7 +565,9 @@ const StudentDashboard = () => {
                 onClick={action.onClick}
                 className="group text-left p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:shadow-lg transition-all hover:scale-[1.02]"
               >
-                <div className={`w-10 h-10 rounded-lg bg-gradient-to-r ${colorMap[action.color]} flex items-center justify-center mb-3`}>
+                <div
+                  className={`w-10 h-10 rounded-lg bg-gradient-to-r ${colorMap[action.color]} flex items-center justify-center mb-3`}
+                >
                   <Icon className="h-5 w-5 text-white" />
                 </div>
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
@@ -568,7 +604,9 @@ const StudentDashboard = () => {
                         <Building className="h-5 w-5 text-white" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Program</p>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                          Program
+                        </p>
                         <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white truncate">
                           {programName}
                         </h3>
@@ -590,7 +628,9 @@ const StudentDashboard = () => {
                         <GraduationCap className="h-5 w-5 text-white" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Course</p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                          Course
+                        </p>
                         <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white truncate">
                           {courseName}
                         </h3>
@@ -656,7 +696,10 @@ const StudentDashboard = () => {
                 const isPopular = index === 1;
                 const isCurrentPlan = student?.planId?._id === plan._id;
                 const priceInGHS = convertToGHS(plan.price);
-                const isFreePlan = plan.isFree || plan.freeAccess || parseFloat(plan.price) === 0;
+                const isFreePlan =
+                  plan.isFree ||
+                  plan.freeAccess ||
+                  parseFloat(plan.price) === 0;
 
                 return (
                   <div
@@ -701,7 +744,7 @@ const StudentDashboard = () => {
                       <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                         {plan.title}
                       </h3>
-                      
+
                       {/* ============ PRICE WITH USD + GHS ============ */}
                       {isFreePlan ? (
                         <div className="mb-4">
@@ -752,13 +795,18 @@ const StudentDashboard = () => {
                           Included Subjects:
                         </p>
                         {plan.subjects?.slice(0, 4).map((subject) => (
-                          <div key={subject._id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                          <div
+                            key={subject._id}
+                            className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
+                          >
                             <CheckCircle className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
                             <span className="truncate">{subject.name}</span>
                           </div>
                         ))}
                         {plan.subjects?.length > 4 && (
-                          <p className="text-xs text-gray-400">+{plan.subjects.length - 4} more</p>
+                          <p className="text-xs text-gray-400">
+                            +{plan.subjects.length - 4} more
+                          </p>
                         )}
                       </div>
 
@@ -776,8 +824,12 @@ const StudentDashboard = () => {
                         {status === "active" && isCurrentPlan
                           ? "Currently Active"
                           : status === "expired"
-                          ? `Renew Plan${exchangeRate ? ` • ${formatGHS(priceInGHS)}` : ''}`
-                          : `Choose Plan${exchangeRate ? ` • ${formatGHS(priceInGHS)}` : ''}`}
+                          ? `Renew Plan${
+                              exchangeRate ? ` • ${formatGHS(priceInGHS)}` : ""
+                            }`
+                          : `Choose Plan${
+                              exchangeRate ? ` • ${formatGHS(priceInGHS)}` : ""
+                            }`}
                       </button>
                     </div>
                   </div>
@@ -796,7 +848,8 @@ const StudentDashboard = () => {
             Plan Deactivated
           </h3>
           <p className="text-red-700 dark:text-red-500 text-sm max-w-md mx-auto">
-            Your plan has been deactivated by an administrator. Please contact support for more information.
+            Your plan has been deactivated by an administrator. Please contact
+            support for more information.
           </p>
           <button
             onClick={() => navigate("/student/payments")}
@@ -836,7 +889,7 @@ const StudentDashboard = () => {
                   <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                     {formatUSD(selectedPlan.price)}
                   </p>
-                  
+
                   {/* GHS Conversion - Prominent */}
                   {exchangeRate && (
                     <div className="flex flex-col items-center gap-1 mt-2">
@@ -852,7 +905,7 @@ const StudentDashboard = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
                   {selectedPlan.duration} {selectedPlan.durationUnit} access
                 </p>
@@ -861,14 +914,18 @@ const StudentDashboard = () => {
               {/* Payment Info Box */}
               <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">Amount (USD)</span>
+                  <span className="text-gray-500 dark:text-gray-400">
+                    Amount (USD)
+                  </span>
                   <span className="font-semibold text-gray-900 dark:text-gray-100">
                     {formatUSD(selectedPlan.price)}
                   </span>
                 </div>
                 {exchangeRate && (
                   <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                    <span className="text-gray-500 dark:text-gray-400">You Pay (GHS)</span>
+                    <span className="text-gray-500 dark:text-gray-400">
+                      You Pay (GHS)
+                    </span>
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                       {formatGHS(convertToGHS(selectedPlan.price))}
                     </span>
@@ -877,13 +934,13 @@ const StudentDashboard = () => {
               </div>
 
               {/* Paystack Payment */}
-              <PaystackPayment 
-                plan={selectedPlan} 
+              <PaystackPayment
+                plan={selectedPlan}
                 exchangeRate={exchangeRate}
                 amountInGHS={convertToGHS(selectedPlan.price)}
-                onSuccess={() => setSelectedPlan(null)} 
+                onSuccess={() => setSelectedPlan(null)}
               />
-              
+
               <p className="text-xs text-center text-gray-400 dark:text-gray-500 mt-4">
                 Secure payment powered by Paystack • Charged in GHS
               </p>
