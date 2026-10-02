@@ -59,10 +59,10 @@ const contentSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
-    price: {
-      type: Number,
-      default: 0
-    },
+    price: { type: Number, default: 0, min: 0 },
+    priceInGHS: { type: Number, default: 0, min: 0 },            // GHS equivalent
+exchangeRateAtCreation: { type: Number, default: 11.74 },    // rate at save
+currency: { type: String, default: "USD", enum: ["USD", "GHS"] },
     quizTimerMinutes: {
       type: Number,
       default: 0,
