@@ -1,7 +1,8 @@
+// routes/aiSubscriptionRoutes.js - COMPLETE UPDATED VERSION
 import express from "express";
 import {
-  subscribeToPlan,
-  verifyPayment,
+  createSubscription,
+  verifySubscription,
   getSubscription,
 } from "../controllers/aiSubscriptionController.js";
 
@@ -9,13 +10,13 @@ import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// ✅ VERIFY PAYMENT (called from frontend)
-router.get("/verify", protect, verifyPayment);
+// ✅ VERIFY PAYMENT (called from frontend after Paystack redirect)
+router.get("/verify", protect, verifySubscription);
 
-// ✅ INIT PAYMENT
-router.post("/", protect, subscribeToPlan);
+// ✅ INIT PAYMENT (create subscription / get Paystack auth URL)
+router.post("/", protect, createSubscription);
 
-// ✅ GET CURRENT SUB
+// ✅ GET CURRENT SUBSCRIPTION
 router.get("/", protect, getSubscription);
 
 export default router;
