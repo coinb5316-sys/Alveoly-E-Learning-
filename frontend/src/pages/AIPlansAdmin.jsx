@@ -1,3 +1,4 @@
+// AIPlansAdmin.jsx - COMPLETE UPDATED VERSION (USD → GHS Conversion)
 import { useState, useEffect } from "react";
 import axios from "../api/axios";
 import { 
@@ -13,20 +14,111 @@ import {
   FaGem,
   FaRocket,
   FaStar,
-  FaCheckCircle
-} from "react-icons/fa";
+  FaCheckCircle,
+  FaDollarSign,
+  FaSync,
+  FaCediSign
+} from "react-icons/fa6";
 import toast, { Toaster } from "react-hot-toast";
+
+// ================= CURRENCY HELPERS =================
+const FALLBACK_USD_TO_GHS = 15.50;
+
+const formatUSD = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "$0.00";
+  return `$${num.toFixed(2)}`;
+};
+
+const formatGHS = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "GH₵0.00";
+  return `GH₵${num.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
 
 const AIPlansAdmin = () => {
   const [plans, setPlans] = useState([]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
+  const [price, setPrice] = useState(""); // USD price
   const [durationValue, setDurationValue] = useState("");
   const [durationUnit, setDurationUnit] = useState("days");
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+
+  // ================= EXCHANGE RATE STATE =================
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  // ================= FETCH EXCHANGE RATE =================
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS,
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS,
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS,
+        },
+      ];
+
+      let rate = null;
+
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // ================= CURRENCY CONVERSION =================
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || !usdAmount) return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
 
   // ================= DARK MODE =================
   useEffect(() => {
@@ -39,6 +131,13 @@ const AIPlansAdmin = () => {
     } else {
       document.documentElement.classList.remove("dark");
     }
+  }, []);
+
+  // ================= INIT =================
+  useEffect(() => {
+    fetchExchangeRate();
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchPlans = async () => {
@@ -55,6 +154,7 @@ const AIPlansAdmin = () => {
     fetchPlans();
   }, []);
 
+  // ================= SAVE PLAN (USD + GHS) =================
   const handleSave = async () => {
     if (!name || !price || !durationValue) {
       toast.error("Please fill all required fields");
@@ -63,10 +163,17 @@ const AIPlansAdmin = () => {
 
     setLoading(true);
     try {
+      const priceUSD = parseFloat(price);
+      const priceGHS = parseFloat(convertToGHS(priceUSD));
+      const rate = exchangeRate || FALLBACK_USD_TO_GHS;
+
       const data = {
         name,
         description,
-        price: parseFloat(price),
+        price: priceUSD,                              // ← USD price
+        priceInGHS: priceGHS,                         // ← GHS equivalent
+        exchangeRateAtCreation: rate,                 // ← Rate used
+        currency: "USD",                              // ← Base currency
         durationValue: parseInt(durationValue),
         durationUnit,
       };
@@ -97,7 +204,7 @@ const AIPlansAdmin = () => {
   const handleEdit = (plan) => {
     setName(plan.name);
     setDescription(plan.description || "");
-    setPrice(plan.price);
+    setPrice(plan.price); // USD price
     setDurationValue(plan.durationValue);
     setDurationUnit(plan.durationUnit);
     setEditingId(plan._id);
@@ -147,7 +254,6 @@ const AIPlansAdmin = () => {
     }
   };
 
-  // ✅ FIXED: Return the component, not JSX
   const getPlanIcon = (index) => {
     const icons = [FaCrown, FaGem, FaRocket, FaStar];
     return icons[index % icons.length];
@@ -162,6 +268,11 @@ const AIPlansAdmin = () => {
     ];
     return gradients[index % gradients.length];
   };
+
+  // Live preview of GHS price in form
+  const formPriceGHS = price && parseFloat(price) > 0 && exchangeRate
+    ? convertToGHS(price)
+    : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -192,6 +303,48 @@ const AIPlansAdmin = () => {
             Create and manage subscription plans for AI features
           </p>
         </div>
+
+        {/* Exchange Rate Banner */}
+        <div className="flex items-center justify-between p-3 mb-6 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+          <div className="flex items-center gap-2">
+            <FaDollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+              Live Exchange Rate
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {exchangeRate ? (
+              <>
+                <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                  1 USD = {exchangeRate.toFixed(2)} GHS
+                </span>
+                {lastUpdated && (
+                  <span className="text-xs text-emerald-600 dark:text-emerald-500 hidden sm:inline">
+                    • {lastUpdated}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-sm text-emerald-600">Loading rate...</span>
+            )}
+            <button
+              onClick={fetchExchangeRate}
+              disabled={exchangeRateLoading}
+              className="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
+              title="Refresh exchange rate"
+            >
+              <FaSync className={`h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {exchangeRateError && (
+          <div className="p-2 mb-6 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+            <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+              ⚠ {exchangeRateError}
+            </p>
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-2 gap-8">
           
@@ -229,13 +382,13 @@ const AIPlansAdmin = () => {
                   />
                 </div>
 
-                {/* Price */}
+                {/* Price in USD with GHS preview */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Price (GH₵) <span className="text-red-500">*</span>
+                    Price (USD) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <FaMoneyBillWave className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                    <FaDollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
                     <input
                       type="number"
                       step="0.01"
@@ -245,6 +398,18 @@ const AIPlansAdmin = () => {
                       onChange={(e) => setPrice(e.target.value)}
                     />
                   </div>
+                  {/* Live GHS Preview */}
+                  {formPriceGHS && formPriceGHS > 0 && (
+                    <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800">
+                      <FaCediSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                        ≈ {formatGHS(formPriceGHS)}
+                      </span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
+                        at {exchangeRate.toFixed(2)} GHS/USD
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Duration */}
@@ -353,8 +518,9 @@ const AIPlansAdmin = () => {
 
             <div className="space-y-4">
               {plans.map((plan, index) => {
-                const PlanIcon = getPlanIcon(index); // ✅ Now returns a component, not JSX
+                const PlanIcon = getPlanIcon(index);
                 const gradient = getPlanGradient(index);
+                const priceInGHS = convertToGHS(plan.price);
                 
                 return (
                   <div
@@ -367,21 +533,30 @@ const AIPlansAdmin = () => {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-3">
                             <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}>
-                              <PlanIcon className="text-white text-xl" /> {/* ✅ Now works correctly */}
+                              <PlanIcon className="text-white text-xl" />
                             </div>
                             <div>
                               <h3 className="font-bold text-lg text-slate-900 dark:text-white">
                                 {plan.name}
                               </h3>
-                              <div className="flex items-center gap-2 mt-1">
-                                <FaMoneyBillWave className="text-emerald-500 text-xs" />
-                                <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                                  GH₵{plan.price}
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <FaDollarSign className="text-yellow-500 text-xs" />
+                                <span className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                                  {formatUSD(plan.price)}
                                 </span>
                                 <span className="text-sm text-slate-500 dark:text-slate-400">
                                   / {getDurationLabel(plan.durationValue, plan.durationUnit)}
                                 </span>
                               </div>
+                              {/* GHS Equivalent Badge */}
+                              {exchangeRate && priceInGHS > 0 && (
+                                <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800">
+                                  <FaCediSign className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                  <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                                    {formatGHS(priceInGHS)}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -391,7 +566,7 @@ const AIPlansAdmin = () => {
                             </p>
                           )}
 
-                          <div className="flex items-center gap-4 mt-3">
+                          <div className="flex items-center gap-4 mt-3 flex-wrap">
                             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
                               <FaCalendarAlt className="w-3 h-3" />
                               <span>{plan.durationValue} {getDurationLabel(plan.durationValue, plan.durationUnit)}</span>
@@ -400,6 +575,11 @@ const AIPlansAdmin = () => {
                               <FaTag className="w-3 h-3" />
                               <span>Active</span>
                             </div>
+                            {plan.exchangeRateAtCreation && (
+                              <div className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                                <span>Rate: {plan.exchangeRateAtCreation.toFixed(2)}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 

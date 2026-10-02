@@ -1,4 +1,4 @@
-// AdminContent.jsx - Complete updated with topic-based organization
+// AdminContent.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -37,8 +37,29 @@ import {
   Hash,
   Tag,
   ArrowLeft,
-  Home
+  Home,
+  RefreshCw,
+  Banknote,
 } from "lucide-react";
+
+// ================= CONSTANTS =================
+const FALLBACK_USD_TO_GHS = 15.50;
+
+// ================= HELPER: CURRENCY FORMATTERS =================
+const formatUSD = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "$0.00";
+  return `$${num.toFixed(2)}`;
+};
+
+const formatGHS = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "GH₵0.00";
+  return `GH₵${num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
 
 // ================= QUIZ EDITOR COMPONENT =================
 const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => {
@@ -421,7 +442,7 @@ const StandaloneQuizEditor = ({ content, onClose, onSave, refreshContents }) => 
   );
 };
 
-// ================= CONTENT CARD COMPONENT (moved outside) =================
+// ================= CONTENT CARD COMPONENT =================
 const ContentCard = ({ 
   content, 
   onView, 
@@ -430,9 +451,13 @@ const ContentCard = ({
   getTypeIcon, 
   getTypeColor, 
   getTopicName,
-  onAddQuiz 
+  onAddQuiz,
+  exchangeRate 
 }) => {
   const subjectId = content.subjectId?._id || content.subjectId;
+  const priceInGHS = exchangeRate && content.price
+    ? (parseFloat(content.price) * exchangeRate).toFixed(2)
+    : null;
   
   return (
     <div
@@ -466,11 +491,19 @@ const ContentCard = ({
           <span className="capitalize">{content.type}</span>
         </div>
 
-        {/* Price Badge */}
+        {/* Price Badge - NOW SHOWS BOTH USD AND GHS */}
         {content.isPaid && (
-          <div className="absolute top-3 right-3 px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1">
-            <DollarSign className="h-3 w-3" />
-            ₵{content.price}
+          <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
+            <div className="px-2 py-1 bg-yellow-500 rounded-lg text-white text-xs font-medium flex items-center gap-1 shadow-lg">
+              <DollarSign className="h-3 w-3" />
+              {formatUSD(content.price)}
+            </div>
+            {priceInGHS && (
+              <div className="px-2 py-0.5 bg-green-600 rounded-lg text-white text-[10px] font-semibold flex items-center gap-1 shadow-lg">
+                <Banknote className="h-2.5 w-2.5" />
+                ≈ {formatGHS(priceInGHS)}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -555,7 +588,7 @@ const AdminContent = () => {
   
   // Navigation state - hierarchical browsing
   const [navigation, setNavigation] = useState({
-    view: 'subjects', // 'subjects' | 'topics' | 'content'
+    view: 'subjects',
     programId: null,
     courseId: null,
     subjectId: null,
@@ -565,6 +598,12 @@ const AdminContent = () => {
   // Expanded state for UI
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [expandedTopics, setExpandedTopics] = useState({});
+
+  // ================= EXCHANGE RATE STATE =================
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   // Form state
   const [form, setForm] = useState({
@@ -587,6 +626,70 @@ const AdminContent = () => {
     title: "",
   });
 
+  // ================= FETCH EXCHANGE RATE =================
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS
+        }
+      ];
+
+      let rate = null;
+
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // ================= CURRENCY CONVERSION =================
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || !usdAmount) return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
+
   // ================= FETCH DATA =================
   useEffect(() => {
     const fetchData = async () => {
@@ -606,6 +709,11 @@ const AdminContent = () => {
     };
     fetchData();
     fetchContents();
+    fetchExchangeRate();
+
+    // Refresh exchange rate every 30 minutes
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchContents = async () => {
@@ -740,6 +848,11 @@ const AdminContent = () => {
       return;
     }
 
+    if (form.isPaid && (!form.price || parseFloat(form.price) <= 0)) {
+      toast.error("Please enter a valid price for paid content");
+      return;
+    }
+
     if (form.type !== "quiz" && !file && !editingId) {
       toast.error("Please select a file to upload");
       return;
@@ -774,8 +887,16 @@ const AdminContent = () => {
       return;
     }
 
+    // ============================================================
+    // PAYLOAD WITH USD + GHS
+    // ============================================================
+    const priceUSD = form.isPaid ? parseFloat(form.price) : 0;
+    const priceGHS = form.isPaid ? parseFloat(convertToGHS(priceUSD)) : 0;
+
     formData.append("isPaid", form.isPaid);
-    formData.append("price", form.price);
+    formData.append("price", priceUSD);              // ← USD price
+    formData.append("priceInGHS", priceGHS);         // ← GHS equivalent
+    formData.append("exchangeRateAtCreation", exchangeRate || FALLBACK_USD_TO_GHS);  // ← Rate used
 
     if (form.type === "quiz") {
       formData.append("quizTimerMinutes", "0");
@@ -915,7 +1036,6 @@ const AdminContent = () => {
   
   // Render subjects view
   const renderSubjectsView = () => {
-    // Get unique subjects that have content
     const subjectsWithContent = subjects.filter(s => {
       return contents.some(c => {
         const contentSubjectId = c.subjectId?._id || c.subjectId;
@@ -1083,6 +1203,7 @@ const AdminContent = () => {
                           getTypeColor={getTypeColor}
                           getTopicName={getTopicName}
                           onAddQuiz={setSelectedLesson}
+                          exchangeRate={exchangeRate}
                         />
                       ))}
                     </div>
@@ -1137,6 +1258,7 @@ const AdminContent = () => {
                   getTypeColor={getTypeColor}
                   getTopicName={getTopicName}
                   onAddQuiz={setSelectedLesson}
+                  exchangeRate={exchangeRate}
                 />
               ))}
             </div>
@@ -1267,6 +1389,7 @@ const AdminContent = () => {
                 getTypeColor={getTypeColor}
                 getTopicName={getTopicName}
                 onAddQuiz={setSelectedLesson}
+                exchangeRate={exchangeRate}
               />
             ))}
           </div>
@@ -1307,6 +1430,48 @@ const AdminContent = () => {
           </button>
         </div>
       </div>
+
+      {/* Exchange Rate Banner */}
+      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border border-green-200 dark:border-green-800">
+        <div className="flex items-center gap-2">
+          <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <span className="text-sm font-medium text-green-700 dark:text-green-400">
+            Exchange Rate
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {exchangeRate ? (
+            <>
+              <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                1 USD = {exchangeRate.toFixed(2)} GHS
+              </span>
+              {lastUpdated && (
+                <span className="text-xs text-green-600 dark:text-green-500 hidden sm:inline">
+                  • {lastUpdated}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-sm text-green-600">Loading rate...</span>
+          )}
+          <button
+            onClick={fetchExchangeRate}
+            disabled={exchangeRateLoading}
+            className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors disabled:opacity-50"
+            title="Refresh exchange rate"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {exchangeRateError && (
+        <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+          <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+            ⚠ {exchangeRateError}
+          </p>
+        </div>
+      )}
 
       {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
@@ -1455,7 +1620,8 @@ const AdminContent = () => {
               </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-4">
+            {/* =============== PAID CONTENT WITH USD/GHS =============== */}
+            <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/30 rounded-lg border border-gray-200 dark:border-gray-700">
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                 <input
                   type="checkbox"
@@ -1465,16 +1631,36 @@ const AdminContent = () => {
                 />
                 Premium Content
               </label>
+
               {form.isPaid && (
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="number"
-                    placeholder="Price"
-                    value={form.price}
-                    onChange={(e) => setForm({ ...form, price: e.target.value })}
-                    className="pl-10 pr-4 py-2 w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                  />
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Price (USD)
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                      value={form.price}
+                      onChange={(e) => setForm({ ...form, price: e.target.value })}
+                      className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    />
+                  </div>
+                  {/* Live GHS Preview */}
+                  {form.price && parseFloat(form.price) > 0 && exchangeRate && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <Banknote className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                        ≈ {formatGHS(convertToGHS(form.price))}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        (at {exchangeRate.toFixed(2)} GHS/USD)
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -1,4 +1,4 @@
-// StudentLessons.jsx - Complete with FULL title display and Plan Deactivation Support
+// StudentLessons.jsx - COMPLETE UPDATED VERSION (USD → GHS Conversion)
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -46,7 +46,27 @@ import {
   Palette,
   Grid3x3,
   Ban,
+  RefreshCw,
+  Banknote,
 } from "lucide-react";
+
+// ================= CURRENCY FORMATTERS =================
+const FALLBACK_USD_TO_GHS = 15.50;
+
+const formatUSD = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "$0.00";
+  return `$${num.toFixed(2)}`;
+};
+
+const formatGHS = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "GH₵0.00";
+  return `GH₵${num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
 
 const StudentLessons = () => {
   const { subjectId } = useParams();
@@ -71,6 +91,12 @@ const StudentLessons = () => {
   const [userPlanStatus, setUserPlanStatus] = useState(null);
   const pdfContainerRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
+
+  // ================= EXCHANGE RATE STATE =================
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [viewer, setViewer] = useState({
     open: false,
@@ -105,6 +131,78 @@ const StudentLessons = () => {
   ];
 
   const [viewerGradientIndex, setViewerGradientIndex] = useState(0);
+  const [viewerPatternIndex, setViewerPatternIndex] = useState(0);
+
+  // ================= FETCH EXCHANGE RATE =================
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS
+        }
+      ];
+
+      let rate = null;
+
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // ================= CURRENCY CONVERSION =================
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || !usdAmount) return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
+
+  // ================= INIT =================
+  useEffect(() => {
+    fetchExchangeRate();
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ================= CHECK PLAN STATUS =================
   useEffect(() => {
@@ -132,8 +230,6 @@ const StudentLessons = () => {
       return () => clearInterval(interval);
     }
   }, [viewer.open]);
-
-  const [viewerPatternIndex, setViewerPatternIndex] = useState(0);
 
   useEffect(() => {
     if (viewer.open) {
@@ -350,8 +446,8 @@ const StudentLessons = () => {
     };
   }, [viewer.open]);
 
+  // ================= UNLOCK CONTENT (SEND GHS AMOUNT) =================
   const handleUnlock = async (c) => {
-    // Don't allow unlocking if plan is deactivated
     if (planDeactivated) {
       toast.error("Your plan has been deactivated. Please contact support.");
       return;
@@ -362,8 +458,16 @@ const StudentLessons = () => {
       localStorage.setItem('current_content_id', c._id);
       localStorage.setItem('current_content_title', c.title);
       
+      const ghsAmount = convertToGHS(c.price);
+      const rate = exchangeRate || FALLBACK_USD_TO_GHS;
+      
       const res = await axios.post("/content-payments/initiate", {
         contentId: c._id,
+        // ============== USD + GHS PAYLOAD ==============
+        amountInGHS: parseFloat(ghsAmount),
+        exchangeRate: parseFloat(rate.toFixed(4)),
+        priceUSD: parseFloat(c.price),
+        currency: "GHS",
       });
       
       if (res.data.authorizationUrl) {
@@ -383,7 +487,6 @@ const StudentLessons = () => {
   };
 
   const openViewer = async (c) => {
-    // Check if content is locked due to plan deactivation
     if (planDeactivated && c.isPaid) {
       toast.error("Your plan has been deactivated. Premium content is locked.");
       return;
@@ -501,7 +604,6 @@ const StudentLessons = () => {
     }
   };
 
-  // Calculate counts with plan deactivation taken into account
   const unlockedCount = contents.filter(c => c.isUnlocked).length;
   const lockedCount = contents.filter(c => c.isPaid && !c.isUnlocked).length;
   const freeCount = contents.filter(c => !c.isPaid).length;
@@ -611,6 +713,40 @@ const StudentLessons = () => {
             </div>
           )}
 
+          {/* Exchange Rate Banner */}
+          <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border border-green-200 dark:border-green-800 mb-6">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                Live Exchange Rate
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              {exchangeRate ? (
+                <>
+                  <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                    1 USD = {exchangeRate.toFixed(2)} GHS
+                  </span>
+                  {lastUpdated && (
+                    <span className="text-xs text-green-600 dark:text-green-500 hidden sm:inline">
+                      • {lastUpdated}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-sm text-green-600">Loading rate...</span>
+              )}
+              <button
+                onClick={fetchExchangeRate}
+                disabled={exchangeRateLoading}
+                className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors disabled:opacity-50"
+                title="Refresh exchange rate"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
           {/* Page Header */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
             <div>
@@ -655,7 +791,7 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          {/* Stats Summary - Enhanced Cards */}
+          {/* Stats Summary */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
             <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm p-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
               <div className="flex items-center justify-between">
@@ -714,7 +850,7 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          {/* Topics Section - Enhanced Design */}
+          {/* Topics Section */}
           {totalTopics > 0 && (
             <div className="rounded-2xl border border-gray-200/50 dark:border-gray-700/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm overflow-hidden shadow-sm mb-8">
               <button
@@ -834,10 +970,10 @@ const StudentLessons = () => {
               {filteredContents.map((content) => {
                 const isHovered = hoveredContent === content._id;
                 const hasQuiz = lessonQuizzes[content._id];
-                // If plan is deactivated, lock all paid content
                 const isUnlocked = planDeactivated ? false : content.isUnlocked;
                 const isPaid = content.isPaid;
                 const topicName = topics.find(t => t._id === content.topicId)?.name;
+                const priceInGHS = convertToGHS(content.price);
                 
                 return (
                   <div
@@ -894,20 +1030,38 @@ const StudentLessons = () => {
                         </div>
                       )}
 
-                      {/* Price Badge */}
+                      {/* ============ PRICE BADGE WITH USD + GHS ============ */}
                       {isPaid && (
-                        <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 rounded-xl text-white text-xs font-medium flex items-center gap-1.5 shadow-lg shadow-yellow-500/25">
-                          <DollarSign className="h-3 w-3" />
-                          ₵{content.price}
+                        <div className="absolute bottom-3 right-3 flex flex-col gap-1 items-end">
+                          <div className="px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-amber-500 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-yellow-500/25">
+                            <DollarSign className="h-3 w-3" />
+                            {formatUSD(content.price)}
+                          </div>
+                          {exchangeRate && priceInGHS > 0 && (
+                            <div className="px-2.5 py-1 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg text-white text-[11px] font-bold flex items-center gap-1 shadow-lg shadow-green-500/25">
+                              <Banknote className="h-3 w-3" />
+                              {formatGHS(priceInGHS)}
+                            </div>
+                          )}
                         </div>
                       )}
 
                       {/* Lock Overlay */}
                       {isPaid && !isUnlocked && (
-                        <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center">
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center px-4">
                           <Lock className="h-12 w-12 text-white mb-3 drop-shadow-2xl" />
                           <p className="text-white text-sm font-semibold mb-1">Premium Content</p>
-                          <p className="text-white/80 text-xs mb-4">₵{content.price} to unlock</p>
+                          {/* Show both currencies in overlay */}
+                          <div className="flex flex-col items-center gap-1 mb-3">
+                            <p className="text-white/90 text-xs">
+                              {formatUSD(content.price)}
+                              {exchangeRate && priceInGHS > 0 && (
+                                <span className="text-green-300 font-bold ml-1.5">
+                                  • {formatGHS(priceInGHS)}
+                                </span>
+                              )}
+                            </p>
+                          </div>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -916,11 +1070,14 @@ const StudentLessons = () => {
                             disabled={planDeactivated}
                             className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all shadow-xl hover:shadow-2xl ${
                               planDeactivated 
-                                ? "bg-gray-500 cursor-not-allowed" 
+                                ? "bg-gray-500 cursor-not-allowed text-white" 
                                 : "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-purple-500/25"
                             }`}
                           >
-                            {planDeactivated ? "Locked" : "Unlock Now"}
+                            {planDeactivated 
+                              ? "Locked" 
+                              : `Unlock Now`
+                            }
                           </button>
                         </div>
                       )}
@@ -941,7 +1098,7 @@ const StudentLessons = () => {
                         <span>By: {content.lecturerName || "Admin"}</span>
                       </div>
                       
-                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200/50 dark:border-gray-700/50 flex-wrap">
                         <Clock className="h-3.5 w-3.5" />
                         <span>Self-paced</span>
                         {hasQuiz && content.type !== "quiz" && (
@@ -959,7 +1116,7 @@ const StudentLessons = () => {
                         {planDeactivated && isPaid && (
                           <>
                             <span className="text-gray-300 dark:text-gray-600">•</span>
-                            <span className="text-red-600 dark:text-red-400 font-medium">Locked (Plan Deactivated)</span>
+                            <span className="text-red-600 dark:text-red-400 font-medium">Locked</span>
                           </>
                         )}
                       </div>
@@ -972,7 +1129,7 @@ const StudentLessons = () => {
         </div>
       </div>
 
-      {/* Secure Viewer Modal - FIXED: Full title display */}
+      {/* Secure Viewer Modal */}
       {viewer.open && (
         <div 
           id="secure-viewer" 
@@ -982,19 +1139,16 @@ const StudentLessons = () => {
         >
           {/* Animated Gradient Background */}
           <div className={`absolute inset-0 ${viewerGradients[viewerGradientIndex]} transition-all duration-1000 ease-in-out`}>
-            {/* Pattern Overlay */}
             <div 
               className="absolute inset-0 opacity-30 transition-all duration-1000"
               style={{ backgroundImage: viewerPatterns[viewerPatternIndex] }}
             ></div>
             
-            {/* Animated Gradient Orbs */}
             <div className="absolute inset-0 overflow-hidden">
               <div className="absolute -top-40 -right-40 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
               <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-500/20 rounded-full blur-3xl animate-pulse delay-2000"></div>
               
-              {/* Floating Particles */}
               <div className="absolute inset-0">
                 <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-white/20 rounded-full animate-float"></div>
                 <div className="absolute top-3/4 left-1/3 w-3 h-3 bg-white/15 rounded-full animate-float-delay"></div>
@@ -1004,14 +1158,12 @@ const StudentLessons = () => {
             </div>
           </div>
 
-          {/* Top Header - FIXED: Title now displays fully */}
+          {/* Top Header */}
           <div className="relative z-10 flex flex-col gap-2 p-3 text-white bg-black/50 backdrop-blur-lg flex-shrink-0 border-b border-white/10">
-            {/* Title row - takes full width */}
             <div className="flex items-start gap-2 w-full">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-purple-500/25">
                 {viewer.type === "video" ? <PlayCircle className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
               </div>
-              {/* Title - FULL WIDTH with proper wrapping, NO truncation */}
               <div className="flex-1">
                 <h3 className="font-semibold text-sm sm:text-base md:text-lg text-white drop-shadow-lg break-words leading-tight whitespace-normal w-full">
                   {viewer.title}
@@ -1019,7 +1171,6 @@ const StudentLessons = () => {
               </div>
             </div>
             
-            {/* Buttons row */}
             <div className="flex gap-1 justify-end w-full">
               {lessonQuizzes[viewer.lessonId] && viewer.type !== "quiz" && (
                 <button
@@ -1041,7 +1192,6 @@ const StudentLessons = () => {
 
           {/* Content Area */}
           <div className="relative z-10 flex-1 flex items-center justify-center p-2 sm:p-4 min-h-0 overflow-hidden">
-            {/* Loading State */}
             {isPdfLoading && viewer.type === "pdf" && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-20">
                 <div className="flex flex-col items-center gap-3">
@@ -1054,7 +1204,6 @@ const StudentLessons = () => {
               </div>
             )}
 
-            {/* PDF Error State */}
             {pdfError && viewer.type === "pdf" && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-20">
                 <div className="flex flex-col items-center gap-3 max-w-md text-center px-4">
@@ -1140,7 +1289,7 @@ const StudentLessons = () => {
             )}
           </div>
 
-          {/* FLOATING PDF CONTROLS - Always visible and on top */}
+          {/* PDF Controls */}
           {viewer.type === "pdf" && (
             <div 
               className={`relative z-30 transition-all duration-300 ${
@@ -1189,7 +1338,7 @@ const StudentLessons = () => {
             </div>
           )}
 
-          {/* Mobile Instructions - With controls visibility indicator */}
+          {/* Mobile Instructions */}
           {viewer.type === "pdf" && (
             <div className={`relative z-10 flex-shrink-0 p-2 text-center text-white/60 text-xs border-t border-white/10 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
               showPdfControls ? 'opacity-100' : 'opacity-0'
@@ -1202,7 +1351,7 @@ const StudentLessons = () => {
             </div>
           )}
 
-          {/* Watermark - Now with gradient text */}
+          {/* Watermark */}
           <div className="absolute inset-0 pointer-events-none select-none overflow-hidden z-0">
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-8 rotate-[-30deg]">

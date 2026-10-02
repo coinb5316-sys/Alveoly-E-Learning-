@@ -1,3 +1,4 @@
+// AIChat.jsx - COMPLETE UPDATED VERSION (USD → GHS Conversion)
 import { useState, useEffect, useRef } from "react";
 import axios from "../api/axios";
 import { io } from "socket.io-client";
@@ -12,10 +13,31 @@ import {
   FaComments,
   FaSpinner,
   FaStar,
-  FaCrown
+  FaCrown,
+  FaDollarSign,
+  FaSync,
+  FaCediSign
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
+
+// ================= CURRENCY HELPERS =================
+const FALLBACK_USD_TO_GHS = 15.50;
+
+const formatUSD = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "$0.00";
+  return `$${num.toFixed(2)}`;
+};
+
+const formatGHS = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "GH₵0.00";
+  return `GH₵${num.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
 
 const AIChat = () => {
   const [socket, setSocket] = useState(null);
@@ -32,6 +54,83 @@ const AIChat = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
+
+  // ================= EXCHANGE RATE STATE =================
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  // ================= FETCH EXCHANGE RATE =================
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS,
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS,
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS,
+        },
+      ];
+
+      let rate = null;
+
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // ================= CURRENCY CONVERSION =================
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || !usdAmount) return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
+
+  // ================= INIT =================
+  useEffect(() => {
+    fetchExchangeRate();
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ================= SOCKET =================
   useEffect(() => {
@@ -294,13 +393,27 @@ const AIChat = () => {
     return `${secs}s`;
   };
 
-  const handleSubscribe = async (planId) => {
-    if (!planId) return;
+  // ================= SUBSCRIBE WITH USD + GHS =================
+  const handleSubscribe = async (plan) => {
+    if (!plan?._id) return;
     
     try {
-      const response = await axios.post("/ai-subscriptions", { planId });
+      const ghsAmount = convertToGHS(plan.price);
+      const rate = exchangeRate || FALLBACK_USD_TO_GHS;
+      
+      const response = await axios.post("/ai-subscriptions", {
+        planId: plan._id,
+        // ============== SEND GHS INFO TO BACKEND ==============
+        amountInGHS: parseFloat(ghsAmount),
+        exchangeRate: parseFloat(rate.toFixed(4)),
+        priceUSD: parseFloat(plan.price),
+        currency: "GHS",
+      });
+      
       if (response.data?.authorization_url) {
         window.location.href = response.data.authorization_url;
+      } else if (response.data?.authorizationUrl) {
+        window.location.href = response.data.authorizationUrl;
       } else {
         toast.error("Invalid subscription response");
       }
@@ -351,6 +464,24 @@ const AIChat = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Exchange Rate Indicator (compact) */}
+          {exchangeRate && (
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800">
+              <FaDollarSign className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                1 USD = {exchangeRate.toFixed(2)} GHS
+              </span>
+              <button
+                onClick={fetchExchangeRate}
+                disabled={exchangeRateLoading}
+                className="p-0.5 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
+                title="Refresh exchange rate"
+              >
+                <FaSync className={`w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          )}
+
           {subscription ? (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg">
               <FaClock className="w-3 h-3" />
@@ -485,18 +616,65 @@ const AIChat = () => {
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
                     Get personalized AI tutoring and instant answers to your nursing questions
                   </p>
-                  <div className="space-y-3">
-                    {plans.map((plan) => (
+
+                  {/* Exchange Rate Banner */}
+                  {exchangeRate && (
+                    <div className="mb-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800">
+                      <FaDollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                        1 USD = {exchangeRate.toFixed(2)} GHS
+                      </span>
                       <button
-                        key={plan._id}
-                        onClick={() => handleSubscribe(plan._id)}
-                        className="w-full flex items-center justify-between px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
+                        onClick={fetchExchangeRate}
+                        disabled={exchangeRateLoading}
+                        className="p-0.5 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
+                        title="Refresh exchange rate"
                       >
-                        <span className="font-semibold">{plan.name}</span>
-                        <span className="text-lg font-bold">${plan.price}</span>
+                        <FaSync className={`w-3 h-3 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
                       </button>
-                    ))}
+                    </div>
+                  )}
+
+                  {/* Plan Buttons with Dual Currency */}
+                  <div className="space-y-3">
+                    {plans.map((plan) => {
+                      const priceInGHS = convertToGHS(plan.price);
+                      return (
+                        <button
+                          key={plan._id}
+                          onClick={() => handleSubscribe(plan)}
+                          className="w-full flex flex-col gap-2 px-5 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className="font-semibold text-base">{plan.name}</span>
+                            <div className="flex items-baseline gap-1">
+                              <FaDollarSign className="w-3 h-3 opacity-80" />
+                              <span className="text-lg font-bold">{parseFloat(plan.price).toFixed(2)}</span>
+                            </div>
+                          </div>
+                          {/* GHS Conversion Row */}
+                          {exchangeRate && priceInGHS > 0 && (
+                            <div className="flex items-center justify-between w-full pt-2 border-t border-white/20">
+                              <span className="text-xs opacity-90">You pay</span>
+                              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
+                                <FaCediSign className="w-3 h-3" />
+                                <span className="text-sm font-bold">
+                                  {formatGHS(priceInGHS)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
+
+                  {plans.length === 0 && (
+                    <div className="text-center py-8">
+                      <FaSpinner className="w-6 h-6 text-slate-400 animate-spin mx-auto" />
+                      <p className="text-xs text-slate-400 mt-2">Loading plans...</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
