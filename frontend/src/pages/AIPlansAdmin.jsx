@@ -2,19 +2,19 @@
 import { useState, useEffect } from "react";
 import axios from "../api/axios";
 import { 
-  FaEdit, 
+  FaPenToSquare,
   FaTrash, 
   FaTag, 
   FaPlus, 
-  FaSave, 
-  FaTimes,
+  FaFloppyDisk,
+  FaXmark,
   FaCrown,
-  FaCalendarAlt,
+  FaCalendarDays,
   FaMoneyBillWave,
   FaGem,
   FaRocket,
   FaStar,
-  FaCheckCircle,
+  FaCircleCheck,
   FaDollarSign,
   FaArrowsRotate,
   FaCediSign
@@ -354,7 +354,7 @@ const AIPlansAdmin = () => {
               <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                    {editingId ? <FaEdit className="text-white text-lg" /> : <FaPlus className="text-white text-lg" />}
+                    {editingId ? <FaPenToSquare className="text-white text-lg" /> : <FaPlus className="text-white text-lg" />}
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-white">
@@ -419,7 +419,7 @@ const AIPlansAdmin = () => {
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="relative">
-                      <FaCalendarAlt className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                      <FaCalendarDays className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" />
                       <input
                         type="number"
                         placeholder="Value"
@@ -471,7 +471,7 @@ const AIPlansAdmin = () => {
                       </>
                     ) : (
                       <>
-                        <FaSave className="w-4 h-4" />
+                        <FaFloppyDisk className="w-4 h-4" />
                         {editingId ? "Update Plan" : "Create Plan"}
                       </>
                     )}
@@ -482,7 +482,7 @@ const AIPlansAdmin = () => {
                       onClick={handleCancelEdit}
                       className="px-6 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
                     >
-                      <FaTimes className="w-4 h-4" />
+                      <FaXmark className="w-4 h-4" />
                     </button>
                   )}
                 </div>
@@ -568,7 +568,7 @@ const AIPlansAdmin = () => {
 
                           <div className="flex items-center gap-4 mt-3 flex-wrap">
                             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                              <FaCalendarAlt className="w-3 h-3" />
+                              <FaCalendarDays className="w-3 h-3" />
                               <span>{plan.durationValue} {getDurationLabel(plan.durationValue, plan.durationUnit)}</span>
                             </div>
                             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
@@ -589,7 +589,7 @@ const AIPlansAdmin = () => {
                             onClick={() => handleEdit(plan)}
                             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-all"
                           >
-                            <FaEdit className="w-3.5 h-3.5" />
+                            <FaPenToSquare className="w-3.5 h-3.5" />
                             <span className="text-sm font-medium">Edit</span>
                           </button>
                           <button
