@@ -1,4 +1,4 @@
-// pages/StudentPlans.jsx - COMPLETE FIXED VERSION (Server-Verified Rate)
+// pages/StudentPlans.jsx - COMPLETE FIXED VERSION (Server-Verified Rate + FA6)
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -6,12 +6,12 @@ import {
   FaCheck,
   FaSpinner,
   FaClock,
-  FaCalendarAlt,
+  FaCalendarDays,
   FaRocket,
   FaUnlock,
   FaLock,
-  FaCheckCircle,
-  FaExclamationTriangle,
+  FaCircleCheck,
+  FaTriangleExclamation,
   FaTag,
   FaArrowsRotate,
   FaDollarSign,
@@ -301,9 +301,9 @@ const StudentPlans = () => {
                   }`}
                 >
                   {isSubscribed ? (
-                    <FaCheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                    <FaCircleCheck className="h-6 w-6 text-green-600 dark:text-green-400" />
                   ) : (
-                    <FaExclamationTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                    <FaTriangleExclamation className="h-6 w-6 text-red-600 dark:text-red-400" />
                   )}
                 </div>
                 <div>
