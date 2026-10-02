@@ -377,3 +377,177 @@ export const approveUser = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// ================= BULK DELETE: ALL NON-ADMIN USERS =================
+export const deleteAllNonAdmins = async (req, res) => {
+  try {
+    // Safety: require a confirmation token in the body
+    const { confirm } = req.body;
+
+    if (confirm !== "DELETE_ALL_NON_ADMINS") {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Confirmation required. Send { "confirm": "DELETE_ALL_NON_ADMINS" } in the request body.',
+      });
+    }
+
+    // Prevent admin deleting themselves (they must be an admin anyway)
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can perform this action" });
+    }
+
+    // Count first for the response
+    const totalNonAdmins = await User.countDocuments({ role: { $ne: "admin" } });
+    const studentsCount = await User.countDocuments({ role: "student" });
+    const lecturersCount = await User.countDocuments({ role: "lecturer" });
+
+    if (totalNonAdmins === 0) {
+      return res.json({
+        success: true,
+        message: "No non-admin users to delete",
+        deletedCount: 0,
+      });
+    }
+
+    // Delete all users whose role is NOT 'admin'
+    const result = await User.deleteMany({ role: { $ne: "admin" } });
+
+    console.log(
+      `🗑️ Bulk delete (all non-admins): deleted ${result.deletedCount} users (${studentsCount} students, ${lecturersCount} lecturers)`
+    );
+
+    // Notify other admins about this action
+    const admins = await User.find({ role: "admin" });
+    for (const admin of admins) {
+      await createNotification(
+        admin._id,
+        "admin",
+        "warning",
+        "⚠️ Bulk User Deletion",
+        `${req.user.name} deleted ALL non-admin users (${result.deletedCount} total: ${studentsCount} students, ${lecturersCount} lecturers).`,
+        "/admin/users",
+        {
+          action: "bulk_delete_non_admins",
+          deletedCount: result.deletedCount,
+          performedBy: req.user._id,
+        }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} non-admin users`,
+      deletedCount: result.deletedCount,
+      breakdown: {
+        students: studentsCount,
+        lecturers: lecturersCount,
+      },
+    });
+  } catch (err) {
+    console.error("Bulk delete all non-admins error:", err);
+    res.status(500).json({ message: "Server error: " + err.message });
+  }
+};
+
+// ================= BULK DELETE: SELECTED USERS =================
+export const deleteSelectedUsers = async (req, res) => {
+  try {
+    const { userIds } = req.body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "userIds array is required and must not be empty",
+      });
+    }
+
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can perform this action" });
+    }
+
+    // Never delete the admin performing the action
+    const sanitizedIds = userIds.filter(
+      (id) => id && id.toString() !== req.user._id.toString()
+    );
+
+    if (sanitizedIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid user IDs provided (cannot delete yourself)",
+      });
+    }
+
+    // Refuse to delete any admins — bulk delete only works on students & lecturers
+    const adminsInSelection = await User.find({
+      _id: { $in: sanitizedIds },
+      role: "admin",
+    }).select("_id name email");
+
+    if (adminsInSelection.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete admin accounts in bulk. Remove these from selection: ${adminsInSelection
+          .map((a) => a.email)
+          .join(", ")}`,
+      });
+    }
+
+    // Fetch users to be deleted (for logging/notification)
+    const usersToDelete = await User.find({ _id: { $in: sanitizedIds } }).select(
+      "_id name email role"
+    );
+
+    if (usersToDelete.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No users found matching the provided IDs",
+      });
+    }
+
+    // Delete them
+    const result = await User.deleteMany({ _id: { $in: sanitizedIds } });
+
+    console.log(
+      `🗑️ Bulk delete (selected): deleted ${result.deletedCount} users by ${req.user.email}`
+    );
+
+    // Notify other admins
+    const admins = await User.find({ role: "admin" });
+    for (const admin of admins) {
+      await createNotification(
+        admin._id,
+        "admin",
+        "warning",
+        "⚠️ Bulk User Deletion",
+        `${req.user.name} deleted ${result.deletedCount} selected users.`,
+        "/admin/users",
+        {
+          action: "bulk_delete_selected",
+          deletedCount: result.deletedCount,
+          performedBy: req.user._id,
+          deletedUsers: usersToDelete.map((u) => ({
+            name: u.name,
+            email: u.email,
+            role: u.role,
+          })),
+        }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} users`,
+      deletedCount: result.deletedCount,
+      deletedUsers: usersToDelete.map((u) => ({
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+      })),
+    });
+  } catch (err) {
+    console.error("Bulk delete selected users error:", err);
+    res.status(500).json({ message: "Server error: " + err.message });
+  }
+};

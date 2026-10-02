@@ -1,9 +1,9 @@
-// AdminUsers.jsx - Updated with Plan Deactivation/Reactivation and Pending Approval Filter
+// pages/AdminUsers.jsx - COMPLETE UPDATED VERSION (with Bulk Delete)
 import { useEffect, useState } from "react";
-import { 
-  FaTrash, 
-  FaSearch, 
-  FaFilter, 
+import {
+  FaTrash,
+  FaSearch,
+  FaFilter,
   FaGraduationCap,
   FaEnvelope,
   FaUsers,
@@ -41,6 +41,8 @@ import {
   FaPlay,
   FaStop,
   FaSync,
+  FaCheckSquare,
+  FaSquare,
 } from "react-icons/fa";
 import axios from "../api/axios";
 import toast, { Toaster } from "react-hot-toast";
@@ -60,7 +62,9 @@ const AdminUsers = () => {
   const [showAddLecturerModal, setShowAddLecturerModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [showAssignPlanModal, setShowAssignPlanModal] = useState(false);
-  const [showRegistrationDetailsModal, setShowRegistrationDetailsModal] = useState(false);
+  const [showRegistrationDetailsModal, setShowRegistrationDetailsModal] =
+    useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [expandedLecturer, setExpandedLecturer] = useState(null);
   const [selectedPlanForUser, setSelectedPlanForUser] = useState("");
@@ -71,7 +75,7 @@ const AdminUsers = () => {
     programId: "",
     courseId: "",
     title: "Dr.",
-    subjectIds: []
+    subjectIds: [],
   });
   const [editUserData, setEditUserData] = useState({
     name: "",
@@ -81,11 +85,15 @@ const AdminUsers = () => {
     programId: "",
     courseId: "",
     title: "",
-    subjectIds: []
+    subjectIds: [],
   });
   const [availableSubjects, setAvailableSubjects] = useState([]);
   const [filteredCourses, setFilteredCourses] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // ================= BULK SELECTION STATE =================
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
 
   // ================= FETCH USERS =================
   const fetchUsers = async () => {
@@ -93,25 +101,36 @@ const AdminUsers = () => {
       setLoading(true);
       const res = await axios.get("/users");
       let allUsers = res.data || [];
-      
-      const formattedUsers = allUsers.map(user => ({
+
+      const formattedUsers = allUsers.map((user) => ({
         ...user,
         programName: user.programId?.name || "Not assigned",
         courseName: user.courseId?.name || "Not assigned",
-        userTypeDisplay: user.userType === "alveoly_student" ? "Alveoly Student" : 
-                         user.userType === "non_alveoly_student" ? "Non-Alveoly Student" : 
-                         "Not set",
+        userTypeDisplay:
+          user.userType === "alveoly_student"
+            ? "Alveoly Student"
+            : user.userType === "non_alveoly_student"
+            ? "Non-Alveoly Student"
+            : "Not set",
         planName: user.planId?.title || "No Plan",
-        planStatus: user.isPlanActive ? "Active" : 
-                    user.planDeactivatedByAdmin ? "Deactivated" :
-                    user.planId ? "Expired" : "None",
+        planStatus: user.isPlanActive
+          ? "Active"
+          : user.planDeactivatedByAdmin
+          ? "Deactivated"
+          : user.planId
+          ? "Expired"
+          : "None",
         isApprovedDisplay: user.isApproved ? "✅ Approved" : "⏳ Pending",
-        registrationSourceDisplay: user.registrationSource === "phone" ? "📱 Phone (0549556116)" :
-                                   user.registrationSource === "other" ? "📝 Other" :
-                                   "❌ Not specified",
-        registrationDetailsDisplay: user.registrationDetails || "No details provided"
+        registrationSourceDisplay:
+          user.registrationSource === "phone"
+            ? "📱 Phone (0549556116)"
+            : user.registrationSource === "other"
+            ? "📝 Other"
+            : "❌ Not specified",
+        registrationDetailsDisplay:
+          user.registrationDetails || "No details provided",
       }));
-      
+
       setUsers(formattedUsers);
     } catch (err) {
       console.error("Error fetching users:", err);
@@ -169,7 +188,12 @@ const AdminUsers = () => {
 
   // ================= FETCH FILTERED COURSES BY PROGRAM =================
   const fetchFilteredCourses = async (programId) => {
-    if (!programId || programId === "undefined" || programId === "null" || programId === "") {
+    if (
+      !programId ||
+      programId === "undefined" ||
+      programId === "null" ||
+      programId === ""
+    ) {
       setFilteredCourses([]);
       return [];
     }
@@ -187,7 +211,12 @@ const AdminUsers = () => {
 
   // ================= FETCH FILTERED SUBJECTS =================
   const fetchFilteredSubjects = async (courseId) => {
-    if (!courseId || courseId === "undefined" || courseId === "null" || courseId === "") {
+    if (
+      !courseId ||
+      courseId === "undefined" ||
+      courseId === "null" ||
+      courseId === ""
+    ) {
       setAvailableSubjects([]);
       return [];
     }
@@ -211,6 +240,103 @@ const AdminUsers = () => {
     fetchPlans();
   }, []);
 
+  // ================= BULK SELECTION HELPERS =================
+  const toggleBulkSelectMode = () => {
+    if (bulkSelectMode) {
+      // turning off: clear selection
+      setSelectedUserIds([]);
+    }
+    setBulkSelectMode(!bulkSelectMode);
+  };
+
+  const toggleUserSelection = (userId) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const selectAllVisible = () => {
+    // Only select non-admin users from the currently filtered list
+    const selectableIds = filteredUsers
+      .filter((u) => u.role !== "admin")
+      .map((u) => u._id);
+    setSelectedUserIds(selectableIds);
+  };
+
+  const deselectAll = () => {
+    setSelectedUserIds([]);
+  };
+
+  // ================= BULK DELETE: SELECTED =================
+  const handleDeleteSelected = async () => {
+    if (selectedUserIds.length === 0) {
+      toast.error("No users selected");
+      return;
+    }
+
+    // Safety: never include current admin
+    const idsToDelete = selectedUserIds.filter((id) => id);
+
+    try {
+      setActionLoading(true);
+      const response = await axios.delete("/users/bulk/delete-selected", {
+        data: { userIds: idsToDelete },
+      });
+
+      if (response.data.success) {
+        toast.success(
+          `Successfully deleted ${response.data.deletedCount} user(s)`
+        );
+        setSelectedUserIds([]);
+        setBulkSelectMode(false);
+        setShowBulkDeleteModal(false);
+        fetchUsers();
+      } else {
+        toast.error(response.data.message || "Failed to delete users");
+      }
+    } catch (err) {
+      console.error("Bulk delete error:", err);
+      toast.error(
+        err.response?.data?.message || "Failed to delete selected users"
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ================= BULK DELETE: ALL NON-ADMINS =================
+  const handleDeleteAllNonAdmins = async () => {
+    try {
+      setActionLoading(true);
+      const response = await axios.delete("/users/bulk/delete-all-non-admins", {
+        data: { confirm: "DELETE_ALL_NON_ADMINS" },
+      });
+
+      if (response.data.success) {
+        toast.success(
+          `Deleted ${response.data.deletedCount} non-admin users (${
+            response.data.breakdown?.students || 0
+          } students, ${response.data.breakdown?.lecturers || 0} lecturers)`
+        );
+        setSelectedUserIds([]);
+        setBulkSelectMode(false);
+        setShowBulkDeleteModal(false);
+        fetchUsers();
+      } else {
+        toast.error(response.data.message || "Failed to delete users");
+      }
+    } catch (err) {
+      console.error("Delete all error:", err);
+      toast.error(
+        err.response?.data?.message || "Failed to delete all non-admin users"
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // ================= ASSIGN PLAN TO USER =================
   const handleAssignPlan = async () => {
     if (!selectedUser || !selectedPlanForUser) {
@@ -222,7 +348,7 @@ const AdminUsers = () => {
       setActionLoading(true);
       const response = await axios.post("/auth/assign-plan", {
         userId: selectedUser._id,
-        planId: selectedPlanForUser
+        planId: selectedPlanForUser,
       });
 
       if (response.data.success) {
@@ -244,7 +370,11 @@ const AdminUsers = () => {
 
   // ================= DEACTIVATE USER PLAN =================
   const handleDeactivatePlan = async (user) => {
-    if (!window.confirm(`Are you sure you want to deactivate ${user.name}'s plan? They will lose access to all premium content.`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to deactivate ${user.name}'s plan? They will lose access to all premium content.`
+      )
+    ) {
       return;
     }
 
@@ -268,7 +398,11 @@ const AdminUsers = () => {
 
   // ================= REACTIVATE USER PLAN =================
   const handleReactivatePlan = async (user) => {
-    if (!window.confirm(`Are you sure you want to reactivate ${user.name}'s plan? They will regain access to premium content.`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to reactivate ${user.name}'s plan? They will regain access to premium content.`
+      )
+    ) {
       return;
     }
 
@@ -302,7 +436,7 @@ const AdminUsers = () => {
     try {
       setActionLoading(true);
       const response = await axios.patch(`/auth/admin/approve/${userId}`);
-      
+
       if (response.data.success) {
         toast.success("User approved successfully!");
         fetchUsers();
@@ -327,7 +461,7 @@ const AdminUsers = () => {
   const handleUpdateUser = async () => {
     try {
       setActionLoading(true);
-      
+
       const updateData = {
         name: editUserData.name,
         email: editUserData.email,
@@ -336,22 +470,26 @@ const AdminUsers = () => {
         programId: editUserData.programId || null,
         courseId: editUserData.courseId || null,
       };
-      
+
       if (editUserData.role === "lecturer") {
         let subjectIds = [];
         if (editUserData.subjectIds && Array.isArray(editUserData.subjectIds)) {
-          subjectIds = editUserData.subjectIds.filter(id => id && id !== "" && id !== "undefined" && id !== "null");
+          subjectIds = editUserData.subjectIds.filter(
+            (id) => id && id !== "" && id !== "undefined" && id !== "null"
+          );
         }
-        
+
         updateData.lecturerInfo = {
           title: editUserData.title || "",
-          assignedCourses: editUserData.courseId ? [editUserData.courseId] : [],
-          assignedSubjects: subjectIds
+          assignedCourses: editUserData.courseId
+            ? [editUserData.courseId]
+            : [],
+          assignedSubjects: subjectIds,
         };
       }
-      
+
       const response = await axios.put(`/users/${selectedUser._id}`, updateData);
-      
+
       if (response.data.success) {
         toast.success("User updated successfully!");
         setShowEditUserModal(false);
@@ -371,17 +509,22 @@ const AdminUsers = () => {
   // ================= OPEN EDIT MODAL =================
   const openEditModal = (user) => {
     let subjectIds = [];
-    if (user.lecturerInfo?.assignedSubjects && user.lecturerInfo.assignedSubjects.length > 0) {
-      subjectIds = user.lecturerInfo.assignedSubjects.map(s => {
-        if (typeof s === 'object' && s._id) return s._id;
-        if (typeof s === 'string') return s;
-        return s;
-      }).filter(id => id && id !== "" && id !== "undefined" && id !== "null");
+    if (
+      user.lecturerInfo?.assignedSubjects &&
+      user.lecturerInfo.assignedSubjects.length > 0
+    ) {
+      subjectIds = user.lecturerInfo.assignedSubjects
+        .map((s) => {
+          if (typeof s === "object" && s._id) return s._id;
+          if (typeof s === "string") return s;
+          return s;
+        })
+        .filter((id) => id && id !== "" && id !== "undefined" && id !== "null");
     }
-    
+
     const userProgramId = user.programId?._id || user.programId || "";
     const userCourseId = user.courseId?._id || user.courseId || "";
-    
+
     setSelectedUser(user);
     setEditUserData({
       name: user.name || "",
@@ -391,17 +534,25 @@ const AdminUsers = () => {
       programId: userProgramId,
       courseId: userCourseId,
       title: user.lecturerInfo?.title || "Dr.",
-      subjectIds: subjectIds
+      subjectIds: subjectIds,
     });
-    
-    if (userProgramId && userProgramId !== "undefined" && userProgramId !== "null") {
-      fetchFilteredCourses(userProgramId).then(coursesData => {
-        if (userCourseId && userCourseId !== "undefined" && userCourseId !== "null") {
+
+    if (
+      userProgramId &&
+      userProgramId !== "undefined" &&
+      userProgramId !== "null"
+    ) {
+      fetchFilteredCourses(userProgramId).then((coursesData) => {
+        if (
+          userCourseId &&
+          userCourseId !== "undefined" &&
+          userCourseId !== "null"
+        ) {
           fetchFilteredSubjects(userCourseId);
         }
       });
     }
-    
+
     setShowEditUserModal(true);
   };
 
@@ -424,7 +575,12 @@ const AdminUsers = () => {
 
   // ================= DELETE USER =================
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this user? This action cannot be undone."
+      )
+    )
+      return;
 
     try {
       setActionLoading(true);
@@ -442,30 +598,32 @@ const AdminUsers = () => {
   // ================= ADD LECTURER =================
   const handleAddLecturer = async (e) => {
     e.preventDefault();
-    
+
     try {
       setActionLoading(true);
-      
+
       if (!newLecturer.name || !newLecturer.email || !newLecturer.password) {
         toast.error("Please fill in all required fields");
         setActionLoading(false);
         return;
       }
-      
+
       if (!newLecturer.programId) {
         toast.error("Please select a program");
         setActionLoading(false);
         return;
       }
-      
+
       if (!newLecturer.courseId) {
         toast.error("Please select a course");
         setActionLoading(false);
         return;
       }
-      
-      const subjectIdsToSend = Array.isArray(newLecturer.subjectIds) ? newLecturer.subjectIds : [];
-      
+
+      const subjectIdsToSend = Array.isArray(newLecturer.subjectIds)
+        ? newLecturer.subjectIds
+        : [];
+
       const payload = {
         name: newLecturer.name,
         email: newLecturer.email,
@@ -473,11 +631,11 @@ const AdminUsers = () => {
         programId: newLecturer.programId,
         courseId: newLecturer.courseId,
         title: newLecturer.title || "Dr.",
-        assignedSubjects: subjectIdsToSend
+        assignedSubjects: subjectIdsToSend,
       };
-      
+
       const response = await axios.post("/auth/register-lecturer", payload);
-      
+
       if (response.data.success) {
         toast.success(response.data.message || "Lecturer added successfully!");
         setShowAddLecturerModal(false);
@@ -488,7 +646,7 @@ const AdminUsers = () => {
           programId: "",
           courseId: "",
           title: "Dr.",
-          subjectIds: []
+          subjectIds: [],
         });
         setAvailableSubjects([]);
         setFilteredCourses([]);
@@ -505,8 +663,18 @@ const AdminUsers = () => {
   };
 
   const handleProgramChange = async (programId) => {
-    setEditUserData({...editUserData, programId, courseId: "", subjectIds: []});
-    if (programId && programId !== "undefined" && programId !== "null" && programId !== "") {
+    setEditUserData({
+      ...editUserData,
+      programId,
+      courseId: "",
+      subjectIds: [],
+    });
+    if (
+      programId &&
+      programId !== "undefined" &&
+      programId !== "null" &&
+      programId !== ""
+    ) {
       const coursesData = await fetchFilteredCourses(programId);
       setFilteredCourses(coursesData);
       setAvailableSubjects([]);
@@ -517,8 +685,13 @@ const AdminUsers = () => {
   };
 
   const handleCourseChange = async (courseId) => {
-    setEditUserData({...editUserData, courseId, subjectIds: []});
-    if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
+    setEditUserData({ ...editUserData, courseId, subjectIds: [] });
+    if (
+      courseId &&
+      courseId !== "undefined" &&
+      courseId !== "null" &&
+      courseId !== ""
+    ) {
       await fetchFilteredSubjects(courseId);
     } else {
       setAvailableSubjects([]);
@@ -526,8 +699,18 @@ const AdminUsers = () => {
   };
 
   const handleNewProgramChange = async (programId) => {
-    setNewLecturer(prev => ({ ...prev, programId, courseId: "", subjectIds: [] }));
-    if (programId && programId !== "undefined" && programId !== "null" && programId !== "") {
+    setNewLecturer((prev) => ({
+      ...prev,
+      programId,
+      courseId: "",
+      subjectIds: [],
+    }));
+    if (
+      programId &&
+      programId !== "undefined" &&
+      programId !== "null" &&
+      programId !== ""
+    ) {
       const coursesData = await fetchFilteredCourses(programId);
       setFilteredCourses(coursesData);
       setAvailableSubjects([]);
@@ -538,8 +721,13 @@ const AdminUsers = () => {
   };
 
   const handleNewCourseChange = async (courseId) => {
-    setNewLecturer(prev => ({ ...prev, courseId, subjectIds: [] }));
-    if (courseId && courseId !== "undefined" && courseId !== "null" && courseId !== "") {
+    setNewLecturer((prev) => ({ ...prev, courseId, subjectIds: [] }));
+    if (
+      courseId &&
+      courseId !== "undefined" &&
+      courseId !== "null" &&
+      courseId !== ""
+    ) {
       await fetchFilteredSubjects(courseId);
     } else {
       setAvailableSubjects([]);
@@ -554,13 +742,13 @@ const AdminUsers = () => {
         selectedValues.push(options[i].value);
       }
     }
-    setEditUserData({...editUserData, subjectIds: selectedValues});
+    setEditUserData({ ...editUserData, subjectIds: selectedValues });
   };
 
   const handleNewSubjectSelection = (e) => {
     const selectedOptions = Array.from(e.target.selectedOptions);
-    const selectedValues = selectedOptions.map(option => option.value);
-    setNewLecturer(prev => ({ ...prev, subjectIds: selectedValues }));
+    const selectedValues = selectedOptions.map((option) => option.value);
+    setNewLecturer((prev) => ({ ...prev, subjectIds: selectedValues }));
   };
 
   const toggleLecturerExpanded = (userId) => {
@@ -574,14 +762,14 @@ const AdminUsers = () => {
   const getAssignedSubjectsList = (user) => {
     if (user.role !== "lecturer") return [];
     if (!user.lecturerInfo?.assignedSubjects) return [];
-    return user.lecturerInfo.assignedSubjects.map(subject => {
-      if (typeof subject === 'object' && subject.name) return subject;
+    return user.lecturerInfo.assignedSubjects.map((subject) => {
+      if (typeof subject === "object" && subject.name) return subject;
       return { _id: subject, name: "Loading..." };
     });
   };
 
   const getUserTypeBadgeStyle = (userType) => {
-    switch(userType) {
+    switch (userType) {
       case "alveoly_student":
         return "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800";
       case "non_alveoly_student":
@@ -592,7 +780,7 @@ const AdminUsers = () => {
   };
 
   const getUserTypeIcon = (userType) => {
-    switch(userType) {
+    switch (userType) {
       case "alveoly_student":
         return <FaUserCheck className="h-3.5 w-3.5" />;
       case "non_alveoly_student":
@@ -604,23 +792,45 @@ const AdminUsers = () => {
 
   const getPlanStatusBadge = (user) => {
     if (user.planDeactivatedByAdmin) {
-      return { color: "bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800", icon: <FaBan className="h-3 w-3" />, label: "Deactivated" };
+      return {
+        color:
+          "bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
+        icon: <FaBan className="h-3 w-3" />,
+        label: "Deactivated",
+      };
     }
     if (user.isPlanActive) {
-      return { color: "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800", icon: <FaCheckCircle className="h-3 w-3" />, label: "Active" };
+      return {
+        color:
+          "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800",
+        icon: <FaCheckCircle className="h-3 w-3" />,
+        label: "Active",
+      };
     }
     if (user.planId) {
-      return { color: "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800", icon: <FaExclamationTriangle className="h-3 w-3" />, label: "Expired" };
+      return {
+        color:
+          "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
+        icon: <FaExclamationTriangle className="h-3 w-3" />,
+        label: "Expired",
+      };
     }
-    return { color: "bg-gray-100 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700", icon: <FaRegClock className="h-3 w-3" />, label: "No Plan" };
+    return {
+      color:
+        "bg-gray-100 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700",
+      icon: <FaRegClock className="h-3 w-3" />,
+      label: "No Plan",
+    };
   };
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch =
+      user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
-    const matchesUserType = userTypeFilter === "all" || user.userType === userTypeFilter;
-    
+    const matchesUserType =
+      userTypeFilter === "all" || user.userType === userTypeFilter;
+
     let matchesStatus = true;
     if (statusFilter === "pending") {
       matchesStatus = user.userType === "alveoly_student" && !user.isApproved;
@@ -629,24 +839,31 @@ const AdminUsers = () => {
     } else if (statusFilter === "deactivated") {
       matchesStatus = user.planDeactivatedByAdmin;
     } else if (statusFilter === "expired") {
-      matchesStatus = !user.isPlanActive && user.planId && !user.planDeactivatedByAdmin;
+      matchesStatus =
+        !user.isPlanActive && user.planId && !user.planDeactivatedByAdmin;
     } else if (statusFilter === "no_plan") {
       matchesStatus = !user.planId;
     }
-    
+
     return matchesSearch && matchesRole && matchesUserType && matchesStatus;
   });
 
   const totalUsers = users.length;
-  const adminCount = users.filter(u => u.role === "admin").length;
-  const lecturerCount = users.filter(u => u.role === "lecturer").length;
-  const studentCount = users.filter(u => u.role === "student").length;
-  const alveolyStudentCount = users.filter(u => u.userType === "alveoly_student").length;
-  const nonAlveolyStudentCount = users.filter(u => u.userType === "non_alveoly_student").length;
-  const pendingApprovalCount = users.filter(u => u.userType === "alveoly_student" && !u.isApproved).length;
+  const adminCount = users.filter((u) => u.role === "admin").length;
+  const lecturerCount = users.filter((u) => u.role === "lecturer").length;
+  const studentCount = users.filter((u) => u.role === "student").length;
+  const alveolyStudentCount = users.filter(
+    (u) => u.userType === "alveoly_student"
+  ).length;
+  const nonAlveolyStudentCount = users.filter(
+    (u) => u.userType === "non_alveoly_student"
+  ).length;
+  const pendingApprovalCount = users.filter(
+    (u) => u.userType === "alveoly_student" && !u.isApproved
+  ).length;
 
   const getRoleBadgeStyle = (role) => {
-    switch(role) {
+    switch (role) {
       case "admin":
         return "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800";
       case "lecturer":
@@ -657,17 +874,25 @@ const AdminUsers = () => {
   };
 
   const getRoleIcon = (role) => {
-    switch(role) {
-      case "admin": return <FaShieldAlt className="h-3.5 w-3.5" />;
-      case "lecturer": return <FaChalkboardTeacher className="h-3.5 w-3.5" />;
-      default: return <FaUserGraduate className="h-3.5 w-3.5" />;
+    switch (role) {
+      case "admin":
+        return <FaShieldAlt className="h-3.5 w-3.5" />;
+      case "lecturer":
+        return <FaChalkboardTeacher className="h-3.5 w-3.5" />;
+      default:
+        return <FaUserGraduate className="h-3.5 w-3.5" />;
     }
   };
+
+  // Count selectable users in current filter (non-admin)
+  const selectableVisibleCount = filteredUsers.filter(
+    (u) => u.role !== "admin"
+  ).length;
 
   return (
     <div className="space-y-6">
       <Toaster position="top-right" />
-      
+
       {/* Page Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -678,7 +903,7 @@ const AdminUsers = () => {
             Manage students, lecturers, and administrators across the platform
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowAddLecturerModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
@@ -693,16 +918,96 @@ const AdminUsers = () => {
             <FaUsers className="h-4 w-4" />
             <span className="text-sm font-medium">Refresh</span>
           </button>
+          <button
+            onClick={toggleBulkSelectMode}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+              bulkSelectMode
+                ? "bg-amber-500 text-white hover:bg-amber-600"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+            }`}
+          >
+            {bulkSelectMode ? (
+              <FaTimes className="h-4 w-4" />
+            ) : (
+              <FaCheckSquare className="h-4 w-4" />
+            )}
+            <span className="text-sm font-medium">
+              {bulkSelectMode ? "Exit Select Mode" : "Bulk Select"}
+            </span>
+          </button>
+          <button
+            onClick={() => setShowBulkDeleteModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:shadow-lg transition-all duration-200"
+          >
+            <FaTrash className="h-4 w-4" />
+            <span className="text-sm font-medium">Bulk Delete</span>
+          </button>
         </div>
       </div>
+
+      {/* Bulk Selection Banner */}
+      {bulkSelectMode && (
+        <div className="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
+                <FaCheckSquare className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">
+                  Bulk Select Mode Active
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  {selectedUserIds.length} of {selectableVisibleCount} selectable user(s) selected
+                  {" "}(admins can't be selected)
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={selectAllVisible}
+                disabled={selectableVisibleCount === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 rounded-lg text-sm font-medium hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FaCheckSquare className="h-3.5 w-3.5" />
+                Select All Visible
+              </button>
+              <button
+                onClick={deselectAll}
+                disabled={selectedUserIds.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FaSquare className="h-3.5 w-3.5" />
+                Deselect All
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                disabled={selectedUserIds.length === 0 || actionLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {actionLoading ? (
+                  <FaSpinner className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FaTrash className="h-3.5 w-3.5" />
+                )}
+                Delete {selectedUserIds.length} Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Summary */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Total Users</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">{totalUsers}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Total Users
+              </p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
+                {totalUsers}
+              </p>
             </div>
             <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
               <FaUsers className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -712,8 +1017,12 @@ const AdminUsers = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Students</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">{studentCount}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Students
+              </p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
+                {studentCount}
+              </p>
             </div>
             <div className="h-10 w-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center">
               <FaUserGraduate className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -723,8 +1032,12 @@ const AdminUsers = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Alveoly Students</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">{alveolyStudentCount}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Alveoly Students
+              </p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
+                {alveolyStudentCount}
+              </p>
             </div>
             <div className="h-10 w-10 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center">
               <FaUserCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -734,8 +1047,12 @@ const AdminUsers = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Non-Alveoly</p>
-              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">{nonAlveolyStudentCount}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Non-Alveoly
+              </p>
+              <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mt-1">
+                {nonAlveolyStudentCount}
+              </p>
             </div>
             <div className="h-10 w-10 rounded-lg bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center">
               <FaUserTimes className="h-5 w-5 text-orange-600 dark:text-orange-400" />
@@ -745,8 +1062,12 @@ const AdminUsers = () => {
         <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Pending Approval</p>
-              <p className="text-2xl font-semibold text-amber-600 dark:text-amber-400 mt-1">{pendingApprovalCount}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Pending Approval
+              </p>
+              <p className="text-2xl font-semibold text-amber-600 dark:text-amber-400 mt-1">
+                {pendingApprovalCount}
+              </p>
             </div>
             <div className="h-10 w-10 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center">
               <FaClock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
@@ -758,7 +1079,10 @@ const AdminUsers = () => {
       {/* Filters Section */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-          <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+          >
             <FaFilter className="h-4 w-4" />
             <span className="text-sm font-medium">Filters & Search</span>
           </button>
@@ -767,17 +1091,17 @@ const AdminUsers = () => {
           <div className="p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="relative">
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <input 
-                type="text" 
-                placeholder="Search by name or email..." 
-                value={searchTerm} 
-                onChange={(e) => setSearchTerm(e.target.value)} 
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
               />
             </div>
-            <select 
-              value={roleFilter} 
-              onChange={(e) => setRoleFilter(e.target.value)} 
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
               className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             >
               <option value="all">All Roles</option>
@@ -785,9 +1109,9 @@ const AdminUsers = () => {
               <option value="lecturer">Lecturer</option>
               <option value="admin">Administrator</option>
             </select>
-            <select 
-              value={userTypeFilter} 
-              onChange={(e) => setUserTypeFilter(e.target.value)} 
+            <select
+              value={userTypeFilter}
+              onChange={(e) => setUserTypeFilter(e.target.value)}
               className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             >
               <option value="all">All User Types</option>
@@ -795,9 +1119,9 @@ const AdminUsers = () => {
               <option value="non_alveoly_student">Non-Alveoly Student</option>
               <option value="">Not Set</option>
             </select>
-            <select 
-              value={statusFilter} 
-              onChange={(e) => setStatusFilter(e.target.value)} 
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             >
               <option value="all">All Status</option>
@@ -815,7 +1139,9 @@ const AdminUsers = () => {
       {loading && (
         <div className="flex flex-col items-center justify-center py-12">
           <FaSpinner className="h-8 w-8 text-blue-500 animate-spin" />
-          <p className="text-gray-500 dark:text-gray-400 mt-3">Loading users...</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-3">
+            Loading users...
+          </p>
         </div>
       )}
 
@@ -826,11 +1152,16 @@ const AdminUsers = () => {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-800/50">
                 <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
+                  {bulkSelectMode && (
+                    <th className="px-4 py-4 text-left font-medium w-12"></th>
+                  )}
                   <th className="px-6 py-4 text-left font-medium">User</th>
                   <th className="px-6 py-4 text-left font-medium">Email</th>
                   <th className="px-6 py-4 text-left font-medium">User Type</th>
                   <th className="px-6 py-4 text-left font-medium">Status</th>
-                  <th className="px-6 py-4 text-left font-medium">Registration Source</th>
+                  <th className="px-6 py-4 text-left font-medium">
+                    Registration Source
+                  </th>
                   <th className="px-6 py-4 text-left font-medium">Program</th>
                   <th className="px-6 py-4 text-left font-medium">Course</th>
                   <th className="px-6 py-4 text-left font-medium">Plan</th>
@@ -840,39 +1171,88 @@ const AdminUsers = () => {
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {filteredUsers.map((user) => {
-                  const isPending = user.userType === "alveoly_student" && !user.isApproved;
-                  const hasRegistrationDetails = user.registrationSource === "other" && user.registrationDetails;
+                  const isPending =
+                    user.userType === "alveoly_student" && !user.isApproved;
+                  const hasRegistrationDetails =
+                    user.registrationSource === "other" &&
+                    user.registrationDetails;
                   const planStatus = getPlanStatusBadge(user);
-                  
+                  const isSelectable = user.role !== "admin";
+                  const isSelected = selectedUserIds.includes(user._id);
+
                   return (
-                    <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <tr
+                      key={user._id}
+                      className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
+                        isSelected ? "bg-amber-50 dark:bg-amber-950/20" : ""
+                      }`}
+                    >
+                      {bulkSelectMode && (
+                        <td className="px-4 py-4">
+                          {isSelectable ? (
+                            <button
+                              onClick={() => toggleUserSelection(user._id)}
+                              className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
+                            >
+                              {isSelected ? (
+                                <FaCheckSquare className="h-5 w-5" />
+                              ) : (
+                                <FaSquare className="h-5 w-5" />
+                              )}
+                            </button>
+                          ) : (
+                            <span
+                              className="text-gray-300 dark:text-gray-600 cursor-not-allowed"
+                              title="Admins cannot be bulk-deleted"
+                            >
+                              <FaSquare className="h-5 w-5" />
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${(
-                            user.role === "admin" ? "from-purple-500 to-purple-600" :
-                            user.role === "lecturer" ? "from-blue-500 to-blue-600" : 
-                            isPending ? "from-amber-500 to-amber-600" : "from-green-500 to-green-600"
-                          )}`}>
-                            <span className="text-white font-semibold text-sm">{user.name?.charAt(0).toUpperCase()}</span>
+                          <div
+                            className={`h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center ${
+                              user.role === "admin"
+                                ? "from-purple-500 to-purple-600"
+                                : user.role === "lecturer"
+                                ? "from-blue-500 to-blue-600"
+                                : isPending
+                                ? "from-amber-500 to-amber-600"
+                                : "from-green-500 to-green-600"
+                            }`}
+                          >
+                            <span className="text-white font-semibold text-sm">
+                              {user.name?.charAt(0).toUpperCase()}
+                            </span>
                           </div>
                           <div>
-                            <span className="font-medium text-gray-900 dark:text-gray-100">{user.name}</span>
+                            <span className="font-medium text-gray-900 dark:text-gray-100">
+                              {user.name}
+                            </span>
                             {isPending && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <FaClock className="h-3 w-3 text-amber-500" />
-                                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending Approval</span>
+                                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                  Pending Approval
+                                </span>
                               </div>
                             )}
                             {user.planDeactivatedByAdmin && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <FaBan className="h-3 w-3 text-red-500" />
-                                <span className="text-xs text-red-600 dark:text-red-400 font-medium">Plan Deactivated</span>
+                                <span className="text-xs text-red-600 dark:text-red-400 font-medium">
+                                  Plan Deactivated
+                                </span>
                               </div>
                             )}
                             {hasRegistrationDetails && (
                               <div className="flex items-center gap-1 mt-0.5">
                                 <FaInfoCircle className="h-3 w-3 text-blue-500" />
-                                <span className="text-xs text-blue-600 dark:text-blue-400">Has registration details</span>
+                                <span className="text-xs text-blue-600 dark:text-blue-400">
+                                  Has registration details
+                                </span>
                               </div>
                             )}
                           </div>
@@ -885,7 +1265,11 @@ const AdminUsers = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${getUserTypeBadgeStyle(user.userType)}`}>
+                        <div
+                          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${getUserTypeBadgeStyle(
+                            user.userType
+                          )}`}
+                        >
                           {getUserTypeIcon(user.userType)}
                           {user.userTypeDisplay}
                         </div>
@@ -913,33 +1297,42 @@ const AdminUsers = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs">{user.registrationSourceDisplay}</span>
-                          {user.registrationSource === "other" && user.registrationDetails && (
-                            <button
-                              onClick={() => viewRegistrationDetails(user)}
-                              className="text-blue-500 hover:text-blue-700 transition-colors"
-                              title="View registration details"
-                            >
-                              <FaEye className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                          <span className="text-xs">
+                            {user.registrationSourceDisplay}
+                          </span>
+                          {user.registrationSource === "other" &&
+                            user.registrationDetails && (
+                              <button
+                                onClick={() => viewRegistrationDetails(user)}
+                                className="text-blue-500 hover:text-blue-700 transition-colors"
+                                title="View registration details"
+                              >
+                                <FaEye className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <FaBuilding className="h-3.5 w-3.5 text-gray-400" />
-                          <span className="text-gray-600 dark:text-gray-400">{user.programId?.name || "—"}</span>
+                          <span className="text-gray-600 dark:text-gray-400">
+                            {user.programId?.name || "—"}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <FaGraduationCap className="h-3.5 w-3.5 text-gray-400" />
-                          <span className="text-gray-600 dark:text-gray-400">{user.courseId?.name || "—"}</span>
+                          <span className="text-gray-600 dark:text-gray-400">
+                            {user.courseId?.name || "—"}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${planStatus.color}`}>
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${planStatus.color}`}
+                          >
                             {planStatus.icon}
                             {planStatus.label}
                           </span>
@@ -953,10 +1346,14 @@ const AdminUsers = () => {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           {getRoleIcon(user.role)}
-                          <select 
-                            value={user.role} 
-                            onChange={(e) => handleRoleChange(user._id, e.target.value)} 
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${getRoleBadgeStyle(user.role)}`}
+                          <select
+                            value={user.role}
+                            onChange={(e) =>
+                              handleRoleChange(user._id, e.target.value)
+                            }
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${getRoleBadgeStyle(
+                              user.role
+                            )}`}
                           >
                             <option value="student">Student</option>
                             <option value="lecturer">Lecturer</option>
@@ -968,25 +1365,27 @@ const AdminUsers = () => {
                         <div className="flex flex-wrap items-center gap-2">
                           {user.role === "student" && (
                             <>
-                              <button 
-                                onClick={() => openAssignPlanModal(user)} 
+                              <button
+                                onClick={() => openAssignPlanModal(user)}
                                 className="flex items-center gap-1 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-950/50 transition-colors text-sm font-medium"
                                 title="Assign Plan"
                               >
                                 <FaCrown className="h-3 w-3" />
                               </button>
-                              {user.planId && user.isPlanActive && !user.planDeactivatedByAdmin && (
-                                <button 
-                                  onClick={() => handleDeactivatePlan(user)} 
-                                  className="flex items-center gap-1 px-2 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
-                                  title="Deactivate Plan"
-                                >
-                                  <FaStop className="h-3 w-3" />
-                                </button>
-                              )}
+                              {user.planId &&
+                                user.isPlanActive &&
+                                !user.planDeactivatedByAdmin && (
+                                  <button
+                                    onClick={() => handleDeactivatePlan(user)}
+                                    className="flex items-center gap-1 px-2 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
+                                    title="Deactivate Plan"
+                                  >
+                                    <FaStop className="h-3 w-3" />
+                                  </button>
+                                )}
                               {user.planId && user.planDeactivatedByAdmin && (
-                                <button 
-                                  onClick={() => handleReactivatePlan(user)} 
+                                <button
+                                  onClick={() => handleReactivatePlan(user)}
                                   className="flex items-center gap-1 px-2 py-1.5 bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors text-sm font-medium"
                                   title="Reactivate Plan"
                                 >
@@ -995,14 +1394,14 @@ const AdminUsers = () => {
                               )}
                             </>
                           )}
-                          <button 
-                            onClick={() => openEditModal(user)} 
+                          <button
+                            onClick={() => openEditModal(user)}
                             className="flex items-center gap-1 px-2 py-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors text-sm font-medium"
                           >
                             <FaEdit className="h-3 w-3" />
                           </button>
-                          <button 
-                            onClick={() => handleDelete(user._id)} 
+                          <button
+                            onClick={() => handleDelete(user._id)}
                             className="flex items-center gap-1 px-2 py-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-sm font-medium"
                           >
                             <FaTrash className="h-3 w-3" />
@@ -1026,6 +1425,119 @@ const AdminUsers = () => {
         </div>
       )}
 
+      {/* ================= BULK DELETE MODAL ================= */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-900 rounded-xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-5 pb-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
+                  <FaTrash className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    Bulk Delete Users
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Delete students and lecturers in bulk
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBulkDeleteModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Warning */}
+              <div className="p-4 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
+                <div className="flex items-start gap-3">
+                  <FaExclamationTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+                      This action is permanent and cannot be undone!
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-500 mt-1">
+                      All selected users will be deleted permanently. Their
+                      payments, progress, and access will be lost. Admin
+                      accounts are always protected.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Option 1: Delete selected */}
+              <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                    Option 1: Delete Selected Users
+                  </h3>
+                  <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 rounded-full">
+                    {selectedUserIds.length} selected
+                  </span>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                  Permanently delete only the {selectedUserIds.length} user(s)
+                  you selected manually.
+                </p>
+                <button
+                  onClick={handleDeleteSelected}
+                  disabled={
+                    selectedUserIds.length === 0 || actionLoading
+                  }
+                  className="w-full px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {actionLoading ? (
+                    <FaSpinner className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FaTrash className="h-4 w-4" />
+                  )}
+                  Delete {selectedUserIds.length} Selected
+                </button>
+              </div>
+
+              {/* Option 2: Delete all non-admins */}
+              <div className="p-4 border border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-950/10 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-red-700 dark:text-red-400">
+                    Option 2: Delete ALL Non-Admin Users
+                  </h3>
+                  <span className="text-xs px-2 py-1 bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 rounded-full font-semibold">
+                    DANGER
+                  </span>
+                </div>
+                <p className="text-sm text-red-600 dark:text-red-500 mb-3">
+                  Deletes <strong>ALL</strong> students ({studentCount}) and
+                  lecturers ({lecturerCount}). Only admins are preserved.
+                </p>
+                <button
+                  onClick={handleDeleteAllNonAdmins}
+                  disabled={actionLoading}
+                  className="w-full px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {actionLoading ? (
+                    <FaSpinner className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FaExclamationTriangle className="h-4 w-4" />
+                  )}
+                  Delete All {studentCount + lecturerCount} Non-Admin Users
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowBulkDeleteModal(false)}
+                className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= REGISTRATION DETAILS MODAL ================= */}
       {showRegistrationDetailsModal && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1036,41 +1548,86 @@ const AdminUsers = () => {
                   <FaClipboardList className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Registration Details</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{selectedUser.name} - {selectedUser.email}</p>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    Registration Details
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {selectedUser.name} - {selectedUser.email}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setShowRegistrationDetailsModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <button
+                onClick={() => setShowRegistrationDetailsModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
                 <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Registration Source</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Registration Source
+                </p>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">{selectedUser.registrationSourceDisplay}</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {selectedUser.registrationSourceDisplay}
+                  </span>
                 </div>
               </div>
 
               <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Registration Details</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Registration Details
+                </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
                   {selectedUser.registrationDetails || "No details provided"}
                 </p>
               </div>
 
               <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">User Information</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  User Information
+                </p>
                 <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                  <p><span className="font-medium">Name:</span> {selectedUser.name}</p>
-                  <p><span className="font-medium">Email:</span> {selectedUser.email}</p>
-                  <p><span className="font-medium">User Type:</span> {selectedUser.userTypeDisplay}</p>
-                  <p><span className="font-medium">Status:</span> {selectedUser.isApproved ? "Approved" : "Pending Approval"}</p>
-                  <p><span className="font-medium">Program:</span> {selectedUser.programName}</p>
-                  <p><span className="font-medium">Course:</span> {selectedUser.courseName}</p>
-                  <p><span className="font-medium">Plan:</span> {selectedUser.planName}</p>
-                  <p><span className="font-medium">Plan Status:</span> {selectedUser.isPlanActive ? "Active" : selectedUser.planDeactivatedByAdmin ? "Deactivated by Admin" : selectedUser.planId ? "Expired" : "None"}</p>
+                  <p>
+                    <span className="font-medium">Name:</span>{" "}
+                    {selectedUser.name}
+                  </p>
+                  <p>
+                    <span className="font-medium">Email:</span>{" "}
+                    {selectedUser.email}
+                  </p>
+                  <p>
+                    <span className="font-medium">User Type:</span>{" "}
+                    {selectedUser.userTypeDisplay}
+                  </p>
+                  <p>
+                    <span className="font-medium">Status:</span>{" "}
+                    {selectedUser.isApproved ? "Approved" : "Pending Approval"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Program:</span>{" "}
+                    {selectedUser.programName}
+                  </p>
+                  <p>
+                    <span className="font-medium">Course:</span>{" "}
+                    {selectedUser.courseName}
+                  </p>
+                  <p>
+                    <span className="font-medium">Plan:</span>{" "}
+                    {selectedUser.planName}
+                  </p>
+                  <p>
+                    <span className="font-medium">Plan Status:</span>{" "}
+                    {selectedUser.isPlanActive
+                      ? "Active"
+                      : selectedUser.planDeactivatedByAdmin
+                      ? "Deactivated by Admin"
+                      : selectedUser.planId
+                      ? "Expired"
+                      : "None"}
+                  </p>
                 </div>
               </div>
 
@@ -1095,11 +1652,18 @@ const AdminUsers = () => {
                   <FaCrown className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Assign Plan</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Assign a plan to {selectedUser.name}</p>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    Assign Plan
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Assign a plan to {selectedUser.name}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setShowAssignPlanModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <button
+                onClick={() => setShowAssignPlanModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
                 <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
@@ -1117,7 +1681,9 @@ const AdminUsers = () => {
                   <option value="">Select a Plan</option>
                   {plans.map((plan) => (
                     <option key={plan._id} value={plan._id}>
-                      {plan.title} - ₵{plan.price} ({plan.duration} {plan.durationUnit}{plan.duration > 1 ? 's' : ''})
+                      {plan.title} - ₵{plan.price} ({plan.duration}{" "}
+                      {plan.durationUnit}
+                      {plan.duration > 1 ? "s" : ""})
                     </option>
                   ))}
                 </select>
@@ -1131,7 +1697,8 @@ const AdminUsers = () => {
                       Assigning a plan will grant immediate access
                     </p>
                     <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-                      The user will have access to all content within the plan duration.
+                      The user will have access to all content within the plan
+                      duration.
                     </p>
                   </div>
                 </div>
@@ -1149,7 +1716,11 @@ const AdminUsers = () => {
                   disabled={actionLoading || !selectedPlanForUser}
                   className="flex-1 px-4 py-2.5 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {actionLoading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaCheck className="h-4 w-4" />}
+                  {actionLoading ? (
+                    <FaSpinner className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FaCheck className="h-4 w-4" />
+                  )}
                   Assign Plan
                 </button>
               </div>
@@ -1168,76 +1739,169 @@ const AdminUsers = () => {
                   <FaChalkboardTeacher className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Add New Lecturer</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Create a new lecturer account</p>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    Add New Lecturer
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Create a new lecturer account
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setShowAddLecturerModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <button
+                onClick={() => setShowAddLecturerModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
                 <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
 
             <form onSubmit={handleAddLecturer} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name <span className="text-red-500">*</span></label>
-                <input type="text" required value={newLecturer.name} onChange={(e) => setNewLecturer({...newLecturer, name: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="e.g., Dr. John Smith" />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newLecturer.name}
+                  onChange={(e) =>
+                    setNewLecturer({ ...newLecturer, name: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  placeholder="e.g., Dr. John Smith"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email <span className="text-red-500">*</span></label>
-                <input type="email" required value={newLecturer.email} onChange={(e) => setNewLecturer({...newLecturer, email: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="lecturer@example.com" />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={newLecturer.email}
+                  onChange={(e) =>
+                    setNewLecturer({ ...newLecturer, email: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  placeholder="lecturer@example.com"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Password <span className="text-red-500">*</span></label>
-                <input type="password" required value={newLecturer.password} onChange={(e) => setNewLecturer({...newLecturer, password: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="Minimum 6 characters" />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newLecturer.password}
+                  onChange={(e) =>
+                    setNewLecturer({ ...newLecturer, password: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  placeholder="Minimum 6 characters"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Program <span className="text-red-500">*</span></label>
-                <select required value={newLecturer.programId} onChange={(e) => handleNewProgramChange(e.target.value)} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Program <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={newLecturer.programId}
+                  onChange={(e) => handleNewProgramChange(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
                   <option value="">Select Program</option>
-                  {programs.map(program => <option key={program._id} value={program._id}>{program.name}</option>)}
+                  {programs.map((program) => (
+                    <option key={program._id} value={program._id}>
+                      {program.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Course <span className="text-red-500">*</span></label>
-                <select required value={newLecturer.courseId} onChange={(e) => handleNewCourseChange(e.target.value)} disabled={!newLecturer.programId || newLecturer.programId === ""} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Course <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={newLecturer.courseId}
+                  onChange={(e) => handleNewCourseChange(e.target.value)}
+                  disabled={!newLecturer.programId || newLecturer.programId === ""}
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <option value="">Select Course</option>
-                  {filteredCourses.map(course => <option key={course._id} value={course._id}>{course.name}</option>)}
+                  {filteredCourses.map((course) => (
+                    <option key={course._id} value={course._id}>
+                      {course.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subjects</label>
-                <select 
-                  multiple 
-                  onChange={handleNewSubjectSelection} 
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Subjects
+                </label>
+                <select
+                  multiple
+                  onChange={handleNewSubjectSelection}
                   value={newLecturer.subjectIds}
-                  disabled={!newLecturer.courseId || newLecturer.courseId === ""} 
+                  disabled={!newLecturer.courseId || newLecturer.courseId === ""}
                   className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {availableSubjects.map(subject => (
+                  {availableSubjects.map((subject) => (
                     <option key={subject._id} value={subject._id}>
                       {subject.name}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Hold Ctrl/Cmd to select multiple subjects
+                </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title</label>
-                <select value={newLecturer.title} onChange={(e) => setNewLecturer({...newLecturer, title: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
-                  <option>Dr.</option><option>Prof.</option><option>Mr.</option><option>Mrs.</option><option>Ms.</option>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Title
+                </label>
+                <select
+                  value={newLecturer.title}
+                  onChange={(e) =>
+                    setNewLecturer({ ...newLecturer, title: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option>Dr.</option>
+                  <option>Prof.</option>
+                  <option>Mr.</option>
+                  <option>Mrs.</option>
+                  <option>Ms.</option>
                 </select>
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button type="button" onClick={() => setShowAddLecturerModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
-                <button type="submit" disabled={actionLoading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                  {actionLoading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaUserPlus className="h-4 w-4" />}
+                <button
+                  type="button"
+                  onClick={() => setShowAddLecturerModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {actionLoading ? (
+                    <FaSpinner className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FaUserPlus className="h-4 w-4" />
+                  )}
                   Add Lecturer
                 </button>
               </div>
@@ -1256,29 +1920,62 @@ const AdminUsers = () => {
                   <FaEdit className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Edit User</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Update user information</p>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    Edit User
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Update user information
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setShowEditUserModal(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <button
+                onClick={() => setShowEditUserModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
                 <FaTimes className="h-5 w-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name</label>
-                <input type="text" value={editUserData.name} onChange={(e) => setEditUserData({...editUserData, name: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={editUserData.name}
+                  onChange={(e) =>
+                    setEditUserData({ ...editUserData, name: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
-                <input type="email" value={editUserData.email} onChange={(e) => setEditUserData({...editUserData, email: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={editUserData.email}
+                  onChange={(e) =>
+                    setEditUserData({ ...editUserData, email: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Role</label>
-                <select value={editUserData.role} onChange={(e) => setEditUserData({...editUserData, role: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Role
+                </label>
+                <select
+                  value={editUserData.role}
+                  onChange={(e) =>
+                    setEditUserData({ ...editUserData, role: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
                   <option value="student">Student</option>
                   <option value="lecturer">Lecturer</option>
                   <option value="admin">Administrator</option>
@@ -1286,54 +1983,136 @@ const AdminUsers = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">User Type</label>
-                <select value={editUserData.userType || ""} onChange={(e) => setEditUserData({...editUserData, userType: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  User Type
+                </label>
+                <select
+                  value={editUserData.userType || ""}
+                  onChange={(e) =>
+                    setEditUserData({
+                      ...editUserData,
+                      userType: e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
                   <option value="">Not Set</option>
                   <option value="alveoly_student">Alveoly Student</option>
-                  <option value="non_alveoly_student">Non-Alveoly Student</option>
+                  <option value="non_alveoly_student">
+                    Non-Alveoly Student
+                  </option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Program</label>
-                <select value={editUserData.programId} onChange={(e) => handleProgramChange(e.target.value)} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Program
+                </label>
+                <select
+                  value={editUserData.programId}
+                  onChange={(e) => handleProgramChange(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
                   <option value="">No Program</option>
-                  {programs.map(program => <option key={program._id} value={program._id}>{program.name}</option>)}
+                  {programs.map((program) => (
+                    <option key={program._id} value={program._id}>
+                      {program.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Course</label>
-                <select value={editUserData.courseId} onChange={(e) => handleCourseChange(e.target.value)} disabled={!editUserData.programId || editUserData.programId === "undefined" || editUserData.programId === "null"} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Course
+                </label>
+                <select
+                  value={editUserData.courseId}
+                  onChange={(e) => handleCourseChange(e.target.value)}
+                  disabled={
+                    !editUserData.programId ||
+                    editUserData.programId === "undefined" ||
+                    editUserData.programId === "null"
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
+                >
                   <option value="">No Course</option>
-                  {filteredCourses.map(course => <option key={course._id} value={course._id}>{course.name}</option>)}
+                  {filteredCourses.map((course) => (
+                    <option key={course._id} value={course._id}>
+                      {course.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               {editUserData.role === "lecturer" && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title</label>
-                    <select value={editUserData.title} onChange={(e) => setEditUserData({...editUserData, title: e.target.value})} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
-                      <option>Dr.</option><option>Prof.</option><option>Mr.</option><option>Mrs.</option><option>Ms.</option>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Title
+                    </label>
+                    <select
+                      value={editUserData.title}
+                      onChange={(e) =>
+                        setEditUserData({
+                          ...editUserData,
+                          title: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    >
+                      <option>Dr.</option>
+                      <option>Prof.</option>
+                      <option>Mr.</option>
+                      <option>Mrs.</option>
+                      <option>Ms.</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Assigned Subjects</label>
-                    <select multiple onChange={handleSubjectSelection} value={editUserData.subjectIds} disabled={!editUserData.courseId || editUserData.courseId === "undefined" || editUserData.courseId === "null"} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50">
-                      {availableSubjects.map(subject => (
-                        <option key={subject._id} value={subject._id}>{subject.name}</option>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Assigned Subjects
+                    </label>
+                    <select
+                      multiple
+                      onChange={handleSubjectSelection}
+                      value={editUserData.subjectIds}
+                      disabled={
+                        !editUserData.courseId ||
+                        editUserData.courseId === "undefined" ||
+                        editUserData.courseId === "null"
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50"
+                    >
+                      {availableSubjects.map((subject) => (
+                        <option key={subject._id} value={subject._id}>
+                          {subject.name}
+                        </option>
                       ))}
                     </select>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Hold Ctrl/Cmd to select multiple subjects</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      Hold Ctrl/Cmd to select multiple subjects
+                    </p>
                   </div>
                 </>
               )}
 
               <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button onClick={() => setShowEditUserModal(false)} className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
-                <button onClick={handleUpdateUser} disabled={actionLoading} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-                  {actionLoading ? <FaSpinner className="h-4 w-4 animate-spin" /> : <FaSave className="h-4 w-4" />}
+                <button
+                  onClick={() => setShowEditUserModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateUser}
+                  disabled={actionLoading}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {actionLoading ? (
+                    <FaSpinner className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FaSave className="h-4 w-4" />
+                  )}
                   Save Changes
                 </button>
               </div>

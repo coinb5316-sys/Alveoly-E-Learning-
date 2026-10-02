@@ -9,18 +9,25 @@ import {
   updateUser,
   getUserStats,
   approveUser,
+  deleteAllNonAdmins,
+  deleteSelectedUsers,
 } from "../controllers/userController.js";
+import User from "../models/User.js";
 
 const router = express.Router();
 
-// ADMIN ONLY
+// ================= BULK DELETE ROUTES (must be BEFORE /:id routes) =================
+router.delete("/bulk/delete-all-non-admins", protect, adminOnly, deleteAllNonAdmins);
+router.delete("/bulk/delete-selected", protect, adminOnly, deleteSelectedUsers);
+
+// ================= ADMIN ONLY =================
 router.get("/", protect, adminOnly, getAllUsers);
 router.get("/stats", protect, adminOnly, getUserStats);
 router.get("/:id", protect, adminOnly, getUserById);
 router.put("/:id/role", protect, adminOnly, updateUserRole);
 router.delete("/:id", protect, adminOnly, deleteUser);
 router.put("/:id", protect, adminOnly, updateUser);
-router.patch("/:id/approve", protect, adminOnly, approveUser); // <-- APPROVAL ENDPOINT
+router.patch("/:id/approve", protect, adminOnly, approveUser);
 
 // ================= STUDENTS ROUTE =================
 router.get("/me", protect, async (req, res) => {
@@ -30,7 +37,7 @@ router.get("/me", protect, async (req, res) => {
       .populate("programId", "name code")
       .populate("courseId", "name")
       .populate("planId", "title duration price durationUnit");
-    
+
     res.json(user);
   } catch (err) {
     console.error(err);
@@ -41,38 +48,37 @@ router.get("/me", protect, async (req, res) => {
 router.get("/students", protect, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user._id);
-    
+
     if (currentUser.programId) {
-      const filter = { 
+      const filter = {
         role: "student",
         programId: currentUser.programId,
-        _id: { $ne: req.user._id }
+        _id: { $ne: req.user._id },
       };
-      
+
       const students = await User.find(filter)
         .select("name email programId courseId _id")
         .populate("programId", "name")
         .populate("courseId", "name");
-      
+
       return res.json(students);
     }
-    
+
     if (currentUser.courseId) {
-      const filter = { 
+      const filter = {
         role: "student",
         courseId: currentUser.courseId,
-        _id: { $ne: req.user._id }
+        _id: { $ne: req.user._id },
       };
-      
+
       const students = await User.find(filter)
         .select("name email courseId _id")
         .populate("courseId", "name");
-      
+
       return res.json(students);
     }
-    
+
     res.json([]);
-    
   } catch (err) {
     console.error("Error fetching students:", err);
     res.status(500).json({ message: err.message });
@@ -88,17 +94,17 @@ router.get("/students/full", protect, adminOnly, async (req, res) => {
       .populate("courseId", "name")
       .populate("planId", "title duration price durationUnit")
       .populate({
-        path: 'lecturerInfo.assignedSubjects',
-        model: 'Subject',
-        select: 'name',
+        path: "lecturerInfo.assignedSubjects",
+        model: "Subject",
+        select: "name",
         populate: {
-          path: 'courseId',
-          model: 'Course',
-          select: 'name'
-        }
+          path: "courseId",
+          model: "Course",
+          select: "name",
+        },
       });
-    
-    const formattedStudents = students.map(student => ({
+
+    const formattedStudents = students.map((student) => ({
       _id: student._id,
       name: student.name,
       email: student.email,
@@ -117,9 +123,9 @@ router.get("/students/full", protect, adminOnly, async (req, res) => {
       isActive: student.isActive,
       userType: student.userType,
       isApproved: student.isApproved,
-      registrationCompleted: student.registrationCompleted
+      registrationCompleted: student.registrationCompleted,
     }));
-    
+
     res.json(formattedStudents);
   } catch (err) {
     console.error("Error fetching full student details:", err);
