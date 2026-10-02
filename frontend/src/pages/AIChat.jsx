@@ -1,4 +1,4 @@
-// AIChat.jsx - COMPLETE UPDATED VERSION (USD → GHS Conversion)
+// AIChat.jsx - COMPLETE FIXED VERSION (USD → GHS Conversion)
 import { useState, useEffect, useRef } from "react";
 import axios from "../api/axios";
 import { io } from "socket.io-client";
@@ -15,9 +15,9 @@ import {
   FaStar,
   FaCrown,
   FaDollarSign,
-  FaSync,
+  FaArrowsRotate,
   FaCediSign
-} from "react-icons/fa";
+} from "react-icons/fa6";
 import { useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -477,7 +477,7 @@ const AIChat = () => {
                 className="p-0.5 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
                 title="Refresh exchange rate"
               >
-                <FaSync className={`w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+                <FaArrowsRotate className={`w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
               </button>
             </div>
           )}
@@ -630,7 +630,7 @@ const AIChat = () => {
                         className="p-0.5 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
                         title="Refresh exchange rate"
                       >
-                        <FaSync className={`w-3 h-3 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+                        <FaArrowsRotate className={`w-3 h-3 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
                       </button>
                     </div>
                   )}
