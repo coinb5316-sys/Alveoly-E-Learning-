@@ -1,4 +1,4 @@
-// StudentDashboard.jsx - Fully Scrollable with Professional Design
+// StudentDashboard.jsx - COMPLETE UPDATED VERSION (USD → GHS Conversion)
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -30,11 +30,31 @@ import {
   Trophy,
   Users,
   MessageCircle,
+  Banknote,
+  DollarSign,
 } from "lucide-react";
 import API from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import PaystackPayment from "../pages/PaystackPayment";
-import toast from "react-hot-toast";
+import toast, { Toaster } from "react-hot-toast";
+
+// ================= CURRENCY HELPERS =================
+const FALLBACK_USD_TO_GHS = 15.50;
+
+const formatUSD = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "$0.00";
+  return `$${num.toFixed(2)}`;
+};
+
+const formatGHS = (amount) => {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "GH₵0.00";
+  return `GH₵${num.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -58,6 +78,83 @@ const StudentDashboard = () => {
   const [planStatusMessage, setPlanStatusMessage] = useState("");
   const [recentActivity, setRecentActivity] = useState([]);
   const [upcomingExams, setUpcomingExams] = useState([]);
+
+  // ================= EXCHANGE RATE STATE =================
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  // ================= FETCH EXCHANGE RATE =================
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS,
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS,
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS,
+        },
+      ];
+
+      let rate = null;
+
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // ================= CURRENCY CONVERSION =================
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || !usdAmount) return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
+
+  // ================= INIT =================
+  useEffect(() => {
+    fetchExchangeRate();
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Timer for countdown
   useEffect(() => {
@@ -153,6 +250,7 @@ const StudentDashboard = () => {
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchStudent();
+    await fetchExchangeRate();
     setRefreshing(false);
     toast.success("Dashboard refreshed!");
   };
@@ -276,6 +374,8 @@ const StudentDashboard = () => {
 
   return (
     <div className="space-y-6 pb-8">
+      <Toaster position="top-right" />
+      
       {/* Header with Refresh */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between sticky top-0 z-10 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm -mx-4 px-4 py-3 md:-mx-6 md:px-6 border-b border-gray-200/50 dark:border-gray-800/50">
         <div>
@@ -292,14 +392,33 @@ const StudentDashboard = () => {
             Welcome back! Here's your learning overview
           </p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Exchange Rate Indicator */}
+          {exchangeRate && (
+            <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800">
+              <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                1 USD = {exchangeRate.toFixed(2)} GHS
+              </span>
+              <button
+                onClick={fetchExchangeRate}
+                disabled={exchangeRateLoading}
+                className="p-0.5 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors disabled:opacity-50"
+                title="Refresh exchange rate"
+              >
+                <RefreshCw className={`h-3 w-3 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Welcome Header - Premium */}
@@ -508,10 +627,21 @@ const StudentDashboard = () => {
       {/* Subscription Plans */}
       {!isPlanDeactivated && (
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-            <Crown className="h-5 w-5 text-yellow-500" />
-            Subscription Plans
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Crown className="h-5 w-5 text-yellow-500" />
+              Subscription Plans
+            </h2>
+            {/* Exchange Rate Badge */}
+            {exchangeRate && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800">
+                <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                  1 USD = {exchangeRate.toFixed(2)} GHS
+                </span>
+              </div>
+            )}
+          </div>
 
           {loadingPlans ? (
             <div className="flex items-center justify-center py-12">
@@ -525,6 +655,8 @@ const StudentDashboard = () => {
                 const timeLeft = getTimeLeft(expiry);
                 const isPopular = index === 1;
                 const isCurrentPlan = student?.planId?._id === plan._id;
+                const priceInGHS = convertToGHS(plan.price);
+                const isFreePlan = plan.isFree || plan.freeAccess || parseFloat(plan.price) === 0;
 
                 return (
                   <div
@@ -569,14 +701,38 @@ const StudentDashboard = () => {
                       <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                         {plan.title}
                       </h3>
-                      <div className="mb-4">
-                        <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-                          ₵{plan.price}
-                        </span>
-                        <span className="text-gray-500 dark:text-gray-400 text-sm">
-                          /{plan.duration} {plan.durationUnit}
-                        </span>
-                      </div>
+                      
+                      {/* ============ PRICE WITH USD + GHS ============ */}
+                      {isFreePlan ? (
+                        <div className="mb-4">
+                          <span className="text-3xl font-extrabold text-green-600 dark:text-green-400">
+                            Free
+                          </span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            No payment required
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mb-4">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
+                              {formatUSD(plan.price)}
+                            </span>
+                            <span className="text-gray-500 dark:text-gray-400 text-sm">
+                              /{plan.duration} {plan.durationUnit}
+                            </span>
+                          </div>
+                          {/* GHS Badge */}
+                          {exchangeRate && priceInGHS > 0 && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800">
+                              <Banknote className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                              <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                                ≈ {formatGHS(priceInGHS)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4">
                         <Clock className="h-4 w-4" />
@@ -620,8 +776,8 @@ const StudentDashboard = () => {
                         {status === "active" && isCurrentPlan
                           ? "Currently Active"
                           : status === "expired"
-                          ? "Renew Plan"
-                          : "Choose Plan"}
+                          ? `Renew Plan${exchangeRate ? ` • ${formatGHS(priceInGHS)}` : ''}`
+                          : `Choose Plan${exchangeRate ? ` • ${formatGHS(priceInGHS)}` : ''}`}
                       </button>
                     </div>
                   </div>
@@ -673,15 +829,64 @@ const StudentDashboard = () => {
             </div>
 
             <div className="p-6">
+              {/* ============ PRICE DISPLAY WITH USD + GHS ============ */}
               <div className="text-center mb-6">
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  ₵{selectedPlan.price}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <div className="flex flex-col items-center gap-1">
+                  {/* USD Price */}
+                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                    {formatUSD(selectedPlan.price)}
+                  </p>
+                  
+                  {/* GHS Conversion - Prominent */}
+                  {exchangeRate && (
+                    <div className="flex flex-col items-center gap-1 mt-2">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+                        <Banknote className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
+                          {formatGHS(convertToGHS(selectedPlan.price))}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Rate: 1 USD = {exchangeRate.toFixed(2)} GHS
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
                   {selectedPlan.duration} {selectedPlan.durationUnit} access
                 </p>
               </div>
-              <PaystackPayment plan={selectedPlan} onSuccess={() => setSelectedPlan(null)} />
+
+              {/* Payment Info Box */}
+              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Amount (USD)</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">
+                    {formatUSD(selectedPlan.price)}
+                  </span>
+                </div>
+                {exchangeRate && (
+                  <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <span className="text-gray-500 dark:text-gray-400">You Pay (GHS)</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      {formatGHS(convertToGHS(selectedPlan.price))}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Paystack Payment */}
+              <PaystackPayment 
+                plan={selectedPlan} 
+                exchangeRate={exchangeRate}
+                amountInGHS={convertToGHS(selectedPlan.price)}
+                onSuccess={() => setSelectedPlan(null)} 
+              />
+              
+              <p className="text-xs text-center text-gray-400 dark:text-gray-500 mt-4">
+                Secure payment powered by Paystack • Charged in GHS
+              </p>
             </div>
           </div>
         </div>
