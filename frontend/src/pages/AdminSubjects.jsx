@@ -7,7 +7,7 @@ import {
   FaXmark,
   FaBook, 
   FaMagnifyingGlass,
-  FaChalkboardTeacher,
+  FaChalkboardUser,
   FaDollarSign,
   FaUnlockAlt,
   FaClock,
@@ -878,7 +878,7 @@ const AdminSubjects = () => {
                                 : "bg-green-50 dark:bg-green-950/30"
                             }`}
                           >
-                            <FaChalkboardTeacher
+                            <FaChalkboardUser
                               className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
                                 subject.isPaid
                                   ? "text-yellow-600 dark:text-yellow-400"
