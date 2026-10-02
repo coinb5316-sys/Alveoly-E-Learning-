@@ -1,4 +1,4 @@
-// AIPlansAdmin.jsx - COMPLETE UPDATED VERSION (USD → GHS Conversion)
+// AIPlansAdmin.jsx - COMPLETE FIXED VERSION (USD → GHS Conversion)
 import { useState, useEffect } from "react";
 import axios from "../api/axios";
 import { 
@@ -16,7 +16,7 @@ import {
   FaStar,
   FaCheckCircle,
   FaDollarSign,
-  FaSync,
+  FaArrowsRotate,
   FaCediSign
 } from "react-icons/fa6";
 import toast, { Toaster } from "react-hot-toast";
@@ -333,7 +333,7 @@ const AIPlansAdmin = () => {
               className="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
               title="Refresh exchange rate"
             >
-              <FaSync className={`h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+              <FaArrowsRotate className={`h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
