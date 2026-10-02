@@ -21,9 +21,9 @@ import {
   FaChevronUp,
   FaSave,
   FaTimesCircle,
-  FaSync,
-  FaCediSign
+  FaSync
 } from "react-icons/fa";
+import { FaCediSign } from "react-icons/fa6"; 
 import axios from "../api/axios";
 import initializeSocket, { getSocket } from "../config/socket";
 import toast, { Toaster } from "react-hot-toast";
