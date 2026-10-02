@@ -1,4 +1,4 @@
-// pages/AdminPlans.jsx - COMPLETE FIXED VERSION (No FaWarning)
+// pages/AdminPlans.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
 import React, { useState, useEffect } from "react";
 import {
   FaPlus,
@@ -36,6 +36,12 @@ const AdminPlans = () => {
   const [updatingAll, setUpdatingAll] = useState(false);
   const [deletingPlan, setDeletingPlan] = useState(null);
   
+  // Exchange rate state
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -56,12 +62,102 @@ const AdminPlans = () => {
   
   const [featureInput, setFeatureInput] = useState("");
 
+  // Fallback exchange rate (approximate - will be replaced by live rate)
+  const FALLBACK_USD_TO_GHS = 15.50;
+
   useEffect(() => {
     fetchPlans();
     fetchSubjects();
     fetchCourses();
     fetchPrograms();
+    fetchExchangeRate();
+    
+    // Refresh exchange rate every 30 minutes
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Fetch live USD to GHS exchange rate
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+      
+      // Try multiple free exchange rate APIs for reliability
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS
+        }
+      ];
+      
+      let rate = null;
+      let lastError = null;
+      
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          lastError = err;
+          continue;
+        }
+      }
+      
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        // Use fallback rate if all APIs fail
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate - live rate unavailable");
+        console.warn("All exchange rate APIs failed, using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate - live rate unavailable");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // Convert USD to GHS
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || usdAmount === 0 || usdAmount === "0") return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
+
+  // Format currency for display
+  const formatUSD = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "$0.00";
+    return `$${num.toFixed(2)}`;
+  };
+
+  const formatGHS = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "GH₵0.00";
+    return `GH₵${num.toFixed(2)}`;
+  };
 
   const fetchPlans = async () => {
     try {
@@ -195,9 +291,13 @@ const AdminPlans = () => {
     try {
       setLoading(true);
       
+      // Store price in USD in the database
       const submitData = {
         ...formData,
-        price: formData.isFree || formData.freeAccess ? 0 : formData.price
+        price: formData.isFree || formData.freeAccess ? 0 : parseFloat(formData.price) || 0,
+        // Optionally store the exchange rate used for reference
+        exchangeRateAtCreation: exchangeRate || FALLBACK_USD_TO_GHS,
+        priceInGHS: formData.isFree || formData.freeAccess ? 0 : convertToGHS(formData.price)
       };
       
       let response;
@@ -300,13 +400,43 @@ const AdminPlans = () => {
             Manage subscription plans that unlock content access
           </p>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
-        >
-          <FaPlus className="h-4 w-4" />
-          <span className="text-sm font-medium">Create Plan</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Exchange Rate Display */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <FaSync 
+              className={`h-3.5 w-3.5 text-gray-500 ${exchangeRateLoading ? 'animate-spin' : 'cursor-pointer hover:text-yellow-500'}`}
+              onClick={fetchExchangeRate}
+              title="Refresh exchange rate"
+            />
+            <div className="text-xs">
+              {exchangeRate ? (
+                <div>
+                  <span className="font-semibold text-gray-700 dark:text-gray-300">
+                    1 USD = {exchangeRate.toFixed(2)} GHS
+                  </span>
+                  {lastUpdated && (
+                    <span className="text-gray-400 dark:text-gray-500 ml-2">
+                      ({lastUpdated})
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <span className="text-gray-500">Loading rate...</span>
+              )}
+              {exchangeRateError && (
+                <span className="text-amber-500 text-[10px] block">{exchangeRateError}</span>
+              )}
+            </div>
+          </div>
+          
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg hover:shadow-lg transition-all duration-200"
+          >
+            <FaPlus className="h-4 w-4" />
+            <span className="text-sm font-medium">Create Plan</span>
+          </button>
+        </div>
       </div>
 
       {/* Loading State */}
@@ -336,6 +466,7 @@ const AdminPlans = () => {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {plans.map((plan) => {
             const isDeleting = deletingPlan === plan._id;
+            const priceInGHS = convertToGHS(plan.price);
             
             return (
               <div
@@ -362,10 +493,17 @@ const AdminPlans = () => {
                     </span>
                   </div>
                   <div className="mt-2">
-                    <span className="text-2xl font-bold">
-                      ${plan.price}
-                    </span>
-                    <span className="text-sm opacity-80 ml-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold">
+                        {formatUSD(plan.price)}
+                      </span>
+                      {!plan.isFree && exchangeRate && (
+                        <span className="text-sm opacity-90 bg-white/20 px-2 py-0.5 rounded">
+                          ≈ {formatGHS(priceInGHS)}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm opacity-80">
                       /{getDurationLabel(plan.duration, plan.durationUnit)}
                     </span>
                   </div>
@@ -489,6 +627,21 @@ const AdminPlans = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Exchange Rate Info in Modal */}
+              {exchangeRate && (
+                <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2">
+                    <FaDollarSign className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm text-blue-700 dark:text-blue-400">
+                      Current Exchange Rate:
+                    </span>
+                  </div>
+                  <div className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+                    1 USD = {exchangeRate.toFixed(2)} GHS
+                  </div>
+                </div>
+              )}
+
               {/* Basic Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -519,6 +672,18 @@ const AdminPlans = () => {
                     disabled={formData.isFree || formData.freeAccess}
                     className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                  {/* GHS Conversion Preview */}
+                  {!formData.isFree && !formData.freeAccess && formData.price > 0 && exchangeRate && (
+                    <div className="mt-1.5 flex items-center gap-2 text-sm">
+                      <span className="text-gray-500 dark:text-gray-400">≈</span>
+                      <span className="font-semibold text-green-600 dark:text-green-400">
+                        {formatGHS(convertToGHS(formData.price))}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        (at {exchangeRate.toFixed(2)} GHS/USD)
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 

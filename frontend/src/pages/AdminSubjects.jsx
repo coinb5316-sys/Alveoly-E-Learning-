@@ -1,4 +1,4 @@
-// AdminSubjects.jsx - Updated with topics management
+// AdminSubjects.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
 import { useState, useEffect } from "react";
 import { 
   FaPlus, 
@@ -20,10 +20,13 @@ import {
   FaChevronDown,
   FaChevronUp,
   FaSave,
-  FaTimesCircle
+  FaTimesCircle,
+  FaSync,
+  FaBanknote
 } from "react-icons/fa";
 import axios from "../api/axios";
 import initializeSocket, { getSocket } from "../config/socket";
+import toast, { Toaster } from "react-hot-toast";
 
 const AdminSubjects = () => {
   const [socket, setSocket] = useState(null);
@@ -47,6 +50,15 @@ const AdminSubjects = () => {
   const [newTopicDescription, setNewTopicDescription] = useState("");
   const [topicFormSubject, setTopicFormSubject] = useState(null);
 
+  // Exchange rate state
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  // Fallback exchange rate
+  const FALLBACK_USD_TO_GHS = 15.50;
+
   const [form, setForm] = useState({
     name: "",
     programId: "",
@@ -61,6 +73,10 @@ const AdminSubjects = () => {
     setSocket(newSocket);
     
     fetchData();
+    fetchExchangeRate();
+
+    // Refresh exchange rate every 30 minutes
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
 
     if (newSocket) {
       newSocket.on("subject:created", (data) => {
@@ -79,6 +95,7 @@ const AdminSubjects = () => {
     }
 
     return () => {
+      clearInterval(interval);
       if (newSocket) {
         newSocket.off("subject:created");
         newSocket.off("subject:updated");
@@ -86,6 +103,86 @@ const AdminSubjects = () => {
       }
     };
   }, []);
+
+  // ================= FETCH EXCHANGE RATE =================
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS
+        }
+      ];
+
+      let rate = null;
+
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate");
+        console.warn("All exchange rate APIs failed, using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // ================= CURRENCY CONVERSION =================
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || usdAmount === 0 || usdAmount === "0") return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
+
+  const formatUSD = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "$0.00";
+    return `$${num.toFixed(2)}`;
+  };
+
+  const formatGHS = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "GH₵0.00";
+    return `GH₵${num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  };
 
   const fetchData = async () => {
     try {
@@ -138,7 +235,7 @@ const AdminSubjects = () => {
 
   const handleAddTopic = async (subjectId) => {
     if (!newTopicName.trim()) {
-      alert("Topic name is required");
+      toast.error("Topic name is required");
       return;
     }
 
@@ -151,10 +248,10 @@ const AdminSubjects = () => {
       setNewTopicDescription("");
       setTopicFormSubject(null);
       await fetchData();
-      alert("Topic added successfully!");
+      toast.success("Topic added successfully!");
     } catch (err) {
       console.error("Error adding topic:", err);
-      alert(err.response?.data?.message || "Failed to add topic");
+      toast.error(err.response?.data?.message || "Failed to add topic");
     }
   };
 
@@ -163,9 +260,10 @@ const AdminSubjects = () => {
     try {
       await axios.delete(`/subjects/${subjectId}/topics/${topicId}`);
       await fetchData();
+      toast.success("Topic deleted");
     } catch (err) {
       console.error("Error deleting topic:", err);
-      alert(err.response?.data?.message || "Failed to delete topic");
+      toast.error(err.response?.data?.message || "Failed to delete topic");
     }
   };
 
@@ -174,9 +272,10 @@ const AdminSubjects = () => {
       await axios.put(`/subjects/${subjectId}/topics/${topicId}`, updates);
       setEditingTopic(null);
       await fetchData();
+      toast.success("Topic updated");
     } catch (err) {
       console.error("Error updating topic:", err);
-      alert(err.response?.data?.message || "Failed to update topic");
+      toast.error(err.response?.data?.message || "Failed to update topic");
     }
   };
 
@@ -194,34 +293,44 @@ const AdminSubjects = () => {
   // ================= SUBJECT CRUD =================
   const handleAdd = async () => {
     if (!form.name) {
-      alert("Subject name is required");
+      toast.error("Subject name is required");
       return;
     }
     if (!form.programId) {
-      alert("Please select a program");
+      toast.error("Please select a program");
       return;
     }
     if (!form.courseId) {
-      alert("Please select a course");
+      toast.error("Please select a course");
+      return;
+    }
+    if (form.isPaid && (!form.price || parseFloat(form.price) <= 0)) {
+      toast.error("Please enter a valid price");
       return;
     }
 
     try {
       setLoading(true);
+      const priceUSD = form.isPaid ? parseFloat(form.price) : 0;
+      const priceGHS = form.isPaid ? parseFloat(convertToGHS(priceUSD)) : 0;
+      
       await axios.post("/subjects", {
         name: form.name,
         programId: form.programId,
         courseId: form.courseId,
         isPaid: form.isPaid,
-        price: form.isPaid ? Number(form.price) : 0,
+        price: priceUSD,
+        // Store GHS equivalent and rate used
+        priceInGHS: priceGHS,
+        exchangeRateAtCreation: exchangeRate || FALLBACK_USD_TO_GHS,
       });
       setForm({ name: "", programId: "", courseId: "", isPaid: false, price: "" });
       setEditing(null);
       await fetchData();
-      alert("Subject added successfully!");
+      toast.success("Subject added successfully!");
     } catch (err) {
       console.error("Error adding subject:", err);
-      alert(err.response?.data?.message || "Failed to add subject");
+      toast.error(err.response?.data?.message || "Failed to add subject");
     } finally {
       setLoading(false);
     }
@@ -229,7 +338,7 @@ const AdminSubjects = () => {
 
   const handleManualUnlock = async () => {
     if (!selectedUser || !selectedSubject) {
-      alert("Please select student and subject");
+      toast.error("Please select student and subject");
       return;
     }
 
@@ -241,14 +350,14 @@ const AdminSubjects = () => {
         durationDays: Number(duration),
         note: "Offline payment",
       });
-      alert("✅ Subject unlocked successfully");
+      toast.success("✅ Subject unlocked successfully");
       setSelectedUser("");
       setSelectedSubject("");
       setDuration(30);
       await fetchData();
     } catch (err) {
       console.error("Error unlocking subject:", err);
-      alert(err.response?.data?.message || "Failed to unlock");
+      toast.error(err.response?.data?.message || "Failed to unlock");
     } finally {
       setManualLoading(false);
     }
@@ -259,9 +368,10 @@ const AdminSubjects = () => {
     try {
       await axios.delete(`/subjects/${_id}`);
       await fetchData();
+      toast.success("Subject deleted");
     } catch (err) {
       console.error("Error deleting subject:", err);
-      alert(err.response?.data?.message || "Failed to delete subject");
+      toast.error(err.response?.data?.message || "Failed to delete subject");
     }
   };
 
@@ -270,8 +380,10 @@ const AdminSubjects = () => {
     try {
       await axios.delete(`/manual-access/${id}`);
       await fetchData();
+      toast.success("Access deleted");
     } catch (err) {
       console.error("Error deleting access:", err);
+      toast.error("Failed to delete access");
     }
   };
 
@@ -279,8 +391,10 @@ const AdminSubjects = () => {
     try {
       await axios.patch(`/manual-access/${id}/toggle`);
       await fetchData();
+      toast.success("Access updated");
     } catch (err) {
       console.error("Error toggling access:", err);
+      toast.error("Failed to toggle access");
     }
   };
 
@@ -292,8 +406,10 @@ const AdminSubjects = () => {
         durationDays: Number(days),
       });
       await fetchData();
+      toast.success("Access updated");
     } catch (err) {
       console.error("Error updating access:", err);
+      toast.error("Failed to update access");
     }
   };
 
@@ -317,35 +433,44 @@ const AdminSubjects = () => {
 
   const handleUpdate = async () => {
     if (!form.name) {
-      alert("Subject name is required");
+      toast.error("Subject name is required");
       return;
     }
     if (!form.programId) {
-      alert("Please select a program");
+      toast.error("Please select a program");
       return;
     }
     if (!form.courseId) {
-      alert("Please select a course");
+      toast.error("Please select a course");
+      return;
+    }
+    if (form.isPaid && (!form.price || parseFloat(form.price) <= 0)) {
+      toast.error("Please enter a valid price");
       return;
     }
 
     try {
       setLoading(true);
+      const priceUSD = form.isPaid ? parseFloat(form.price) : 0;
+      const priceGHS = form.isPaid ? parseFloat(convertToGHS(priceUSD)) : 0;
+      
       await axios.put(`/subjects/${editing._id}`, {
         name: form.name,
         programId: form.programId,
         courseId: form.courseId,
         isPaid: form.isPaid,
-        price: form.isPaid ? Number(form.price) : 0,
+        price: priceUSD,
+        priceInGHS: priceGHS,
+        exchangeRateAtCreation: exchangeRate || FALLBACK_USD_TO_GHS,
       });
       setEditing(null);
       setForm({ name: "", programId: "", courseId: "", isPaid: false, price: "" });
       setFilteredCourses([]);
       await fetchData();
-      alert("Subject updated successfully!");
+      toast.success("Subject updated successfully!");
     } catch (err) {
       console.error("Error updating subject:", err);
-      alert(err.response?.data?.message || "Failed to update subject");
+      toast.error(err.response?.data?.message || "Failed to update subject");
     } finally {
       setLoading(false);
     }
@@ -378,6 +503,8 @@ const AdminSubjects = () => {
 
   return (
     <div className="w-full px-3 sm:px-4 md:px-6 space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
+      <Toaster position="top-right" />
+      
       {/* Page Header */}
       <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0 flex-1">
@@ -403,6 +530,48 @@ const AdminSubjects = () => {
           </div>
         </div>
       </div>
+
+      {/* Exchange Rate Banner */}
+      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border border-green-200 dark:border-green-800">
+        <div className="flex items-center gap-2">
+          <FaDollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <span className="text-sm font-medium text-green-700 dark:text-green-400">
+            Exchange Rate
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {exchangeRate ? (
+            <>
+              <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                1 USD = {exchangeRate.toFixed(2)} GHS
+              </span>
+              {lastUpdated && (
+                <span className="text-xs text-green-600 dark:text-green-500 hidden sm:inline">
+                  • {lastUpdated}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-sm text-green-600">Loading rate...</span>
+          )}
+          <button
+            onClick={fetchExchangeRate}
+            disabled={exchangeRateLoading}
+            className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors disabled:opacity-50"
+            title="Refresh exchange rate"
+          >
+            <FaSync className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+      
+      {exchangeRateError && (
+        <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+          <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+            ⚠ {exchangeRateError}
+          </p>
+        </div>
+      )}
 
       {/* Stats Summary */}
       <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
@@ -554,14 +723,27 @@ const AdminSubjects = () => {
               </label>
 
               {form.isPaid && (
-                <input
-                  type="number"
-                  name="price"
-                  value={form.price}
-                  onChange={handleChange}
-                  placeholder="Price (₵)"
-                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                />
+                <div className="space-y-1">
+                  <input
+                    type="number"
+                    name="price"
+                    value={form.price}
+                    onChange={handleChange}
+                    placeholder="Price (USD)"
+                    step="0.01"
+                    min="0"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                  {/* GHS Conversion Preview */}
+                  {form.price && parseFloat(form.price) > 0 && exchangeRate && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <FaBanknote className="h-3 w-3 text-green-600 dark:text-green-400" />
+                      <span className="font-semibold text-green-600 dark:text-green-400">
+                        {formatGHS(convertToGHS(form.price))}
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -622,6 +804,7 @@ const AdminSubjects = () => {
                 filteredSubjects.map((subject) => {
                   const isExpanded = expandedSubjects[subject._id];
                   const topicCount = subject.topics?.length || 0;
+                  const priceInGHS = convertToGHS(subject.price);
                   
                   return (
                     <div key={subject._id} className="group">
@@ -663,13 +846,22 @@ const AdminSubjects = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className={`text-xs px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full font-medium whitespace-nowrap ${
-                              subject.isPaid
-                                ? "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400"
-                                : "bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400"
-                            }`}>
-                              {subject.isPaid ? `₵${subject.price}` : "Free"}
-                            </span>
+                            {subject.isPaid ? (
+                              <div className="flex flex-col items-end gap-0.5">
+                                <span className="text-xs px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full font-medium whitespace-nowrap bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-400">
+                                  {formatUSD(subject.price)}
+                                </span>
+                                {exchangeRate && (
+                                  <span className="text-[10px] sm:text-xs font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
+                                    ≈ {formatGHS(priceInGHS)}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full font-medium whitespace-nowrap bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400">
+                                Free
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
@@ -866,7 +1058,7 @@ const AdminSubjects = () => {
         </>
       )}
 
-      {/* Access Tab - Keep your original working code */}
+      {/* Access Tab */}
       {activeTab === "access" && (
         <>
           {/* Manual Unlock Form */}
@@ -1051,7 +1243,7 @@ const AdminSubjects = () => {
         </>
       )}
 
-      {/* Edit Modal - Updated with topic count display */}
+      {/* Edit Modal */}
       {editing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-[calc(100%-1.5rem)] sm:max-w-md relative shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto">
@@ -1144,15 +1336,29 @@ const AdminSubjects = () => {
               {form.isPaid && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Price (₵)
+                    Price (USD)
                   </label>
                   <input
                     type="number"
                     name="price"
                     value={form.price}
                     onChange={handleChange}
+                    step="0.01"
+                    min="0"
                     className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   />
+                  {/* GHS Conversion Preview */}
+                  {form.price && parseFloat(form.price) > 0 && exchangeRate && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <FaBanknote className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                        ≈ {formatGHS(convertToGHS(form.price))}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        (at {exchangeRate.toFixed(2)} GHS/USD)
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

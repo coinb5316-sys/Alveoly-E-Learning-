@@ -1,4 +1,4 @@
-// src/pages/Pricing.jsx - COMPLETE FIXED
+// src/pages/Pricing.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +16,9 @@ import {
   BookOpen,
   User,
   Lock,
+  RefreshCw,
+  DollarSign,
+  Banknote,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -37,25 +40,34 @@ const Pricing = () => {
   const [authChecked, setAuthChecked] = useState(false);
   const [authReady, setAuthReady] = useState(false);
 
+  // Exchange rate state
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  // Fallback exchange rate
+  const FALLBACK_USD_TO_GHS = 15.50;
+
   // Check if user came from registration
   useEffect(() => {
     const state = location.state;
     console.log("📍 Pricing page location state:", state);
-    console.log("🔐 Auth state:", { 
-      isAuthenticated, 
-      user: user?._id, 
+    console.log("🔐 Auth state:", {
+      isAuthenticated,
+      user: user?._id,
       userEmail: user?.email,
       token: !!token,
       localStorageToken: !!localStorage.getItem("token")
     });
-    
+
     if (state?.userId) {
       setPendingUserId(state.userId);
       if (state.message) {
         toast.success(state.message);
       }
     }
-    
+
     // If we have a token but no user, try to refresh
     const storedToken = localStorage.getItem("token");
     if (storedToken && !user && !authChecked) {
@@ -66,9 +78,16 @@ const Pricing = () => {
     } else if (user) {
       setAuthReady(true);
     }
-    
+
     setAuthChecked(true);
   }, [location, isAuthenticated, user, token, refreshUser]);
+
+  // Fetch exchange rate
+  useEffect(() => {
+    fetchExchangeRate();
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch plans
   useEffect(() => {
@@ -88,24 +107,103 @@ const Pricing = () => {
     fetchPlans();
   }, []);
 
-  // ================= HANDLE PLAN PURCHASE - FIXED =================
+  // ================= FETCH EXCHANGE RATE =================
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS
+        }
+      ];
+
+      let rate = null;
+
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate");
+        console.warn("All exchange rate APIs failed, using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // ================= CURRENCY CONVERSION =================
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || usdAmount === 0 || usdAmount === "0") return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
+
+  const formatUSD = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "$0.00";
+    return `$${num.toFixed(2)}`;
+  };
+
+  const formatGHS = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "GH₵0.00";
+    return `GH₵${num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  };
+
+  // ================= HANDLE PLAN PURCHASE =================
   const handlePurchasePlan = async (plan) => {
-    // CRITICAL: Check localStorage directly for the token
     const storedToken = localStorage.getItem("token");
     const isLoggedIn = isAuthenticated || !!storedToken || !!token;
-    
-    console.log("🛒 Purchase plan clicked:", { 
-      plan: plan._id, 
-      isAuthenticated, 
+
+    console.log("🛒 Purchase plan clicked:", {
+      plan: plan._id,
+      isAuthenticated,
       isLoggedIn,
-      user: user?._id, 
+      user: user?._id,
       userEmail: user?.email,
       tokenFromState: !!token,
       tokenFromStorage: !!storedToken,
-      pendingUserId 
+      pendingUserId
     });
-    
-    // Check if user is logged in - check both state and localStorage
+
+    // Check if user is logged in
     if (!isLoggedIn) {
       console.log("❌ User not authenticated, showing login prompt");
       setPendingPlanId(plan._id);
@@ -115,28 +213,35 @@ const Pricing = () => {
 
     try {
       setProcessingPayment(true);
-      
-      // Get userId from various sources
+
       const userId = pendingUserId || user?._id || location.state?.userId;
-      
+
       if (!userId) {
         console.error("❌ No userId found:", { pendingUserId, user: user?._id, state: location.state });
         toast.error("User information not found. Please login again.");
         setProcessingPayment(false);
         return;
       }
-      
+
       console.log("✅ Initiating payment for user:", userId);
-      
+
       // Make sure the token is in the headers
       if (storedToken) {
         API.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
       }
-      
-      // Initiate payment
+
+      // Calculate GHS amount
+      const ghsAmount = convertToGHS(plan.price);
+      const rate = exchangeRate || FALLBACK_USD_TO_GHS;
+
+      // Initiate payment with full currency info
       const response = await API.post("/payments/initiate-plan", {
         planId: plan._id,
-        userId: userId
+        userId: userId,
+        amountInGHS: parseFloat(ghsAmount),
+        exchangeRate: parseFloat(rate.toFixed(4)),
+        priceUSD: parseFloat(plan.price),
+        currency: "GHS"
       });
 
       console.log("✅ Payment initiation response:", response.data);
@@ -144,8 +249,11 @@ const Pricing = () => {
       // Redirect to payment gateway
       if (response.data.authorizationUrl) {
         window.location.href = response.data.authorizationUrl;
+      } else if (response.data.redirectUrl) {
+        window.location.href = response.data.redirectUrl;
       } else {
         toast.error("Failed to initiate payment");
+        setProcessingPayment(false);
       }
     } catch (err) {
       console.error("Payment initiation error:", err);
@@ -174,7 +282,7 @@ const Pricing = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 font-['Inter',sans-serif]">
       <Navbar />
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-20">
         {/* Page Header */}
         <div className="text-center mb-12">
@@ -188,7 +296,39 @@ const Pricing = () => {
           <p className="text-gray-500 dark:text-gray-400 mt-4 max-w-2xl mx-auto">
             Select the perfect plan to unlock premium content and accelerate your learning journey
           </p>
-          
+
+          {/* Exchange Rate Banner */}
+          <div className="mt-6 inline-flex items-center gap-3 px-4 py-2.5 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm">
+            <button
+              onClick={fetchExchangeRate}
+              disabled={exchangeRateLoading}
+              className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              title="Refresh exchange rate"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 text-gray-500 dark:text-gray-400 ${exchangeRateLoading ? 'animate-spin' : ''}`}
+              />
+            </button>
+            {exchangeRate ? (
+              <div className="flex items-center gap-2 text-sm">
+                <DollarSign className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                <span className="font-semibold text-gray-700 dark:text-gray-300">
+                  1 USD = {exchangeRate.toFixed(2)} GHS
+                </span>
+                {lastUpdated && (
+                  <span className="text-gray-400 dark:text-gray-500 text-xs hidden sm:inline">
+                    • {lastUpdated}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-sm text-gray-500">Loading rate...</span>
+            )}
+            {exchangeRateError && (
+              <span className="text-amber-500 text-xs">⚠ {exchangeRateError}</span>
+            )}
+          </div>
+
           {/* Show user info if authenticated */}
           {isAuthenticated && user && (
             <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 max-w-md mx-auto">
@@ -197,7 +337,7 @@ const Pricing = () => {
               </p>
             </div>
           )}
-          
+
           {pendingUserId && !isAuthenticated && (
             <div className="mt-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800 max-w-md mx-auto">
               <p className="text-sm text-green-700 dark:text-green-400">
@@ -215,7 +355,7 @@ const Pricing = () => {
           </div>
         )}
 
-        {/* Plans Grid */}
+        {/* No Plans */}
         {!loading && plans.length === 0 && (
           <div className="text-center py-20">
             <div className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
@@ -226,10 +366,13 @@ const Pricing = () => {
           </div>
         )}
 
+        {/* Plans Grid */}
         {!loading && plans.length > 0 && (
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {plans.map((plan, index) => {
               const isPopular = plan.isPopular || index === 1;
+              const isFreePlan = plan.isFree || plan.freeAccess || parseFloat(plan.price) === 0;
+              const priceInGHS = convertToGHS(plan.price);
 
               return (
                 <motion.div
@@ -271,14 +414,36 @@ const Pricing = () => {
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                           {plan.title}
                         </h3>
-                        <div className="flex items-center gap-1">
-                          <span className="text-3xl font-extrabold text-gray-900 dark:text-white">
-                            ₵{plan.price}
-                          </span>
-                          <span className="text-gray-500 dark:text-gray-400 text-sm">
-                            /{plan.duration} {plan.durationUnit}
-                          </span>
-                        </div>
+                        {isFreePlan ? (
+                          <div>
+                            <span className="text-3xl font-extrabold text-green-600 dark:text-green-400">
+                              Free
+                            </span>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              No payment required
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-3xl font-extrabold text-gray-900 dark:text-white">
+                                {formatUSD(plan.price)}
+                              </span>
+                              <span className="text-gray-500 dark:text-gray-400 text-sm">
+                                /{plan.duration} {plan.durationUnit}
+                              </span>
+                            </div>
+                            {/* GHS Conversion Badge */}
+                            {exchangeRate && (
+                              <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                                <Banknote className="h-3 w-3 text-green-600 dark:text-green-400" />
+                                <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                                  {formatGHS(priceInGHS)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -332,7 +497,11 @@ const Pricing = () => {
                       ) : (
                         <>
                           <CreditCard className="h-4 w-4" />
-                          {isAuthenticated || localStorage.getItem("token") ? "Subscribe Now" : "Choose Plan"}
+                          {isAuthenticated || localStorage.getItem("token")
+                            ? isFreePlan
+                              ? "Get Free Access"
+                              : `Subscribe Now${exchangeRate ? ` • ${formatGHS(priceInGHS)}` : ''}`
+                            : "Choose Plan"}
                         </>
                       )}
                     </button>
@@ -364,11 +533,16 @@ const Pricing = () => {
           </div>
         )}
 
-        <div className="mt-16 text-center">
+        <div className="mt-16 text-center space-y-2">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             All plans include full access to selected subjects. Cancel anytime.
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+          {exchangeRate && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Prices displayed in USD. Charged in GHS at {exchangeRate.toFixed(2)} GHS/USD
+            </p>
+          )}
+          <p className="text-xs text-gray-400 dark:text-gray-500">
             Secure payment powered by Paystack
           </p>
         </div>

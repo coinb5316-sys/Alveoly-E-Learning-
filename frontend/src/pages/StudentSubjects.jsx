@@ -1,4 +1,4 @@
-// StudentSubjects.jsx - Updated with plan deactivation check
+// StudentSubjects.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
 import { useEffect, useState } from "react"; 
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
@@ -26,7 +26,11 @@ import {
   ChevronDown,
   ChevronUp,
   Ban,
+  RefreshCw,
+  DollarSign,
+  Banknote,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 const StudentSubjects = () => {
   const navigate = useNavigate();
@@ -50,6 +54,100 @@ const StudentSubjects = () => {
   const [payments, setPayments] = useState([]);
   const [now, setNow] = useState(new Date());
   const [manualAccess, setManualAccess] = useState([]);
+
+  // Exchange rate state
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  // Fallback exchange rate
+  const FALLBACK_USD_TO_GHS = 15.50;
+
+  // ================= EXCHANGE RATE =================
+  useEffect(() => {
+    fetchExchangeRate();
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS
+        }
+      ];
+
+      let rate = null;
+
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          continue;
+        }
+      }
+
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // ================= CURRENCY CONVERSION =================
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || usdAmount === 0 || usdAmount === "0") return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
+
+  const formatUSD = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "$0.00";
+    return `$${num.toFixed(2)}`;
+  };
+
+  const formatGHS = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "GH₵0.00";
+    return `GH₵${num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  };
 
   // ================= LIVE TIMER =================
   useEffect(() => {
@@ -160,7 +258,6 @@ const StudentSubjects = () => {
 
   // ================= ACCESS LOGIC =================
   const hasActivePlan = () => {
-    // Check if plan is deactivated by admin
     if (planDeactivated) return false;
     
     return payments.some(
@@ -173,7 +270,6 @@ const StudentSubjects = () => {
   };
 
   const isSubjectUnlocked = (subject) => {
-    // If plan is deactivated, everything is locked
     if (planDeactivated) return false;
     
     if (subject.isUnlocked !== undefined) {
@@ -214,7 +310,6 @@ const StudentSubjects = () => {
       try {
         setFetching(true);
         const res = await axios.get(`/subjects?course=${courseId}`);
-        // Mark all subjects as locked if plan is deactivated
         const subjectsData = res.data || [];
         if (planDeactivated) {
           subjectsData.forEach(s => s.isUnlocked = false);
@@ -284,23 +379,35 @@ const StudentSubjects = () => {
 
   // ================= PAYMENT =================
   const handleUnlock = async (subject) => {
-    // Don't allow unlocking if plan is deactivated
     if (planDeactivated) {
-      alert("Your plan has been deactivated by an administrator. Please contact support.");
+      toast.error("Your plan has been deactivated. Please contact support.");
       return;
     }
     
     try {
       setLoading(true);
+      
+      const ghsAmount = convertToGHS(subject.price);
+      const rate = exchangeRate || FALLBACK_USD_TO_GHS;
+      
       const res = await axios.post("/payments/initiate", {
         subjectId: subject._id,
+        amountInGHS: parseFloat(ghsAmount),
+        exchangeRate: parseFloat(rate.toFixed(4)),
+        priceUSD: parseFloat(subject.price),
+        currency: "GHS"
       });
+      
       if (res.data?.authorizationUrl) {
         window.location.href = res.data.authorizationUrl;
+      } else if (res.data?.redirectUrl) {
+        window.location.href = res.data.redirectUrl;
+      } else {
+        toast.error("Failed to initiate payment");
       }
     } catch (err) {
       console.error("Payment error:", err);
-      alert(err.response?.data?.message || "Payment failed. Please try again.");
+      toast.error(err.response?.data?.message || "Payment failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -324,7 +431,6 @@ const StudentSubjects = () => {
   if (showCourseSelector) {
     return (
       <div className="space-y-6">
-        {/* Page Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
@@ -398,7 +504,6 @@ const StudentSubjects = () => {
   if (planDeactivated) {
     return (
       <div className="space-y-6">
-        {/* Page Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1 flex-wrap">
@@ -425,7 +530,6 @@ const StudentSubjects = () => {
           </div>
         </div>
 
-        {/* Deactivated Banner */}
         <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20 p-8 text-center">
           <Ban className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-red-800 dark:text-red-400 mb-2">
@@ -497,6 +601,40 @@ const StudentSubjects = () => {
               Change Course
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Exchange Rate Banner */}
+      <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border border-green-200 dark:border-green-800">
+        <div className="flex items-center gap-2">
+          <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <span className="text-sm font-medium text-green-700 dark:text-green-400">
+            Live Exchange Rate
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {exchangeRate ? (
+            <>
+              <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                1 USD = {exchangeRate.toFixed(2)} GHS
+              </span>
+              {lastUpdated && (
+                <span className="text-xs text-green-600 dark:text-green-500 hidden sm:inline">
+                  • {lastUpdated}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-sm text-green-600">Loading rate...</span>
+          )}
+          <button
+            onClick={fetchExchangeRate}
+            disabled={exchangeRateLoading}
+            className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors disabled:opacity-50"
+            title="Refresh exchange rate"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 text-green-600 dark:text-green-400 ${exchangeRateLoading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
 
@@ -599,6 +737,7 @@ const StudentSubjects = () => {
             const unlocked = isSubjectUnlocked(subject);
             const isExpanded = expandedTopics[subject._id];
             const topicCount = subject.topics?.length || 0;
+            const priceInGHS = convertToGHS(subject.price);
             
             return (
               <div
@@ -659,12 +798,25 @@ const StudentSubjects = () => {
                       <h3 className={`font-semibold text-base leading-tight break-words ${unlocked ? 'text-gray-900 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'}`}>
                         {subject.name}
                       </h3>
+                      
+                      {/* Price Display with USD → GHS */}
                       {subject.isPaid && (
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1 flex-wrap">
-                          <CreditCard className="h-3 w-3 flex-shrink-0" />
-                          <span>₵{subject.price}</span>
-                        </p>
+                        <div className="mt-1.5 space-y-1">
+                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1 flex-wrap">
+                            <CreditCard className="h-3 w-3 flex-shrink-0" />
+                            <span>{formatUSD(subject.price)}</span>
+                          </p>
+                          {exchangeRate && (
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded">
+                              <Banknote className="h-3 w-3 text-green-600 dark:text-green-400" />
+                              <span className="text-xs font-bold text-green-700 dark:text-green-400">
+                                {formatGHS(priceInGHS)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       )}
+                      
                       {topicCount > 0 && (
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                           {topicCount} {topicCount === 1 ? 'topic' : 'topics'} available
@@ -742,7 +894,7 @@ const StudentSubjects = () => {
                           ) : (
                             <>
                               <CreditCard className="h-4 w-4" />
-                              Unlock for ₵{subject.price}
+                              <span>Unlock for {exchangeRate ? formatGHS(priceInGHS) : formatUSD(subject.price)}</span>
                             </>
                           )}
                         </button>
@@ -804,7 +956,7 @@ const StudentSubjects = () => {
         </div>
       )}
 
-      {/* Upgrade Banner - Only show if not deactivated */}
+      {/* Upgrade Banner */}
       {lockedCount > 0 && !hasActivePlan() && !planDeactivated && (
         <div className="mt-8 rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 p-6 text-white overflow-hidden relative">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />

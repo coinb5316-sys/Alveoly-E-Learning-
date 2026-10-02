@@ -1,4 +1,4 @@
-// pages/StudentPlans.jsx
+// pages/StudentPlans.jsx - COMPLETE UPDATED VERSION (USD to GHS Conversion)
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -12,6 +12,9 @@ import {
   FaLock,
   FaCheckCircle,
   FaExclamationTriangle,
+  FaTag,
+  FaSync,
+  FaDollarSign,
 } from "react-icons/fa";
 import API from "../api/axios";
 import { useAuth } from "../context/AuthContext";
@@ -27,11 +30,108 @@ const StudentPlans = () => {
   const [userPlan, setUserPlan] = useState(null);
   const [userPlanExpiry, setUserPlanExpiry] = useState(null);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  
+  // Exchange rate state
+  const [exchangeRate, setExchangeRate] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  // Fallback exchange rate (approximate - will be replaced by live rate)
+  const FALLBACK_USD_TO_GHS = 15.50;
 
   useEffect(() => {
     fetchPlans();
     fetchUserPlan();
+    fetchExchangeRate();
+    
+    // Refresh exchange rate every 30 minutes
+    const interval = setInterval(fetchExchangeRate, 30 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Fetch live USD to GHS exchange rate
+  const fetchExchangeRate = async () => {
+    try {
+      setExchangeRateLoading(true);
+      setExchangeRateError(null);
+      
+      // Try multiple free exchange rate APIs for reliability
+      const apis = [
+        {
+          url: "https://api.exchangerate-api.com/v4/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://open.er-api.com/v6/latest/USD",
+          extract: (data) => data.rates?.GHS
+        },
+        {
+          url: "https://api.frankfurter.app/latest?from=USD&to=GHS",
+          extract: (data) => data.rates?.GHS
+        }
+      ];
+      
+      let rate = null;
+      let lastError = null;
+      
+      for (const api of apis) {
+        try {
+          const response = await fetch(api.url);
+          if (response.ok) {
+            const data = await response.json();
+            const extractedRate = api.extract(data);
+            if (extractedRate && extractedRate > 0) {
+              rate = extractedRate;
+              break;
+            }
+          }
+        } catch (err) {
+          lastError = err;
+          continue;
+        }
+      }
+      
+      if (rate) {
+        setExchangeRate(rate);
+        setLastUpdated(new Date().toLocaleString());
+        console.log(`Exchange rate loaded: 1 USD = ${rate} GHS`);
+      } else {
+        // Use fallback rate if all APIs fail
+        setExchangeRate(FALLBACK_USD_TO_GHS);
+        setExchangeRateError("Using fallback rate - live rate unavailable");
+        console.warn("All exchange rate APIs failed, using fallback rate");
+      }
+    } catch (err) {
+      console.error("Error fetching exchange rate:", err);
+      setExchangeRate(FALLBACK_USD_TO_GHS);
+      setExchangeRateError("Using fallback rate - live rate unavailable");
+    } finally {
+      setExchangeRateLoading(false);
+    }
+  };
+
+  // Convert USD to GHS
+  const convertToGHS = (usdAmount) => {
+    if (!exchangeRate || usdAmount === 0 || usdAmount === "0") return 0;
+    const amount = parseFloat(usdAmount);
+    if (isNaN(amount)) return 0;
+    return (amount * exchangeRate).toFixed(2);
+  };
+
+  // Format currency for display
+  const formatUSD = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "$0.00";
+    return `$${num.toFixed(2)}`;
+  };
+
+  const formatGHS = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "GH₵0.00";
+    // Format with commas for thousands
+    return `GH₵${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   const fetchPlans = async () => {
     try {
@@ -125,6 +225,32 @@ const StudentPlans = () => {
           <p className="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
             Choose a plan that fits your learning needs. Get access to premium content, practice questions, and expert resources.
           </p>
+          
+          {/* Exchange Rate Banner */}
+          <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm">
+            <FaSync 
+              className={`h-3.5 w-3.5 text-gray-500 ${exchangeRateLoading ? 'animate-spin' : 'cursor-pointer hover:text-yellow-500'}`}
+              onClick={fetchExchangeRate}
+              title="Refresh exchange rate"
+            />
+            {exchangeRate ? (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-semibold text-gray-700 dark:text-gray-300">
+                  1 USD = {exchangeRate.toFixed(2)} GHS
+                </span>
+                {lastUpdated && (
+                  <span className="text-gray-400 dark:text-gray-500 text-xs hidden sm:inline">
+                    • Updated {lastUpdated}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-sm text-gray-500">Loading exchange rate...</span>
+            )}
+            {exchangeRateError && (
+              <span className="text-amber-500 text-xs ml-2">{exchangeRateError}</span>
+            )}
+          </div>
         </div>
 
         {/* Current Subscription Status */}
@@ -169,11 +295,27 @@ const StudentPlans = () => {
                   )}
                 </div>
               </div>
-              {hasFreeAccess && (
-                <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-sm font-medium">
-                  Free Access
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {/* Show current plan price */}
+                {userPlan && !userPlan.isFree && !userPlan.freeAccess && (
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Plan Price</p>
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      {formatUSD(userPlan.price)}
+                      {exchangeRate && (
+                        <span className="text-xs text-gray-500 ml-1">
+                          (≈ {formatGHS(convertToGHS(userPlan.price))})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {hasFreeAccess && (
+                  <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-sm font-medium">
+                    Free Access
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -186,7 +328,7 @@ const StudentPlans = () => {
           </div>
         )}
 
-        {/* Plans Grid */}
+        {/* No Plans */}
         {!loading && plans.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
             <FaRocket className="h-12 w-12 text-gray-400 mb-3" />
@@ -201,6 +343,7 @@ const StudentPlans = () => {
               const isPopular = index === 1 && !plan.isFree;
               const isCurrentPlan = userPlan?._id === plan._id;
               const isFreePlan = plan.isFree || plan.freeAccess;
+              const priceInGHS = convertToGHS(plan.price);
               
               return (
                 <div
@@ -252,21 +395,41 @@ const StudentPlans = () => {
                       )}
                     </div>
 
-                    {/* Price */}
+                    {/* Price with GHS Conversion */}
                     <div className="mb-4">
                       {isFreePlan ? (
-                        <span className="text-3xl font-extrabold text-green-600 dark:text-green-400">
-                          Free
-                        </span>
+                        <div>
+                          <span className="text-3xl font-extrabold text-green-600 dark:text-green-400">
+                            Free
+                          </span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            No payment required
+                          </p>
+                        </div>
                       ) : (
-                        <>
-                          <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-                            ${plan.price}
-                          </span>
-                          <span className="text-gray-500 dark:text-gray-400 text-sm ml-1">
-                            /{getDurationLabel(plan.duration, plan.durationUnit)}
-                          </span>
-                        </>
+                        <div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
+                              {formatUSD(plan.price)}
+                            </span>
+                            <span className="text-gray-500 dark:text-gray-400 text-sm">
+                              /{getDurationLabel(plan.duration, plan.durationUnit)}
+                            </span>
+                          </div>
+                          {/* GHS Price - Prominent Display */}
+                          {exchangeRate && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                                <span className="text-sm font-bold text-green-700 dark:text-green-400">
+                                  {formatGHS(priceInGHS)}
+                                </span>
+                              </span>
+                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                                at {exchangeRate.toFixed(2)} GHS/USD
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -346,7 +509,14 @@ const StudentPlans = () => {
                         onClick={() => handlePlanSelect(plan)}
                         className="w-full py-3 bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-yellow-500/25"
                       >
-                        Choose Plan
+                        <span className="flex items-center justify-center gap-2">
+                          Choose Plan
+                          {exchangeRate && (
+                            <span className="text-xs opacity-90">
+                              ({formatGHS(priceInGHS)})
+                            </span>
+                          )}
+                        </span>
                       </button>
                     )}
                   </div>
@@ -380,21 +550,60 @@ const StudentPlans = () => {
               </div>
 
               <div className="p-6">
+                {/* Price Display with Conversion */}
                 <div className="text-center mb-6">
-                  <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                    ${selectedPlan.price}
-                  </p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    {getDurationLabel(selectedPlan.duration, selectedPlan.durationUnit)} access
-                  </p>
-                  {selectedPlan.features && selectedPlan.features.length > 0 && (
-                    <div className="mt-4 text-left space-y-1">
-                      {selectedPlan.features.slice(0, 3).map((feature, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                          <FaCheck className="h-3 w-3 text-green-500" />
-                          {feature}
+                  <div className="flex flex-col items-center gap-1">
+                    {/* USD Price */}
+                    <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                      {formatUSD(selectedPlan.price)}
+                    </p>
+                    
+                    {/* GHS Conversion - Prominent */}
+                    {exchangeRate && (
+                      <div className="flex flex-col items-center gap-1 mt-2">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                          <FaDollarSign className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                          <span className="text-lg font-bold text-green-700 dark:text-green-400">
+                            {formatGHS(convertToGHS(selectedPlan.price))}
+                          </span>
                         </div>
-                      ))}
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Exchange rate: 1 USD = {exchangeRate.toFixed(2)} GHS
+                        </p>
+                      </div>
+                    )}
+                    
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                      {getDurationLabel(selectedPlan.duration, selectedPlan.durationUnit)} access
+                    </p>
+                    
+                    {selectedPlan.features && selectedPlan.features.length > 0 && (
+                      <div className="mt-4 text-left space-y-1 w-full">
+                        {selectedPlan.features.slice(0, 3).map((feature, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <FaCheck className="h-3 w-3 text-green-500" />
+                            {feature}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Payment Info - Shows both currencies */}
+                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">Amount (USD)</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
+                      {formatUSD(selectedPlan.price)}
+                    </span>
+                  </div>
+                  {exchangeRate && (
+                    <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <span className="text-gray-500 dark:text-gray-400">Amount (GHS)</span>
+                      <span className="font-semibold text-green-600 dark:text-green-400">
+                        {formatGHS(convertToGHS(selectedPlan.price))}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -402,11 +611,18 @@ const StudentPlans = () => {
                 {/* Paystack Payment */}
                 <PaystackPayment 
                   plan={selectedPlan} 
+                  exchangeRate={exchangeRate}
+                  amountInGHS={convertToGHS(selectedPlan.price)}
                   onSuccess={() => {
                     handlePaymentSuccess();
                     setSelectedPlan(null);
                   }}
                 />
+                
+                {/* Secure Payment Note */}
+                <p className="text-xs text-center text-gray-400 dark:text-gray-500 mt-4">
+                  Secure payment powered by Paystack • You will be charged in GHS
+                </p>
               </div>
             </div>
           </div>
