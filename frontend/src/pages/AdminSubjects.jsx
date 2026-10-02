@@ -9,7 +9,7 @@ import {
   FaMagnifyingGlass,
   FaChalkboardUser,
   FaDollarSign,
-  FaUnlockAlt,
+  FaUnlock,
   FaClock,
   FaUserGraduate,
   FaSpinner,
@@ -1181,7 +1181,7 @@ const AdminSubjects = () => {
           {/* Manual Unlock Form */}
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6">
             <h3 className="font-semibold text-base sm:text-lg text-gray-900 dark:text-gray-100 mb-2 sm:mb-4 flex items-center gap-2">
-              <FaUnlockAlt className="h-4 w-4 text-green-500" />
+              <FaUnlock className="h-4 w-4 text-green-500" />
               Manual Unlock Access
             </h3>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3 sm:mb-4 break-words">
