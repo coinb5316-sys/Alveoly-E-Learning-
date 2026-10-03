@@ -1,7 +1,7 @@
 // src/components/SplashScreen.jsx
 // A calm, premium splash screen — staged entrance, no visual noise.
 import { useEffect, useState, useRef } from "react";
-import "../styles/splash.css";
+// Styles are defined in src/index.css
 
 const SplashScreen = ({ onFinish }) => {
   const [progress, setProgress] = useState(0);
@@ -11,7 +11,6 @@ const SplashScreen = ({ onFinish }) => {
   finishRef.current = onFinish;
 
   // Total time on screen — 2.2s feels respectful to the user.
-  // (AI-generated splashes usually run 4–6s and feel like a punishment.)
   const HOLD_MS = 2200;
   const EXIT_MS = 700;
 
