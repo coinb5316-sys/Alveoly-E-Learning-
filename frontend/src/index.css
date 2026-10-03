@@ -227,219 +227,199 @@
   }
 }
 
-/* ================= SPLASH SCREEN ANIMATIONS ================= */
+/* ================= ALVEOLY SPLASH SCREEN =================
+   Design intent: calm, premium, minimal.
+   - One gradient backdrop, no floating orbs
+   - Logo fades in with a soft breath, not a pop
+   - Single thin progress line, no bouncing dots
+   - Muted palette pulled from the brand purple/indigo
+   ========================================================= */
 
-/* ============ ANIMATED BACKGROUND ORBS ============ */
-.splash-orb {
+.alveoly-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #0b0b14;
+  /* A single soft radial wash — not four competing orbs */
+  background-image:
+    radial-gradient(
+      ellipse 60% 50% at 50% 40%,
+      rgba(99, 102, 241, 0.18),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 40% 40% at 80% 90%,
+      rgba(139, 92, 246, 0.10),
+      transparent 70%
+    );
+  transition: opacity 700ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.alveoly-splash.is-leaving {
+  opacity: 0;
+  transform: scale(1.02);
+  pointer-events: none;
+}
+
+/* Subtle film grain — gives it texture, feels less "digital" */
+.alveoly-splash::after {
+  content: "";
   position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.5;
-  will-change: transform, opacity;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
 }
 
-.splash-orb-1 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.6), transparent 70%);
-  top: -100px;
-  left: -100px;
-  animation: splashOrbFloat1 12s ease-in-out infinite;
+/* ============ LOGO ============ */
+.alveoly-splash__logo-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: alveolyLogoIn 900ms cubic-bezier(0.16, 1, 0.3, 1) 100ms forwards;
 }
 
-.splash-orb-2 {
-  width: 350px;
-  height: 350px;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.6), transparent 70%);
-  bottom: -80px;
-  right: -80px;
-  animation: splashOrbFloat2 14s ease-in-out infinite;
-}
-
-.splash-orb-3 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(236, 72, 153, 0.5), transparent 70%);
-  top: 40%;
-  right: 10%;
-  animation: splashOrbFloat3 16s ease-in-out infinite;
-}
-
-.splash-orb-4 {
-  width: 280px;
-  height: 280px;
-  background: radial-gradient(circle, rgba(34, 211, 238, 0.5), transparent 70%);
-  bottom: 20%;
-  left: 5%;
-  animation: splashOrbFloat1 15s ease-in-out infinite reverse;
-}
-
-@keyframes splashOrbFloat1 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(40px, -30px) scale(1.1); }
-  66% { transform: translate(-30px, 20px) scale(0.95); }
-}
-
-@keyframes splashOrbFloat2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-50px, -40px) scale(1.15); }
-}
-
-@keyframes splashOrbFloat3 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(-40px, 30px) scale(1.1); }
-  66% { transform: translate(30px, -20px) scale(0.9); }
-}
-
-/* ============ FLOATING PARTICLES ============ */
-.splash-particle {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: white;
-  opacity: 0.3;
-  animation: splashParticleFloat 6s ease-in-out infinite;
-}
-
-@keyframes splashParticleFloat {
-  0%, 100% {
-    transform: translateY(0) scale(1);
-    opacity: 0.2;
-  }
-  50% {
-    transform: translateY(-100px) scale(1.5);
-    opacity: 0.6;
+@media (min-width: 640px) {
+  .alveoly-splash__logo-wrap {
+    width: 104px;
+    height: 104px;
   }
 }
 
-/* ============ PULSING GLOW BEHIND LOGO ============ */
-.splash-pulse-glow {
-  animation: splashGlowPulse 3s ease-in-out infinite;
+/* The gentle "breath" — barely perceptible, not a bounce */
+.alveoly-splash__logo-wrap.is-breathing {
+  animation:
+    alveolyLogoIn 900ms cubic-bezier(0.16, 1, 0.3, 1) 100ms forwards,
+    alveolyBreathe 5s ease-in-out 1s infinite;
 }
 
-@keyframes splashGlowPulse {
-  0%, 100% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.4;
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.2);
-    opacity: 0.7;
-  }
-}
-
-/* ============ ROTATING RINGS ============ */
-.splash-ring-rotate {
-  animation: splashRingRotate 4s linear infinite;
-}
-
-.splash-ring-rotate-reverse {
-  animation: splashRingRotateReverse 3s linear infinite;
-}
-
-@keyframes splashRingRotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes splashRingRotateReverse {
-  from { transform: rotate(360deg); }
-  to { transform: rotate(0deg); }
-}
-
-/* ============ LOGO ENTRANCE ANIMATION ============ */
-.splash-logo-pop {
-  animation: splashLogoPop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
-@keyframes splashLogoPop {
-  0% {
+@keyframes alveolyLogoIn {
+  from {
     opacity: 0;
-    transform: scale(0.3) rotate(-180deg);
+    transform: translateY(8px);
   }
-  60% {
+  to {
     opacity: 1;
-    transform: scale(1.1) rotate(10deg);
+    transform: translateY(0);
   }
-  100% {
+}
+
+@keyframes alveolyBreathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.018); }
+}
+
+.alveoly-splash__logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Soft glow uses ONE color, subtle — not multi-color */
+  filter: drop-shadow(0 4px 24px rgba(139, 92, 246, 0.35));
+}
+
+/* Fallback monogram if image is missing */
+.alveoly-splash__monogram {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #c7c9ff;
+}
+
+/* ============ WORDMARK ============ */
+.alveoly-splash__wordmark {
+  margin-top: 28px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+  padding-left: 0.42em; /* optically center the letterspacing */
+  opacity: 0;
+  transform: translateY(6px);
+  animation: alveolyWordmarkIn 800ms cubic-bezier(0.16, 1, 0.3, 1) 500ms forwards;
+}
+
+@keyframes alveolyWordmarkIn {
+  to {
     opacity: 1;
-    transform: scale(1) rotate(0deg);
+    transform: translateY(0);
   }
 }
 
-/* ============ LOGO FLOATING ============ */
-.splash-logo-float {
-  animation: splashLogoFloat 3s ease-in-out infinite;
+/* ============ PROGRESS ============ */
+.alveoly-splash__progress {
+  position: relative;
+  margin-top: 44px;
+  width: 180px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  opacity: 0;
+  animation: alveolyProgressIn 600ms ease-out 800ms forwards;
 }
 
-@keyframes splashLogoFloat {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-6px) scale(1.02); }
+@media (min-width: 640px) {
+  .alveoly-splash__progress {
+    width: 220px;
+  }
 }
 
-/* ============ BRAND NAME SHIMMER ============ */
-.splash-shimmer-text {
+@keyframes alveolyProgressIn {
+  to { opacity: 1; }
+}
+
+.alveoly-splash__progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
   background: linear-gradient(
     90deg,
-    #ffffff 0%,
-    #ffffff 40%,
-    #a78bfa 50%,
-    #ffffff 60%,
-    #ffffff 100%
+    rgba(199, 201, 255, 0.9),
+    rgba(167, 139, 250, 1)
   );
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-fill-color: transparent;
-  animation: splashShimmer 3s linear infinite;
-  text-shadow: 0 0 40px rgba(167, 139, 250, 0.5);
+  border-radius: inherit;
+  transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.5);
 }
 
-@keyframes splashShimmer {
-  0% { background-position: 200% center; }
-  100% { background-position: -200% center; }
+/* ============ FOOTER ============ */
+.alveoly-splash__footer {
+  position: absolute;
+  bottom: 28px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.22);
+  opacity: 0;
+  animation: alveolyProgressIn 700ms ease-out 1100ms forwards;
 }
 
-/* ============ TEXT APPEAR ANIMATIONS ============ */
-.splash-text-appear {
-  animation: splashTextAppear 0.6s ease-out 0.4s both;
-}
-
-.splash-text-appear-delayed {
-  animation: splashTextAppear 0.6s ease-out 0.7s both;
-}
-
-@keyframes splashTextAppear {
-  0% {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ============ LOADING DOTS ============ */
-.splash-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #a78bfa, #ec4899);
-  box-shadow: 0 0 10px rgba(167, 139, 250, 0.6);
-  animation: splashDotBounce 1.4s ease-in-out infinite;
-}
-
-@keyframes splashDotBounce {
-  0%, 60%, 100% {
-    transform: translateY(0);
-    opacity: 0.6;
-  }
-  30% {
-    transform: translateY(-12px);
-    opacity: 1;
+/* ============ ACCESSIBILITY ============ */
+@media (prefers-reduced-motion: reduce) {
+  .alveoly-splash__logo-wrap,
+  .alveoly-splash__logo-wrap.is-breathing,
+  .alveoly-splash__wordmark,
+  .alveoly-splash__progress,
+  .alveoly-splash__footer {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
