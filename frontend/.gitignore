@@ -58,3 +58,6 @@ vite.config.js.timestamp-*
 
 # Netlify
 .netlify
+# Env backups
+.env.*
+*.env.*

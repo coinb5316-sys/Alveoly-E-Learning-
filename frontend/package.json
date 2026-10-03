@@ -10,6 +10,9 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@emailjs/browser": "^4.4.1",
     "@react-oauth/google": "^0.13.5",
     "axios": "^1.15.2",
