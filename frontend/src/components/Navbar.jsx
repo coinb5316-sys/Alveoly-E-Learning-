@@ -2,10 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  FaQuestionCircle, 
-  FaUser, 
-  FaShoppingBag, 
+import {
+  FaQuestionCircle,
+  FaUser,
+  FaShoppingBag,
   FaBars,
   FaTimes,
   FaFacebook,
@@ -31,6 +31,7 @@ import {
   FaClock,
   FaGraduationCap,
 } from "react-icons/fa";
+import { GoogleLogin } from "@react-oauth/google";
 import { isNativePlatform } from "../utils/socialAuth";
 import logo from "../assets/logo.png";
 import { useAuth } from "../context/AuthContext";
@@ -70,7 +71,7 @@ const Navbar = () => {
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [approvalMessage, setApprovalMessage] = useState("");
   const [registeredUser, setRegisteredUser] = useState(null);
-  
+
   // ================= GOOGLE SIGNUP FORM STATE =================
   const [googleSignupForm, setGoogleSignupForm] = useState({
     name: "",
@@ -91,9 +92,7 @@ const Navbar = () => {
   const [tempRegistrationSource, setTempRegistrationSource] = useState("");
   const [pendingRegistrationData, setPendingRegistrationData] = useState(null);
 
-  // ========== Define isAuthPage ==========
   const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
-  // =======================================
 
   // Fetch programs for signup
   useEffect(() => {
@@ -151,90 +150,88 @@ const Navbar = () => {
 
   // ================= LOGIN HANDLER =================
   const handleLoginSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  try {
-    const result = await login(loginForm);
-    console.log("Login result:", result);
-    
-    // Check if user needs approval
-    if (result.requiresApproval) {
-      setShowApprovalModal(true);
-      setApprovalMessage("Your account is pending approval. Please wait for admin approval.");
-      setLoading(false);
-      return;
-    }
-    
-    // Check if user needs to select plan (non-alveoly students)
-    if (result.requiresPlan) {
-      console.log("User requires plan - redirecting to pricing");
-      navigate("/pricing", {
-        state: {
-          message: "Please select a plan to continue",
-          userId: result.user?._id,
-          email: result.user?.email,
-          user: result.user
-        }
-      });
-      toast.info("Please select a plan to continue");
-      setShowLoginModal(false);
-      setLoginForm({ email: "", password: "" });
-      setLoading(false);
-      return;
-    }
-    
-    if (result.user?.role === "admin") {
-      navigate("/admin");
-    } else if (result.user?.role === "lecturer") {
-      navigate("/lecturer");
-    } else if (result.requiresProgram) {
-      navigate("/select-program");
-    } else {
-      navigate("/student/dashboard");
-    }
-    toast.success("Login successful!");
-    setShowLoginModal(false);
-    setLoginForm({ email: "", password: "" });
-  } catch (err) {
-    console.error("Login error:", err);
-    // Check if this is a plan requirement error from the backend
-    if (err.response?.status === 403) {
-      if (err.response?.data?.requiresPlan) {
-        console.log("Server requires plan - redirecting to pricing");
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const result = await login(loginForm);
+      console.log("Login result:", result);
+
+      if (result.requiresApproval) {
+        setShowApprovalModal(true);
+        setApprovalMessage("Your account is pending approval. Please wait for admin approval.");
+        setLoading(false);
+        return;
+      }
+
+      if (result.requiresPlan) {
+        console.log("User requires plan - redirecting to pricing");
         navigate("/pricing", {
           state: {
-            message: err.response?.data?.message || "Please select a plan to continue",
-            userId: err.response?.data?.userId
+            message: "Please select a plan to continue",
+            userId: result.user?._id,
+            email: result.user?.email,
+            user: result.user
           }
         });
-        toast.info(err.response?.data?.message || "Please select a plan to continue");
+        toast.info("Please select a plan to continue");
         setShowLoginModal(false);
+        setLoginForm({ email: "", password: "" });
         setLoading(false);
         return;
       }
-      if (err.response?.data?.requiresApproval) {
-        setShowApprovalModal(true);
-        setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
-        setLoading(false);
-        return;
+
+      if (result.user?.role === "admin") {
+        navigate("/admin");
+      } else if (result.user?.role === "lecturer") {
+        navigate("/lecturer");
+      } else if (result.requiresProgram) {
+        navigate("/select-program");
+      } else {
+        navigate("/student/dashboard");
       }
+      toast.success("Login successful!");
+      setShowLoginModal(false);
+      setLoginForm({ email: "", password: "" });
+    } catch (err) {
+      console.error("Login error:", err);
+      if (err.response?.status === 403) {
+        if (err.response?.data?.requiresPlan) {
+          console.log("Server requires plan - redirecting to pricing");
+          navigate("/pricing", {
+            state: {
+              message: err.response?.data?.message || "Please select a plan to continue",
+              userId: err.response?.data?.userId
+            }
+          });
+          toast.info(err.response?.data?.message || "Please select a plan to continue");
+          setShowLoginModal(false);
+          setLoading(false);
+          return;
+        }
+        if (err.response?.data?.requiresApproval) {
+          setShowApprovalModal(true);
+          setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+          setLoading(false);
+          return;
+        }
+      }
+      toast.error(err.response?.data?.message || "Login failed");
+    } finally {
+      setLoading(false);
     }
-    toast.error(err.response?.data?.message || "Login failed");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   // ================= ALVEOLY STUDENT REGISTRATION =================
   const handleAlveolyRegistration = async (source, details) => {
     try {
       setLoading(true);
-      
+
       if (!signupForm.name || !signupForm.email || !signupForm.password) {
         toast.error("Please fill in all required fields");
         setLoading(false);
         return;
       }
-      
+
       const payload = {
         name: signupForm.name.trim(),
         email: signupForm.email.trim().toLowerCase(),
@@ -245,11 +242,9 @@ const Navbar = () => {
         programId: signupForm.programId,
         courseId: signupForm.courseId
       };
-      
-      console.log("Sending Alveoly registration payload:", payload);
-      
+
       const response = await API.post("/auth/register/alveoly", payload);
-      
+
       if (response.data.success) {
         setRegisteredUser({ email: response.data.email, userId: response.data.userId });
         setApprovalMessage(response.data.message || "Registration submitted for approval!");
@@ -279,109 +274,92 @@ const Navbar = () => {
     }
   };
 
-  // ================= NON-ALVEOLY STUDENT REGISTRATION - FIXED =================
-const handleNonAlveolyRegistration = async () => {
-  try {
-    setLoading(true);
-    
-    if (!signupForm.name || !signupForm.email || !signupForm.password) {
-      toast.error("Please fill in all required fields");
-      setLoading(false);
-      return;
-    }
-    
-    const payload = {
-      name: signupForm.name.trim(),
-      email: signupForm.email.trim().toLowerCase(),
-      password: signupForm.password,
-      userType: "non_alveoly_student",
-      programId: signupForm.programId,
-      courseId: signupForm.courseId
-    };
-    
-    console.log("Sending Non-Alveoly registration payload:", payload);
-    
-    // Use the AuthContext's registerNonAlveoly method
-    // This now works EXACTLY like googleLogin
-    const result = await registerNonAlveoly(payload);
-    console.log("Registration result:", result);
-    console.log("🔐 Auth state after registration:", { 
-      isAuthenticated, 
-      user: user?._id,
-      token: !!token,
-      localStorageToken: !!localStorage.getItem("token")
-    });
-    
-    if (result.user) {
-      toast.success("Registration successful! Please subscribe to a plan to activate your account.");
-      setShowLoginModal(false);
-      setSignupForm({
-        name: "",
-        email: "",
-        password: "",
-        programId: "",
-        courseId: "",
-        userType: ""
-      });
-      
-      // Navigate to PRICING page with user data
-      // The user is already authenticated (setAuth was called)
-      navigate("/pricing", { 
-        state: { 
-          message: "Please subscribe to a plan to activate your account.",
-          userId: result.user._id || result.userId,
-          email: result.user.email,
-          user: result.user
-        } 
-      });
-    } else {
-      toast.error(result.message || "Registration failed");
-    }
-  } catch (err) {
-    console.error("Non-Alveoly Registration error:", err);
-    toast.error(err.response?.data?.message || "Registration failed. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+  // ================= NON-ALVEOLY STUDENT REGISTRATION =================
+  const handleNonAlveolyRegistration = async () => {
+    try {
+      setLoading(true);
 
+      if (!signupForm.name || !signupForm.email || !signupForm.password) {
+        toast.error("Please fill in all required fields");
+        setLoading(false);
+        return;
+      }
+
+      const payload = {
+        name: signupForm.name.trim(),
+        email: signupForm.email.trim().toLowerCase(),
+        password: signupForm.password,
+        userType: "non_alveoly_student",
+        programId: signupForm.programId,
+        courseId: signupForm.courseId
+      };
+
+      const result = await registerNonAlveoly(payload);
+
+      if (result.user) {
+        toast.success("Registration successful! Please subscribe to a plan to activate your account.");
+        setShowLoginModal(false);
+        setSignupForm({
+          name: "",
+          email: "",
+          password: "",
+          programId: "",
+          courseId: "",
+          userType: ""
+        });
+
+        navigate("/pricing", {
+          state: {
+            message: "Please subscribe to a plan to activate your account.",
+            userId: result.user._id || result.userId,
+            email: result.user.email,
+            user: result.user
+          }
+        });
+      } else {
+        toast.error(result.message || "Registration failed");
+      }
+    } catch (err) {
+      console.error("Non-Alveoly Registration error:", err);
+      toast.error(err.response?.data?.message || "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ================= HANDLE SIGNUP SUBMIT =================
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!signupForm.name || !signupForm.email || !signupForm.password) {
       toast.error("Please fill in all required fields");
       return;
     }
-    
     if (!signupForm.userType) {
       toast.error("Please select your user type");
       return;
     }
-    
     if (!signupForm.programId) {
       toast.error("Please select a program");
       return;
     }
-    
     if (!signupForm.courseId) {
       toast.error("Please select a course");
       return;
     }
-    
+
     if (signupForm.userType === "alveoly_student") {
       setShowRegistrationSourceModal(true);
       return;
     }
-    
+
     await handleNonAlveolyRegistration();
   };
 
   // ================= REGISTRATION SOURCE HANDLER =================
   const handleRegistrationSourceSelect = (source) => {
     setTempRegistrationSource(source);
-    
+
     if (source === "phone") {
       if (pendingGoogleCredential) {
         handleGoogleSignupComplete("alveoly_student", "phone", "");
@@ -401,7 +379,7 @@ const handleNonAlveolyRegistration = async () => {
       toast.error("Please provide details about how you registered with Alveoly");
       return;
     }
-    
+
     if (pendingGoogleCredential) {
       handleGoogleSignupComplete("alveoly_student", "other", registrationSourceInput.trim());
     } else {
@@ -410,18 +388,18 @@ const handleNonAlveolyRegistration = async () => {
     setShowRegistrationDetailsModal(false);
   };
 
-  // ================= HANDLE GOOGLE AUTH =================
+  // ================= HANDLE GOOGLE AUTH (WEB) =================
   const handleGoogleAuth = async (credentialResponse) => {
     try {
       setGoogleLoading(true);
       const idToken = credentialResponse?.credential;
       if (!idToken) throw new Error("No Google credential received");
-      
+
       setPendingGoogleCredential(idToken);
-      
+
       try {
         const result = await googleLogin(idToken);
-        
+
         if (result.requiresApproval) {
           setShowApprovalModal(true);
           setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
@@ -430,7 +408,7 @@ const handleNonAlveolyRegistration = async () => {
           setPendingGoogleCredential(null);
           return;
         }
-        
+
         if (result.requiresPlan) {
           navigate("/pricing", {
             state: {
@@ -446,7 +424,7 @@ const handleNonAlveolyRegistration = async () => {
           setPendingGoogleCredential(null);
           return;
         }
-        
+
         if (result.user?.role === "admin") {
           navigate("/admin");
         } else if (result.user?.role === "lecturer") {
@@ -483,9 +461,67 @@ const handleNonAlveolyRegistration = async () => {
       }
     } catch (err) {
       console.error("Google auth error:", err);
-      toast.error(err.response?.data?.message || "Google authentication failed");
+      toast.error(err.response?.data?.message || err.message || "Google authentication failed");
       setGoogleLoading(false);
       setPendingGoogleCredential(null);
+    }
+  };
+
+  // ================= HANDLE NATIVE GOOGLE AUTH (ANDROID) =================
+  const handleNativeGoogleAuth = async () => {
+    try {
+      setGoogleLoading(true);
+      const result = await googleLogin(); // no idToken → native bridge fetches it
+
+      if (result.requiresApproval) {
+        setShowApprovalModal(true);
+        setApprovalMessage("Your account is pending approval.");
+        setGoogleLoading(false);
+        return;
+      }
+
+      if (result.requiresPlan) {
+        navigate("/pricing", {
+          state: {
+            message: "Please select a plan to continue",
+            userId: result.user?._id,
+            email: result.user?.email,
+            user: result.user
+          }
+        });
+        setShowLoginModal(false);
+        setGoogleLoading(false);
+        return;
+      }
+
+      if (result.user?.role === "admin") navigate("/admin");
+      else if (result.user?.role === "lecturer") navigate("/lecturer");
+      else if (result.requiresProgram) navigate("/select-program");
+      else navigate("/student/dashboard");
+      toast.success("Login successful!");
+      setShowLoginModal(false);
+    } catch (err) {
+      console.error("Native Google login error:", err);
+      if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
+        setPendingGoogleCredential("__native__");
+        setShowUserTypeModal(true);
+      } else if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
+        setShowApprovalModal(true);
+        setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+      } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
+        navigate("/pricing", {
+          state: {
+            message: "Please select a plan to continue",
+            userId: err.response?.data?.userId,
+            email: err.response?.data?.email
+          }
+        });
+        setShowLoginModal(false);
+      } else {
+        toast.error(err.message || err.response?.data?.message || "Google login failed");
+      }
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -495,9 +531,9 @@ const handleNonAlveolyRegistration = async () => {
       toast.error("Please select your user type");
       return;
     }
-    
+
     setShowUserTypeModal(false);
-    
+
     if (selectedUserType === "alveoly_student") {
       setShowGoogleSignupForm(true);
       setGoogleSignupForm({
@@ -522,28 +558,26 @@ const handleNonAlveolyRegistration = async () => {
   // ================= HANDLE GOOGLE SIGNUP FORM SUBMIT =================
   const handleGoogleSignupFormSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!googleSignupForm.name) {
       toast.error("Please enter your full name");
       return;
     }
-    
     if (!googleSignupForm.programId) {
       toast.error("Please select a program");
       return;
     }
-    
     if (!googleSignupForm.courseId) {
       toast.error("Please select a course");
       return;
     }
-    
+
     if (googleSignupForm.userType === "alveoly_student") {
       setShowGoogleSignupForm(false);
       setShowRegistrationSourceModal(true);
       return;
     }
-    
+
     await handleGoogleSignupComplete("non_alveoly_student", "none", "");
   };
 
@@ -551,7 +585,7 @@ const handleNonAlveolyRegistration = async () => {
   const handleGoogleSignupProgramChange = async (programId) => {
     setGoogleSignupForm({ ...googleSignupForm, programId, courseId: "" });
     setGoogleSignupCourses([]);
-    
+
     if (programId && programId !== "") {
       try {
         setLoadingGoogleSignupCourses(true);
@@ -571,14 +605,15 @@ const handleNonAlveolyRegistration = async () => {
   const handleGoogleSignupComplete = async (userType, source, details) => {
     try {
       setGoogleLoading(true);
-      
+
+      const tokenArg = pendingGoogleCredential === "__native__" ? undefined : pendingGoogleCredential;
+
       const payload = {
-        idToken: pendingGoogleCredential,
         userType: userType,
         programId: googleSignupForm.programId || null,
         courseId: googleSignupForm.courseId || null
       };
-      
+
       if (userType === "alveoly_student") {
         payload.registrationSource = source || "other";
         payload.registrationDetails = details || "";
@@ -589,16 +624,14 @@ const handleNonAlveolyRegistration = async () => {
         payload.registrationSource = "none";
         payload.registrationDetails = "";
       }
-      
-      console.log("Google signup payload:", payload);
-      
+
       const result = await googleLogin(
-        payload.idToken, 
-        payload.userType, 
-        payload.registrationSource, 
+        tokenArg,
+        payload.userType,
+        payload.registrationSource,
         payload.registrationDetails
       );
-      
+
       setShowRegistrationSourceModal(false);
       setShowRegistrationDetailsModal(false);
       setShowGoogleSignupForm(false);
@@ -608,28 +641,28 @@ const handleNonAlveolyRegistration = async () => {
       setRegistrationSourceInput("");
       setTempRegistrationSource("");
       setPendingRegistrationData(null);
-      
+
       if (result.requiresApproval) {
         setShowApprovalModal(true);
         setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
         setGoogleLoading(false);
         return;
       }
-      
+
       if (result.requiresPlan) {
-        navigate("/pricing", { 
-          state: { 
+        navigate("/pricing", {
+          state: {
             message: "Please subscribe to a plan to activate your account.",
             userId: result.user?._id || result.user?.id,
             email: result.user?.email,
             user: result.user
-          } 
+          }
         });
         toast.info("Please select a plan to continue");
         setGoogleLoading(false);
         return;
       }
-      
+
       if (result.user?.role === "admin") {
         navigate("/admin");
       } else if (result.user?.role === "lecturer") {
@@ -642,7 +675,7 @@ const handleNonAlveolyRegistration = async () => {
       toast.success("Account created successfully!");
     } catch (err) {
       console.error("Google signup complete error:", err);
-      toast.error(err.response?.data?.message || "Failed to complete signup");
+      toast.error(err.response?.data?.message || err.message || "Failed to complete signup");
     } finally {
       setGoogleLoading(false);
     }
@@ -658,7 +691,7 @@ const handleNonAlveolyRegistration = async () => {
   const handleProgramChange = async (programId) => {
     setSignupForm({ ...signupForm, programId, courseId: "" });
     setCourses([]);
-    
+
     if (programId && programId !== "") {
       try {
         setLoadingCourses(true);
@@ -679,7 +712,6 @@ const handleNonAlveolyRegistration = async () => {
     setSignupForm({ ...signupForm, [name]: value });
   };
 
-  // Navigation links inside hamburger menu
   const navLinks = [
     { name: "About", path: "/about" },
     { name: "Programs", path: "/programs" },
@@ -780,16 +812,16 @@ const handleNonAlveolyRegistration = async () => {
                 aria-label="Toggle menu"
               >
                 {menuOpen ? (
-                  <FaTimes 
+                  <FaTimes
                     className={`text-2xl transition-colors duration-300 ${
                       scrolled || isAuthPage ? "text-gray-800" : "text-white"
-                    }`} 
+                    }`}
                   />
                 ) : (
-                  <FaBars 
+                  <FaBars
                     className={`text-2xl transition-colors duration-300 ${
                       scrolled || isAuthPage ? "text-gray-800" : "text-white"
-                    }`} 
+                    }`}
                   />
                 )}
               </button>
@@ -815,7 +847,7 @@ const handleNonAlveolyRegistration = async () => {
                   {link.name}
                 </button>
               ))}
-              
+
               <div className="p-8 border-b border-gray-100">
                 <button
                   onClick={() => {
@@ -845,7 +877,7 @@ const handleNonAlveolyRegistration = async () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="p-8 text-center border-t border-gray-200">
               <p className="text-sm text-gray-600">© 2024 Alveoly Academy</p>
             </div>
@@ -950,94 +982,44 @@ const handleNonAlveolyRegistration = async () => {
                     </button>
                   </div>
 
-                 <div>
-  {!googleLoading ? (
-    isNativePlatform() ? (
-      <button
-        onClick={async () => {
-          try {
-            setGoogleLoading(true);
-            const result = await googleLogin();
-            if (result.requiresApproval) {
-              setShowApprovalModal(true);
-              setApprovalMessage("Your account is pending approval.");
-              return;
-            }
-            if (result.requiresPlan) {
-              navigate("/pricing", {
-                state: {
-                  message: "Please select a plan to continue",
-                  userId: result.user?._id,
-                  email: result.user?.email,
-                  user: result.user,
-                },
-              });
-              setShowLoginModal(false);
-              return;
-            }
-            if (result.user?.role === "admin") navigate("/admin");
-            else if (result.user?.role === "lecturer") navigate("/lecturer");
-            else if (result.requiresProgram) navigate("/select-program");
-            else navigate("/student/dashboard");
-            toast.success("Login successful!");
-            setShowLoginModal(false);
-          } catch (err) {
-            console.error("Native Google login error:", err);
-            if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
-              setPendingGoogleCredential("__native__");
-              setShowUserTypeModal(true);
-            } else if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
-              setShowApprovalModal(true);
-              setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
-            } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
-              navigate("/pricing", {
-                state: {
-                  message: "Please select a plan to continue",
-                  userId: err.response?.data?.userId,
-                  email: err.response?.data?.email,
-                },
-              });
-              setShowLoginModal(false);
-            } else {
-              toast.error(err.message || err.response?.data?.message || "Google login failed");
-            }
-          } finally {
-            setGoogleLoading(false);
-          }
-        }}
-        className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
-      >
-        <svg className="w-5 h-5" viewBox="0 0 48 48">
-          <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
-          <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
-          <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
-          <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
-        </svg>
-        <span className="text-gray-700 dark:text-gray-300 font-medium">
-          Continue with Google
-        </span>
-      </button>
-    ) : (
-      <div className="w-full">
-        <GoogleLogin
-          onSuccess={handleGoogleAuth}
-          onError={() => toast.error("Google authentication failed")}
-          theme="outline"
-          size="large"
-          text={isSignup ? "signup_with" : "signin_with"}
-          shape="rectangular"
-          logo_alignment="center"
-          width="100%"
-        />
-      </div>
-    )
-  ) : (
-    <div className="flex items-center justify-center gap-2 w-full py-3 border rounded-xl bg-gray-50 dark:bg-gray-800">
-      <FaSpinner className="animate-spin text-indigo-600" />
-      <span className="text-gray-600 dark:text-gray-400">Connecting...</span>
-    </div>
-  )}
-</div>
+                  <div>
+                    {!googleLoading ? (
+                      isNativePlatform() ? (
+                        <button
+                          onClick={handleNativeGoogleAuth}
+                          className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 48 48">
+                            <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+                            <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
+                            <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+                            <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+                          </svg>
+                          <span className="text-gray-700 dark:text-gray-300 font-medium">
+                            Continue with Google
+                          </span>
+                        </button>
+                      ) : (
+                        <div className="w-full">
+                          <GoogleLogin
+                            onSuccess={handleGoogleAuth}
+                            onError={() => toast.error("Google authentication failed")}
+                            theme="outline"
+                            size="large"
+                            text={isSignup ? "signup_with" : "signin_with"}
+                            shape="rectangular"
+                            logo_alignment="center"
+                            width="100%"
+                          />
+                        </div>
+                      )
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 w-full py-3 border rounded-xl bg-gray-50 dark:bg-gray-800">
+                        <FaSpinner className="animate-spin text-indigo-600" />
+                        <span className="text-gray-600 dark:text-gray-400">Connecting...</span>
+                      </div>
+                    )}
+                  </div>
 
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center">
@@ -1201,7 +1183,7 @@ const handleNonAlveolyRegistration = async () => {
                           type="email"
                           placeholder="Email Address"
                           value={loginForm.email}
-                          onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
+                          onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
                           required
                           className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm transition-all"
                         />
@@ -1213,7 +1195,7 @@ const handleNonAlveolyRegistration = async () => {
                           type={showPassword ? "text" : "password"}
                           placeholder="Password"
                           value={loginForm.password}
-                          onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                          onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
                           required
                           className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm transition-all"
                         />
