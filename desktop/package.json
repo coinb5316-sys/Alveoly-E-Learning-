@@ -4,7 +4,15 @@
   "version": "0.1.0",
   "description": "Alveoly E-Learning Platform desktop application",
   "main": "main.js",
-  "author": "Alveoly",
+  "author": {
+    "name": "Alveoly",
+    "email": "support@alveolye-learning.academy"
+  },
+  "homepage": "https://alveolye-learning.academy",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/coinb5316-sys/Alveoly-E-Learning-.git"
+  },
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -16,7 +24,7 @@
   "devDependencies": {
     "electron": "^32.0.0",
     "electron-builder": "^25.0.0",
-    "sharp": "^0.35.5",
+    "sharp": "^0.33.0",
     "sharp-ico": "^0.1.5"
   },
   "build": {
@@ -33,18 +41,8 @@
     ],
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
       ],
       "icon": "build/icon.ico"
     },
@@ -56,20 +54,15 @@
       "shortcutName": "Alveoly E Learning"
     },
     "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
+      "target": ["dmg", "zip"],
       "category": "public.app-category.education",
-      "icon": "build/icon.icns"
+      "icon": "build/icon.png"
     },
     "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
+      "target": ["AppImage"],
       "category": "Education",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "maintainer": "Alveoly <support@alveolye-learning.academy>"
     }
   }
 }
