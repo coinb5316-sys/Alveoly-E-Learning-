@@ -1,5 +1,5 @@
-// src/App.js - Updated with Blog Routes
-import React, { useEffect } from "react";
+// src/App.js - Updated with Blog Routes + Splash Screen
+import React, { useEffect, useState } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -117,26 +117,57 @@ import AdminBlogComments from "./pages/admin/blog/AdminBlogComments";
 import AdminBlogPosts from "./pages/admin/blog/AdminBlogPosts";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 
+// ⬇️ NEW: Splash Screen import
+import SplashScreen from "./components/SplashScreen";
+
 function App() {
+  // ⬇️ NEW: Control splash screen visibility
+  const [showSplash, setShowSplash] = useState(() => {
+    // Only show splash on first visit within this session
+    // (prevents it from replaying on every navigation)
+    const hasVisited = sessionStorage.getItem("alveoly_has_visited");
+    return !hasVisited;
+  });
+
   useEffect(() => {
     document.documentElement.style.scrollBehavior = "smooth";
     document.body.style.backgroundColor = "#f9fafb";
-    
+
     return () => {
       document.documentElement.style.scrollBehavior = "";
       document.body.style.backgroundColor = "";
     };
   }, []);
 
+  // Lock body scroll while splash is visible
+  useEffect(() => {
+    if (showSplash) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [showSplash]);
+
+  const handleSplashFinish = () => {
+    sessionStorage.setItem("alveoly_has_visited", "true");
+    setShowSplash(false);
+  };
+
   return (
     <>
+      {/* ⬇️ NEW: Splash screen (renders above everything) */}
+      {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
+
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; }
       `}</style>
-      
+
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-        <ToastContainer 
+        <ToastContainer
           position="top-right"
           autoClose={3000}
           hideProgressBar={false}
@@ -148,7 +179,7 @@ function App() {
           pauseOnHover
           theme="light"
         />
-        
+
         <Routes>
           {/* ==================== PUBLIC ROUTES ==================== */}
           <Route path="/" element={<HomePage />} />
@@ -159,14 +190,14 @@ function App() {
           <Route path="/programs/:id" element={<ProgramDetail />} />
           <Route path="/admissions" element={<Admissions />} />
           <Route path="/contact_us" element={<Contact />} />
-          
+
           {/* ==================== BLOG ROUTES ==================== */}
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/blog/post/:id" element={<BlogPostPage />} />
           <Route path="/blog/category/:category" element={<BlogCategory />} />
           <Route path="/blog/author/:authorId" element={<BlogAuthor />} />
           <Route path="/blog/search" element={<BlogSearch />} />
-          
+
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -189,7 +220,7 @@ function App() {
           <Route path="/grad-school" element={<GradSchoolPage />} />
           <Route path="/legal" element={<LegalPage />} />
           <Route path="/pharmacy" element={<PharmacyPage />} />
-          
+
           {/* Payment Success Routes */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/content-payment-success" element={<ContentPaymentSuccess />} />
@@ -273,13 +304,13 @@ function App() {
             <Route path="ai-plans" element={<AIPlansAdmin />} />
             <Route path="ai-generator" element={<AIGenerator />} />
             <Route path="blog/posts" element={<AdminBlogPosts />} />
-<Route path="blog/create" element={<AdminCreateBlogPost />} />
-<Route path="blog/edit/:id" element={<AdminCreateBlogPost />} />
-<Route path="blog/categories" element={<AdminBlogCategories />} />
-<Route path="blog/authors" element={<AdminBlogAuthors />} />
-<Route path="blog/tags" element={<AdminBlogTags />} />
-<Route path="blog/comments" element={<AdminBlogComments />} />
-<Route path="notifications" element={<AdminNotifications />} />
+            <Route path="blog/create" element={<AdminCreateBlogPost />} />
+            <Route path="blog/edit/:id" element={<AdminCreateBlogPost />} />
+            <Route path="blog/categories" element={<AdminBlogCategories />} />
+            <Route path="blog/authors" element={<AdminBlogAuthors />} />
+            <Route path="blog/tags" element={<AdminBlogTags />} />
+            <Route path="blog/comments" element={<AdminBlogComments />} />
+            <Route path="notifications" element={<AdminNotifications />} />
           </Route>
 
           {/* ==================== LECTURER ROUTES ==================== */}
@@ -326,7 +357,7 @@ function App() {
 
 const NotFoundPage = () => {
   const navigate = useNavigate();
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center px-6">
       <div className="text-center max-w-2xl">
