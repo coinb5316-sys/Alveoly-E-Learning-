@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 import API from "../api/axios";
 import { initializeSocket } from "../config/socket.js";
 import toast from "react-hot-toast";
+import { isNativePlatform, getNativeGoogleIdToken } from "../utils/socialAuth";
 
 const AuthContext = createContext();
 
@@ -16,16 +17,16 @@ export const AuthProvider = ({ children }) => {
   // ================= SOCKET =================
   const connectSocket = (userData) => {
     if (!userData?._id) return;
-    
+
     const socketInstance = initializeSocket();
     setSocket(socketInstance);
-    
+
     if (socketInstance && !socketInstance.connected) {
       socketInstance.connect();
     }
 
     socketInstance.emit("join:user", userData._id);
-    
+
     if (userData.role === "lecturer") {
       socketInstance.emit("join:lecturer", userData._id);
     } else if (userData.role === "admin") {
@@ -42,7 +43,7 @@ export const AuthProvider = ({ children }) => {
   // ================= SET AUTH =================
   const setAuth = (newToken, userData) => {
     console.log("🔐 Setting auth with token:", newToken ? "present" : "null", "user:", userData?.email);
-    
+
     if (newToken) {
       localStorage.setItem("token", newToken);
       setToken(newToken);
@@ -67,7 +68,7 @@ export const AuthProvider = ({ children }) => {
   const fetchUser = async () => {
     const storedToken = localStorage.getItem("token");
     console.log("🔍 Fetching user, token exists:", !!storedToken);
-    
+
     if (!storedToken) {
       setUser(null);
       setIsAuthenticated(false);
@@ -94,7 +95,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     fetchUser();
-    
+
     return () => {
       disconnectSocket();
     };
@@ -106,9 +107,9 @@ export const AuthProvider = ({ children }) => {
       console.log("🔑 Logging in with:", form.email);
       const res = await API.post("/auth/login", form);
       console.log("🔑 Login response:", res.data);
-      
+
       const { token: newToken, user: userData, requiresProgram, requiresPlan } = res.data;
-      
+
       setAuth(newToken, userData);
       return { user: userData, requiresProgram, requiresPlan };
     } catch (err) {
@@ -122,7 +123,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await API.post("/auth/register", form);
       const { token: newToken, user: userData, requiresProgram } = res.data;
-      
+
       setAuth(newToken, userData);
       return { user: userData, requiresProgram };
     } catch (err) {
@@ -131,25 +132,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= NON-ALVEOLY REGISTER - NOW WORKS EXACTLY LIKE GOOGLE LOGIN =================
+  // ================= NON-ALVEOLY REGISTER =================
   const registerNonAlveoly = async (form) => {
     try {
       console.log("📝 Registering non-alveoly student with form:", form);
-      
+
       const res = await API.post("/auth/register/non-alveoly", form);
       console.log("📝 Registration response:", res.data);
-      
+
       const { token: newToken, user: userData, requiresPlan, userId } = res.data;
-      
-      // CRITICAL: Set auth EXACTLY like googleLogin does
-      // This sets localStorage, token state, user state, and isAuthenticated
+
       setAuth(newToken, userData);
-      
-      return { 
-        user: userData, 
-        requiresPlan, 
+
+      return {
+        user: userData,
+        requiresPlan,
         userId: userId || userData?._id,
-        message: res.data.message 
+        message: res.data.message
       };
     } catch (err) {
       console.error("Non-Alveoly register error:", err);
@@ -157,10 +156,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ================= GOOGLE LOGIN =================
+  // ================= GOOGLE LOGIN (WEB + NATIVE) =================
   const googleLogin = async (idToken, userType = null, registrationSource = null, registrationDetails = null) => {
     try {
-      const payload = { idToken };
+      // Native branch: if we're in the Android/iOS app and no token was passed,
+      // trigger the native Google Sign-In dialog to get one.
+      let finalIdToken = idToken;
+
+      if (isNativePlatform() && !finalIdToken) {
+        console.log("📱 Native platform detected — invoking native Google Sign-In");
+        finalIdToken = await getNativeGoogleIdToken();
+        console.log("📱 Received native ID token");
+      }
+
+      if (!finalIdToken) {
+        throw new Error("Missing Google ID token");
+      }
+
+      const payload = { idToken: finalIdToken };
       if (userType) {
         payload.userType = userType;
       }
@@ -170,20 +183,17 @@ export const AuthProvider = ({ children }) => {
       if (registrationDetails) {
         payload.registrationDetails = registrationDetails;
       }
-      
+
       const res = await API.post("/auth/google-login", payload);
       const { token: newToken, user: userData, requiresProgram, requiresApproval, requiresPlan } = res.data;
-      
+
       console.log("Google login response:", { userData, requiresProgram, requiresApproval, requiresPlan });
-      
+
       setAuth(newToken, userData);
-      
+
       return { user: userData, requiresProgram, requiresApproval, requiresPlan };
     } catch (err) {
       console.error("Google login error:", err);
-      if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
-        throw err;
-      }
       throw err;
     }
   };

@@ -7,12 +7,20 @@
     "androidScheme": "https",
     "allowNavigation": [
       "alveolye-learning.academy",
-      "*.alveolye-learning.academy"
+      "*.alveolye-learning.academy",
+      "accounts.google.com",
+      "*.googleusercontent.com"
     ]
   },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 0
+    },
+    "SocialLogin": {
+      "google": {
+        "webClientId": "373555023169-746elkknmtjl7e0ijghdloibn68kcji7.apps.googleusercontent.com",
+        "forceCodeForRefreshToken": true
+      }
     }
   }
 }

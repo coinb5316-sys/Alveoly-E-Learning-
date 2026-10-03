@@ -1,15 +1,15 @@
-// src/pages/Login.jsx - COMPLETE UPDATED
+// src/pages/Login.jsx
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  FaEnvelope, 
-  FaLock, 
-  FaEye, 
-  FaEyeSlash, 
-  FaGraduationCap, 
-  FaSpinner, 
-  FaUserGraduate, 
+import {
+  FaEnvelope,
+  FaLock,
+  FaEye,
+  FaEyeSlash,
+  FaGraduationCap,
+  FaSpinner,
+  FaUserGraduate,
   FaUserPlus,
   FaTimes,
   FaExclamationTriangle,
@@ -19,6 +19,7 @@ import { GoogleLogin } from "@react-oauth/google";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { useAuth } from "../context/AuthContext";
+import { isNativePlatform } from "../utils/socialAuth";
 import toast, { Toaster } from "react-hot-toast";
 
 const LoginPage = () => {
@@ -44,25 +45,22 @@ const LoginPage = () => {
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
-  // ================= LOGIN HANDLER - MATCHES NAVBAR LOGIC =================
+  // ================= LOGIN HANDLER =================
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const result = await login(form);
       console.log("Login result:", result);
-      
-      // Check if user needs approval
+
       if (result.requiresApproval) {
         setApprovalMessage("Your account is pending approval. Please wait for admin approval.");
         setShowApprovalModal(true);
         setLoading(false);
         return;
       }
-      
-      // Check if user needs to select plan (non-alveoly students)
+
       if (result.requiresPlan) {
-        console.log("User requires plan - redirecting to pricing");
         navigate("/pricing", {
           state: {
             message: "Please select a plan to continue",
@@ -75,7 +73,7 @@ const LoginPage = () => {
         setLoading(false);
         return;
       }
-      
+
       if (result.user?.role === "admin") {
         navigate("/admin");
       } else if (result.user?.role === "lecturer") {
@@ -88,10 +86,8 @@ const LoginPage = () => {
       toast.success("Login successful!");
     } catch (err) {
       console.error("Login error:", err);
-      // Check if this is a plan requirement error from the backend
       if (err.response?.status === 403) {
         if (err.response?.data?.requiresPlan) {
-          console.log("Server requires plan - redirecting to pricing");
           navigate("/pricing", {
             state: {
               message: err.response?.data?.message || "Please select a plan to continue",
@@ -115,19 +111,19 @@ const LoginPage = () => {
     }
   };
 
-  // ================= GOOGLE AUTH HANDLER - MATCHES NAVBAR LOGIC =================
+  // ================= GOOGLE AUTH HANDLER (WEB ONLY) =================
   const handleGoogleAuth = async (credentialResponse) => {
     try {
       setGoogleLoading(true);
       const idToken = credentialResponse?.credential;
       if (!idToken) throw new Error("No Google credential received");
-      
+
       setPendingGoogleCredential(idToken);
-      
+
       try {
         const result = await googleLogin(idToken);
         console.log("Google login result:", result);
-        
+
         if (result.requiresApproval) {
           setApprovalMessage("Your account is pending approval. You will receive an email once approved.");
           setShowApprovalModal(true);
@@ -135,7 +131,7 @@ const LoginPage = () => {
           setPendingGoogleCredential(null);
           return;
         }
-        
+
         if (result.requiresPlan) {
           navigate("/pricing", {
             state: {
@@ -150,7 +146,7 @@ const LoginPage = () => {
           setPendingGoogleCredential(null);
           return;
         }
-        
+
         if (result.user?.role === "admin") {
           navigate("/admin");
         } else if (result.user?.role === "lecturer") {
@@ -187,35 +183,24 @@ const LoginPage = () => {
       }
     } catch (err) {
       console.error("Google auth error:", err);
-      toast.error(err.response?.data?.message || "Google authentication failed");
+      toast.error(err.response?.data?.message || err.message || "Google authentication failed");
       setGoogleLoading(false);
       setPendingGoogleCredential(null);
     }
   };
 
-  // ================= COMPLETE GOOGLE SIGNUP WITH USER TYPE =================
-  const handleGoogleSignupWithType = async () => {
-    if (!selectedUserType) {
-      toast.error("Please select your user type");
-      return;
-    }
-    
+  // ================= NATIVE GOOGLE LOGIN =================
+  const handleNativeGoogleLogin = async () => {
     try {
       setGoogleLoading(true);
-      const result = await googleLogin(pendingGoogleCredential, selectedUserType);
-      console.log("Google login with user type result:", result);
-      
-      setShowUserTypeModal(false);
-      setPendingGoogleCredential(null);
-      setSelectedUserType("");
-      
+      const result = await googleLogin(); // no token → plugin fetches one
+
       if (result.requiresApproval) {
-        setApprovalMessage(result.message || "Your account is pending approval. You will receive an email once approved.");
+        setApprovalMessage("Your account is pending approval.");
         setShowApprovalModal(true);
-        setGoogleLoading(false);
         return;
       }
-      
+
       if (result.requiresPlan) {
         navigate("/pricing", {
           state: {
@@ -225,20 +210,80 @@ const LoginPage = () => {
             user: result.user
           }
         });
-        toast("Please select a plan to continue", { icon: 'ℹ️' });
+        return;
+      }
+
+      if (result.user?.role === "admin") navigate("/admin");
+      else if (result.user?.role === "lecturer") navigate("/lecturer");
+      else if (result.requiresProgram) navigate("/select-program");
+      else navigate("/student/dashboard");
+      toast.success("Login successful!");
+    } catch (err) {
+      console.error("Native Google login error:", err);
+      if (err.response?.status === 404 && err.response?.data?.requiresUserType) {
+        setPendingGoogleCredential("__native__");
+        setShowUserTypeModal(true);
+      } else if (err.response?.status === 403 && err.response?.data?.requiresApproval) {
+        setApprovalMessage(err.response?.data?.message || "Your account is pending approval.");
+        setShowApprovalModal(true);
+      } else if (err.response?.status === 403 && err.response?.data?.requiresPlan) {
+        navigate("/pricing", {
+          state: {
+            message: "Please select a plan to continue",
+            userId: err.response?.data?.userId,
+            email: err.response?.data?.email
+          }
+        });
+      } else {
+        toast.error(err.message || err.response?.data?.message || "Google login failed");
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  // ================= COMPLETE GOOGLE SIGNUP WITH USER TYPE =================
+  const handleGoogleSignupWithType = async () => {
+    if (!selectedUserType) {
+      toast.error("Please select your user type");
+      return;
+    }
+
+    try {
+      setGoogleLoading(true);
+      // If native, pass undefined to trigger native flow again
+      const tokenArg = pendingGoogleCredential === "__native__" ? undefined : pendingGoogleCredential;
+      const result = await googleLogin(tokenArg, selectedUserType);
+      console.log("Google login with user type result:", result);
+
+      setShowUserTypeModal(false);
+      setPendingGoogleCredential(null);
+      setSelectedUserType("");
+
+      if (result.requiresApproval) {
+        setApprovalMessage(result.message || "Your account is pending approval.");
+        setShowApprovalModal(true);
         setGoogleLoading(false);
         return;
       }
-      
-      if (result.user?.role === "admin") {
-        navigate("/admin");
-      } else if (result.user?.role === "lecturer") {
-        navigate("/lecturer");
-      } else if (result.requiresProgram) {
-        navigate("/select-program");
-      } else {
-        navigate("/student/dashboard");
+
+      if (result.requiresPlan) {
+        navigate("/pricing", {
+          state: {
+            message: "Please select a plan to continue",
+            userId: result.user?._id,
+            email: result.user?.email,
+            user: result.user
+          }
+        });
+        setGoogleLoading(false);
+        return;
       }
+
+      if (result.user?.role === "admin") navigate("/admin");
+      else if (result.user?.role === "lecturer") navigate("/lecturer");
+      else if (result.requiresProgram) navigate("/select-program");
+      else navigate("/student/dashboard");
       toast.success("Login successful!");
     } catch (err) {
       console.error("Google login with user type error:", err);
@@ -252,7 +297,7 @@ const LoginPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-[#0a1a3a] via-[#1a2a4a] to-[#0a1a3a]">
       <Toaster position="top-right" />
       <Navbar />
-      
+
       <section className="pt-32 pb-20 px-4">
         <div className="max-w-6xl mx-auto">
           <motion.div
@@ -261,7 +306,6 @@ const LoginPage = () => {
             className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-white/20 dark:border-slate-800"
           >
             <div className="grid md:grid-cols-2">
-              {/* Left Side - Branding */}
               <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-8 md:p-12 text-white flex flex-col justify-center">
                 <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center mb-6 backdrop-blur-sm">
                   <FaGraduationCap className="text-3xl" />
@@ -286,26 +330,41 @@ const LoginPage = () => {
                 </div>
               </div>
 
-              {/* Right Side - Login Form */}
               <div className="p-8 md:p-12">
                 <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">Login</h2>
                 <p className="text-slate-500 dark:text-slate-400 mb-6">Access your account</p>
 
-                {/* Google Login */}
                 <div className="mb-6">
                   {!googleLoading ? (
-                    <div className="w-full">
-                      <GoogleLogin
-                        onSuccess={handleGoogleAuth}
-                        onError={() => toast.error("Google login failed")}
-                        theme="outline"
-                        size="large"
-                        text="signin_with"
-                        shape="rectangular"
-                        logo_alignment="center"
-                        width="100%"
-                      />
-                    </div>
+                    isNativePlatform() ? (
+                      <button
+                        onClick={handleNativeGoogleLogin}
+                        className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all"
+                      >
+                        <svg className="w-5 h-5" viewBox="0 0 48 48">
+                          <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+                          <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
+                          <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+                          <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+                        </svg>
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">
+                          Continue with Google
+                        </span>
+                      </button>
+                    ) : (
+                      <div className="w-full">
+                        <GoogleLogin
+                          onSuccess={handleGoogleAuth}
+                          onError={() => toast.error("Google login failed")}
+                          theme="outline"
+                          size="large"
+                          text="signin_with"
+                          shape="rectangular"
+                          logo_alignment="center"
+                          width="100%"
+                        />
+                      </div>
+                    )
                   ) : (
                     <div className="flex items-center justify-center gap-2 w-full py-3 border rounded-lg bg-gray-50 dark:bg-slate-800">
                       <FaSpinner className="animate-spin text-indigo-600" />
@@ -391,7 +450,6 @@ const LoginPage = () => {
         </div>
       </section>
 
-      {/* ================= USER TYPE SELECTION MODAL ================= */}
       <AnimatePresence>
         {showUserTypeModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -477,7 +535,6 @@ const LoginPage = () => {
         )}
       </AnimatePresence>
 
-      {/* ================= APPROVAL MODAL ================= */}
       <AnimatePresence>
         {showApprovalModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

@@ -1,4 +1,4 @@
-// src/main.jsx - COMPLETE FIXED VERSION FOR RENDER
+// src/main.jsx
 import './polyfills';
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -6,10 +6,10 @@ import { AuthProvider } from "./context/AuthContext";
 import App from "./App.jsx";
 import "./index.css";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { initNativeGoogleAuth } from "./utils/socialAuth";
 
 // ==================== POLYFILLS FOR WEBRTC & SIMPLE-PEER ====================
 
-// Fix for simple-peer "global is not defined" error
 if (typeof global === 'undefined') {
   window.global = window;
 }
@@ -18,7 +18,6 @@ if (typeof globalThis === 'undefined') {
   window.globalThis = window;
 }
 
-// Process polyfill for WebRTC libraries - NO REASSIGNMENT
 if (typeof process === 'undefined') {
   window.process = {
     env: {},
@@ -34,7 +33,6 @@ if (typeof process === 'undefined') {
   };
 }
 
-// Buffer polyfill - SYNCHRONOUS ONLY
 if (typeof Buffer === 'undefined') {
   const textEncoder = new TextEncoder();
   window.Buffer = {
@@ -61,12 +59,10 @@ if (typeof Buffer === 'undefined') {
   };
 }
 
-// URL polyfill for WebRTC
 if (typeof window.URL === 'undefined') {
   window.URL = window.webkitURL || window.URL;
 }
 
-// CustomEvent polyfill for older browsers
 if (typeof window.CustomEvent !== 'function') {
   function CustomEvent(event, params) {
     params = params || { bubbles: false, cancelable: false, detail: null };
@@ -78,7 +74,6 @@ if (typeof window.CustomEvent !== 'function') {
   CustomEvent.prototype = window.Event.prototype;
 }
 
-// MediaDevices polyfill
 if (!navigator.mediaDevices) {
   navigator.mediaDevices = {};
 }
@@ -95,12 +90,18 @@ if (!navigator.mediaDevices.getUserMedia) {
   };
 }
 
-// RTCPeerConnection polyfill
 if (!window.RTCPeerConnection) {
   window.RTCPeerConnection = window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
 }
 
 console.log('✅ Polyfills loaded for WebRTC and simple-peer');
+
+// ==================== NATIVE GOOGLE AUTH ====================
+// Initialize the native Google Sign-In plugin on Android/iOS.
+// No-op on the website.
+initNativeGoogleAuth().catch((err) => {
+  console.error("Failed to init native Google Auth:", err);
+});
 
 // ==================== APP RENDER ====================
 
