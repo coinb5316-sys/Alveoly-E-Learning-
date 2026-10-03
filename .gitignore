@@ -48,3 +48,7 @@ files/
 # Vite
 .vite/
 vite.config.js.timestamp-*
+
+# Android signing keystore — never commit this
+frontend/android/app/*.keystore
+frontend/android/app/keystore.b64
