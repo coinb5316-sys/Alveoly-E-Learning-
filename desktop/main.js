@@ -5,6 +5,11 @@ const path = require("path");
 const APP_URL = "https://alveolye-learning.academy";
 const APP_NAME = "Alveoly E Learning";
 
+// A modern Chrome UA so Google's OAuth popup doesn't detect Electron
+// and block the flow with "disallowed_useragent" / stuck on /gsi/transform.
+const CHROME_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
 let mainWindow = null;
 
 function createWindow() {
@@ -22,6 +27,10 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Allow popup windows (Google OAuth needs this)
+      nativeWindowOpen: true,
+      // Spoof a real browser so Google lets the popup complete
+      userAgent: CHROME_UA,
     },
     show: false,
   });
@@ -34,25 +43,61 @@ function createWindow() {
   // Load the live site
   mainWindow.loadURL(APP_URL);
 
-  // Open external links (payment gateways, mailto:, etc.) in the system browser
+  // ---- Handle window.open / target="_blank" ----
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Allow same-domain popups to open inside the app
-    if (url.startsWith(APP_URL) || url.startsWith("https://alveolye-learning.academy")) {
+    // 1. Google OAuth popups — must open INSIDE the app so the popup
+    //    can post the token back to the main window.
+    if (
+      url.startsWith("https://accounts.google.com") ||
+      url.startsWith("https://content.googleapis.com") ||
+      url.startsWith("https://oauth2.googleapis.com") ||
+      url.startsWith("https://apis.google.com")
+    ) {
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          width: 520,
+          height: 640,
+          autoHideMenuBar: true,
+          backgroundColor: "#ffffff",
+          parent: mainWindow,
+          modal: false,
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+            userAgent: CHROME_UA,
+          },
+        },
+      };
+    }
+
+    // 2. Same-domain popups stay in the app
+    if (
+      url.startsWith(APP_URL) ||
+      url.startsWith("https://alveolye-learning.academy") ||
+      url.startsWith("https://www.alveolye-learning.academy")
+    ) {
       return { action: "allow" };
     }
-    // Everything else goes to the default browser
+
+    // 3. Everything else (payment gateways, mailto:, etc.) goes to system browser
     shell.openExternal(url);
     return { action: "deny" };
   });
 
-  // Also intercept top-level navigation to external domains
+  // ---- Handle top-level navigation to external domains ----
   mainWindow.webContents.on("will-navigate", (event, url) => {
     const isInternal =
       url.startsWith(APP_URL) ||
       url.startsWith("https://alveolye-learning.academy") ||
       url.startsWith("https://www.alveolye-learning.academy") ||
       url.startsWith("https://alveoly-platform-sunu.onrender.com") ||
-      url.startsWith("https://alveoly-e-learning-o2qq.onrender.com");
+      url.startsWith("https://alveoly-e-learning-o2qq.onrender.com") ||
+      url.startsWith("https://alveoly-e-learning-755w.onrender.com") ||
+      // Allow Google domains (some OAuth steps do top-level navigation)
+      url.startsWith("https://accounts.google.com") ||
+      url.startsWith("https://content.googleapis.com");
 
     if (!isInternal) {
       event.preventDefault();
@@ -60,11 +105,13 @@ function createWindow() {
     }
   });
 
-  // Handle load failures gracefully
-  mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDescription) => {
-    if (errorCode === -3) return; // -3 = user aborted, ignore
-    mainWindow.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(`
+  // ---- Handle load failures gracefully ----
+  mainWindow.webContents.on(
+    "did-fail-load",
+    (event, errorCode, errorDescription) => {
+      if (errorCode === -3) return; // -3 = user aborted, ignore
+      mainWindow.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(`
         <!doctype html>
         <html>
           <head>
@@ -105,8 +152,9 @@ function createWindow() {
           </body>
         </html>
       `)}`
-    );
-  });
+      );
+    }
+  );
 
   mainWindow.on("closed", () => {
     mainWindow = null;
