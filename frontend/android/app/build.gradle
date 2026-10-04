@@ -20,12 +20,6 @@ android {
     signingConfigs {
         release {
             def keystoreFile = file("alveoly-release.keystore")
-            println "=== KEYSTORE CHECK ==="
-            println "Path: ${keystoreFile.absolutePath}"
-            println "Exists: ${keystoreFile.exists()}"
-            println "CanRead: ${keystoreFile.canRead()}"
-            println "Environment ANDROID_KEYSTORE_BASE64 is set: ${System.getenv('ANDROID_KEYSTORE_BASE64') != null}"
-            println "Environment ANDROID_KEYSTORE_PASSWORD is set: ${System.getenv('ANDROID_KEYSTORE_PASSWORD') != null}"
             if (keystoreFile.exists()) {
                 storeFile keystoreFile
                 storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
