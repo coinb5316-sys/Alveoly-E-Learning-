@@ -29,11 +29,12 @@ export const initNativeGoogleAuth = async () => {
     await SocialLogin.initialize({
       google: {
         webClientId: GOOGLE_WEB_CLIENT_ID,
-        // IMPORTANT: Show ALL Google accounts on the device, not only
-        // the ones that have already authorized this app. Without this,
-        // a fresh install loops back to the modal because no account
-        // has yet authorized the app.
+        // Show ALL Google accounts on the device, not only the ones
+        // that have already authorized this app.
         filterByAuthorizedAccounts: false,
+        // Disable One Tap — it caches stale state that breaks adding
+        // a second Google account.
+        disableOneTap: true,
       },
     });
     console.log("✅ Native Google Sign-In initialized");
@@ -55,9 +56,10 @@ export const getNativeGoogleIdToken = async () => {
     provider: "google",
     options: {
       scopes: ["email", "profile"],
-      // Also set on the login call for extra safety — some plugin
-      // versions read this option at login time, not just at init.
+      // Same flags as initialization — some plugin versions read them
+      // at login time only.
       filterByAuthorizedAccounts: false,
+      disableOneTap: true,
     },
   });
 
