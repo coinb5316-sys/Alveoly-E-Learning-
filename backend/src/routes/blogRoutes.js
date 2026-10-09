@@ -38,6 +38,7 @@ import {
 } from "../controllers/blogController.js";
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 import { upload } from "../../config/multer.js";
+import { createAuthor, deleteAuthor, getAuthors, updateAuthor } from "../controllers/blogAuthorController.js";
 
 const router = express.Router();
 
@@ -74,6 +75,11 @@ router.delete("/admin/posts/bulk", protect, adminOnly, bulkDeletePosts);
 router.patch("/admin/posts/:id/featured", protect, adminOnly, toggleFeatured);
 router.patch("/admin/posts/:id/publish", protect, adminOnly, publishBlogPost);
 router.patch("/admin/posts/:id/archive", protect, adminOnly, archiveBlogPost);
+
+router.get("/admin/authors", protect, adminOnly, getAuthors);
+router.post("/admin/authors", protect, adminOnly, createAuthor);
+router.put("/admin/authors/:id", protect, adminOnly, updateAuthor);
+router.delete("/admin/authors/:id", protect, adminOnly, deleteAuthor);
 
 // Admin category routes
 router.post("/admin/categories", protect, adminOnly, createCategory);

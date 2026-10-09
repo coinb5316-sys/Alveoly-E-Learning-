@@ -1,11 +1,10 @@
-// models/BlogAuthor.js - COMPLETELY FIXED (NO PRE-SAVE MIDDLEWARE)
+// models/BlogAuthor.js
 import mongoose from "mongoose";
 
 const blogAuthorSchema = new mongoose.Schema({
-  // Basic Info
   name: {
     type: String,
-    required: [true, "Author name is required"],
+    required: [true, "Name is required"],
     trim: true,
     maxlength: [100, "Name cannot exceed 100 characters"]
   },
@@ -13,20 +12,17 @@ const blogAuthorSchema = new mongoose.Schema({
     type: String,
     required: [true, "Email is required"],
     unique: true,
-    trim: true,
     lowercase: true,
-    match: [/^\S+@\S+\.\S+$/, "Please enter a valid email"]
+    trim: true
   },
   title: {
     type: String,
-    required: [true, "Author title is required"],
-    trim: true,
-    maxlength: [100, "Title cannot exceed 100 characters"]
+    required: [true, "Title is required"],
+    trim: true
   },
   bio: {
     type: String,
     required: [true, "Bio is required"],
-    trim: true,
     maxlength: [500, "Bio cannot exceed 500 characters"]
   },
   avatar: {
@@ -62,6 +58,11 @@ const blogAuthorSchema = new mongoose.Schema({
     enum: ["active", "inactive", "pending"],
     default: "active"
   },
+  metaDescription: {
+    type: String,
+    maxlength: [160, "Meta description cannot exceed 160 characters"],
+    default: ""
+  },
   postCount: {
     type: Number,
     default: 0
@@ -73,36 +74,12 @@ const blogAuthorSchema = new mongoose.Schema({
   totalViews: {
     type: Number,
     default: 0
-  },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    default: null
-  },
-  slug: {
-    type: String,
-    required: true, // Make required so validation catches it
-    unique: true,
-    lowercase: true,
-    trim: true
-  },
-  metaDescription: {
-    type: String,
-    maxlength: [160, "Meta description cannot exceed 160 characters"],
-    default: ""
-  },
-  isActive: {
-    type: Boolean,
-    default: true
   }
 }, {
   timestamps: true
 });
 
-// NO PRE-SAVE MIDDLEWARE - handle slug generation in the controller
-
 // Indexes
-blogAuthorSchema.index({ slug: 1 });
 blogAuthorSchema.index({ email: 1 });
 blogAuthorSchema.index({ status: 1 });
 blogAuthorSchema.index({ name: 1 });
