@@ -1,33 +1,65 @@
-// src/pages/BlogCategory.jsx - COMPLETE WITH API INTEGRATION
+// src/pages/BlogCategory.jsx - EDITORIAL REDESIGN
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  FaArrowLeft,
-  FaCalendarAlt,
-  FaUser,
-  FaClock,
-  FaEye,
-  FaHeart,
-  FaComment,
-  FaTag,
-  FaFire,
-  FaBookmark,
-  FaRegBookmark,
-  FaSearch,
-  FaSpinner,
-  FaShareAlt,
-  FaTwitter,
-  FaLinkedin,
-  FaFacebook,
-  FaWhatsapp
+  FaArrowLeft, FaClock, FaHeart, FaComment, FaEye,
+  FaFire, FaBookmark, FaRegBookmark, FaShareAlt,
+  FaArrowRight as FaArrowRightIcon,
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../api/blogApi';
 
+// ==================== HELPERS ====================
+
+const formatDate = (d) =>
+  d
+    ? new Date(d).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : '';
+
+const Skeleton = () => (
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
+    {[...Array(6)].map((_, i) => (
+      <div key={i} className="animate-pulse space-y-4">
+        <div className="bg-stone-200 dark:bg-stone-800 rounded-lg aspect-[16/10]" />
+        <div className="h-3 bg-stone-200 dark:bg-stone-800 rounded w-1/4" />
+        <div className="h-5 bg-stone-200 dark:bg-stone-800 rounded w-3/4" />
+        <div className="h-3 bg-stone-200 dark:bg-stone-800 rounded w-full" />
+        <div className="h-3 bg-stone-200 dark:bg-stone-800 rounded w-2/3" />
+      </div>
+    ))}
+  </div>
+);
+
+const AuthorAvatar = ({ author, authorName }) => {
+  const name = author?.name || authorName || 'A';
+  const img = author?.avatar || author?.image;
+  if (img) {
+    return (
+      <img
+        src={img}
+        alt={name}
+        className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+      />
+    );
+  }
+  return (
+    <div className="w-8 h-8 rounded-full bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900 flex items-center justify-center text-xs font-medium flex-shrink-0">
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+};
+
+// ==================== MAIN ====================
+
 const BlogCategory = () => {
   const { category } = useParams();
   const navigate = useNavigate();
+
   const [posts, setPosts] = useState([]);
   const [categoryInfo, setCategoryInfo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,33 +73,30 @@ const BlogCategory = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
-        // Fetch category info from API
+
+        // Category metadata
         const categoryResponse = await blogAPI.getCategoryBySlug(category);
-        
         if (categoryResponse.success) {
           setCategoryInfo(categoryResponse.data);
         } else {
-          // If category not found, use fallback
           const fallbackName = category
             .split('-')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(' ');
           setCategoryInfo({
             name: fallbackName,
-            description: `Articles in ${fallbackName} category`,
-            icon: '📚',
-            count: 0
+            description: `Essays and reports filed under ${fallbackName}.`,
+            count: 0,
           });
         }
-        
-        // Fetch posts by category
+
+        // Posts in this category
         const postsResponse = await blogAPI.getPostsByCategory(category, {
           page: currentPage,
           limit: 6,
-          sort: sortBy
+          sort: sortBy,
         });
-        
+
         if (postsResponse.success) {
           setPosts(postsResponse.data.posts || []);
           setTotalPages(postsResponse.data.pagination?.totalPages || 1);
@@ -75,315 +104,317 @@ const BlogCategory = () => {
         } else {
           toast.error(postsResponse.message || 'Failed to load posts');
         }
-        
-      } catch (error) {
-        console.error('Error fetching category data:', error);
-        toast.error(error.response?.data?.message || 'Failed to load category');
+      } catch (err) {
+        console.error('Error fetching category data:', err);
+        toast.error('Could not load this category');
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchData();
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   }, [category, currentPage, sortBy]);
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
   const handleBookmark = (postId) => {
-    setBookmarks(prev => 
-      prev.includes(postId) 
-        ? prev.filter(id => id !== postId)
-        : [...prev, postId]
+    const isB = bookmarks.includes(postId);
+    setBookmarks((prev) =>
+      isB ? prev.filter((id) => id !== postId) : [...prev, postId]
     );
-    toast.success(bookmarks.includes(postId) ? 'Removed from bookmarks' : 'Added to bookmarks');
+    toast.success(isB ? 'Removed from your list' : 'Saved to your list');
   };
 
   const handleShare = (post) => {
     const url = `${window.location.origin}/blog/post/${post.slug || post._id}`;
     if (navigator.share) {
-      navigator.share({
-        title: post.title,
-        text: post.subtitle,
-        url: url,
-      });
+      navigator.share({ title: post.title, text: post.subtitle, url }).catch(() => {});
     } else {
       navigator.clipboard.writeText(url);
-      toast.success('Link copied to clipboard!');
+      toast.success('Link copied');
     }
   };
 
-  const getIconForCategory = (categoryName) => {
-    const icons = {
-      'Healthcare Technology': '💻',
-      'Nursing Practice': '🏥',
-      'Mental Health': '🧠',
-      'Telehealth': '📱',
-      'Patient Care': '❤️',
-      'Nursing Leadership': '👔',
-    };
-    return icons[categoryName] || '📚';
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <FaSpinner className="animate-spin text-4xl text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading category...</p>
-        </div>
-      </div>
-    );
-  }
+  const categoryName = categoryInfo?.name || category;
+  const categoryDescription =
+    categoryInfo?.description ||
+    `Essays and reports filed under ${categoryName}.`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* ===== HEADER SECTION ===== */}
-      <div className="relative bg-gradient-to-r from-blue-900 via-purple-900 to-blue-900 py-16 overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAyNHYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-20"></div>
-        <div className="absolute top-1/2 right-0 w-96 h-96 bg-blue-500/10 rounded-full filter blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full filter blur-3xl"></div>
-        
-        <div className="relative container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <Link
-                to="/blog"
-                className="inline-flex items-center gap-2 text-white/80 hover:text-white transition mb-6"
+    <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
+      {/* ============ MASTHEAD ============ */}
+      <header className="border-b border-stone-200 dark:border-stone-800">
+        <div className="max-w-5xl mx-auto px-5 pt-12 md:pt-16 pb-10 md:pb-14">
+          <Link
+            to="/blog"
+            className="inline-flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition mb-8"
+          >
+            <FaArrowLeft className="text-xs" />
+            All stories
+          </Link>
+
+          <p className="text-xs uppercase tracking-[0.3em] text-stone-500 dark:text-stone-400 mb-4">
+            Category
+          </p>
+
+          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-stone-900 dark:text-stone-50 leading-[1.1] mb-5">
+            {categoryName}
+          </h1>
+
+          <p className="text-lg md:text-xl text-stone-600 dark:text-stone-400 max-w-2xl leading-relaxed mb-8">
+            {categoryDescription}
+          </p>
+
+          <div className="flex items-center justify-between flex-wrap gap-4 pt-6 border-t border-stone-200 dark:border-stone-800">
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              {loading
+                ? 'Loading…'
+                : `${totalPosts} ${totalPosts === 1 ? 'story' : 'stories'}`}
+            </p>
+
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-stone-500 dark:text-stone-400">
+                Sort
+              </label>
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="text-sm bg-transparent border-none text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 focus:outline-none cursor-pointer"
               >
-                <FaArrowLeft />
-                <span>Back to Blog</span>
-              </Link>
-              
-              <div className="flex items-center gap-4 mb-4">
-                <span className="text-5xl">{categoryInfo?.icon || getIconForCategory(categoryInfo?.name) || '📚'}</span>
-                <div>
-                  <h1 className="text-4xl md:text-5xl font-bold text-white">
-                    {categoryInfo?.name || category}
-                  </h1>
-                  <p className="text-white/80 text-lg mt-2">
-                    {categoryInfo?.description || `Articles in ${categoryInfo?.name || category} category`}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-4 text-white/70 text-sm">
-                  <span className="flex items-center gap-1.5">
-                    <FaTag />
-                    {totalPosts} articles
-                  </span>
-                  {categoryInfo?.count && (
-                    <span className="flex items-center gap-1.5">
-                      <FaFire />
-                      {categoryInfo.count} total posts
-                    </span>
-                  )}
-                </div>
-                
-                {/* Sort Options */}
-                <div className="flex items-center gap-2">
-                  <span className="text-white/70 text-sm">Sort by:</span>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => {
-                      setSortBy(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="px-3 py-1 bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/50"
-                  >
-                    <option value="latest" className="text-gray-900">Latest</option>
-                    <option value="popular" className="text-gray-900">Most Popular</option>
-                    <option value="trending" className="text-gray-900">Trending</option>
-                    <option value="oldest" className="text-gray-900">Oldest</option>
-                  </select>
-                </div>
-              </div>
-            </motion.div>
+                <option value="latest">Latest</option>
+                <option value="popular">Most read</option>
+                <option value="trending">Trending</option>
+                <option value="oldest">Oldest</option>
+              </select>
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* ===== POSTS GRID ===== */}
-      <div className="container mx-auto px-4 py-12">
-        {posts.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">📭</div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">No articles in this category</h3>
-            <p className="text-gray-600">Check back later for new content</p>
+      {/* ============ POSTS ============ */}
+      <section className="max-w-6xl mx-auto px-5 py-12 md:py-16">
+        {loading ? (
+          <Skeleton />
+        ) : posts.length === 0 ? (
+          <div className="py-20 text-center max-w-md mx-auto">
+            <p className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100 mb-3">
+              Nothing here yet
+            </p>
+            <p className="text-stone-500 dark:text-stone-400 mb-6">
+              We haven't published anything in this category. Try another topic
+              or browse everything.
+            </p>
             <Link
               to="/blog"
-              className="inline-block mt-4 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition"
+              className="inline-flex items-center gap-2 text-sm font-medium text-stone-900 dark:text-stone-100 underline underline-offset-4 hover:text-rose-600 dark:hover:text-rose-400 transition"
             >
-              Browse all articles
+              Browse all stories
+              <FaArrowRightIcon className="text-xs" />
             </Link>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {posts.map((post, index) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
+              {posts.map((post, i) => (
                 <motion.article
                   key={post._id || post.id}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 group"
+                  transition={{ delay: Math.min(i * 0.05, 0.4), duration: 0.35 }}
+                  className="group"
                 >
-                  <Link to={`/blog/post/${post.slug || post._id}`} className="block">
-                    <div className="relative overflow-hidden h-48">
+                  {/* Image */}
+                  <Link
+                    to={`/blog/post/${post.slug || post._id}`}
+                    className="block"
+                  >
+                    {post.featuredImage ? (
                       <img
                         src={post.featuredImage}
                         alt={post.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                        className="w-full aspect-[16/10] object-cover rounded-md group-hover:opacity-95 transition"
                       />
-                      {post.tags && post.tags.length > 0 && (
-                        <div className="absolute top-3 left-3 flex flex-wrap gap-2">
-                          {post.tags.slice(0, 2).map((tag) => (
-                            <span key={tag} className="px-2 py-1 bg-black/50 backdrop-blur-sm rounded-full text-white text-xs">
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          handleBookmark(post._id || post.id);
-                        }}
-                        className="absolute top-3 right-3 p-1.5 bg-white/20 backdrop-blur-sm rounded-full hover:bg-white/40 transition"
-                      >
-                        {bookmarks.includes(post._id || post.id) ? (
-                          <FaBookmark className="text-yellow-400 text-sm" />
-                        ) : (
-                          <FaRegBookmark className="text-white text-sm" />
-                        )}
-                      </button>
+                    ) : (
+                      <div className="w-full aspect-[16/10] rounded-md bg-stone-100 dark:bg-stone-900" />
+                    )}
+                  </Link>
+
+                  {/* Content */}
+                  <div className="pt-5">
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mb-3">
+                      <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                        {post.category || categoryName}
+                      </span>
+                      <span className="text-stone-300 dark:text-stone-700">·</span>
+                      <time>{formatDate(post.publishDate)}</time>
                     </div>
-                    <div className="p-6">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 mb-2 flex-wrap">
-                        <span className="font-medium text-blue-600">{post.category}</span>
-                        <span>•</span>
-                        <span>{formatDate(post.publishDate)}</span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <FaClock className="text-gray-400" />
-                          {post.readTime || 5} min read
-                        </span>
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition line-clamp-2">
+
+                    <Link to={`/blog/post/${post.slug || post._id}`}>
+                      <h3 className="font-serif text-xl md:text-2xl font-bold leading-snug text-stone-900 dark:text-stone-50 mb-3 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition">
                         {post.title}
                       </h3>
-                      <p className="text-gray-600 line-clamp-2 mb-4">
+                    </Link>
+
+                    {post.subtitle && (
+                      <p className="text-stone-600 dark:text-stone-400 leading-relaxed mb-4 line-clamp-2">
                         {post.subtitle}
                       </p>
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                        <div className="flex items-center gap-2">
-                          {post.author?.avatar || post.author?.image ? (
-                            <img
-                              src={post.author.avatar || post.author.image}
-                              alt={post.author.name}
-                              className="w-8 h-8 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                              {post.author?.name?.charAt(0) || 'A'}
-                            </div>
-                          )}
-                          <span className="text-sm text-gray-700">{post.author?.name || 'Unknown'}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-gray-400 text-sm">
-                          <span className="flex items-center gap-1">
-                            <FaHeart className="text-red-400" />
-                            {post.likes || 0}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <FaComment className="text-blue-400" />
-                            {post.comments || 0}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <FaEye className="text-gray-400" />
-                            {post.views || 0}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              handleShare(post);
-                            }}
-                            className="text-gray-400 hover:text-blue-600 transition"
+                    )}
+
+                    {/* Author + meta row */}
+                    <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
+                      <div className="flex items-center gap-2.5">
+                        <AuthorAvatar
+                          author={post.author}
+                          authorName={post.authorName}
+                        />
+                        <div className="text-sm leading-tight">
+                          <Link
+                            to={`/blog/author/${
+                              post.author?._id || post.author?.id || 'unknown'
+                            }`}
+                            className="font-medium text-stone-800 dark:text-stone-200 hover:text-rose-600 dark:hover:text-rose-400 transition"
                           >
-                            <FaShareAlt />
-                          </button>
+                            {post.author?.name || post.authorName || 'Anonymous'}
+                          </Link>
+                          <p className="text-xs text-stone-500 flex items-center gap-1.5">
+                            <FaClock className="text-[9px]" />
+                            {post.readingTime || post.readTime || 5} min
+                            <span className="text-stone-300 dark:text-stone-700">·</span>
+                            <span className="flex items-center gap-1">
+                              <FaEye className="text-[9px]" />
+                              {post.views || 0}
+                            </span>
+                          </p>
                         </div>
                       </div>
+
+                      <div className="flex items-center gap-3 text-stone-400 text-sm">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleBookmark(post._id || post.id);
+                          }}
+                          className="hover:text-amber-500 transition"
+                          title="Save"
+                        >
+                          {bookmarks.includes(post._id || post.id) ? (
+                            <FaBookmark className="text-amber-500" />
+                          ) : (
+                            <FaRegBookmark />
+                          )}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleShare(post);
+                          }}
+                          className="hover:text-stone-900 dark:hover:text-stone-100 transition"
+                          title="Share"
+                        >
+                          <FaShareAlt className="text-xs" />
+                        </button>
+                      </div>
                     </div>
-                  </Link>
+                  </div>
                 </motion.article>
               ))}
             </div>
 
-            {/* ===== PAGINATION ===== */}
+            {/* ============ PAGINATION ============ */}
             {totalPages > 1 && (
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-12">
+              <div className="flex items-center justify-center gap-2 mt-16">
                 <button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
                 >
+                  <FaArrowLeft className="text-xs" />
                   Previous
                 </button>
-                
-                {[...Array(Math.min(totalPages, 5))].map((_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-                  
-                  if (pageNum > 0 && pageNum <= totalPages) {
+
+                <div className="flex items-center gap-1">
+                  {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) pageNum = i + 1;
+                    else if (currentPage <= 3) pageNum = i + 1;
+                    else if (currentPage >= totalPages - 2)
+                      pageNum = totalPages - 4 + i;
+                    else pageNum = currentPage - 2 + i;
+
+                    if (pageNum < 1 || pageNum > totalPages) return null;
+
                     return (
                       <button
                         key={i}
                         onClick={() => setCurrentPage(pageNum)}
-                        className={`w-10 h-10 rounded-xl transition ${
+                        className={`w-9 h-9 rounded-full text-sm font-medium transition ${
                           currentPage === pageNum
-                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25'
-                            : 'bg-white text-gray-600 hover:bg-gray-50'
+                            ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900'
+                            : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
                       >
                         {pageNum}
                       </button>
                     );
-                  }
-                  return null;
-                })}
-                
+                  })}
+                </div>
+
                 <button
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 bg-white rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
                 >
                   Next
+                  <FaArrowRightIcon className="text-xs" />
                 </button>
               </div>
             )}
           </>
         )}
-      </div>
+      </section>
+
+      {/* ============ NEWSLETTER ============ */}
+      <section className="border-t border-stone-200 dark:border-stone-800">
+        <div className="max-w-3xl mx-auto px-5 py-16 md:py-20 text-center">
+          <p className="text-xs uppercase tracking-[0.3em] text-stone-500 dark:text-stone-400 mb-4">
+            The Alveoly Letter
+          </p>
+          <h2 className="font-serif text-3xl md:text-4xl font-bold text-stone-900 dark:text-stone-50 mb-4 leading-tight">
+            A weekly letter on nursing and healthcare education.
+          </h2>
+          <p className="text-lg text-stone-600 dark:text-stone-400 mb-8 leading-relaxed">
+            Original reporting, clinical insights, and thoughtful essays — no noise, no sales pitches.
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              toast.success('Thanks for subscribing');
+            }}
+            className="max-w-md mx-auto flex flex-col sm:flex-row gap-2"
+          >
+            <input
+              type="email"
+              required
+              placeholder="your@email.com"
+              className="flex-1 px-4 py-3 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-full text-sm text-stone-800 dark:text-stone-200 placeholder-stone-400 focus:outline-none focus:border-stone-900 dark:focus:border-stone-100 transition"
+            />
+            <button
+              type="submit"
+              className="px-6 py-3 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-full text-sm font-medium hover:opacity-90 transition"
+            >
+              Subscribe
+            </button>
+          </form>
+          <p className="text-xs text-stone-400 mt-4">
+            Unsubscribe anytime. We never share your email.
+          </p>
+        </div>
+      </section>
     </div>
   );
 };
