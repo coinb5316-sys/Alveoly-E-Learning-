@@ -266,6 +266,7 @@ export const createAuthor = async (req, res) => {
       certifications: parsedCertifications,
       social: parsedSocial,
       status: status || "active",
+      isActive: true,
       userId: userId || null,
       metaDescription: metaDescription || "",
       slug: slug // Explicitly set slug
@@ -499,21 +500,24 @@ export const getAuthorStats = async (req, res) => {
 // ==================== GET ALL AUTHORS (PUBLIC - FOR BLOG POST FORM) ====================
 export const getAuthorsForSelect = async (req, res) => {
   try {
-    const authors = await BlogAuthor.find({ status: "active", isActive: true })
-      .select("_id name email title avatar bio")
+    // ✅ FIX: Don't require isActive: true — just require status active
+    const authors = await BlogAuthor.find({ status: "active" })
+      .select("_id name email title avatar bio expertise")
       .sort({ name: 1 })
       .lean();
 
+    console.log(`📋 getAuthorsForSelect returning ${authors.length} authors`);
+
     res.json({
       success: true,
-      data: authors
+      data: authors,
     });
   } catch (error) {
     console.error("❌ Get authors for select error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch authors",
-      error: error.message
+      error: error.message,
     });
   }
 };

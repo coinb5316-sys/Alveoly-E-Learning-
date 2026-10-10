@@ -524,10 +524,23 @@ const AdminCreateBlogPost = () => {
 
   // ==================== SAVE / PUBLISH ====================
 
-  const handleSave = async (status = "draft") => {
-    console.log("🚀 handleSave called with status:", status);
+   const handleSave = async (status = "draft") => {
+    console.log("🚀🚀🚀 handleSave FIRED with status:", status);
+    console.log("📋 Current formData:", {
+      title: formData.title,
+      hasContent: !!formData.content,
+      category: formData.category,
+      authorId: formData.authorId,
+      authorName: formData.authorName,
+      featuredImageType: formData.featuredImage instanceof File ? "File" : typeof formData.featuredImage,
+      galleryCount: formData.galleryImages.length,
+    });
 
-    if (!validateForm()) {
+    const isValid = validateForm();
+    console.log("✅ validateForm returned:", isValid);
+    console.log("   errors state after validate:", errors);
+
+    if (!isValid) {
       toast.error("Please fix the errors before saving");
       return;
     }
@@ -538,7 +551,6 @@ const AdminCreateBlogPost = () => {
 
       const formDataToSend = new FormData();
 
-      // Basic fields
       formDataToSend.append("title", formData.title || "");
       formDataToSend.append("subtitle", formData.subtitle || "");
       formDataToSend.append("content", formData.content || "");
@@ -546,22 +558,14 @@ const AdminCreateBlogPost = () => {
       formDataToSend.append("status", status);
       formDataToSend.append("featured", formData.featured ? "true" : "false");
       formDataToSend.append("readingTime", String(formData.readingTime || 5));
-      formDataToSend.append(
-        "allowComments",
-        formData.allowComments ? "true" : "false"
-      );
+      formDataToSend.append("allowComments", formData.allowComments ? "true" : "false");
       formDataToSend.append("showAuthor", formData.showAuthor ? "true" : "false");
-      formDataToSend.append(
-        "showShareButtons",
-        formData.showShareButtons ? "true" : "false"
-      );
+      formDataToSend.append("showShareButtons", formData.showShareButtons ? "true" : "false");
 
-      // Media fields
       formDataToSend.append("videoUrl", formData.videoUrl || "");
       formDataToSend.append("videoEmbed", formData.videoEmbed || "");
       formDataToSend.append("audioUrl", formData.audioUrl || "");
 
-      // AUTHOR: send both authorId (BlogAuthor._id) AND fallback name fields
       if (formData.authorId) {
         formDataToSend.append("authorId", formData.authorId);
       }
@@ -570,63 +574,37 @@ const AdminCreateBlogPost = () => {
       formDataToSend.append("authorBio", formData.authorBio || "");
       formDataToSend.append("authorImage", formData.authorImage || "");
 
-      // SEO
       formDataToSend.append("metaDescription", formData.metaDescription || "");
       formDataToSend.append("metaKeywords", formData.metaKeywords || "");
 
-      // JSON fields
       formDataToSend.append("tags", JSON.stringify(formData.tags || []));
       formDataToSend.append("references", JSON.stringify(formData.references || []));
-      formDataToSend.append(
-        "learningObjectives",
-        JSON.stringify(formData.learningObjectives || [])
-      );
-      formDataToSend.append(
-        "statistics",
-        JSON.stringify(formData.statistics || [])
-      );
-      formDataToSend.append(
-        "relatedPosts",
-        JSON.stringify(formData.relatedPosts || [])
-      );
+      formDataToSend.append("learningObjectives", JSON.stringify(formData.learningObjectives || []));
+      formDataToSend.append("statistics", JSON.stringify(formData.statistics || []));
+      formDataToSend.append("relatedPosts", JSON.stringify(formData.relatedPosts || []));
 
-      // GALLERY: separate existing URL strings from new File objects
-      const galleryUrls = (formData.galleryImages || []).filter(
-        (img) => typeof img === "string"
-      );
-      const galleryFiles = (formData.galleryImages || []).filter(
-        (img) => img instanceof File
-      );
+      const galleryUrls = (formData.galleryImages || []).filter(img => typeof img === "string");
+      const galleryFiles = (formData.galleryImages || []).filter(img => img instanceof File);
 
       if (galleryUrls.length > 0) {
         formDataToSend.append("galleryImages", JSON.stringify(galleryUrls));
       }
-      galleryFiles.forEach((file) => {
+      galleryFiles.forEach(file => {
         formDataToSend.append("galleryImages", file);
       });
 
-      // Publish date — only append if it's a valid string
-      if (
-        formData.publishDate &&
-        formData.publishDate !== "null" &&
-        formData.publishDate !== ""
-      ) {
+      if (formData.publishDate && formData.publishDate !== "null" && formData.publishDate !== "") {
         formDataToSend.append("publishDate", formData.publishDate);
       }
 
-      // Featured image — three cases
       if (formData.featuredImage instanceof File) {
         formDataToSend.append("featuredImage", formData.featuredImage);
-      } else if (
-        typeof formData.featuredImage === "string" &&
-        formData.featuredImage.trim() !== ""
-      ) {
+      } else if (typeof formData.featuredImage === "string" && formData.featuredImage.trim() !== "") {
         formDataToSend.append("featuredImageUrl", formData.featuredImage);
       } else {
         formDataToSend.append("featuredImageUrl", "");
       }
 
-      // Debug: log FormData contents
       console.log("📦 FormData entries:");
       for (let pair of formDataToSend.entries()) {
         if (pair[1] instanceof File) {
@@ -638,20 +616,17 @@ const AdminCreateBlogPost = () => {
 
       let response;
       if (isEditing) {
-        console.log(`📤 Updating post ${id}...`);
+        console.log(`📤 Calling updatePost(${id})...`);
         response = await blogAPI.updatePost(id, formDataToSend);
       } else {
-        console.log("📤 Creating new post...");
+        console.log("📤 Calling createPost...");
         response = await blogAPI.createPost(formDataToSend);
       }
 
-      console.log("📥 Response:", response);
+      console.log("📥 Response received:", response);
 
       if (response && response.success) {
-        toast.success(
-          isEditing ? "Post updated successfully!" : "Post created successfully!"
-        );
-
+        toast.success(isEditing ? "Post updated successfully!" : "Post created successfully!");
         if (status === "published") {
           navigate("/admin/blog/posts");
         } else {
@@ -666,9 +641,11 @@ const AdminCreateBlogPost = () => {
         toast.error(msg);
       }
     } catch (error) {
-      console.error("❌ handleSave error:", error);
-      console.error("   Error response:", error.response);
-      console.error("   Error data:", error.response?.data);
+      console.error("❌❌❌ handleSave THREW:", error);
+      console.error("   error.message:", error.message);
+      console.error("   error.code:", error.code);
+      console.error("   error.response:", error.response);
+      console.error("   error.response.data:", error.response?.data);
 
       const serverMessage =
         error.response?.data?.message ||
@@ -683,8 +660,8 @@ const AdminCreateBlogPost = () => {
     }
   };
 
-  // ✅ FIX: This was missing — that's why `handlePublish is not defined`
   const handlePublish = () => {
+    console.log("🖱️ handlePublish clicked");
     handleSave("published");
   };
 

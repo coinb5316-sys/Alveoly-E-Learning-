@@ -21,17 +21,16 @@ const blogAPI = {
 
   // ✅ FIXED: Removed manual Content-Type (Axios sets boundary automatically)
   // Admin endpoints are under /admin/blog (singular)
-  createPost: async (formData) => {
+    createPost: async (formData) => {
     const response = await API.post("/admin/blog/posts", formData, {
-      headers: { "Content-Type": undefined }, // let Axios set multipart boundary
-      timeout: 120000, // 2 minutes for uploads
+      timeout: 120000,
+      // ✅ DO NOT set headers here — interceptor handles FormData
     });
     return response.data;
   },
 
   updatePost: async (id, formData) => {
     const response = await API.put(`/admin/blog/posts/${id}`, formData, {
-      headers: { "Content-Type": undefined },
       timeout: 120000,
     });
     return response.data;

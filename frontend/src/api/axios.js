@@ -10,9 +10,9 @@ const API = axios.create({
   withCredentials: false,
   headers: {
     Accept: "application/json",
-    // ✅ DO NOT set Content-Type here — let Axios pick per-request
+    // ✅ DO NOT set Content-Type here — Axios picks per-request
   },
-  timeout: 60000,
+  timeout: 120000,
 });
 
 let lastNetworkErrorTime = 0;
@@ -33,15 +33,34 @@ API.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    // ✅ Only set JSON content-type for non-FormData
-    if (
+
+    // ✅ If we have FormData, DELETE any Content-Type so the browser/Axios
+    // sets multipart/form-data WITH the boundary automatically.
+    const isFormData =
       config.data &&
-      !(config.data instanceof FormData) &&
-      !config.headers["Content-Type"]
+      (config.data instanceof FormData ||
+        (typeof config.data === "object" &&
+          typeof config.data.append === "function" &&
+          typeof config.data.getAll === "function"));
+
+    if (isFormData) {
+      // Remove any Content-Type — Axios will inject the correct multipart header
+      delete config.headers["Content-Type"];
+      delete config.headers["content-type"];
+      // Also clear from defaults on this specific request
+      if (config.headers.common) delete config.headers.common["Content-Type"];
+    } else if (
+      config.data &&
+      !config.headers["Content-Type"] &&
+      !config.headers["content-type"]
     ) {
       config.headers["Content-Type"] = "application/json";
     }
+
     console.log(`📤 ${config.method?.toUpperCase()} ${config.url}`);
+    console.log("   Content-Type:", config.headers["Content-Type"] || "(auto)");
+    console.log("   isFormData:", !!isFormData);
+
     return config;
   },
   (error) => {
@@ -66,10 +85,7 @@ API.interceptors.response.use(
       const isBlogPublicRoute =
         url.includes("/blog/posts") ||
         url.includes("/blog/categories") ||
-        url.includes("/blog/comments") ||
-        url.includes("/blog/posts/search") ||
-        url.includes("/blog/posts/category") ||
-        url.includes("/blog/posts/author");
+        url.includes("/blog/comments");
 
       if (!isBlogPublicRoute) {
         localStorage.removeItem("token");
