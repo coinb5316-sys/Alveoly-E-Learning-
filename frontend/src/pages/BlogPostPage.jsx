@@ -1,5 +1,5 @@
-// src/pages/BlogPostPage.jsx - PROFESSIONAL REDESIGN
-import React, { useState, useEffect, lazy, Suspense, useMemo, useRef } from 'react';
+// src/pages/BlogPostPage.jsx - PROFESSIONAL v3 (Production Ready)
+import React, { useState, useEffect, lazy, Suspense, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -11,13 +11,11 @@ import {
   FaComment,
   FaClock,
   FaCalendarAlt,
-  FaUser,
   FaEye,
   FaTwitter,
   FaLinkedin,
   FaFacebook,
   FaWhatsapp,
-  FaEnvelope,
   FaLink,
   FaCheckCircle,
   FaGraduationCap,
@@ -26,7 +24,6 @@ import {
   FaArrowLeft,
   FaArrowRight,
   FaLightbulb,
-  FaUserCircle,
   FaSpinner,
   FaHeadphones,
   FaPlay,
@@ -34,8 +31,6 @@ import {
   FaInstagram,
   FaYoutube,
   FaGlobe,
-  FaQuoteLeft,
-  FaCopy,
   FaChevronRight,
   FaListUl,
   FaChevronUp,
@@ -52,22 +47,33 @@ const ReactPlayer = lazy(() => import('react-player'));
 // ============================================================
 const formatDate = (dateString, style = 'long') => {
   if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  if (style === 'short') return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  try {
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return 'N/A';
+    if (style === 'short') {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  } catch {
+    return 'N/A';
+  }
 };
 
 const formatTimeAgo = (dateString) => {
   if (!dateString) return 'N/A';
-  const diffMs = Date.now() - new Date(dateString).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  const hours = Math.floor(diffMs / 3600000);
-  const days = Math.floor(diffMs / 86400000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins} min ago`;
-  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-  if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
-  return formatDate(dateString, 'short');
+  try {
+    const diffMs = Date.now() - new Date(dateString).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    const hours = Math.floor(diffMs / 3600000);
+    const days = Math.floor(diffMs / 86400000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins} min ago`;
+    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
+    return formatDate(dateString, 'short');
+  } catch {
+    return 'N/A';
+  }
 };
 
 const getInitials = (name) => {
@@ -75,7 +81,10 @@ const getInitials = (name) => {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 };
 
-/** Approximate reading progress as user scrolls */
+const categorySlug = (cat) =>
+  (cat || 'general').toString().toLowerCase().trim().replace(/\s+/g, '-');
+
+/** Reading progress bar hook */
 const useReadingProgress = () => {
   const [progress, setProgress] = useState(0);
   useEffect(() => {
@@ -95,7 +104,6 @@ const useReadingProgress = () => {
 // ============================================================
 // SUB-COMPONENTS
 // ============================================================
-
 const AuthorAvatar = ({ author, name, size = 'md' }) => {
   const sizes = {
     xs: 'w-6 h-6 text-[10px]',
@@ -106,26 +114,30 @@ const AuthorAvatar = ({ author, name, size = 'md' }) => {
   };
   const avatar = author?.avatar || author?.image;
   const displayName = author?.name || name || 'Unknown';
+  const sizeClass = sizes[size] || sizes.md;
+
   if (avatar) {
     return (
       <img
         src={avatar}
         alt={displayName}
-        className={`${sizes[size]} rounded-full object-cover ring-2 ring-white dark:ring-gray-900`}
+        className={`${sizeClass} rounded-full object-cover ring-2 ring-white dark:ring-gray-900`}
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
       />
     );
   }
   return (
     <div
-      className={`${sizes[size]} rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold ring-2 ring-white dark:ring-gray-900`}
+      className={`${sizeClass} rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold ring-2 ring-white dark:ring-gray-900 flex-shrink-0`}
     >
       {getInitials(displayName)}
     </div>
   );
 };
 
-/** Author social icon row */
-const AuthorSocialRow = ({ author, dark = false }) => {
+const AuthorSocialRow = ({ author }) => {
   if (!author?.social) return null;
   const list = [
     { key: 'twitter', icon: FaTwitter, url: author.social.twitter, label: 'Twitter' },
@@ -139,7 +151,7 @@ const AuthorSocialRow = ({ author, dark = false }) => {
   if (!list.length) return null;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       {list.map(({ key, icon: Icon, url, label }) => (
         <a
           key={key}
@@ -147,11 +159,7 @@ const AuthorSocialRow = ({ author, dark = false }) => {
           target="_blank"
           rel="noopener noreferrer"
           aria-label={label}
-          className={`p-2 rounded-full transition ${
-            dark
-              ? 'text-gray-400 hover:text-white hover:bg-white/10'
-              : 'text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
+          className="p-2 rounded-full transition text-gray-500 dark:text-gray-400 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-800"
         >
           <Icon className="h-3.5 w-3.5" />
         </a>
@@ -160,42 +168,109 @@ const AuthorSocialRow = ({ author, dark = false }) => {
   );
 };
 
-/** Floating share sidebar (desktop only) */
+/** Floating share rail (desktop only) */
 const ShareRail = ({ post, onCopy }) => {
-  const url = typeof window !== 'undefined' ? window.location.href : '';
+  if (typeof window === 'undefined') return null;
+  const url = window.location.href;
   const title = post?.title || '';
   const links = [
-    { icon: FaTwitter, label: 'Share on Twitter', href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`, color: 'hover:text-[#1da1f2]' },
-    { icon: FaLinkedin, label: 'Share on LinkedIn', href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, color: 'hover:text-[#0a66c2]' },
-    { icon: FaFacebook, label: 'Share on Facebook', href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, color: 'hover:text-[#1877f2]' },
-    { icon: FaWhatsapp, label: 'Share on WhatsApp', href: `https://wa.me/?text=${encodeURIComponent(title + ' ' + url)}`, color: 'hover:text-[#25d366]' },
+    {
+      key: 'twitter',
+      icon: FaTwitter,
+      label: 'Share on Twitter',
+      href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`,
+      color: 'hover:text-[#1da1f2] hover:border-[#1da1f2]',
+    },
+    {
+      key: 'linkedin',
+      icon: FaLinkedin,
+      label: 'Share on LinkedIn',
+      href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
+      color: 'hover:text-[#0a66c2] hover:border-[#0a66c2]',
+    },
+    {
+      key: 'facebook',
+      icon: FaFacebook,
+      label: 'Share on Facebook',
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+      color: 'hover:text-[#1877f2] hover:border-[#1877f2]',
+    },
+    {
+      key: 'whatsapp',
+      icon: FaWhatsapp,
+      label: 'Share on WhatsApp',
+      href: `https://wa.me/?text=${encodeURIComponent(`${title} ${url}`)}`,
+      color: 'hover:text-[#25d366] hover:border-[#25d366]',
+    },
   ];
 
   return (
     <div className="hidden xl:flex flex-col items-center gap-2 sticky top-32 self-start">
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">Share</span>
-      {links.map(({ icon: Icon, href, label, color }) => (
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">
+        Share
+      </span>
+      {links.map(({ key, icon: Icon, href, label, color }) => (
         <a
-          key={label}
+          key={key}
           href={href}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={label}
-          className={`p-2.5 rounded-full border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 ${color} hover:border-current transition`}
+          className={`p-2.5 rounded-full border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 ${color} transition`}
         >
           <Icon className="h-3.5 w-3.5" />
         </a>
       ))}
       <button
+        type="button"
         onClick={onCopy}
         aria-label="Copy link"
-        className="p-2.5 rounded-full border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:border-blue-400 transition"
+        className="p-2.5 rounded-full border border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400 hover:text-blue-700 hover:border-blue-400 transition"
       >
         <FaLink className="h-3.5 w-3.5" />
       </button>
     </div>
   );
 };
+
+/** Loading skeleton */
+const LoadingSkeleton = () => (
+  <div className="min-h-screen bg-white dark:bg-gray-950">
+    <div className="container mx-auto px-4 sm:px-6 py-24 max-w-3xl">
+      <div className="animate-pulse space-y-6">
+        <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-1/3" />
+        <div className="h-10 bg-gray-200 dark:bg-gray-800 rounded w-full" />
+        <div className="h-10 bg-gray-200 dark:bg-gray-800 rounded w-3/4" />
+        <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2" />
+        <div className="aspect-[16/9] bg-gray-200 dark:bg-gray-800 rounded-2xl" />
+        <div className="space-y-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-full" />
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+/** Empty state */
+const NotFoundState = () => (
+  <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-950">
+    <div className="text-center max-w-md px-6">
+      <div className="text-5xl mb-4 opacity-50">📄</div>
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Article not found</h2>
+      <p className="text-gray-500 dark:text-gray-400 mt-2">
+        The article you&apos;re looking for doesn&apos;t exist or has been moved.
+      </p>
+      <Link
+        to="/blog"
+        className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl font-medium hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white transition"
+      >
+        <FaArrowLeft className="w-3.5 h-3.5" /> Back to Journal
+      </Link>
+    </div>
+  </div>
+);
 
 // ============================================================
 // MAIN PAGE
@@ -230,23 +305,29 @@ const BlogPostPage = () => {
         setLoading(true);
         const response = await blogAPI.getPostBySlug(id);
         if (cancelled) return;
-        if (response.success) {
-          const data = response.data;
+        if (response?.success) {
+          const data = response.data || {};
           setPost(data);
-          setRelatedPosts(data.relatedPosts || []);
-          setComments(data.comments || []);
+          setRelatedPosts(Array.isArray(data.relatedPosts) ? data.relatedPosts : []);
+          setComments(Array.isArray(data.comments) ? data.comments : []);
           setLikesCount(data.likes || 0);
           setViewsCount(data.views || 0);
-          if (isAuthenticated && user && data.likedBy) setLiked(data.likedBy.includes(user._id));
-          if (isAuthenticated && user && data.bookmarkedBy) setBookmarked(data.bookmarkedBy.includes(user._id));
-          blogAPI.incrementViews(data._id).catch(() => {});
+          if (isAuthenticated && user && Array.isArray(data.likedBy)) {
+            setLiked(data.likedBy.includes(user._id));
+          }
+          if (isAuthenticated && user && Array.isArray(data.bookmarkedBy)) {
+            setBookmarked(data.bookmarkedBy.includes(user._id));
+          }
+          if (data._id) {
+            blogAPI.incrementViews(data._id).catch(() => {});
+          }
         } else {
-          toast.error(response.message || 'Failed to load blog post');
+          toast.error(response?.message || 'Failed to load blog post');
           navigate('/blog');
         }
       } catch (error) {
         if (!cancelled) {
-          toast.error(error.response?.data?.message || 'Failed to load blog post');
+          toast.error(error?.response?.data?.message || 'Failed to load blog post');
           navigate('/blog');
         }
       } finally {
@@ -255,10 +336,12 @@ const BlogPostPage = () => {
     };
     fetchPost();
     window.scrollTo(0, 0);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [id, navigate, user, isAuthenticated]);
 
-  // Back-to-top button visibility
+  // -------- BACK TO TOP LISTENER --------
   useEffect(() => {
     const onScroll = () => setShowBackToTop(window.scrollY > 800);
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -277,20 +360,27 @@ const BlogPostPage = () => {
   };
 
   const handleNativeShare = async () => {
+    if (!post) return;
     try {
       if (navigator.share) {
         await navigator.share({ title: post.title, text: post.subtitle, url: shareUrl });
       } else {
         handleCopyLink();
       }
-    } catch { /* cancelled */ }
+    } catch {
+      /* user cancelled */
+    }
   };
 
   const handleLike = async () => {
-    if (!isAuthenticated) { toast.error('Please sign in to like this article'); return; }
+    if (!isAuthenticated) {
+      toast.error('Please sign in to like this article');
+      return;
+    }
+    if (!post?._id) return;
     try {
       const response = await blogAPI.toggleLike(post._id);
-      if (response.success) {
+      if (response?.success) {
         setLiked((v) => !v);
         setLikesCount((c) => (liked ? Math.max(0, c - 1) : c + 1));
       }
@@ -299,25 +389,35 @@ const BlogPostPage = () => {
     }
   };
 
-  const handleBookmark = async () => {
-    if (!isAuthenticated) { toast.error('Please sign in to save articles'); return; }
+  const handleBookmark = () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to save articles');
+      return;
+    }
     setBookmarked((v) => !v);
-    toast.success(bookmarked ? 'Removed from reading list' : 'Saved to reading list');
+    toast.success(bookmarked ? 'Removed from your reading list' : 'Saved to your reading list');
   };
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
     if (!commentText.trim()) return;
-    if (!isAuthenticated) { toast.error('Please sign in to comment'); return; }
+    if (!isAuthenticated) {
+      toast.error('Please sign in to comment');
+      return;
+    }
+    if (!post?._id) return;
     try {
       setSubmittingComment(true);
       const response = await blogAPI.addComment(post._id, {
         content: commentText.trim(),
-        authorName: user.name,
-        authorEmail: user.email,
+        authorName: user?.name,
+        authorEmail: user?.email,
       });
-      if (response.success) {
-        setComments([{ ...response.data, authorName: user.name, authorAvatar: user.avatar }, ...comments]);
+      if (response?.success) {
+        setComments((prev) => [
+          { ...response.data, authorName: user?.name, authorAvatar: user?.avatar },
+          ...prev,
+        ]);
         setCommentText('');
         toast.success('Comment submitted for review');
       }
@@ -330,55 +430,27 @@ const BlogPostPage = () => {
 
   const toggleAudio = () => {
     if (!audioRef.current) return;
-    if (audioPlaying) audioRef.current.pause();
-    else audioRef.current.play();
+    if (audioPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch(() => {});
+    }
     setAudioPlaying((v) => !v);
   };
 
-  // -------- LOADING --------
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-white dark:bg-gray-950">
-        <div className="container mx-auto px-4 sm:px-6 py-24 max-w-3xl">
-          <div className="animate-pulse space-y-6">
-            <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-1/3" />
-            <div className="h-10 bg-gray-200 dark:bg-gray-800 rounded w-full" />
-            <div className="h-10 bg-gray-200 dark:bg-gray-800 rounded w-3/4" />
-            <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2" />
-            <div className="aspect-[16/9] bg-gray-200 dark:bg-gray-800 rounded-2xl" />
-            <div className="space-y-3">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-full" />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!post) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-950">
-        <div className="text-center max-w-md px-6">
-          <div className="text-5xl mb-4 opacity-50">📄</div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Article not found</h2>
-          <p className="text-gray-500 dark:text-gray-400 mt-2">The article you're looking for doesn't exist or has been moved.</p>
-          <Link
-            to="/blog"
-            className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl font-medium hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white transition"
-          >
-            <FaArrowLeft className="w-3.5 h-3.5" /> Back to Journal
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  // -------- RENDER STATES --------
+  if (loading) return <LoadingSkeleton />;
+  if (!post) return <NotFoundState />;
 
   const authorName = post.author?.name || post.authorName || 'Editorial Team';
   const authorTitle = post.author?.title || post.authorTitle || 'Contributor';
   const authorBio = post.author?.bio || post.authorBio;
-  const authorAvatar = post.author?.avatar || post.author?.image || post.authorImage;
+  const postCategory = post.category || 'General';
+
+  const hasExtraTabs =
+    Boolean(post.videoUrl) ||
+    Boolean(post.audioUrl) ||
+    (Array.isArray(post.references) && post.references.length > 0);
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -395,17 +467,26 @@ const BlogPostPage = () => {
         <div className="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Link to="/blog" className="flex items-center gap-2">
             <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-              Alveoly <span className="text-blue-600 dark:text-blue-400">Journal</span>
+              Alveoly <span className="text-blue-700 dark:text-blue-400">Journal</span>
             </span>
           </Link>
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600 dark:text-gray-400">
-            <Link to="/blog" className="hover:text-blue-600 dark:hover:text-blue-400 transition">Latest</Link>
-            <Link to="/blog/categories" className="hover:text-blue-600 dark:hover:text-blue-400 transition">Topics</Link>
-            <Link to="/blog/authors" className="hover:text-blue-600 dark:hover:text-blue-400 transition">Authors</Link>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <Link to="/blog" className="hover:text-blue-700 dark:hover:text-blue-400 transition">
+              Latest
+            </Link>
+            <Link
+              to="/blog/search?q="
+              className="hover:text-blue-700 dark:hover:text-blue-400 transition"
+            >
+              Search
+            </Link>
+            <Link to="/" className="hover:text-blue-700 dark:hover:text-blue-400 transition">
+              Courses
+            </Link>
           </nav>
           <Link
             to="/blog"
-            className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition hidden sm:inline-flex items-center gap-1.5"
+            className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 transition hidden sm:inline-flex items-center gap-1.5"
           >
             <FaArrowLeft className="w-3 h-3" /> Back
           </Link>
@@ -416,26 +497,39 @@ const BlogPostPage = () => {
       <article className="container mx-auto px-4 sm:px-6 py-10 lg:py-16">
         <div className="max-w-3xl mx-auto">
           {/* Breadcrumbs */}
-          <nav className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 mb-8 flex-wrap">
-            <Link to="/" className="hover:text-blue-600 dark:hover:text-blue-400 transition">Home</Link>
-            <FaChevronRight className="w-2 h-2" />
-            <Link to="/blog" className="hover:text-blue-600 dark:hover:text-blue-400 transition">Journal</Link>
+          <nav className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-400 mb-8 flex-wrap">
+            <Link
+              to="/"
+              className="hover:text-blue-700 dark:hover:text-blue-400 transition hover:underline"
+            >
+              Home
+            </Link>
             <FaChevronRight className="w-2 h-2" />
             <Link
-              to={`/blog/category/${(post.category || 'general').toLowerCase().replace(/\s+/g, '-')}`}
-              className="text-blue-600 dark:text-blue-400 hover:underline"
+              to="/blog"
+              className="hover:text-blue-700 dark:hover:text-blue-400 transition hover:underline"
             >
-              {post.category || 'General'}
+              Journal
+            </Link>
+            <FaChevronRight className="w-2 h-2" />
+            <Link
+              to={`/blog/category/${categorySlug(postCategory)}`}
+              className="text-blue-700 dark:text-blue-400 underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-600"
+            >
+              {postCategory}
             </Link>
           </nav>
 
-          {/* Category + meta line */}
+          {/* Category + featured */}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <span className="inline-block px-2.5 py-1 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 text-[11px] font-bold uppercase tracking-wider rounded-full">
-              {post.category || 'Article'}
-            </span>
+            <Link
+              to={`/blog/category/${categorySlug(postCategory)}`}
+              className="inline-block px-2.5 py-1 bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 text-[11px] font-bold uppercase tracking-wider rounded-full underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-600"
+            >
+              {postCategory}
+            </Link>
             {post.featured && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                 <HiOutlineSparkles className="w-3.5 h-3.5" /> Featured
               </span>
             )}
@@ -448,7 +542,7 @@ const BlogPostPage = () => {
 
           {/* Subtitle */}
           {post.subtitle && (
-            <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 leading-relaxed mb-8">
+            <p className="text-lg sm:text-xl text-gray-700 dark:text-gray-300 leading-relaxed mb-8">
               {post.subtitle}
             </p>
           )}
@@ -458,11 +552,13 @@ const BlogPostPage = () => {
             <div className="flex items-center gap-3">
               <AuthorAvatar author={post.author} name={post.authorName} size="lg" />
               <div className="leading-tight">
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{authorName}</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {authorName}
+                </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{authorTitle}</p>
               </div>
             </div>
-            <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
               <span className="flex items-center gap-1.5">
                 <FaCalendarAlt className="w-3 h-3" /> {formatDate(post.publishDate, 'short')}
               </span>
@@ -475,34 +571,41 @@ const BlogPostPage = () => {
             </div>
           </div>
 
-          {/* ============ TABS (only show if there is extra content) ============ */}
-          {(post.videoUrl || post.audioUrl || (post.references && post.references.length > 0)) && (
+          {/* ============ TABS ============ */}
+          {hasExtraTabs && (
             <div className="flex flex-wrap gap-2 mt-8 mb-8">
               {[
                 { key: 'content', label: 'Article', icon: FaFileAlt },
                 post.videoUrl && { key: 'videos', label: 'Watch', icon: FaVideo },
                 post.audioUrl && { key: 'audio', label: 'Listen', icon: FaHeadphones },
-                post.references?.length > 0 && { key: 'references', label: 'References', icon: FaListUl },
-              ].filter(Boolean).map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  onClick={() => setActiveTab(key)}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${
-                    activeTab === key
-                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent'
-                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" /> {label}
-                </button>
-              ))}
+                Array.isArray(post.references) &&
+                  post.references.length > 0 && {
+                    key: 'references',
+                    label: 'References',
+                    icon: FaListUl,
+                  },
+              ]
+                .filter(Boolean)
+                .map(({ key, label, icon: Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setActiveTab(key)}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${
+                      activeTab === key
+                        ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent'
+                        : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" /> {label}
+                  </button>
+                ))}
             </div>
           )}
 
           {/* ============ CONTENT ============ */}
           {activeTab === 'content' && (
             <>
-              {/* Featured image */}
               {post.featuredImage && (
                 <motion.figure
                   initial={{ opacity: 0, y: 12 }}
@@ -516,31 +619,37 @@ const BlogPostPage = () => {
                       className="w-full h-auto object-cover"
                     />
                   </div>
-                  {post.imageCaption && (
-                    <figcaption className="mt-3 text-center text-xs text-gray-500 dark:text-gray-400 italic">
-                      {post.imageCaption}
-                    </figcaption>
-                  )}
                 </motion.figure>
               )}
 
-              {/* Audio preview inline */}
               {post.audioUrl && (
                 <div className="mb-10 p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center gap-4">
                   <button
+                    type="button"
                     onClick={toggleAudio}
                     aria-label={audioPlaying ? 'Pause audio' : 'Play audio'}
                     className="w-11 h-11 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 flex items-center justify-center flex-shrink-0 hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white transition"
                   >
-                    {audioPlaying ? <FaPause className="w-3.5 h-3.5" /> : <FaPlay className="w-3.5 h-3.5 ml-0.5" />}
+                    {audioPlaying ? (
+                      <FaPause className="w-3.5 h-3.5" />
+                    ) : (
+                      <FaPlay className="w-3.5 h-3.5 ml-0.5" />
+                    )}
                   </button>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400">
                       Listen to this article
                     </p>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 truncate">{post.title}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                      {post.title}
+                    </p>
                   </div>
-                  <audio ref={audioRef} src={post.audioUrl} onEnded={() => setAudioPlaying(false)} className="hidden" />
+                  <audio
+                    ref={audioRef}
+                    src={post.audioUrl}
+                    onEnded={() => setAudioPlaying(false)}
+                    className="hidden"
+                  />
                 </div>
               )}
 
@@ -559,21 +668,27 @@ const BlogPostPage = () => {
                     prose-h3:text-xl prose-h3:mt-8 prose-h3:mb-3
                     prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-p:leading-relaxed
                     prose-li:text-gray-700 dark:prose-li:text-gray-300
-                    prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
+                    prose-a:text-blue-700 dark:prose-a:text-blue-400
+                    prose-a:font-medium
+                    prose-a:underline
+                    prose-a:decoration-blue-300
+                    prose-a:decoration-2
+                    prose-a:underline-offset-4
+                    hover:prose-a:decoration-blue-600
                     prose-strong:text-gray-900 dark:prose-strong:text-gray-100
                     prose-blockquote:border-l-4 prose-blockquote:border-blue-500 prose-blockquote:bg-blue-50/50 dark:prose-blockquote:bg-blue-950/20
                     prose-blockquote:py-1 prose-blockquote:px-6 prose-blockquote:rounded-r-xl prose-blockquote:not-italic prose-blockquote:text-gray-700 dark:prose-blockquote:text-gray-300
                     prose-img:rounded-2xl prose-img:shadow-sm
                     prose-hr:border-gray-200 dark:prose-hr:border-gray-800
-                    prose-code:text-blue-600 dark:prose-code:text-blue-400 prose-code:bg-blue-50 dark:prose-code:bg-blue-950/30 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+                    prose-code:text-blue-700 dark:prose-code:text-blue-400 prose-code:bg-blue-50 dark:prose-code:bg-blue-950/30 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
                     prose-table:text-sm
                   "
-                  dangerouslySetInnerHTML={{ __html: post.content }}
+                  dangerouslySetInnerHTML={{ __html: post.content || '' }}
                 />
               </div>
 
               {/* Gallery */}
-              {post.galleryImages?.length > 0 && (
+              {Array.isArray(post.galleryImages) && post.galleryImages.length > 0 && (
                 <section className="mt-12">
                   <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-4">
                     Gallery
@@ -599,8 +714,8 @@ const BlogPostPage = () => {
                 </section>
               )}
 
-              {/* Statistics callout */}
-              {post.statistics?.length > 0 && (
+              {/* Statistics */}
+              {Array.isArray(post.statistics) && post.statistics.length > 0 && (
                 <section className="my-12 py-8 border-y border-gray-100 dark:border-gray-900">
                   <p className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-6 text-center">
                     Key Numbers
@@ -621,18 +736,21 @@ const BlogPostPage = () => {
               )}
 
               {/* Learning objectives */}
-              {post.learningObjectives?.length > 0 && (
+              {Array.isArray(post.learningObjectives) && post.learningObjectives.length > 0 && (
                 <section className="my-12 p-6 sm:p-8 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-2xl border border-blue-100 dark:border-blue-900/40">
                   <div className="flex items-center gap-2 mb-5">
-                    <FaGraduationCap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <FaGraduationCap className="w-5 h-5 text-blue-700 dark:text-blue-400" />
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-                      What you'll learn
+                      What you&apos;ll learn
                     </h3>
                   </div>
                   <ul className="space-y-3">
                     {post.learningObjectives.map((obj, i) => (
-                      <li key={i} className="flex items-start gap-3 text-gray-700 dark:text-gray-300">
-                        <FaCheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-1 flex-shrink-0" />
+                      <li
+                        key={i}
+                        className="flex items-start gap-3 text-gray-700 dark:text-gray-300"
+                      >
+                        <FaCheckCircle className="w-4 h-4 text-blue-700 dark:text-blue-400 mt-1 flex-shrink-0" />
                         <span className="leading-relaxed">{obj}</span>
                       </li>
                     ))}
@@ -641,14 +759,17 @@ const BlogPostPage = () => {
               )}
 
               {/* Tags */}
-              {post.tags?.length > 0 && (
+              {Array.isArray(post.tags) && post.tags.length > 0 && (
                 <div className="mt-12 pt-8 border-t border-gray-100 dark:border-gray-900">
+                  <p className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-4">
+                    Related Topics
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {post.tags.map((tag) => (
                       <Link
                         key={tag}
                         to={`/blog/search?q=${encodeURIComponent(tag)}`}
-                        className="px-3 py-1.5 bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-400 rounded-full text-xs font-medium hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-600 dark:hover:text-blue-400 transition border border-gray-100 dark:border-gray-800"
+                        className="px-3 py-1.5 bg-gray-50 dark:bg-gray-900 text-blue-700 dark:text-blue-400 rounded-full text-xs font-medium hover:bg-blue-50 dark:hover:bg-blue-950/30 underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-600 transition border border-gray-100 dark:border-gray-800"
                       >
                         #{tag}
                       </Link>
@@ -693,70 +814,90 @@ const BlogPostPage = () => {
               <div className="w-16 h-16 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 flex items-center justify-center mx-auto mb-4">
                 <FaHeadphones className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">Listen to this article</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">
+                Listen to this article
+              </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                Narrated version of "{post.title}"
+                Narrated version of &ldquo;{post.title}&rdquo;
               </p>
               <button
+                type="button"
                 onClick={toggleAudio}
                 className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center mx-auto hover:bg-blue-700 transition"
                 aria-label={audioPlaying ? 'Pause' : 'Play'}
               >
                 {audioPlaying ? <FaPause className="w-5 h-5" /> : <FaPlay className="w-5 h-5 ml-0.5" />}
               </button>
-              <audio ref={audioRef} src={post.audioUrl} onEnded={() => setAudioPlaying(false)} className="hidden" />
             </div>
           )}
 
           {/* ============ REFERENCES TAB ============ */}
-          {activeTab === 'references' && post.references?.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-5">References</h3>
-              <ol className="space-y-3">
-                {post.references.map((ref, i) => (
-                  <li key={i} className="flex gap-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                    <span className="text-blue-600 dark:text-blue-400 font-semibold flex-shrink-0 w-6">
-                      {i + 1}.
-                    </span>
-                    <span dangerouslySetInnerHTML={{ __html: ref }} />
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
+          {activeTab === 'references' &&
+            Array.isArray(post.references) &&
+            post.references.length > 0 && (
+              <div className="mt-8">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-5">
+                  References
+                </h3>
+                <ol className="space-y-3">
+                  {post.references.map((ref, i) => (
+                    <li
+                      key={i}
+                      className="flex gap-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed"
+                    >
+                      <span className="text-blue-700 dark:text-blue-400 font-semibold flex-shrink-0 w-6">
+                        {i + 1}.
+                      </span>
+                      <span dangerouslySetInnerHTML={{ __html: ref }} />
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
 
           {/* ============ ENGAGEMENT BAR ============ */}
           <div className="mt-14 pt-8 border-t border-gray-100 dark:border-gray-900">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <button
+                  type="button"
                   onClick={handleLike}
                   className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${
                     liked
                       ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/50'
-                      : 'text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800 hover:border-red-300 dark:hover:border-red-900/50 hover:text-red-600 dark:hover:text-red-400'
+                      : 'text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800 hover:border-red-300 dark:hover:border-red-900/50 hover:text-red-600 dark:hover:text-red-400'
                   }`}
                 >
-                  {liked ? <FaHeart className="w-3.5 h-3.5" /> : <FaRegHeart className="w-3.5 h-3.5" />}
+                  {liked ? (
+                    <FaHeart className="w-3.5 h-3.5" />
+                  ) : (
+                    <FaRegHeart className="w-3.5 h-3.5" />
+                  )}
                   <span>{likesCount.toLocaleString()}</span>
                 </button>
                 <button
+                  type="button"
                   onClick={handleBookmark}
                   className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${
                     bookmarked
                       ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/50'
-                      : 'text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800 hover:border-amber-300 dark:hover:border-amber-900/50 hover:text-amber-600 dark:hover:text-amber-400'
+                      : 'text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800 hover:border-amber-300 dark:hover:border-amber-900/50 hover:text-amber-600 dark:hover:text-amber-400'
                   }`}
                 >
-                  {bookmarked ? <FaBookmark className="w-3.5 h-3.5" /> : <FaRegBookmark className="w-3.5 h-3.5" />}
+                  {bookmarked ? (
+                    <FaBookmark className="w-3.5 h-3.5" />
+                  ) : (
+                    <FaRegBookmark className="w-3.5 h-3.5" />
+                  )}
                   <span>{bookmarked ? 'Saved' : 'Save'}</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShowComments((v) => !v)}
                   className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${
                     showComments
-                      ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/50'
-                      : 'text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-900/50 hover:text-blue-600 dark:hover:text-blue-400'
+                      ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900/50'
+                      : 'text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-900/50 hover:text-blue-700 dark:hover:text-blue-400'
                   }`}
                 >
                   <FaComment className="w-3.5 h-3.5" />
@@ -764,8 +905,9 @@ const BlogPostPage = () => {
                 </button>
               </div>
               <button
+                type="button"
                 onClick={handleNativeShare}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-900/50 hover:text-blue-600 dark:hover:text-blue-400 transition"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-900/50 hover:text-blue-700 dark:hover:text-blue-400 transition"
               >
                 <FaShareAlt className="w-3.5 h-3.5" />
                 <span>Share</span>
@@ -773,7 +915,7 @@ const BlogPostPage = () => {
             </div>
           </div>
 
-          {/* ============ AUTHOR BIO (footnote) ============ */}
+          {/* ============ AUTHOR BIO ============ */}
           <div className="mt-12 p-6 sm:p-8 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800">
             <div className="flex items-start gap-5">
               <AuthorAvatar author={post.author} name={post.authorName} size="xl" />
@@ -784,13 +926,15 @@ const BlogPostPage = () => {
                 <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{authorName}</h4>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{authorTitle}</p>
                 {authorBio && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-3 leading-relaxed">{authorBio}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-3 leading-relaxed">
+                    {authorBio}
+                  </p>
                 )}
                 <div className="mt-4 flex flex-wrap items-center gap-4">
                   {post.author?._id && (
                     <Link
                       to={`/blog/author/${post.author._id}`}
-                      className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                      className="text-sm font-medium text-blue-700 dark:text-blue-400 underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-600"
                     >
                       View all articles
                     </Link>
@@ -802,9 +946,10 @@ const BlogPostPage = () => {
           </div>
 
           {/* ============ COMMENTS ============ */}
-          <AnimatePresence>
+          <AnimatePresence initial={false}>
             {showComments && (
               <motion.section
+                key="comments-section"
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
@@ -817,7 +962,11 @@ const BlogPostPage = () => {
                 {isAuthenticated ? (
                   <form onSubmit={handleCommentSubmit} className="mb-8">
                     <div className="flex gap-3">
-                      <AuthorAvatar author={{ name: user?.name, avatar: user?.avatar }} name={user?.name} size="md" />
+                      <AuthorAvatar
+                        author={{ name: user?.name, avatar: user?.avatar }}
+                        name={user?.name}
+                        size="md"
+                      />
                       <div className="flex-1">
                         <textarea
                           value={commentText}
@@ -826,8 +975,8 @@ const BlogPostPage = () => {
                           rows={3}
                           className="w-full px-4 py-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none resize-none text-gray-800 dark:text-gray-200 placeholder-gray-400"
                         />
-                        <div className="flex items-center justify-between mt-2">
-                          <p className="text-xs text-gray-400">
+                        <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
                             Comments are reviewed before publishing.
                           </p>
                           <button
@@ -835,7 +984,9 @@ const BlogPostPage = () => {
                             disabled={submittingComment || !commentText.trim()}
                             className="px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg text-sm font-medium hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2"
                           >
-                            {submittingComment && <FaSpinner className="animate-spin w-3 h-3" />}
+                            {submittingComment && (
+                              <FaSpinner className="animate-spin w-3 h-3" />
+                            )}
                             Post comment
                           </button>
                         </div>
@@ -844,12 +995,18 @@ const BlogPostPage = () => {
                   </form>
                 ) : (
                   <div className="mb-8 p-5 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 text-center">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      <Link to="/login" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      <Link
+                        to="/login"
+                        className="font-semibold text-blue-700 dark:text-blue-400 underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-600"
+                      >
                         Sign in
                       </Link>{' '}
                       or{' '}
-                      <Link to="/signup" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">
+                      <Link
+                        to="/signup"
+                        className="font-semibold text-blue-700 dark:text-blue-400 underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-600"
+                      >
                         create an account
                       </Link>{' '}
                       to join the discussion.
@@ -863,15 +1020,18 @@ const BlogPostPage = () => {
                       No comments yet. Be the first to share your thoughts.
                     </p>
                   ) : (
-                    comments.map((c) => (
+                    comments.map((c, i) => (
                       <motion.div
-                        key={c._id || c.id}
+                        key={c._id || c.id || i}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="flex gap-3"
                       >
                         <AuthorAvatar
-                          author={{ name: c.authorName || c.user, avatar: c.authorAvatar || c.avatar }}
+                          author={{
+                            name: c.authorName || c.user,
+                            avatar: c.authorAvatar || c.avatar,
+                          }}
                           name={c.authorName || c.user}
                           size="md"
                         />
@@ -912,7 +1072,7 @@ const BlogPostPage = () => {
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {relatedPosts.slice(0, 3).map((r) => (
                   <Link
-                    key={r._id || r.id}
+                    key={r._id || r.id || r.slug}
                     to={`/blog/post/${r.slug || r._id}`}
                     className="group block bg-white dark:bg-gray-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-800 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-lg transition-all duration-300"
                   >
@@ -927,10 +1087,10 @@ const BlogPostPage = () => {
                       </div>
                     )}
                     <div className="p-5">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-400 mb-2">
                         {r.category || 'Article'}
                       </p>
-                      <h4 className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition line-clamp-2 leading-snug">
+                      <h4 className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition line-clamp-2 leading-snug">
                         {r.title}
                       </h4>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
@@ -951,7 +1111,7 @@ const BlogPostPage = () => {
           <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <Link
               to="/blog"
-              className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition"
+              className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 transition"
             >
               <FaArrowLeft className="w-3 h-3" /> Back to Journal
             </Link>
@@ -969,6 +1129,8 @@ const BlogPostPage = () => {
       <AnimatePresence>
         {showBackToTop && (
           <motion.button
+            key="back-to-top"
+            type="button"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}

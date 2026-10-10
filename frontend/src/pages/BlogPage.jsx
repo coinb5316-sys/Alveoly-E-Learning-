@@ -1,36 +1,22 @@
-// src/pages/BlogPage.jsx - PROFESSIONAL REDESIGN
+// src/pages/BlogPage.jsx - PROFESSIONAL REDESIGN v2 (AdSense-Friendly)
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaSearch,
-  FaCalendarAlt,
-  FaUser,
   FaClock,
   FaArrowRight,
   FaHeart,
-  FaComment,
   FaEye,
   FaShareAlt,
   FaBookmark,
   FaRegBookmark,
-  FaTwitter,
-  FaLinkedin,
-  FaFacebook,
-  FaWhatsapp,
   FaEnvelope,
   FaFire,
-  FaChevronDown,
-  FaChevronUp,
   FaArrowLeft,
   FaArrowRight as FaArrowRightIcon,
   FaBars,
   FaThLarge,
-  FaInstagram,
-  FaYoutube,
-  FaGlobe,
-  FaQuoteLeft,
-  FaSpinner,
 } from 'react-icons/fa';
 import { HiOutlineSparkles, HiOutlineTrendingUp } from 'react-icons/hi';
 import { toast } from 'react-hot-toast';
@@ -51,7 +37,7 @@ const formatDate = (dateString, style = 'long') => {
 
 const getInitials = (name) => {
   if (!name) return 'A';
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 };
 
 const stripHtml = (html = '') => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -59,12 +45,15 @@ const stripHtml = (html = '') => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, '
 const readingTimeLabel = (min) => `${min || 5} min read`;
 
 // ============================================================
-// COMPONENTS
+// SUB-COMPONENTS
 // ============================================================
-
-/** Small circular author avatar with fallback initials */
 const AuthorAvatar = ({ author, name, size = 'sm' }) => {
-  const sizes = { xs: 'w-6 h-6 text-[10px]', sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-12 h-12 text-base' };
+  const sizes = {
+    xs: 'w-6 h-6 text-[10px]',
+    sm: 'w-8 h-8 text-xs',
+    md: 'w-10 h-10 text-sm',
+    lg: 'w-12 h-12 text-base',
+  };
   const avatar = author?.avatar || author?.image;
   const displayName = author?.name || name || 'Unknown';
 
@@ -85,11 +74,10 @@ const AuthorAvatar = ({ author, name, size = 'sm' }) => {
   );
 };
 
-/** Editorial-style article card */
+/** Editorial article card */
 const ArticleCard = ({ post, variant = 'grid', isBookmarked, onBookmark, onShare, isAuthenticated }) => {
   const href = `/blog/post/${post.slug || post._id}`;
   const authorName = post.author?.name || post.authorName || 'Editorial Team';
-  const authorTitle = post.author?.title || post.authorTitle;
   const excerpt = post.subtitle || stripHtml(post.content).slice(0, 160);
 
   if (variant === 'list') {
@@ -112,7 +100,12 @@ const ArticleCard = ({ post, variant = 'grid', isBookmarked, onBookmark, onShare
         <div className="flex flex-col justify-center py-2">
           <div className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider">
             <span>{post.category || 'Article'}</span>
-            {post.featured && <><span className="text-gray-300">•</span><span className="text-amber-600 dark:text-amber-400">Featured</span></>}
+            {post.featured && (
+              <>
+                <span className="text-gray-300">•</span>
+                <span className="text-amber-600 dark:text-amber-400">Featured</span>
+              </>
+            )}
           </div>
           <Link to={href}>
             <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition line-clamp-2">
@@ -142,7 +135,7 @@ const ArticleCard = ({ post, variant = 'grid', isBookmarked, onBookmark, onShare
     );
   }
 
-  // Grid variant (default)
+  // Grid variant
   return (
     <motion.article
       initial={{ opacity: 0, y: 12 }}
@@ -212,7 +205,7 @@ const ArticleCard = ({ post, variant = 'grid', isBookmarked, onBookmark, onShare
   );
 };
 
-/** Featured hero card — magazine style */
+/** Featured hero — magazine style */
 const FeaturedHero = ({ post }) => {
   if (!post) return null;
   const href = `/blog/post/${post.slug || post._id}`;
@@ -227,7 +220,6 @@ const FeaturedHero = ({ post }) => {
       className="container mx-auto px-4 sm:px-6 py-8"
     >
       <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-        {/* Image */}
         <Link to={href} className="group block order-2 lg:order-1">
           <div className="relative aspect-[4/3] rounded-3xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-2xl shadow-blue-900/10">
             <img
@@ -238,16 +230,18 @@ const FeaturedHero = ({ post }) => {
           </div>
         </Link>
 
-        {/* Text */}
         <div className="order-1 lg:order-2">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-[11px] font-bold uppercase tracking-wider rounded-full shadow-md shadow-blue-500/20">
               <HiOutlineSparkles className="w-3.5 h-3.5" />
               Editor's Pick
             </span>
-            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+            <Link
+              to={`/blog/category/${(post.category || 'general').toLowerCase().replace(/\s+/g, '-')}`}
+              className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-600 transition"
+            >
               {post.category || 'Article'}
-            </span>
+            </Link>
           </div>
 
           <Link to={href}>
@@ -272,7 +266,7 @@ const FeaturedHero = ({ post }) => {
 
           <Link
             to={href}
-            className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold hover:gap-3 transition-all"
+            className="inline-flex items-center gap-2 text-blue-700 dark:text-blue-400 font-semibold underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-600 transition-all"
           >
             Read the full story
             <FaArrowRight className="text-sm" />
@@ -322,7 +316,6 @@ const BlogPage = () => {
   const [totalPosts, setTotalPosts] = useState(0);
   const [viewMode, setViewMode] = useState('grid');
   const [bookmarks, setBookmarks] = useState([]);
-  const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('latest');
 
   // Load bookmarks from localStorage
@@ -393,12 +386,12 @@ const BlogPage = () => {
 
   const handleBookmark = (postId) => {
     if (!isAuthenticated) {
-      toast.error('Please sign in to bookmark articles');
+      toast.error('Please sign in to save articles');
       return;
     }
     setBookmarks((prev) => {
       const exists = prev.includes(postId);
-      toast.success(exists ? 'Removed from bookmarks' : 'Saved to bookmarks');
+      toast.success(exists ? 'Removed from your reading list' : 'Saved to your reading list');
       return exists ? prev.filter((id) => id !== postId) : [...prev, postId];
     });
   };
@@ -412,7 +405,7 @@ const BlogPage = () => {
         await navigator.clipboard.writeText(url);
         toast.success('Link copied to clipboard');
       }
-    } catch { /* user cancelled */ }
+    } catch { /* cancelled */ }
   };
 
   const pageNumbers = useMemo(() => {
@@ -433,18 +426,17 @@ const BlogPage = () => {
         <div className="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Link to="/blog" className="flex items-center gap-2">
             <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
-              Alveoly <span className="text-blue-600 dark:text-blue-400">Journal</span>
+              Alveoly <span className="text-blue-700 dark:text-blue-400">Journal</span>
             </span>
           </Link>
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600 dark:text-gray-400">
-            <Link to="/blog" className="hover:text-blue-600 dark:hover:text-blue-400 transition">Latest</Link>
-            <Link to="/blog/categories" className="hover:text-blue-600 dark:hover:text-blue-400 transition">Topics</Link>
-            <Link to="/blog/authors" className="hover:text-blue-600 dark:hover:text-blue-400 transition">Authors</Link>
-            <Link to="/blog/about" className="hover:text-blue-600 dark:hover:text-blue-400 transition">About</Link>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <Link to="/blog" className="hover:text-blue-700 dark:hover:text-blue-400 transition">Latest</Link>
+            <Link to="/blog/search?q=" className="hover:text-blue-700 dark:hover:text-blue-400 transition">Search</Link>
+            <Link to="/" className="hover:text-blue-700 dark:hover:text-blue-400 transition">Courses</Link>
           </nav>
           <button
             onClick={() => navigate('/')}
-            className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition hidden sm:block"
+            className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-400 transition hidden sm:block"
           >
             ← Back to Alveoly
           </button>
@@ -452,19 +444,16 @@ const BlogPage = () => {
       </header>
 
       {/* ============ HERO ============ */}
-      <section className="relative border-b border-gray-100 dark:border-gray-900">
+      <section className="border-b border-gray-100 dark:border-gray-900">
         <div className="container mx-auto px-4 sm:px-6 pt-16 pb-12 text-center max-w-4xl">
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400 mb-4">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700 dark:text-blue-400 mb-4">
               The Alveoly Journal
             </p>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-gray-100 leading-[1.1] tracking-tight mb-6">
               Evidence-based insights for the modern nurse
             </h1>
-            <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 leading-relaxed max-w-2xl mx-auto">
+            <p className="text-lg sm:text-xl text-gray-700 dark:text-gray-300 leading-relaxed max-w-2xl mx-auto">
               Clinical judgment, exam preparation, and career growth — written by educators, for the next generation of healthcare professionals.
             </p>
           </motion.div>
@@ -474,7 +463,6 @@ const BlogPage = () => {
       {/* ============ SEARCH / FILTERS ============ */}
       <section className="container mx-auto px-4 sm:px-6 py-8">
         <div className="max-w-5xl mx-auto">
-          {/* Search bar */}
           <form onSubmit={handleSearch} className="relative mb-6">
             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
             <input
@@ -492,7 +480,6 @@ const BlogPage = () => {
             </button>
           </form>
 
-          {/* Category pills */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1 min-w-0">
               <button
@@ -500,7 +487,7 @@ const BlogPage = () => {
                 className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition ${
                   selectedCategory === 'all'
                     ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
-                    : 'bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'
+                    : 'bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'
                 }`}
               >
                 All
@@ -512,7 +499,7 @@ const BlogPage = () => {
                   className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition ${
                     selectedCategory === cat.slug
                       ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
-                      : 'bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'
+                      : 'bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'
                   }`}
                 >
                   {cat.name}
@@ -557,9 +544,7 @@ const BlogPage = () => {
       </section>
 
       {/* ============ FEATURED POST ============ */}
-      {!loading && featuredPost && (
-        <FeaturedHero post={featuredPost} />
-      )}
+      {!loading && featuredPost && <FeaturedHero post={featuredPost} />}
 
       {/* ============ ARTICLE GRID ============ */}
       <section className="container mx-auto px-4 sm:px-6 py-12">
@@ -567,7 +552,9 @@ const BlogPage = () => {
           <div className="flex items-end justify-between mb-8">
             <div>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-                {selectedCategory === 'all' ? 'Latest Articles' : categories.find(c => c.slug === selectedCategory)?.name || 'Articles'}
+                {selectedCategory === 'all'
+                  ? 'Latest Articles'
+                  : categories.find((c) => c.slug === selectedCategory)?.name || 'Articles'}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 {totalPosts} {totalPosts === 1 ? 'article' : 'articles'} published
@@ -576,7 +563,7 @@ const BlogPage = () => {
             {trendingTags.length > 0 && (
               <Link
                 to="/blog/search?q=trending"
-                className="hidden sm:inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:gap-3 transition-all"
+                className="hidden sm:inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-400 underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-600 transition-all"
               >
                 <HiOutlineTrendingUp className="w-4 h-4" />
                 See what's trending
@@ -591,9 +578,7 @@ const BlogPage = () => {
           ) : posts.length === 0 ? (
             <div className="text-center py-20 border border-dashed border-gray-200 dark:border-gray-800 rounded-3xl">
               <div className="text-5xl mb-4 opacity-50">📖</div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                No articles found
-              </h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">No articles found</h3>
               <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
                 We couldn't find any articles matching your filters. Try adjusting your search or browse all topics.
               </p>
@@ -605,11 +590,7 @@ const BlogPage = () => {
               </button>
             </div>
           ) : (
-            <div className={
-              viewMode === 'grid'
-                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-                : 'space-y-5'
-            }>
+            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-5'}>
               {posts.map((post, index) => (
                 <motion.div
                   key={post._id || post.id}
@@ -634,7 +615,7 @@ const BlogPage = () => {
           {!loading && totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-14">
               <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900 transition disabled:opacity-40 disabled:cursor-not-allowed"
                 aria-label="Previous page"
@@ -655,7 +636,7 @@ const BlogPage = () => {
                 </button>
               ))}
               <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
                 className="p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-900 transition disabled:opacity-40 disabled:cursor-not-allowed"
                 aria-label="Next page"
@@ -685,10 +666,10 @@ const BlogPage = () => {
                     to={`/blog/search?q=${encodeURIComponent(tag.name)}`}
                     className="group inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-900 rounded-full border border-gray-200 dark:border-gray-800 hover:border-blue-400 dark:hover:border-blue-700 transition-all"
                   >
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                    <span className="text-sm font-medium text-blue-700 dark:text-blue-400 group-hover:underline">
                       #{tag.name}
                     </span>
-                    <span className="text-xs text-gray-400 group-hover:text-blue-500 transition">
+                    <span className="text-xs text-gray-500 group-hover:text-blue-600 transition">
                       {tag.count}
                     </span>
                   </Link>
@@ -709,7 +690,7 @@ const BlogPage = () => {
             <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight mb-3">
               The Weekly Brief
             </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">
+            <p className="text-gray-700 dark:text-gray-300 mb-8 leading-relaxed">
               One email. Every Sunday. The most important nursing insights, exam tips, and clinical judgment frameworks — curated by our editorial team.
             </p>
             <form
@@ -729,9 +710,7 @@ const BlogPage = () => {
                 Subscribe
               </button>
             </form>
-            <p className="text-xs text-gray-400 mt-4">
-              No spam. Unsubscribe anytime.
-            </p>
+            <p className="text-xs text-gray-500 mt-4">No spam. Unsubscribe anytime.</p>
           </div>
         </div>
       </section>
