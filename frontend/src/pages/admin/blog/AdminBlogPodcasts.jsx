@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogPodcasts.jsx — EDITORIAL ADMIN
-// Podcast episode management for The Alveoly Journal.
+// src/pages/admin/blog/AdminBlogPodcasts.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -9,22 +8,11 @@ import {
   Volume2, VolumeX, RotateCw, Check,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend ready
-import {
-  podcasts as mockPodcasts,
-  authors as mockAuthors,
-} from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
 ============================================================ */
-
-const slugify = (s = "") =>
-  String(s)
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-");
 
 const formatShortDate = (d) =>
   d
@@ -35,7 +23,6 @@ const formatShortDate = (d) =>
       })
     : "";
 
-/* Turn "42:15" into seconds so we can compare and sort. */
 const durationToSeconds = (str = "") => {
   const parts = String(str).split(":").map((x) => parseInt(x, 10));
   if (parts.length === 2) return parts[0] * 60 + parts[1];
@@ -45,6 +32,7 @@ const durationToSeconds = (str = "") => {
 
 const emptyEpisode = () => ({
   id: "",
+  _id: "",
   episodeNumber: "",
   title: "",
   description: "",
@@ -54,7 +42,21 @@ const emptyEpisode = () => ({
   guests: [],
   publishedAt: new Date().toISOString().slice(0, 10),
   featured: false,
-  status: "draft", // draft | published | archived
+  status: "draft",
+});
+
+/* Normalize server → local shape */
+const normalizeEpisode = (e) => ({
+  ...e,
+  id: e._id || e.id,
+  episodeNumber: Number(e.episodeNumber) || e.episodeNumber,
+  featured: e.featured === true,
+  status: e.status || "draft",
+  guests: Array.isArray(e.guests) ? e.guests : [],
+  publishedAt:
+    e.publishedAt instanceof Date
+      ? e.publishedAt.toISOString()
+      : e.publishedAt,
 });
 
 /* ============================================================
@@ -103,7 +105,6 @@ const TextArea = ({ value, onChange, placeholder, rows = 3 }) => (
   />
 );
 
-/* Small list-input for guest names */
 const ListInput = ({ values, onChange, placeholder }) => {
   const [draft, setDraft] = useState("");
   const add = () => {
@@ -161,7 +162,7 @@ const ListInput = ({ values, onChange, placeholder }) => {
 };
 
 /* ============================================================
-   INLINE AUDIO PLAYER (used on cards + drawer)
+   INLINE AUDIO PLAYER
 ============================================================ */
 
 const AudioPlayer = ({ src, compact = false }) => {
@@ -347,7 +348,6 @@ const EpisodeDrawer = ({ open, onClose, initial, onSave, saving, existingNumbers
     if (!validate()) return;
     onSave({
       ...form,
-      id: form.id || `ep-${Date.now()}`,
       episodeNumber: Number(form.episodeNumber),
     });
   };
@@ -370,7 +370,6 @@ const EpisodeDrawer = ({ open, onClose, initial, onSave, saving, existingNumbers
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
             className="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-white dark:bg-stone-950 z-50 flex flex-col border-l border-stone-200 dark:border-stone-800"
           >
-            {/* Header */}
             <div className="flex-shrink-0 px-6 py-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400 font-semibold mb-1">
@@ -390,9 +389,7 @@ const EpisodeDrawer = ({ open, onClose, initial, onSave, saving, existingNumbers
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              {/* Cover preview */}
               <div className="flex items-start gap-4 p-4 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
                 <div className="w-24 h-24 rounded-lg overflow-hidden bg-stone-100 dark:bg-stone-800 flex-shrink-0 flex items-center justify-center">
                   {form.image ? (
@@ -476,7 +473,7 @@ const EpisodeDrawer = ({ open, onClose, initial, onSave, saving, existingNumbers
                   value={form.description}
                   onChange={(e) => update("description", e.target.value)}
                   rows={4}
-                  placeholder="Dr. James Mensah joins us to break down what blood pressure really means, why hypertension is so dangerous, and what listeners can do today."
+                  placeholder="Dr. James Mensah joins us to break down what blood pressure really means…"
                 />
               </Field>
 
@@ -512,10 +509,7 @@ const EpisodeDrawer = ({ open, onClose, initial, onSave, saving, existingNumbers
                 )}
               </Field>
 
-              <Field
-                label="Guests"
-                hint="Press Enter after each name."
-              >
+              <Field label="Guests" hint="Press Enter after each name.">
                 <ListInput
                   values={form.guests}
                   onChange={(v) => update("guests", v)}
@@ -549,7 +543,6 @@ const EpisodeDrawer = ({ open, onClose, initial, onSave, saving, existingNumbers
               </div>
             </div>
 
-            {/* Footer */}
             <div className="flex-shrink-0 px-6 py-4 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-3">
               <button
                 onClick={onClose}
@@ -648,7 +641,7 @@ const ConfirmDelete = ({ open, episode, onCancel, onConfirm, deleting }) => (
 );
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const AdminBlogPodcasts = () => {
@@ -665,17 +658,22 @@ const AdminBlogPodcasts = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await blogAPI.getPodcasts();
+      setEpisodes((res.data || []).map(normalizeEpisode));
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load episodes");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Replace with blogAPI.getPodcasts()
-    setEpisodes(
-      mockPodcasts.map((p) => ({
-        ...p,
-        status: p.status || "published",
-        featured: !!p.featured,
-      }))
-    );
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
@@ -749,65 +747,114 @@ const AdminBlogPodcasts = () => {
 
   const handleSave = async (payload) => {
     setSaving(true);
-    // Replace with blogAPI.createPodcast / updatePodcast
-    await new Promise((r) => setTimeout(r, 400));
-    setEpisodes((prev) => {
-      const exists = prev.find((e) => e.id === payload.id);
-      if (exists) return prev.map((e) => (e.id === payload.id ? payload : e));
-      return [payload, ...prev];
-    });
-    toast.success(editing?.id ? "Episode updated" : "Episode created");
-    setSaving(false);
-    setDrawerOpen(false);
+    try {
+      // Send plain JSON — no file upload from this drawer for now.
+      // If you later add a file picker for cover art, switch to FormData.
+      const body = {
+        episodeNumber: Number(payload.episodeNumber),
+        title: payload.title.trim(),
+        description: payload.description || "",
+        audioUrl: payload.audioUrl.trim(),
+        duration: payload.duration.trim(),
+        image: (payload.image || "").trim(),
+        guests: payload.guests || [],
+        featured: payload.featured === true,
+        status: payload.status || "draft",
+        publishedAt: payload.publishedAt || new Date().toISOString(),
+      };
+
+      if (editing?.id) {
+        await blogAPI.updatePodcast(editing.id, body);
+        toast.success("Episode updated");
+      } else {
+        await blogAPI.createPodcast(body);
+        toast.success("Episode created");
+      }
+
+      await fetchData();
+      setDrawerOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to save episode");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setEpisodes((prev) => prev.filter((e) => e.id !== deleteTarget.id));
-    toast.success("Episode deleted");
-    setDeleting(false);
-    setDeleteTarget(null);
+    try {
+      await blogAPI.deletePodcast(deleteTarget.id);
+      setEpisodes((prev) => prev.filter((e) => e.id !== deleteTarget.id));
+      toast.success("Episode deleted");
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete episode");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const toggleFeatured = (ep) => {
+  const toggleFeatured = async (ep) => {
+    const next = !ep.featured;
     setEpisodes((prev) =>
-      prev.map((e) =>
-        e.id === ep.id ? { ...e, featured: !e.featured } : e
-      )
+      prev.map((e) => (e.id === ep.id ? { ...e, featured: next } : e))
     );
-    toast.success(
-      `Episode ${ep.episodeNumber} ${
-        ep.featured ? "unfeatured" : "featured"
-      }`
-    );
+    try {
+      await blogAPI.updatePodcast(ep.id, { featured: next });
+      toast.success(
+        `Episode ${ep.episodeNumber} ${next ? "featured" : "unfeatured"}`
+      );
+    } catch (err) {
+      setEpisodes((prev) =>
+        prev.map((e) => (e.id === ep.id ? { ...e, featured: ep.featured } : e))
+      );
+      toast.error("Failed to update episode");
+    }
   };
 
-  const toggleStatus = (ep) => {
+  const toggleStatus = async (ep) => {
     const next = ep.status === "published" ? "draft" : "published";
     setEpisodes((prev) =>
       prev.map((e) => (e.id === ep.id ? { ...e, status: next } : e))
     );
-    toast.success(next === "published" ? "Published" : "Moved to draft");
+    try {
+      await blogAPI.updatePodcast(ep.id, { status: next });
+      toast.success(next === "published" ? "Published" : "Moved to draft");
+    } catch (err) {
+      setEpisodes((prev) =>
+        prev.map((e) => (e.id === ep.id ? { ...e, status: ep.status } : e))
+      );
+      toast.error("Failed to update status");
+    }
   };
 
-  const duplicate = (ep) => {
+  const duplicate = async (ep) => {
     const copy = {
-      ...ep,
-      id: `ep-copy-${Date.now()}`,
       episodeNumber: stats.latestNumber + 1,
       title: `${ep.title} (copy)`,
+      description: ep.description || "",
+      audioUrl: ep.audioUrl || "",
+      duration: ep.duration || "",
+      image: ep.image || "",
+      guests: ep.guests || [],
+      featured: false,
       status: "draft",
-      publishedAt: new Date().toISOString().slice(0, 10),
+      publishedAt: new Date().toISOString(),
     };
-    setEpisodes((prev) => [copy, ...prev]);
-    toast.success("Duplicated as draft");
+    try {
+      await blogAPI.createPodcast(copy);
+      toast.success("Duplicated as draft");
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to duplicate");
+    }
   };
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (same UI as before) ---------- */
   return (
     <div className="space-y-6 pb-24">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400 font-semibold mb-2">
@@ -834,7 +881,7 @@ const AdminBlogPodcasts = () => {
         </button>
       </div>
 
-      {/* ---------- STATS ---------- */}
+      {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Episodes", value: stats.count },
@@ -856,7 +903,7 @@ const AdminBlogPodcasts = () => {
         ))}
       </div>
 
-      {/* ---------- TOOLBAR ---------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -892,7 +939,7 @@ const AdminBlogPodcasts = () => {
         </div>
       </div>
 
-      {/* ---------- LIST ---------- */}
+      {/* LIST */}
       {loading ? (
         <div className="py-20 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
@@ -929,7 +976,6 @@ const AdminBlogPodcasts = () => {
               transition={{ delay: Math.min(i * 0.03, 0.3) }}
               className="group rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 overflow-hidden flex flex-col"
             >
-              {/* Cover */}
               <div className="relative aspect-square bg-stone-100 dark:bg-stone-900">
                 {ep.image ? (
                   <img
@@ -943,12 +989,10 @@ const AdminBlogPodcasts = () => {
                   </div>
                 )}
 
-                {/* Episode number */}
                 <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-white/90 dark:bg-stone-950/90 backdrop-blur-sm text-[10px] uppercase tracking-wider text-stone-700 dark:text-stone-300 font-semibold">
                   Ep. {ep.episodeNumber}
                 </div>
 
-                {/* Featured */}
                 {ep.featured && (
                   <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-amber-500/90 backdrop-blur-sm text-white text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1">
                     <Star className="w-2.5 h-2.5" />
@@ -956,13 +1000,11 @@ const AdminBlogPodcasts = () => {
                   </div>
                 )}
 
-                {/* Status badge bottom-left */}
                 <div className="absolute bottom-3 left-3">
                   <StatusBadge status={ep.status} />
                 </div>
               </div>
 
-              {/* Body */}
               <div className="flex-1 p-5 flex flex-col">
                 <h3 className="font-serif text-lg font-bold leading-snug text-stone-900 dark:text-stone-50 mb-2 line-clamp-2">
                   {ep.title}
@@ -984,12 +1026,10 @@ const AdminBlogPodcasts = () => {
                 )}
 
                 <div className="mt-auto">
-                  {/* Inline audio preview */}
                   <div className="mb-4 pb-4 border-b border-stone-100 dark:border-stone-900">
                     <AudioPlayer src={ep.audioUrl} compact />
                   </div>
 
-                  {/* Meta + actions */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-stone-500">
                       <span className="flex items-center gap-1.5">
@@ -1005,9 +1045,7 @@ const AdminBlogPodcasts = () => {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => toggleFeatured(ep)}
-                        title={
-                          ep.featured ? "Unfeature" : "Feature on the page"
-                        }
+                        title={ep.featured ? "Unfeature" : "Feature on the page"}
                         className="w-8 h-8 rounded-full flex items-center justify-center text-stone-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition"
                       >
                         <Star className="w-3.5 h-3.5" />
@@ -1055,17 +1093,14 @@ const AdminBlogPodcasts = () => {
         </div>
       )}
 
-      {/* ---------- FOOTER HINT ---------- */}
       {!loading && filtered.length > 0 && (
         <p className="text-xs text-stone-500 dark:text-stone-500 text-center">
-          {filtered.length}{" "}
-          {filtered.length === 1 ? "episode" : "episodes"} shown
-          {statusFilter !== "all" &&
-            ` · filtered by ${statusFilter}`}
+          {filtered.length} {filtered.length === 1 ? "episode" : "episodes"}{" "}
+          shown
+          {statusFilter !== "all" && ` · filtered by ${statusFilter}`}
         </p>
       )}
 
-      {/* ---------- DRAWER ---------- */}
       <EpisodeDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -1075,7 +1110,6 @@ const AdminBlogPodcasts = () => {
         existingNumbers={existingNumbers}
       />
 
-      {/* ---------- DELETE ---------- */}
       <ConfirmDelete
         open={!!deleteTarget}
         episode={deleteTarget}

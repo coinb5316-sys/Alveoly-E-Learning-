@@ -1,6 +1,5 @@
-// src/pages/blog/BlogPodcasts.jsx — THE ALVEOLY JOURNAL PODCAST
-// Standalone editorial podcast page. Mock data. No component imports.
-import React, { useMemo, useRef, useState } from "react";
+// src/pages/blog/BlogPodcasts.jsx — THE ALVEOLY JOURNAL PODCAST (LIVE API)
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -9,11 +8,7 @@ import {
   FaLinkedin, FaInstagram, FaYoutube, FaRss, FaVideo, FaBookOpen,
   FaCheckCircle, FaHeadphones,
 } from "react-icons/fa";
-import {
-  podcasts as allPodcasts,
-  posts as allPosts,
-  categories,
-} from "../../data/blogData";
+import { publicBlogAPI as blogAPI } from "../../api/blogApi";
 
 /* ============================================================
    UTILITIES
@@ -28,14 +23,6 @@ const formatShortDate = (d) =>
       })
     : "";
 
-const slugify = (s) =>
-  String(s)
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-");
-
-/* Duration strings are stored as "MM:SS" or "M:SS" — turn into seconds. */
 const durationToSeconds = (str) => {
   if (!str) return 0;
   const parts = String(str).split(":").map((x) => parseInt(x, 10));
@@ -49,6 +36,9 @@ const secondsToLabel = (s) => {
   const mins = Math.round(s / 60);
   return `${mins} min`;
 };
+
+/* Pull the URL of the first image out of a post, if any. */
+const postImage = (p) => p.image || p.featuredImage || "";
 
 /* ============================================================
    PRIMITIVES
@@ -273,7 +263,7 @@ const JournalFooter = () => {
 };
 
 /* ============================================================
-   EPISODE PLAYER — local custom audio control
+   EPISODE PLAYER
 ============================================================ */
 
 const EpisodePlayer = ({ podcast, autoPlay = false, variant = "featured" }) => {
@@ -380,7 +370,6 @@ const EpisodePlayer = ({ podcast, autoPlay = false, variant = "featured" }) => {
     );
   }
 
-  // Compact variant — used in the episode list
   return (
     <div className="flex items-start gap-5 py-6">
       <button
@@ -448,7 +437,7 @@ const EpisodePlayer = ({ podcast, autoPlay = false, variant = "featured" }) => {
 };
 
 /* ============================================================
-   SUBSCRIBE ROW — where to listen
+   SUBSCRIBE ROW
 ============================================================ */
 
 const SubscribeRow = () => {
@@ -481,56 +470,102 @@ const SubscribeRow = () => {
 };
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE PUBLIC API
 ============================================================ */
 
 const BlogPodcasts = () => {
-  /* Sort by newest */
+  const [podcasts, setPodcasts] = useState([]);
+  const [pairedArticles, setPairedArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  /* ---------- Fetch podcasts + paired articles ---------- */
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [podRes, postsRes] = await Promise.all([
+          blogAPI.getPodcasts(),
+          blogAPI.getPosts({ limit: 30, publishedOnly: true }),
+        ]);
+        if (cancelled) return;
+        setPodcasts(podRes.data || []);
+        const posts = postsRes.data?.posts || [];
+        // Prefer medically reviewed pieces, fall back to the newest
+        const reviewed = posts.filter((p) => p.medicallyReviewed);
+        const pool = reviewed.length > 0 ? reviewed : posts;
+        setPairedArticles(
+          pool
+            .sort(
+              (a, b) =>
+                new Date(b.publishedAt) - new Date(a.publishedAt)
+            )
+            .slice(0, 3)
+        );
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setPodcasts([]);
+          setPairedArticles([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* ---------- Sort + split lead/rest ---------- */
   const sorted = useMemo(
     () =>
-      [...allPodcasts].sort(
+      [...podcasts].sort(
         (a, b) => new Date(b.publishedAt) - new Date(a.publishedAt)
       ),
-    []
+    [podcasts]
   );
-
   const lead = sorted[0];
   const rest = sorted.slice(1);
 
-  /* Stats */
+  /* ---------- Stats ---------- */
   const stats = useMemo(() => {
-    const totalSeconds = allPodcasts.reduce(
+    const totalSeconds = podcasts.reduce(
       (sum, p) => sum + durationToSeconds(p.duration),
       0
     );
     const guests = new Set();
-    allPodcasts.forEach((p) => (p.guests || []).forEach((g) => guests.add(g)));
+    podcasts.forEach((p) => (p.guests || []).forEach((g) => guests.add(g)));
     const years = new Set(
-      allPodcasts.map((p) => new Date(p.publishedAt).getFullYear())
+      podcasts
+        .map((p) => (p.publishedAt ? new Date(p.publishedAt).getFullYear() : null))
+        .filter(Boolean)
     );
     return {
-      episodes: allPodcasts.length,
+      episodes: podcasts.length,
       guests: guests.size,
       totalRuntime: secondsToLabel(totalSeconds),
       years: [...years].sort((a, b) => b - a),
     };
-  }, []);
+  }, [podcasts]);
 
-  /* Paired articles — recent medically reviewed pieces */
-  const pairedArticles = useMemo(
-    () =>
-      allPosts
-        .filter((p) => p.medicallyReviewed)
-        .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
-        .slice(0, 3),
-    []
-  );
+  /* ---------- Loading screen ---------- */
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 dark:border-stone-700 dark:border-t-stone-100 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
       <JournalNav />
 
-      {/* ---------- MASTHEAD ---------- */}
+      {/* MASTHEAD */}
       <header className="border-b border-stone-200 dark:border-stone-800">
         <div className="max-w-5xl mx-auto px-5 pt-12 md:pt-16 pb-10">
           <Link
@@ -555,7 +590,6 @@ const BlogPodcasts = () => {
             people on the other side of the exam room.
           </p>
 
-          {/* Stats strip */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-stone-500 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-800">
             <span>
               <strong className="font-semibold text-stone-900 dark:text-stone-100">
@@ -595,12 +629,11 @@ const BlogPodcasts = () => {
             )}
           </div>
 
-          {/* Subscribe row */}
           <SubscribeRow />
         </div>
       </header>
 
-      {/* ---------- FEATURED EPISODE ---------- */}
+      {/* FEATURED EPISODE */}
       {lead && (
         <section className="max-w-6xl mx-auto px-5 pt-12 md:pt-16">
           <div className="max-w-3xl">
@@ -610,10 +643,9 @@ const BlogPodcasts = () => {
         </section>
       )}
 
-      {/* ---------- EPISODE ARCHIVE ---------- */}
+      {/* EPISODE ARCHIVE */}
       <section className="max-w-6xl mx-auto px-5 py-12 md:py-16">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12">
-          {/* Main column */}
           <div className="lg:col-span-8 min-w-0">
             {rest.length > 0 ? (
               <>
@@ -628,7 +660,7 @@ const BlogPodcasts = () => {
                 <div className="divide-y divide-stone-100 dark:divide-stone-900">
                   {rest.map((podcast, i) => (
                     <motion.div
-                      key={podcast.id}
+                      key={podcast._id || podcast.id}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{
@@ -648,10 +680,9 @@ const BlogPodcasts = () => {
             )}
           </div>
 
-          {/* Sidebar */}
+          {/* SIDEBAR */}
           <aside className="lg:col-span-4 min-w-0">
             <div className="lg:sticky lg:top-24 space-y-8">
-              {/* About the podcast */}
               <div className="p-6 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
                 <SectionLabel icon={FaMicrophone}>
                   About the podcast
@@ -664,7 +695,6 @@ const BlogPodcasts = () => {
                 </p>
               </div>
 
-              {/* Recent guests */}
               {stats.guests > 0 && (
                 <div>
                   <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-4">
@@ -672,13 +702,11 @@ const BlogPodcasts = () => {
                   </p>
                   <ul className="space-y-3">
                     {[
-                      ...new Set(
-                        allPodcasts.flatMap((p) => p.guests || [])
-                      ),
+                      ...new Set(podcasts.flatMap((p) => p.guests || [])),
                     ]
                       .slice(0, 6)
                       .map((guest) => {
-                        const ep = allPodcasts.find((p) =>
+                        const ep = podcasts.find((p) =>
                           (p.guests || []).includes(guest)
                         );
                         return (
@@ -701,7 +729,6 @@ const BlogPodcasts = () => {
                 </div>
               )}
 
-              {/* Newsletter */}
               <div className="p-5 rounded-2xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900">
                 <p className="font-serif text-base font-bold mb-2">
                   Get stories worth reading.
@@ -728,7 +755,6 @@ const BlogPodcasts = () => {
                 </form>
               </div>
 
-              {/* Editorial promise */}
               <div className="p-5 rounded-2xl border border-stone-200 dark:border-stone-800">
                 <div className="flex items-start gap-3">
                   <FaCheckCircle className="text-emerald-600 dark:text-emerald-400 mt-0.5 text-sm" />
@@ -748,7 +774,7 @@ const BlogPodcasts = () => {
         </div>
       </section>
 
-      {/* ---------- READ ALONGSIDE ---------- */}
+      {/* READ ALONGSIDE */}
       {pairedArticles.length > 0 && (
         <section className="border-t border-stone-200 dark:border-stone-800">
           <div className="max-w-6xl mx-auto px-5 py-14">
@@ -762,23 +788,27 @@ const BlogPodcasts = () => {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {pairedArticles.map((post) => {
-                const cat = categories.find((c) => c.id === post.categoryId);
+                const img = postImage(post);
+                const catName =
+                  post.categoryId?.name || post.category?.name || "";
                 return (
                   <Link
-                    key={post.id}
+                    key={post._id || post.id}
                     to={`/blog/${post.slug}`}
                     className="group"
                   >
-                    {post.image && (
+                    {img && (
                       <img
-                        src={post.image}
+                        src={img}
                         alt={post.title}
                         className="w-full aspect-[16/10] object-cover rounded-md mb-4 group-hover:opacity-95 transition"
                       />
                     )}
-                    <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
-                      {cat?.name}
-                    </p>
+                    {catName && (
+                      <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
+                        {catName}
+                      </p>
+                    )}
                     <h3 className="font-serif text-base font-bold leading-snug text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2 mb-2">
                       {post.title}
                     </h3>
@@ -794,7 +824,7 @@ const BlogPodcasts = () => {
         </section>
       )}
 
-      {/* ---------- OTHER MEDIA ---------- */}
+      {/* OTHER MEDIA */}
       <section className="border-t border-stone-200 dark:border-stone-800">
         <div className="max-w-6xl mx-auto px-5 py-14">
           <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-6">
