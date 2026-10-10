@@ -1,48 +1,656 @@
-// src/pages/blog/BlogVideos.jsx
-import React from "react";
+// src/pages/blog/BlogVideos.jsx — THE ALVEOLY JOURNAL VIDEO LIBRARY
+// Standalone editorial video page. Mock data. No component imports.
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { FaArrowLeft, FaVideo } from "react-icons/fa";
-import Navbar from "../../components/Navbar";
-import Footer from "../../components/Footer";
-import VideoEmbed from "../../components/blog/VideoEmbed";
-import { videos } from "../../data/blogData";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  FaArrowLeft, FaPlay, FaClock, FaHome, FaSearch, FaChevronDown,
+  FaMicrophone, FaStream, FaTag, FaTwitter, FaLinkedin, FaInstagram,
+  FaYoutube, FaRss, FaVideo, FaEye, FaBookOpen, FaCheckCircle,
+} from "react-icons/fa";
+import {
+  posts as allPosts,
+  videos as allVideos,
+  categories,
+} from "../../data/blogData";
 
-const BlogVideos = () => {
+/* ============================================================
+   UTILITIES
+============================================================ */
+
+const formatShortDate = (d) =>
+  d
+    ? new Date(d).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "";
+
+const slugify = (s) =>
+  String(s)
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-");
+
+/* ============================================================
+   PRIMITIVES
+============================================================ */
+
+const SectionLabel = ({ icon: Icon, children }) => (
+  <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-3 flex items-center gap-2">
+    {Icon && <Icon className="text-xs" />}
+    {children}
+  </p>
+);
+
+const JournalNav = () => {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const links = [
+    { to: "/blog", label: "Home" },
+    { to: "/blog/archive", label: "Archive" },
+    { to: "/blog/podcasts", label: "Podcasts" },
+    { to: "/blog/videos", label: "Videos", active: true },
+    { to: "/blog/search", label: "Search" },
+    { to: "/sitemap", label: "Sitemap" },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-
-      <section className="pt-32 pb-12 bg-gradient-to-br from-[#0a1628] to-[#0f2847]">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link
-            to="/blog"
-            className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors mb-6"
-          >
-            <FaArrowLeft /> Back to Blog
-          </Link>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-[#00a3a1] flex items-center justify-center">
-              <FaVideo className="text-white text-xl" />
-            </div>
-            <h1 className="text-3xl md:text-4xl font-bold text-white">
-              Video Library
-            </h1>
+    <nav className="border-b border-stone-200 dark:border-stone-800 bg-white/85 dark:bg-stone-950/85 backdrop-blur-md sticky top-0 z-40">
+      <div className="max-w-6xl mx-auto px-5">
+        <div className="h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link
+              to="/"
+              className="text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition text-sm flex items-center gap-2"
+            >
+              <FaHome className="text-xs" />
+              <span className="hidden sm:inline">Alveoly</span>
+            </Link>
+            <span className="text-stone-300 dark:text-stone-700">/</span>
+            <Link
+              to="/blog"
+              className="font-serif text-lg font-bold tracking-tight text-stone-900 dark:text-stone-50"
+            >
+              The Journal
+            </Link>
           </div>
-          <p className="text-gray-300 text-lg">
-            Watch practical, evidence-based health guides from our clinical team.
+
+          <div className="hidden md:flex items-center gap-1">
+            {links.map((l) => (
+              <Link
+                key={l.to}
+                to={l.to}
+                className={`px-3 py-2 rounded-full text-sm font-medium transition ${
+                  l.active
+                    ? "text-stone-900 dark:text-stone-100 bg-stone-100 dark:bg-stone-900"
+                    : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-900"
+                }`}
+              >
+                {l.label}
+              </Link>
+            ))}
+            <Link
+              to="/blog/search"
+              className="ml-2 inline-flex items-center justify-center w-9 h-9 rounded-full border border-stone-200 dark:border-stone-800 text-stone-500 dark:text-stone-400 hover:border-stone-900 dark:hover:border-stone-100 hover:text-stone-900 dark:hover:text-stone-100 transition"
+              title="Search"
+            >
+              <FaSearch className="text-xs" />
+            </Link>
+          </div>
+
+          <button
+            onClick={() => setMobileOpen((o) => !o)}
+            className="md:hidden inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-900 transition"
+          >
+            Menu
+            <FaChevronDown
+              className={`text-[10px] transition-transform ${
+                mobileOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {mobileOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="md:hidden overflow-hidden border-t border-stone-200 dark:border-stone-800"
+            >
+              <div className="py-3 flex flex-col">
+                {links.map((l) => (
+                  <Link
+                    key={l.to}
+                    to={l.to}
+                    onClick={() => setMobileOpen(false)}
+                    className={`px-2 py-2.5 text-sm font-medium transition ${
+                      l.active
+                        ? "text-stone-900 dark:text-stone-100"
+                        : "text-stone-700 dark:text-stone-300"
+                    }`}
+                  >
+                    {l.label}
+                  </Link>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </nav>
+  );
+};
+
+const JournalFooter = () => {
+  const policyLinks = [
+    { to: "/editorial-policy", label: "Editorial Policy" },
+    { to: "/medical-review-policy", label: "Medical Review Policy" },
+    { to: "/advertising-policy", label: "Advertising Policy" },
+  ];
+  const contentLinks = [
+    { to: "/blog", label: "All articles" },
+    { to: "/blog/archive", label: "Archive" },
+    { to: "/blog/podcasts", label: "Podcasts" },
+    { to: "/blog/videos", label: "Videos" },
+    { to: "/blog/search", label: "Search" },
+    { to: "/sitemap", label: "Sitemap" },
+  ];
+  const socials = [
+    { icon: FaTwitter, href: "https://twitter.com/alveoly", label: "Twitter" },
+    { icon: FaInstagram, href: "https://instagram.com/alveoly", label: "Instagram" },
+    { icon: FaYoutube, href: "https://youtube.com/@alveoly", label: "YouTube" },
+    { icon: FaLinkedin, href: "https://linkedin.com/company/alveoly", label: "LinkedIn" },
+    { icon: FaRss, href: "/blog/rss", label: "RSS" },
+  ];
+
+  return (
+    <footer className="border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950">
+      <div className="max-w-6xl mx-auto px-5 py-14">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
+          <div className="md:col-span-2">
+            <Link
+              to="/blog"
+              className="font-serif text-xl font-bold text-stone-900 dark:text-stone-50"
+            >
+              The Alveoly Journal
+            </Link>
+            <p className="text-sm text-stone-600 dark:text-stone-400 mt-4 max-w-sm leading-relaxed">
+              A clinician-written publication on heart health, nutrition,
+              mental wellness, and public health. Evidence in plain language,
+              reviewed for accuracy, free of clickbait.
+            </p>
+            <div className="flex items-center gap-4 mt-6">
+              {socials.map((s) => (
+                <a
+                  key={s.label}
+                  href={s.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={s.label}
+                  className="text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition"
+                >
+                  <s.icon />
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-4">
+              Content
+            </p>
+            <ul className="space-y-2.5">
+              {contentLinks.map((l) => (
+                <li key={l.to}>
+                  <Link
+                    to={l.to}
+                    className="text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-4">
+              Trust
+            </p>
+            <ul className="space-y-2.5">
+              {policyLinks.map((l) => (
+                <li key={l.to}>
+                  <Link
+                    to={l.to}
+                    className="text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <Link
+                  to="/"
+                  className="text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition"
+                >
+                  Back to Alveoly
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-12 pt-6 border-t border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-3 text-xs text-stone-500 dark:text-stone-500">
+          <p>© {new Date().getFullYear()} Alveoly. All rights reserved.</p>
+          <p className="italic">
+            The content is educational only and not a substitute for medical
+            advice.
           </p>
         </div>
+      </div>
+    </footer>
+  );
+};
+
+/* ============================================================
+   VIDEO EMBED (local)
+============================================================ */
+
+const VideoEmbed = ({ video, autoplay = false }) => (
+  <div className="aspect-video bg-black rounded-lg overflow-hidden">
+    <iframe
+      src={`https://www.youtube.com/embed/${video.youtubeId}${
+        autoplay ? "?autoplay=1" : ""
+      }`}
+      title={video.title}
+      className="w-full h-full"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowFullScreen
+    />
+  </div>
+);
+
+/* ============================================================
+   MAIN
+============================================================ */
+
+const BlogVideos = () => {
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  /* Derive category options from the videos themselves */
+  const videoCategories = useMemo(() => {
+    const set = new Set();
+    allVideos.forEach((v) => {
+      if (v.category) set.add(v.category);
+    });
+    return ["all", ...[...set].sort()];
+  }, []);
+
+  /* Filter */
+  const filtered = useMemo(() => {
+    let list = [...allVideos];
+    if (categoryFilter !== "all") {
+      list = list.filter((v) => v.category === categoryFilter);
+    }
+    list.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+    return list;
+  }, [categoryFilter]);
+
+  /* Lead video + rest */
+  const lead = filtered[0];
+  const rest = filtered.slice(1);
+
+  /* Stats */
+  const totalRuntime = useMemo(() => {
+    // duration is stored as "MM:SS" or "M:SS"
+    let total = 0;
+    allVideos.forEach((v) => {
+      if (!v.duration) return;
+      const [m, s] = v.duration.split(":").map((x) => parseInt(x, 10));
+      if (!isNaN(m) && !isNaN(s)) total += m * 60 + s;
+    });
+    const mins = Math.round(total / 60);
+    return mins;
+  }, []);
+
+  /* Related articles that pair with videos — pick recent medically reviewed pieces */
+  const pairedArticles = useMemo(
+    () =>
+      allPosts
+        .filter((p) => p.medicallyReviewed)
+        .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+        .slice(0, 3),
+    []
+  );
+
+  return (
+    <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
+      <JournalNav />
+
+      {/* ---------- MASTHEAD ---------- */}
+      <header className="border-b border-stone-200 dark:border-stone-800">
+        <div className="max-w-5xl mx-auto px-5 pt-12 md:pt-16 pb-10">
+          <Link
+            to="/blog"
+            className="inline-flex items-center gap-2 text-sm text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition mb-8"
+          >
+            <FaArrowLeft className="text-xs" />
+            All stories
+          </Link>
+
+          <p className="text-xs uppercase tracking-[0.3em] text-stone-500 dark:text-stone-400 mb-4">
+            The Alveoly Journal
+          </p>
+
+          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-stone-900 dark:text-stone-50 leading-[1.08] mb-5">
+            Video library
+          </h1>
+
+          <p className="text-lg md:text-xl text-stone-600 dark:text-stone-400 max-w-2xl leading-relaxed mb-8">
+            Short, practical explainers from our clinical team — the same
+            evidence you read in the journal, told in a few minutes of your
+            time.
+          </p>
+
+          {/* Stats strip */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-stone-500 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-800">
+            <span>
+              <strong className="font-semibold text-stone-900 dark:text-stone-100">
+                {allVideos.length}
+              </strong>{" "}
+              {allVideos.length === 1 ? "video" : "videos"}
+            </span>
+            {videoCategories.length > 1 && (
+              <>
+                <span className="text-stone-300 dark:text-stone-700">·</span>
+                <span>
+                  <strong className="font-semibold text-stone-900 dark:text-stone-100">
+                    {videoCategories.length - 1}
+                  </strong>{" "}
+                  {videoCategories.length - 1 === 1
+                    ? "category"
+                    : "categories"}
+                </span>
+              </>
+            )}
+            {totalRuntime > 0 && (
+              <>
+                <span className="text-stone-300 dark:text-stone-700">·</span>
+                <span>
+                  <strong className="font-semibold text-stone-900 dark:text-stone-100">
+                    {totalRuntime} min
+                  </strong>{" "}
+                  of viewing
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Category strip */}
+          {videoCategories.length > 2 && (
+            <div className="mt-8 flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+              {videoCategories.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCategoryFilter(c)}
+                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition ${
+                    categoryFilter === c
+                      ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+                      : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+                  }`}
+                >
+                  {c === "all" ? "All videos" : c}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* ---------- FEATURED + LIST ---------- */}
+      <section className="max-w-6xl mx-auto px-5 py-12 md:py-16">
+        {!lead ? (
+          <div className="py-20 text-center max-w-md mx-auto">
+            <p className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100 mb-3">
+              No videos in this category
+            </p>
+            <p className="text-stone-500 dark:text-stone-400 mb-6">
+              Try another category, or view the full video library.
+            </p>
+            <button
+              onClick={() => setCategoryFilter("all")}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-full text-sm font-medium hover:opacity-90 transition"
+            >
+              <FaArrowLeft className="text-xs" />
+              All videos
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* ---------- FEATURED VIDEO ---------- */}
+            <motion.article
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45 }}
+              className="mb-16"
+            >
+              <SectionLabel icon={FaPlay}>Featured</SectionLabel>
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-10 items-start">
+                <div className="lg:col-span-3">
+                  <VideoEmbed video={lead} />
+                </div>
+                <div className="lg:col-span-2">
+                  <h2 className="font-serif text-2xl md:text-3xl font-bold leading-tight text-stone-900 dark:text-stone-50 mb-4">
+                    {lead.title}
+                  </h2>
+                  {lead.description && (
+                    <p className="text-stone-600 dark:text-stone-400 leading-relaxed mb-6">
+                      {lead.description}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-stone-500 dark:text-stone-500 pb-6 border-b border-stone-200 dark:border-stone-800">
+                    {lead.category && (
+                      <>
+                        <span className="uppercase tracking-wider font-semibold text-rose-600 dark:text-rose-400">
+                          {lead.category}
+                        </span>
+                        <span className="text-stone-300 dark:text-stone-700">
+                          ·
+                        </span>
+                      </>
+                    )}
+                    <span className="flex items-center gap-1.5">
+                      <FaClock className="text-[9px]" />
+                      {lead.duration}
+                    </span>
+                    <span className="text-stone-300 dark:text-stone-700">
+                      ·
+                    </span>
+                    <time>{formatShortDate(lead.publishedAt)}</time>
+                  </div>
+                  <p className="text-xs text-stone-500 dark:text-stone-500 mt-4 leading-relaxed">
+                    Prefer reading? Every video has a companion article in the
+                    journal — the same facts, in text.
+                  </p>
+                  <div className="mt-6">
+                    <Link
+                      to="/blog"
+                      className="inline-flex items-center gap-2 text-sm font-medium text-stone-900 dark:text-stone-100 underline underline-offset-4 hover:text-rose-600 dark:hover:text-rose-400 transition"
+                    >
+                      Read the journal
+                      <FaArrowLeft className="text-xs rotate-180" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </motion.article>
+
+            {/* ---------- REST OF VIDEOS ---------- */}
+            {rest.length > 0 && (
+              <>
+                <div className="flex items-center gap-4 mb-8">
+                  <span className="flex-1 h-px bg-stone-200 dark:bg-stone-800" />
+                  <span className="text-xs uppercase tracking-widest text-stone-400">
+                    Also in the library
+                  </span>
+                  <span className="flex-1 h-px bg-stone-200 dark:bg-stone-800" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-12">
+                  {rest.map((video, i) => (
+                    <motion.article
+                      key={video.id}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        duration: 0.35,
+                        delay: Math.min(i * 0.05, 0.35),
+                      }}
+                    >
+                      <VideoEmbed video={video} />
+                      <div className="pt-5">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mb-3">
+                          {video.category && (
+                            <>
+                              <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                                {video.category}
+                              </span>
+                              <span className="text-stone-300 dark:text-stone-700">
+                                ·
+                              </span>
+                            </>
+                          )}
+                          <span className="flex items-center gap-1.5">
+                            <FaClock className="text-[9px]" />
+                            {video.duration}
+                          </span>
+                          <span className="text-stone-300 dark:text-stone-700">
+                            ·
+                          </span>
+                          <time>{formatShortDate(video.publishedAt)}</time>
+                        </div>
+                        <h3 className="font-serif text-xl font-bold leading-snug text-stone-900 dark:text-stone-50 mb-2">
+                          {video.title}
+                        </h3>
+                        {video.description && (
+                          <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-2">
+                            {video.description}
+                          </p>
+                        )}
+                      </div>
+                    </motion.article>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </section>
 
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="space-y-8">
-          {videos.map((video) => (
-            <VideoEmbed key={video.id} video={video} />
-          ))}
+      {/* ---------- PAIRED ARTICLES ---------- */}
+      {pairedArticles.length > 0 && (
+        <section className="border-t border-stone-200 dark:border-stone-800">
+          <div className="max-w-6xl mx-auto px-5 py-14">
+            <SectionLabel icon={FaBookOpen}>Read alongside</SectionLabel>
+            <h2 className="font-serif text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-50 mb-2">
+              The written version
+            </h2>
+            <p className="text-stone-600 dark:text-stone-400 mb-8 max-w-2xl">
+              Every topic we cover in video, we cover in depth in writing.
+              Here are three recent pieces worth a slow read.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {pairedArticles.map((post) => {
+                const cat = categories.find((c) => c.id === post.categoryId);
+                return (
+                  <Link
+                    key={post.id}
+                    to={`/blog/${post.slug}`}
+                    className="group"
+                  >
+                    {post.image && (
+                      <img
+                        src={post.image}
+                        alt={post.title}
+                        className="w-full aspect-[16/10] object-cover rounded-md mb-4 group-hover:opacity-95 transition"
+                      />
+                    )}
+                    <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
+                      {cat?.name}
+                    </p>
+                    <h3 className="font-serif text-base font-bold leading-snug text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2 mb-2">
+                      {post.title}
+                    </h3>
+                    <p className="text-xs text-stone-500 flex items-center gap-1.5">
+                      <FaClock className="text-[9px]" />
+                      {post.readingTime} min read
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ---------- OTHER MEDIA ---------- */}
+      <section className="border-t border-stone-200 dark:border-stone-800">
+        <div className="max-w-6xl mx-auto px-5 py-14">
+          <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-6">
+            Also on the journal
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <Link
+              to="/blog/podcasts"
+              className="group flex items-start gap-4 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 hover:border-stone-900 dark:hover:border-stone-100 transition"
+            >
+              <FaMicrophone className="text-stone-400 group-hover:text-rose-600 transition text-lg mt-1" />
+              <div>
+                <h3 className="font-serif text-base font-bold text-stone-900 dark:text-stone-100 mb-1">
+                  Podcasts
+                </h3>
+                <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
+                  Conversations with the clinicians behind the writing.
+                </p>
+              </div>
+            </Link>
+            <Link
+              to="/blog/archive"
+              className="group flex items-start gap-4 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 hover:border-stone-900 dark:hover:border-stone-100 transition"
+            >
+              <FaStream className="text-stone-400 group-hover:text-rose-600 transition text-lg mt-1" />
+              <div>
+                <h3 className="font-serif text-base font-bold text-stone-900 dark:text-stone-100 mb-1">
+                  Archive
+                </h3>
+                <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
+                  Every story we've published, filed by month.
+                </p>
+              </div>
+            </Link>
+            <Link
+              to="/sitemap"
+              className="group flex items-start gap-4 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 hover:border-stone-900 dark:hover:border-stone-100 transition"
+            >
+              <FaStream className="text-stone-400 group-hover:text-rose-600 transition text-lg mt-1" />
+              <div>
+                <h3 className="font-serif text-base font-bold text-stone-900 dark:text-stone-100 mb-1">
+                  Sitemap
+                </h3>
+                <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
+                  A structured index of everything the journal publishes.
+                </p>
+              </div>
+            </Link>
+          </div>
         </div>
       </section>
 
-      <Footer />
+      <JournalFooter />
     </div>
   );
 };
