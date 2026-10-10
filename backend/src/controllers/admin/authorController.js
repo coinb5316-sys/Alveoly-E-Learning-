@@ -1,6 +1,6 @@
 // server/controllers/admin/authorController.js
 import Author from "../../models/Author.js";
-import { uploadToCloudinary } from "../../config/cloudinary.js";
+import { uploadToCloudinary } from "../../../config/cloudinary.js";
 
 // GET /api/admin/blog/authors
 export const getAuthors = async (req, res) => {
