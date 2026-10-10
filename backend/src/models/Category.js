@@ -1,4 +1,4 @@
-// server/models/Category.js
+// backend/src/models/Category.js
 import mongoose from "mongoose";
 
 const categorySchema = new mongoose.Schema(
@@ -15,7 +15,8 @@ const categorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-categorySchema.pre("save", function (next) {
+// ✅ Async-style hook — no `next` parameter.
+categorySchema.pre("save", function () {
   if (this.isModified("name") && !this.slug) {
     this.slug = this.name
       .toLowerCase()
@@ -23,7 +24,6 @@ categorySchema.pre("save", function (next) {
       .replace(/[^\w\s-]/g, "")
       .replace(/\s+/g, "-");
   }
-  next();
 });
 
 categorySchema.index({ order: 1, name: 1 });

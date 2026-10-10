@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogCategories.jsx — EDITORIAL ADMIN
-// Category management for The Alveoly Journal.
+// src/pages/admin/blog/AdminBlogCategories.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -8,11 +7,7 @@ import {
   ArrowUp, ArrowDown, Check,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend is ready
-import {
-  categories as mockCategories,
-  posts as mockPosts,
-} from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
@@ -27,6 +22,7 @@ const slugify = (s = "") =>
 
 const emptyCategory = () => ({
   id: "",
+  _id: "",
   slug: "",
   name: "",
   description: "",
@@ -37,8 +33,16 @@ const emptyCategory = () => ({
   active: true,
 });
 
+/* Normalize server response → local shape */
+const normalizeCategory = (c) => ({
+  ...c,
+  id: c._id || c.id,
+  order: typeof c.order === "number" ? c.order : 0,
+  active: c.active !== false,
+});
+
 /* ============================================================
-   PRIMITIVES
+   PRIMITIVES (unchanged from your original)
 ============================================================ */
 
 const Field = ({ label, hint, required, error, children }) => (
@@ -83,7 +87,6 @@ const TextArea = ({ value, onChange, placeholder, rows = 3 }) => (
   />
 );
 
-/* Small preview of what the category will look like as a pill / card */
 const CategoryPreview = ({ category }) => (
   <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
     <p className="text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-3">
@@ -118,7 +121,7 @@ const CategoryPreview = ({ category }) => (
 );
 
 /* ============================================================
-   DRAWER
+   DRAWER (unchanged behavior)
 ============================================================ */
 
 const CategoryDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs }) => {
@@ -166,7 +169,6 @@ const CategoryDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs 
     if (!validate()) return;
     onSave({
       ...form,
-      id: form.id || slugify(form.name),
       slug: form.slug || slugify(form.name),
       order: Number(form.order) || 0,
     });
@@ -190,7 +192,6 @@ const CategoryDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs 
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
             className="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-white dark:bg-stone-950 z-50 flex flex-col border-l border-stone-200 dark:border-stone-800"
           >
-            {/* Header */}
             <div className="flex-shrink-0 px-6 py-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400 font-semibold mb-1">
@@ -208,7 +209,6 @@ const CategoryDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs 
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
               <CategoryPreview category={form} />
 
@@ -238,9 +238,7 @@ const CategoryDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs 
                   {initial && (
                     <button
                       type="button"
-                      onClick={() => {
-                        update("slug", slugify(form.name));
-                      }}
+                      onClick={() => update("slug", slugify(form.name))}
                       className="px-3 py-2.5 rounded-lg border border-stone-200 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-900 transition whitespace-nowrap"
                     >
                       Regenerate
@@ -288,7 +286,7 @@ const CategoryDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs 
 
                 <Field
                   label="Accent"
-                  hint="Optional. Reserved for future theming — the journal currently renders every category in the same palette."
+                  hint="Optional. Reserved for future theming."
                 >
                   <TextInput
                     value={form.color}
@@ -312,7 +310,6 @@ const CategoryDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs 
               </label>
             </div>
 
-            {/* Footer */}
             <div className="flex-shrink-0 px-6 py-4 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-3">
               <button
                 onClick={onClose}
@@ -347,7 +344,7 @@ const CategoryDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs 
 };
 
 /* ============================================================
-   CONFIRM DELETE
+   DELETE CONFIRM (unchanged)
 ============================================================ */
 
 const ConfirmDelete = ({ open, category, postCount, onCancel, onConfirm, deleting }) => (
@@ -423,7 +420,7 @@ const ConfirmDelete = ({ open, category, postCount, onCancel, onConfirm, deletin
 );
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const AdminBlogCategories = () => {
@@ -441,25 +438,34 @@ const AdminBlogCategories = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [catsRes, postsRes] = await Promise.all([
+        blogAPI.getCategories(),
+        blogAPI.getAdminPosts({ limit: 500, publishedOnly: false }),
+      ]);
+      setCategories((catsRes.data || []).map(normalizeCategory));
+      setPosts(postsRes.data?.posts || []);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load categories");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Replace with blogAPI.getCategories() + blogAPI.getPosts() when ready
-    setCategories(
-      mockCategories.map((c, i) => ({
-        ...c,
-        order: typeof c.order === "number" ? c.order : i,
-        active: c.active !== false,
-      }))
-    );
-    setPosts(mockPosts);
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
   const postsByCategory = useMemo(() => {
     const map = new Map();
     posts.forEach((p) => {
-      map.set(p.categoryId, (map.get(p.categoryId) || 0) + 1);
+      const key = p.categoryId?._id || p.categoryId;
+      map.set(key, (map.get(key) || 0) + 1);
     });
     return map;
   }, [posts]);
@@ -487,7 +493,9 @@ const AdminBlogCategories = () => {
       if (sortBy === "order") return (a.order || 0) - (b.order || 0);
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "posts")
-        return (postsByCategory.get(b.id) || 0) - (postsByCategory.get(a.id) || 0);
+        return (
+          (postsByCategory.get(b.id) || 0) - (postsByCategory.get(a.id) || 0)
+        );
       return 0;
     });
     return list;
@@ -506,75 +514,114 @@ const AdminBlogCategories = () => {
 
   const handleSave = async (payload) => {
     setSaving(true);
-    // Replace with blogAPI.createCategory / updateCategory
-    await new Promise((r) => setTimeout(r, 400));
+    try {
+      // Backend accepts JSON for categories (no file upload from this UI yet)
+      const body = {
+        name: payload.name.trim(),
+        slug: payload.slug || slugify(payload.name),
+        description: payload.description || "",
+        image: typeof payload.image === "string" ? payload.image.trim() : "",
+        icon: payload.icon || "folder",
+        color: payload.color || "",
+        order: Number(payload.order) || 0,
+        active: payload.active !== false,
+      };
 
-    setCategories((prev) => {
-      const exists = prev.find((c) => c.id === payload.id);
-      if (exists) return prev.map((c) => (c.id === payload.id ? payload : c));
-      return [...prev, payload];
-    });
-    toast.success(editing?.id ? "Category updated" : "Category created");
-    setSaving(false);
-    setDrawerOpen(false);
+      if (editing?.id) {
+        await blogAPI.updateCategory(editing.id, body);
+        toast.success("Category updated");
+      } else {
+        await blogAPI.createCategory(body);
+        toast.success("Category created");
+      }
+
+      await fetchData();
+      setDrawerOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to save category");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setCategories((prev) => prev.filter((c) => c.id !== deleteTarget.id));
-    toast.success("Category deleted");
-    setDeleting(false);
-    setDeleteTarget(null);
+    try {
+      await blogAPI.deleteCategory(deleteTarget.id);
+      setCategories((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+      toast.success("Category deleted");
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete category");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const toggleActive = (category) => {
+  const toggleActive = async (category) => {
+    const next = !category.active;
     setCategories((prev) =>
-      prev.map((c) =>
-        c.id === category.id ? { ...c, active: !c.active } : c
-      )
+      prev.map((c) => (c.id === category.id ? { ...c, active: next } : c))
     );
-    toast.success(
-      `${category.name} ${category.active ? "deactivated" : "activated"}`
+    try {
+      await blogAPI.updateCategory(category.id, { active: next });
+      toast.success(`${category.name} ${next ? "activated" : "deactivated"}`);
+    } catch (err) {
+      setCategories((prev) =>
+        prev.map((c) =>
+          c.id === category.id ? { ...c, active: category.active } : c
+        )
+      );
+      toast.error("Failed to update category");
+    }
+  };
+
+  /* Swap order with the neighbouring category and persist both */
+  const swapOrder = async (a, b) => {
+    const aOrder = a.order || 0;
+    const bOrder = b.order || 0;
+    setCategories((prev) =>
+      prev.map((c) => {
+        if (c.id === a.id) return { ...c, order: bOrder };
+        if (c.id === b.id) return { ...c, order: aOrder };
+        return c;
+      })
     );
+    try {
+      await Promise.all([
+        blogAPI.updateCategory(a.id, { order: bOrder }),
+        blogAPI.updateCategory(b.id, { order: aOrder }),
+      ]);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to reorder");
+      await fetchData();
+    }
   };
 
   const moveUp = (category) => {
-    setCategories((prev) => {
-      const sorted = [...prev].sort(
-        (a, b) => (a.order || 0) - (b.order || 0)
-      );
-      const idx = sorted.findIndex((c) => c.id === category.id);
-      if (idx <= 0) return prev;
-      const above = sorted[idx - 1];
-      return prev.map((c) => {
-        if (c.id === category.id) return { ...c, order: above.order };
-        if (c.id === above.id) return { ...c, order: category.order };
-        return c;
-      });
-    });
+    const sorted = [...categories].sort(
+      (a, b) => (a.order || 0) - (b.order || 0)
+    );
+    const idx = sorted.findIndex((c) => c.id === category.id);
+    if (idx <= 0) return;
+    swapOrder(category, sorted[idx - 1]);
   };
 
   const moveDown = (category) => {
-    setCategories((prev) => {
-      const sorted = [...prev].sort(
-        (a, b) => (a.order || 0) - (b.order || 0)
-      );
-      const idx = sorted.findIndex((c) => c.id === category.id);
-      if (idx === -1 || idx >= sorted.length - 1) return prev;
-      const below = sorted[idx + 1];
-      return prev.map((c) => {
-        if (c.id === category.id) return { ...c, order: below.order };
-        if (c.id === below.id) return { ...c, order: category.order };
-        return c;
-      });
-    });
+    const sorted = [...categories].sort(
+      (a, b) => (a.order || 0) - (b.order || 0)
+    );
+    const idx = sorted.findIndex((c) => c.id === category.id);
+    if (idx === -1 || idx >= sorted.length - 1) return;
+    swapOrder(category, sorted[idx + 1]);
   };
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (same design as before) ---------- */
   return (
     <div className="space-y-6">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400 font-semibold mb-2">
@@ -601,24 +648,17 @@ const AdminBlogCategories = () => {
         </button>
       </div>
 
-      {/* ---------- STATS ---------- */}
+      {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Sections", value: categories.length },
-          {
-            label: "Active",
-            value: categories.filter((c) => c.active).length,
-          },
+          { label: "Active", value: categories.filter((c) => c.active).length },
           {
             label: "With stories",
-            value: categories.filter(
-              (c) => (postsByCategory.get(c.id) || 0) > 0
-            ).length,
+            value: categories.filter((c) => (postsByCategory.get(c.id) || 0) > 0)
+              .length,
           },
-          {
-            label: "Total filed",
-            value: posts.length,
-          },
+          { label: "Total filed", value: posts.length },
         ].map((s) => (
           <div
             key={s.label}
@@ -634,7 +674,7 @@ const AdminBlogCategories = () => {
         ))}
       </div>
 
-      {/* ---------- TOOLBAR ---------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -669,7 +709,7 @@ const AdminBlogCategories = () => {
         </div>
       </div>
 
-      {/* ---------- LIST / GRID ---------- */}
+      {/* LIST / GRID */}
       {loading ? (
         <div className="py-20 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
@@ -677,7 +717,9 @@ const AdminBlogCategories = () => {
       ) : filtered.length === 0 ? (
         <div className="py-20 text-center max-w-md mx-auto">
           <p className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100 mb-3">
-            {categories.length === 0 ? "No categories yet" : "No categories match"}
+            {categories.length === 0
+              ? "No categories yet"
+              : "No categories match"}
           </p>
           <p className="text-sm text-stone-500 dark:text-stone-400 mb-6">
             {categories.length === 0
@@ -706,7 +748,6 @@ const AdminBlogCategories = () => {
                 transition={{ delay: Math.min(i * 0.03, 0.3) }}
                 className="group rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 overflow-hidden flex flex-col"
               >
-                {/* Cover */}
                 <div className="relative aspect-[16/9] bg-stone-100 dark:bg-stone-900">
                   {c.image ? (
                     <img
@@ -744,7 +785,6 @@ const AdminBlogCategories = () => {
                   </div>
                 </div>
 
-                {/* Body */}
                 <div className="flex-1 p-5 flex flex-col">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <h3 className="font-serif text-lg font-bold text-stone-900 dark:text-stone-50 leading-snug">
@@ -815,7 +855,6 @@ const AdminBlogCategories = () => {
         </div>
       )}
 
-      {/* ---------- DRAWER ---------- */}
       <CategoryDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -825,7 +864,6 @@ const AdminBlogCategories = () => {
         existingSlugs={existingSlugs}
       />
 
-      {/* ---------- DELETE ---------- */}
       <ConfirmDelete
         open={!!deleteTarget}
         category={deleteTarget}
