@@ -587,9 +587,17 @@ const AdminCreateBlogPost = () => {
       }
       
       // Featured image - if it's a File object, append it
-      if (formData.featuredImage && typeof formData.featuredImage === 'object') {
-        formDataToSend.append('featuredImage', formData.featuredImage);
-      }
+      // Featured image — handle three cases:
+// 1. New File object → send as multipart file
+// 2. Existing URL string → send as text field so backend preserves it
+// 3. Explicit null (user removed it) → send empty string to clear it
+if (formData.featuredImage instanceof File) {
+  formDataToSend.append('featuredImage', formData.featuredImage);
+} else if (typeof formData.featuredImage === 'string' && formData.featuredImage.trim() !== '') {
+  formDataToSend.append('featuredImageUrl', formData.featuredImage);
+} else if (formData.featuredImage === null || formData.featuredImage === '') {
+  formDataToSend.append('featuredImageUrl', '');
+}
 
       let response;
       if (isEditing) {

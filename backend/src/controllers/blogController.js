@@ -1,4 +1,4 @@
-// controllers/blogController.js - COMPLETE FIXED
+// controllers/blogController.js - COMPLETE FIXED v2
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
@@ -39,20 +39,25 @@ export const createBlogPost = async (req, res) => {
       showShareButtons,
       galleryImages,
       relatedPosts,
-      readingTime
+      readingTime,
+      featuredImageUrl, // 👈 NEW: URL string fallback for existing images
     } = req.body;
 
     // Validate required fields
     if (!title || !content || !category) {
       return res.status(400).json({
         success: false,
-        message: "Title, content, and category are required"
+        message: "Title, content, and category are required",
       });
     }
 
-    // Upload featured image if provided
+    // ============================================
+    // FEATURED IMAGE — priority: new file > existing URL > null
+    // ============================================
     let featuredImage = null;
+
     if (req.file) {
+      // Case 1: A new file was uploaded
       try {
         console.log("📤 Uploading featured image to Cloudinary...");
         const result = await uploadToCloudinary(req.file.buffer, {
@@ -60,8 +65,8 @@ export const createBlogPost = async (req, res) => {
           public_id: `featured_${Date.now()}`,
           transformation: [
             { width: 1200, height: 630, crop: "fill" },
-            { quality: "auto" }
-          ]
+            { quality: "auto" },
+          ],
         });
         featuredImage = result.secure_url;
         console.log("✅ Featured image uploaded:", featuredImage);
@@ -70,25 +75,34 @@ export const createBlogPost = async (req, res) => {
         return res.status(500).json({
           success: false,
           message: "Failed to upload image",
-          error: uploadError.message
+          error: uploadError.message,
         });
       }
+    } else if (
+      featuredImageUrl &&
+      typeof featuredImageUrl === "string" &&
+      featuredImageUrl.trim() !== ""
+    ) {
+      // Case 2: A URL string was provided (no file, but explicit URL)
+      featuredImage = featuredImageUrl.trim();
+      console.log("✅ Using provided featured image URL:", featuredImage);
     }
+    // Case 3: No image at all → featuredImage stays null
 
-    // Process gallery images - HANDLE BOTH STRING ARRAY AND FILE UPLOADS
+    // ============================================
+    // GALLERY IMAGES — accept string or array
+    // ============================================
     let processedGalleryImages = [];
     if (galleryImages) {
       try {
-        // If galleryImages is a string, parse it as JSON
         if (typeof galleryImages === "string") {
           processedGalleryImages = JSON.parse(galleryImages);
-        } 
-        // If it's already an array, use it directly
-        else if (Array.isArray(galleryImages)) {
+        } else if (Array.isArray(galleryImages)) {
           processedGalleryImages = galleryImages;
-        }
-        // If it's a string that's not JSON, treat it as a single URL
-        else if (typeof galleryImages === "string" && galleryImages.startsWith("http")) {
+        } else if (
+          typeof galleryImages === "string" &&
+          galleryImages.startsWith("http")
+        ) {
           processedGalleryImages = [galleryImages];
         }
         console.log("📸 Processed gallery images:", processedGalleryImages);
@@ -98,12 +112,14 @@ export const createBlogPost = async (req, res) => {
       }
     }
 
-    // Get author details
+    // ============================================
+    // AUTHOR DETAILS
+    // ============================================
     const author = await User.findById(req.user.id);
     if (!author) {
       return res.status(404).json({
         success: false,
-        message: "Author not found"
+        message: "Author not found",
       });
     }
 
@@ -112,26 +128,51 @@ export const createBlogPost = async (req, res) => {
     const authorBioFinal = authorBio || author.bio || "";
     const authorImageFinal = authorImage || author.avatar || "";
 
-    // Create slug from title
+    // ============================================
+    // SLUG
+    // ============================================
     let slug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    // Check if slug exists
     const existingPost = await BlogPost.findOne({ slug });
     if (existingPost) {
       slug += `-${Date.now()}`;
     }
 
-    // Parse JSON fields
-    const parsedTags = tags ? (typeof tags === "string" ? JSON.parse(tags) : tags) : [];
-    const parsedReferences = references ? (typeof references === "string" ? JSON.parse(references) : references) : [];
-    const parsedLearningObjectives = learningObjectives ? (typeof learningObjectives === "string" ? JSON.parse(learningObjectives) : learningObjectives) : [];
-    const parsedStatistics = statistics ? (typeof statistics === "string" ? JSON.parse(statistics) : statistics) : [];
-    const parsedRelatedPosts = relatedPosts ? (typeof relatedPosts === "string" ? JSON.parse(relatedPosts) : relatedPosts) : [];
+    // ============================================
+    // JSON FIELDS
+    // ============================================
+    const parsedTags = tags
+      ? typeof tags === "string"
+        ? JSON.parse(tags)
+        : tags
+      : [];
+    const parsedReferences = references
+      ? typeof references === "string"
+        ? JSON.parse(references)
+        : references
+      : [];
+    const parsedLearningObjectives = learningObjectives
+      ? typeof learningObjectives === "string"
+        ? JSON.parse(learningObjectives)
+        : learningObjectives
+      : [];
+    const parsedStatistics = statistics
+      ? typeof statistics === "string"
+        ? JSON.parse(statistics)
+        : statistics
+      : [];
+    const parsedRelatedPosts = relatedPosts
+      ? typeof relatedPosts === "string"
+        ? JSON.parse(relatedPosts)
+        : relatedPosts
+      : [];
 
-    // Determine publish date
+    // ============================================
+    // PUBLISH DATE
+    // ============================================
     let publishDateFinal = null;
     if (publishDate) {
       publishDateFinal = new Date(publishDate);
@@ -139,6 +180,9 @@ export const createBlogPost = async (req, res) => {
       publishDateFinal = new Date();
     }
 
+    // ============================================
+    // CREATE POST
+    // ============================================
     const newPost = new BlogPost({
       title: title.trim(),
       subtitle: subtitle || "",
@@ -165,11 +209,20 @@ export const createBlogPost = async (req, res) => {
       statistics: parsedStatistics,
       relatedPosts: parsedRelatedPosts,
       readingTime: readingTime ? parseInt(readingTime) : 5,
-      allowComments: allowComments !== undefined ? (allowComments === true || allowComments === "true") : true,
-      showAuthor: showAuthor !== undefined ? (showAuthor === true || showAuthor === "true") : true,
-      showShareButtons: showShareButtons !== undefined ? (showShareButtons === true || showShareButtons === "true") : true,
+      allowComments:
+        allowComments !== undefined
+          ? allowComments === true || allowComments === "true"
+          : true,
+      showAuthor:
+        showAuthor !== undefined
+          ? showAuthor === true || showAuthor === "true"
+          : true,
+      showShareButtons:
+        showShareButtons !== undefined
+          ? showShareButtons === true || showShareButtons === "true"
+          : true,
       slug,
-      isPublished: status === "published"
+      isPublished: status === "published",
     });
 
     await newPost.save();
@@ -191,7 +244,7 @@ export const createBlogPost = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Blog post created successfully",
-      data: populatedPost
+      data: populatedPost,
     });
   } catch (error) {
     console.error("❌ Create blog post error:", error);
@@ -199,7 +252,7 @@ export const createBlogPost = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to create blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -210,52 +263,110 @@ export const updateBlogPost = async (req, res) => {
     const { id } = req.params;
     const updates = { ...req.body };
     console.log("📝 Update blog post:", id);
+    console.log("📎 File:", req.file ? "Present" : "None");
+    console.log("🔑 featuredImageUrl:", updates.featuredImageUrl);
 
     // Find existing post
     const existingPost = await BlogPost.findById(id);
     if (!existingPost) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
-    // Handle featured image upload
+    // ============================================
+    // FEATURED IMAGE — three-way branching
+    // ============================================
     if (req.file) {
+      // Case 1: New file uploaded → replace existing
       try {
         // Delete old image from Cloudinary if exists
         if (existingPost.featuredImage) {
           try {
-            const oldPublicId = existingPost.featuredImage.split("/").pop().split(".")[0];
+            const oldPublicId = existingPost.featuredImage
+              .split("/")
+              .pop()
+              .split(".")[0];
             await deleteFromCloudinary(`blog/featured/${oldPublicId}`);
           } catch (err) {
             console.log("⚠️ Could not delete old image:", err.message);
           }
         }
 
-        // Upload new image
         const result = await uploadToCloudinary(req.file.buffer, {
           folder: "blog/featured",
           public_id: `featured_${Date.now()}`,
           transformation: [
             { width: 1200, height: 630, crop: "fill" },
-            { quality: "auto" }
-          ]
+            { quality: "auto" },
+          ],
         });
         updates.featuredImage = result.secure_url;
-        console.log("✅ Featured image updated:", updates.featuredImage);
+        console.log("✅ Featured image replaced with new upload:", updates.featuredImage);
       } catch (uploadError) {
         console.error("❌ Cloudinary upload error:", uploadError);
         return res.status(500).json({
           success: false,
           message: "Failed to upload image",
-          error: uploadError.message
+          error: uploadError.message,
         });
       }
-    }
+    } else if (updates.featuredImageUrl !== undefined) {
+      // Case 2: URL string sent from frontend
+      const url = (updates.featuredImageUrl || "").trim();
 
-    // Parse JSON fields
-    const jsonFields = ['galleryImages', 'tags', 'references', 'learningObjectives', 'statistics', 'relatedPosts'];
+      if (url === "") {
+        // 2a. Empty string → user removed the image
+        if (existingPost.featuredImage) {
+          try {
+            const oldPublicId = existingPost.featuredImage
+              .split("/")
+              .pop()
+              .split(".")[0];
+            await deleteFromCloudinary(`blog/featured/${oldPublicId}`);
+          } catch (err) {
+            console.log("⚠️ Could not delete old image:", err.message);
+          }
+        }
+        updates.featuredImage = null;
+        console.log("✅ Featured image cleared");
+      } else if (url !== existingPost.featuredImage) {
+        // 2b. Different URL → replace it
+        if (existingPost.featuredImage && existingPost.featuredImage !== url) {
+          try {
+            const oldPublicId = existingPost.featuredImage
+              .split("/")
+              .pop()
+              .split(".")[0];
+            await deleteFromCloudinary(`blog/featured/${oldPublicId}`);
+          } catch (err) {
+            console.log("⚠️ Could not delete old image:", err.message);
+          }
+        }
+        updates.featuredImage = url;
+        console.log("✅ Featured image updated to URL:", url);
+      } else {
+        // 2c. Same URL → leave untouched
+        console.log("ℹ️ Featured image unchanged");
+      }
+
+      // Remove helper field so it doesn't get written to the DB
+      delete updates.featuredImageUrl;
+    }
+    // Case 3: No file, no URL field → leave existing image untouched
+
+    // ============================================
+    // PARSE JSON FIELDS
+    // ============================================
+    const jsonFields = [
+      "galleryImages",
+      "tags",
+      "references",
+      "learningObjectives",
+      "statistics",
+      "relatedPosts",
+    ];
     for (const field of jsonFields) {
       if (updates[field] && typeof updates[field] === "string") {
         try {
@@ -267,16 +378,18 @@ export const updateBlogPost = async (req, res) => {
       }
     }
 
-    // Update slug if title changed
+    // ============================================
+    // SLUG (if title changed)
+    // ============================================
     if (updates.title && updates.title !== existingPost.title) {
       let newSlug = updates.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
-      
-      const existingSlug = await BlogPost.findOne({ 
-        slug: newSlug, 
-        _id: { $ne: id } 
+
+      const existingSlug = await BlogPost.findOne({
+        slug: newSlug,
+        _id: { $ne: id },
       });
       if (existingSlug) {
         newSlug += `-${Date.now()}`;
@@ -284,43 +397,50 @@ export const updateBlogPost = async (req, res) => {
       updates.slug = newSlug;
     }
 
-    // Set publish date if status changed to published
+    // ============================================
+    // PUBLISH DATE (if status changed to published)
+    // ============================================
     if (updates.status === "published" && existingPost.status !== "published") {
       updates.publishDate = new Date();
       updates.isPublished = true;
     }
 
-    // Update reading time if provided
+    // ============================================
+    // READING TIME
+    // ============================================
     if (updates.readingTime) {
       updates.readingTime = parseInt(updates.readingTime);
     }
 
-    // Update the post
+    // ============================================
+    // UPDATE POST
+    // ============================================
     const updatedPost = await BlogPost.findByIdAndUpdate(
       id,
       { $set: updates },
       { new: true, runValidators: true }
-    ).populate("author", "name email avatar role title")
-     .populate("relatedPosts", "title slug featuredImage readingTime");
+    )
+      .populate("author", "name email avatar role title")
+      .populate("relatedPosts", "title slug featuredImage readingTime");
 
     if (!updatedPost) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found after update"
+        message: "Blog post not found after update",
       });
     }
 
     res.json({
       success: true,
       message: "Blog post updated successfully",
-      data: updatedPost
+      data: updatedPost,
     });
   } catch (error) {
     console.error("❌ Update blog post error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -338,7 +458,7 @@ export const getAllBlogPosts = async (req, res) => {
       search,
       sort = "-publishDate",
       featured,
-      publishedOnly = true
+      publishedOnly = true,
     } = req.query;
 
     const pageNum = parseInt(page);
@@ -347,25 +467,25 @@ export const getAllBlogPosts = async (req, res) => {
 
     // Build filter
     const filter = {};
-    
+
     if (publishedOnly === "true" || publishedOnly === true) {
       filter.status = "published";
       filter.isPublished = true;
     }
-    
+
     if (status) filter.status = status;
     if (category) filter.category = category;
     if (featured === "true" || featured === true) filter.featured = true;
     if (author) filter.author = author;
     if (tag) filter.tags = { $in: [tag] };
-    
+
     // Search
     if (search) {
       filter.$or = [
         { title: { $regex: search, $options: "i" } },
         { subtitle: { $regex: search, $options: "i" } },
         { content: { $regex: search, $options: "i" } },
-        { tags: { $in: [new RegExp(search, "i")] } }
+        { tags: { $in: [new RegExp(search, "i")] } },
       ];
     }
 
@@ -375,8 +495,10 @@ export const getAllBlogPosts = async (req, res) => {
     else if (sort === "oldest") sortOptions.publishDate = 1;
     else if (sort === "popular") sortOptions.views = -1;
     else if (sort === "trending") sortOptions.likes = -1;
-    else if (sort === "featured") { sortOptions.featured = -1; sortOptions.publishDate = -1; }
-    else sortOptions.createdAt = -1;
+    else if (sort === "featured") {
+      sortOptions.featured = -1;
+      sortOptions.publishDate = -1;
+    } else sortOptions.createdAt = -1;
 
     // Execute query
     const [posts, total] = await Promise.all([
@@ -387,13 +509,16 @@ export const getAllBlogPosts = async (req, res) => {
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      BlogPost.countDocuments(filter)
+      BlogPost.countDocuments(filter),
     ]);
 
     // Get featured post
     let featuredPost = null;
     if (pageNum === 1 && !search && !category && !status) {
-      featuredPost = await BlogPost.findOne({ featured: true, status: "published" })
+      featuredPost = await BlogPost.findOne({
+        featured: true,
+        status: "published",
+      })
         .populate("author", "name email avatar role title")
         .populate("relatedPosts", "title slug featuredImage readingTime")
         .sort({ publishDate: -1 })
@@ -411,35 +536,40 @@ export const getAllBlogPosts = async (req, res) => {
       { $unwind: "$tags" },
       { $group: { _id: "$tags", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
-      { $limit: 20 }
+      { $limit: 20 },
     ]);
-    const trendingTags = tagAggregation.map(t => ({ name: t._id, count: t.count }));
+    const trendingTags = tagAggregation.map((t) => ({
+      name: t._id,
+      count: t.count,
+    }));
 
     // Get author stats
     const authorAggregation = await BlogPost.aggregate([
       { $match: { status: "published" } },
-      { $group: { 
-        _id: "$author", 
-        count: { $sum: 1 },
-        totalLikes: { $sum: "$likes" },
-        totalViews: { $sum: "$views" }
-      }},
+      {
+        $group: {
+          _id: "$author",
+          count: { $sum: 1 },
+          totalLikes: { $sum: "$likes" },
+          totalViews: { $sum: "$views" },
+        },
+      },
       { $sort: { count: -1 } },
-      { $limit: 10 }
+      { $limit: 10 },
     ]);
 
-    const authorIds = authorAggregation.map(a => a._id);
+    const authorIds = authorAggregation.map((a) => a._id);
     const authors = await User.find({ _id: { $in: authorIds } })
       .select("name email avatar role title")
       .lean();
 
-    const authorStats = authorAggregation.map(a => {
-      const user = authors.find(u => u._id.toString() === a._id.toString());
+    const authorStats = authorAggregation.map((a) => {
+      const user = authors.find((u) => u._id.toString() === a._id.toString());
       return {
         author: user,
         postCount: a.count,
         totalLikes: a.totalLikes,
-        totalViews: a.totalViews
+        totalViews: a.totalViews,
       };
     });
 
@@ -454,20 +584,20 @@ export const getAllBlogPosts = async (req, res) => {
           total,
           totalPages: Math.ceil(total / limitNum),
           hasNext: pageNum < Math.ceil(total / limitNum),
-          hasPrev: pageNum > 1
+          hasPrev: pageNum > 1,
         },
         categories,
         trendingTags,
         authorStats,
-        totalPosts: total
-      }
+        totalPosts: total,
+      },
     });
   } catch (error) {
     console.error("❌ Get blog posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch blog posts",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -485,7 +615,7 @@ export const getBlogPostBySlug = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -493,9 +623,9 @@ export const getBlogPostBySlug = async (req, res) => {
     await BlogPost.findByIdAndUpdate(post._id, { $inc: { views: 1 } });
 
     // Get comments
-    const comments = await BlogComment.find({ 
-      postId: post._id, 
-      status: "approved" 
+    const comments = await BlogComment.find({
+      postId: post._id,
+      status: "approved",
     })
       .sort({ createdAt: -1 })
       .limit(50)
@@ -507,7 +637,7 @@ export const getBlogPostBySlug = async (req, res) => {
       relatedPosts = await BlogPost.find({
         _id: { $ne: post._id },
         category: post.category,
-        status: "published"
+        status: "published",
       })
         .select("title slug featuredImage readingTime publishDate")
         .limit(3)
@@ -519,15 +649,15 @@ export const getBlogPostBySlug = async (req, res) => {
       data: {
         ...post,
         comments,
-        relatedPosts
-      }
+        relatedPosts,
+      },
     });
   } catch (error) {
     console.error("❌ Get blog post by slug error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -545,20 +675,20 @@ export const getBlogPostById = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
     res.json({
       success: true,
-      data: post
+      data: post,
     });
   } catch (error) {
     console.error("❌ Get blog post by ID error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -572,7 +702,7 @@ export const deleteBlogPost = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -600,14 +730,14 @@ export const deleteBlogPost = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Blog post deleted successfully"
+      message: "Blog post deleted successfully",
     });
   } catch (error) {
     console.error("❌ Delete blog post error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -621,7 +751,7 @@ export const toggleFeatured = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -631,14 +761,14 @@ export const toggleFeatured = async (req, res) => {
     res.json({
       success: true,
       message: `Post ${post.featured ? "featured" : "unfeatured"}`,
-      data: { featured: post.featured }
+      data: { featured: post.featured },
     });
   } catch (error) {
     console.error("❌ Toggle featured error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to toggle featured",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -652,7 +782,7 @@ export const publishBlogPost = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -664,14 +794,14 @@ export const publishBlogPost = async (req, res) => {
     res.json({
       success: true,
       message: "Blog post published successfully",
-      data: post
+      data: post,
     });
   } catch (error) {
     console.error("❌ Publish blog post error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to publish blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -685,7 +815,7 @@ export const archiveBlogPost = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -696,14 +826,14 @@ export const archiveBlogPost = async (req, res) => {
     res.json({
       success: true,
       message: "Blog post archived successfully",
-      data: post
+      data: post,
     });
   } catch (error) {
     console.error("❌ Archive blog post error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to archive blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -713,9 +843,9 @@ export const getFeaturedPosts = async (req, res) => {
   try {
     const { limit = 3 } = req.query;
 
-    const posts = await BlogPost.find({ 
-      featured: true, 
-      status: "published" 
+    const posts = await BlogPost.find({
+      featured: true,
+      status: "published",
     })
       .populate("author", "name email avatar role title")
       .sort({ publishDate: -1 })
@@ -724,14 +854,14 @@ export const getFeaturedPosts = async (req, res) => {
 
     res.json({
       success: true,
-      data: posts
+      data: posts,
     });
   } catch (error) {
     console.error("❌ Get featured posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch featured posts",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -749,14 +879,14 @@ export const getTrendingPosts = async (req, res) => {
 
     res.json({
       success: true,
-      data: posts
+      data: posts,
     });
   } catch (error) {
     console.error("❌ Get trending posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch trending posts",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -771,17 +901,14 @@ export const getRelatedPosts = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
     const relatedPosts = await BlogPost.find({
       _id: { $ne: id },
       status: "published",
-      $or: [
-        { category: post.category },
-        { tags: { $in: post.tags } }
-      ]
+      $or: [{ category: post.category }, { tags: { $in: post.tags } }],
     })
       .populate("author", "name email avatar role title")
       .sort({ publishDate: -1 })
@@ -790,14 +917,14 @@ export const getRelatedPosts = async (req, res) => {
 
     res.json({
       success: true,
-      data: relatedPosts
+      data: relatedPosts,
     });
   } catch (error) {
     console.error("❌ Get related posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch related posts",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -812,9 +939,9 @@ export const getPostsByCategory = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const filter = { 
-      category, 
-      status: "published" 
+    const filter = {
+      category,
+      status: "published",
     };
 
     const [posts, total] = await Promise.all([
@@ -824,7 +951,7 @@ export const getPostsByCategory = async (req, res) => {
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      BlogPost.countDocuments(filter)
+      BlogPost.countDocuments(filter),
     ]);
 
     res.json({
@@ -835,16 +962,16 @@ export const getPostsByCategory = async (req, res) => {
           page: pageNum,
           limit: limitNum,
           total,
-          totalPages: Math.ceil(total / limitNum)
-        }
-      }
+          totalPages: Math.ceil(total / limitNum),
+        },
+      },
     });
   } catch (error) {
     console.error("❌ Get posts by category error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch posts",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -859,9 +986,9 @@ export const getPostsByAuthor = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const filter = { 
+    const filter = {
       author: authorId,
-      status: "published" 
+      status: "published",
     };
 
     const [posts, total] = await Promise.all([
@@ -871,19 +998,34 @@ export const getPostsByAuthor = async (req, res) => {
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      BlogPost.countDocuments(filter)
+      BlogPost.countDocuments(filter),
     ]);
 
-    const author = await User.findById(authorId).select("name email avatar role title bio");
+    const author = await User.findById(authorId).select(
+      "name email avatar role title bio"
+    );
 
-    const totalPosts = await BlogPost.countDocuments({ author: authorId, status: "published" });
+    const totalPosts = await BlogPost.countDocuments({
+      author: authorId,
+      status: "published",
+    });
     const totalLikes = await BlogPost.aggregate([
-      { $match: { author: new mongoose.Types.ObjectId(authorId), status: "published" } },
-      { $group: { _id: null, total: { $sum: "$likes" } } }
+      {
+        $match: {
+          author: new mongoose.Types.ObjectId(authorId),
+          status: "published",
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$likes" } } },
     ]);
     const totalViews = await BlogPost.aggregate([
-      { $match: { author: new mongoose.Types.ObjectId(authorId), status: "published" } },
-      { $group: { _id: null, total: { $sum: "$views" } } }
+      {
+        $match: {
+          author: new mongoose.Types.ObjectId(authorId),
+          status: "published",
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$views" } } },
     ]);
 
     res.json({
@@ -894,22 +1036,22 @@ export const getPostsByAuthor = async (req, res) => {
         stats: {
           totalPosts,
           totalLikes: totalLikes[0]?.total || 0,
-          totalViews: totalViews[0]?.total || 0
+          totalViews: totalViews[0]?.total || 0,
         },
         pagination: {
           page: pageNum,
           limit: limitNum,
           total,
-          totalPages: Math.ceil(total / limitNum)
-        }
-      }
+          totalPages: Math.ceil(total / limitNum),
+        },
+      },
     });
   } catch (error) {
     console.error("❌ Get posts by author error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch posts",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -922,7 +1064,7 @@ export const searchPosts = async (req, res) => {
     if (!q || q.trim().length < 2) {
       return res.status(400).json({
         success: false,
-        message: "Search query must be at least 2 characters"
+        message: "Search query must be at least 2 characters",
       });
     }
 
@@ -938,8 +1080,8 @@ export const searchPosts = async (req, res) => {
         { subtitle: searchRegex },
         { content: searchRegex },
         { tags: { $in: [searchRegex] } },
-        { authorName: searchRegex }
-      ]
+        { authorName: searchRegex },
+      ],
     };
 
     if (category) filter.category = category;
@@ -952,24 +1094,44 @@ export const searchPosts = async (req, res) => {
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      BlogPost.countDocuments(filter)
+      BlogPost.countDocuments(filter),
     ]);
 
     // Get suggestions
     const suggestionAggregation = await BlogPost.aggregate([
       { $match: { status: "published" } },
-      { $project: { 
-        title: 1,
-        tags: 1,
-        category: 1
-      }},
-      { $limit: 20 }
+      {
+        $project: {
+          title: 1,
+          tags: 1,
+          category: 1,
+        },
+      },
+      { $limit: 20 },
     ]);
 
     const suggestions = {
-      titles: [...new Set(suggestionAggregation.map(p => p.title).filter(t => t.toLowerCase().includes(q.toLowerCase())))].slice(0, 5),
-      tags: [...new Set(suggestionAggregation.flatMap(p => p.tags).filter(t => t && t.toLowerCase().includes(q.toLowerCase())))].slice(0, 5),
-      categories: [...new Set(suggestionAggregation.map(p => p.category).filter(c => c && c.toLowerCase().includes(q.toLowerCase())))].slice(0, 5)
+      titles: [
+        ...new Set(
+          suggestionAggregation
+            .map((p) => p.title)
+            .filter((t) => t.toLowerCase().includes(q.toLowerCase()))
+        ),
+      ].slice(0, 5),
+      tags: [
+        ...new Set(
+          suggestionAggregation
+            .flatMap((p) => p.tags)
+            .filter((t) => t && t.toLowerCase().includes(q.toLowerCase()))
+        ),
+      ].slice(0, 5),
+      categories: [
+        ...new Set(
+          suggestionAggregation
+            .map((p) => p.category)
+            .filter((c) => c && c.toLowerCase().includes(q.toLowerCase()))
+        ),
+      ].slice(0, 5),
     };
 
     res.json({
@@ -982,16 +1144,16 @@ export const searchPosts = async (req, res) => {
           page: pageNum,
           limit: limitNum,
           total,
-          totalPages: Math.ceil(total / limitNum)
-        }
-      }
+          totalPages: Math.ceil(total / limitNum),
+        },
+      },
     });
   } catch (error) {
     console.error("❌ Search posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to search posts",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1008,7 +1170,7 @@ export const getPostStats = async (req, res) => {
       featuredPosts,
       totalViews,
       totalLikes,
-      totalComments
+      totalComments,
     ] = await Promise.all([
       BlogPost.countDocuments(),
       BlogPost.countDocuments({ status: "published" }),
@@ -1018,7 +1180,7 @@ export const getPostStats = async (req, res) => {
       BlogPost.countDocuments({ featured: true, status: "published" }),
       BlogPost.aggregate([{ $group: { _id: null, total: { $sum: "$views" } } }]),
       BlogPost.aggregate([{ $group: { _id: null, total: { $sum: "$likes" } } }]),
-      BlogComment.countDocuments({ status: "approved" })
+      BlogComment.countDocuments({ status: "approved" }),
     ]);
 
     res.json({
@@ -1032,15 +1194,15 @@ export const getPostStats = async (req, res) => {
         featuredPosts,
         totalViews: totalViews[0]?.total || 0,
         totalLikes: totalLikes[0]?.total || 0,
-        totalComments
-      }
+        totalComments,
+      },
     });
   } catch (error) {
     console.error("❌ Get post stats error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch stats",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1053,12 +1215,12 @@ export const bulkDeletePosts = async (req, res) => {
     if (!postIds || !Array.isArray(postIds) || postIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Post IDs array is required"
+        message: "Post IDs array is required",
       });
     }
 
     const posts = await BlogPost.find({ _id: { $in: postIds } });
-    
+
     for (const post of posts) {
       if (post.featuredImage) {
         try {
@@ -1075,14 +1237,14 @@ export const bulkDeletePosts = async (req, res) => {
 
     res.json({
       success: true,
-      message: `${postIds.length} blog posts deleted successfully`
+      message: `${postIds.length} blog posts deleted successfully`,
     });
   } catch (error) {
     console.error("❌ Bulk delete posts error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete posts",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1096,7 +1258,7 @@ export const createCategory = async (req, res) => {
     if (!name) {
       return res.status(400).json({
         success: false,
-        message: "Category name is required"
+        message: "Category name is required",
       });
     }
 
@@ -1105,23 +1267,23 @@ export const createCategory = async (req, res) => {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-    const existingCategory = await BlogCategory.findOne({ 
-      $or: [{ slug }, { name: name }] 
+    const existingCategory = await BlogCategory.findOne({
+      $or: [{ slug }, { name: name }],
     });
-    
+
     if (existingCategory) {
       return res.status(400).json({
         success: false,
-        message: "Category already exists"
+        message: "Category already exists",
       });
     }
 
     const category = new BlogCategory({
       name: name.trim(),
       slug,
-      description: description || '',
-      icon: icon || '',
-      color: color || '#3b82f6'
+      description: description || "",
+      icon: icon || "",
+      color: color || "#3b82f6",
     });
 
     await category.save();
@@ -1129,20 +1291,20 @@ export const createCategory = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Category created successfully",
-      data: category
+      data: category,
     });
   } catch (error) {
     console.error("❌ Create category error:", error);
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: "Category with this name or slug already exists"
+        message: "Category with this name or slug already exists",
       });
     }
     res.status(500).json({
       success: false,
       message: "Failed to create category",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1155,14 +1317,14 @@ export const getAllCategories = async (req, res) => {
 
     res.json({
       success: true,
-      data: categories
+      data: categories,
     });
   } catch (error) {
     console.error("❌ Get categories error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch categories",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1175,20 +1337,20 @@ export const getCategoryBySlug = async (req, res) => {
     if (!category) {
       return res.status(404).json({
         success: false,
-        message: "Category not found"
+        message: "Category not found",
       });
     }
 
     res.json({
       success: true,
-      data: category
+      data: category,
     });
   } catch (error) {
     console.error("❌ Get category error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch category",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1202,7 +1364,7 @@ export const updateCategory = async (req, res) => {
     if (!category) {
       return res.status(404).json({
         success: false,
-        message: "Category not found"
+        message: "Category not found",
       });
     }
 
@@ -1211,19 +1373,20 @@ export const updateCategory = async (req, res) => {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
-      
+
       const existing = await BlogCategory.findOne({ slug, _id: { $ne: id } });
       if (existing) {
         return res.status(400).json({
           success: false,
-          message: "Category with this name already exists"
+          message: "Category with this name already exists",
         });
       }
       category.slug = slug;
     }
 
     category.name = name || category.name;
-    category.description = description !== undefined ? description : category.description;
+    category.description =
+      description !== undefined ? description : category.description;
     category.icon = icon !== undefined ? icon : category.icon;
     category.color = color !== undefined ? color : category.color;
     category.isActive = isActive !== undefined ? isActive : category.isActive;
@@ -1233,14 +1396,14 @@ export const updateCategory = async (req, res) => {
     res.json({
       success: true,
       message: "Category updated successfully",
-      data: category
+      data: category,
     });
   } catch (error) {
     console.error("❌ Update category error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update category",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1253,7 +1416,7 @@ export const deleteCategory = async (req, res) => {
     if (!category) {
       return res.status(404).json({
         success: false,
-        message: "Category not found"
+        message: "Category not found",
       });
     }
 
@@ -1261,7 +1424,7 @@ export const deleteCategory = async (req, res) => {
     if (postCount > 0) {
       return res.status(400).json({
         success: false,
-        message: `Cannot delete category with ${postCount} posts. Reassign posts first.`
+        message: `Cannot delete category with ${postCount} posts. Reassign posts first.`,
       });
     }
 
@@ -1269,14 +1432,14 @@ export const deleteCategory = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Category deleted successfully"
+      message: "Category deleted successfully",
     });
   } catch (error) {
     console.error("❌ Delete category error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete category",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1291,7 +1454,7 @@ export const addComment = async (req, res) => {
     if (!content || !authorName || !authorEmail) {
       return res.status(400).json({
         success: false,
-        message: "Content, author name, and email are required"
+        message: "Content, author name, and email are required",
       });
     }
 
@@ -1299,14 +1462,14 @@ export const addComment = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
     if (!post.allowComments) {
       return res.status(403).json({
         success: false,
-        message: "Comments are disabled for this post"
+        message: "Comments are disabled for this post",
       });
     }
 
@@ -1317,7 +1480,11 @@ export const addComment = async (req, res) => {
       authorEmail,
       content,
       status: "pending",
-      authorAvatar: req.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=random`
+      authorAvatar:
+        req.user?.avatar ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          authorName
+        )}&background=random`,
     });
 
     await BlogPost.findByIdAndUpdate(postId, { $inc: { comments: 1 } });
@@ -1325,14 +1492,14 @@ export const addComment = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Comment submitted for approval",
-      data: comment
+      data: comment,
     });
   } catch (error) {
     console.error("❌ Add comment error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to add comment",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1355,7 +1522,7 @@ export const getComments = async (req, res) => {
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      BlogComment.countDocuments(filter)
+      BlogComment.countDocuments(filter),
     ]);
 
     res.json({
@@ -1366,16 +1533,16 @@ export const getComments = async (req, res) => {
           page: pageNum,
           limit: limitNum,
           total,
-          totalPages: Math.ceil(total / limitNum)
-        }
-      }
+          totalPages: Math.ceil(total / limitNum),
+        },
+      },
     });
   } catch (error) {
     console.error("❌ Get comments error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch comments",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1388,7 +1555,7 @@ export const approveComment = async (req, res) => {
     if (!comment) {
       return res.status(404).json({
         success: false,
-        message: "Comment not found"
+        message: "Comment not found",
       });
     }
 
@@ -1399,14 +1566,14 @@ export const approveComment = async (req, res) => {
     res.json({
       success: true,
       message: "Comment approved successfully",
-      data: comment
+      data: comment,
     });
   } catch (error) {
     console.error("❌ Approve comment error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to approve comment",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1419,7 +1586,7 @@ export const rejectComment = async (req, res) => {
     if (!comment) {
       return res.status(404).json({
         success: false,
-        message: "Comment not found"
+        message: "Comment not found",
       });
     }
 
@@ -1429,14 +1596,14 @@ export const rejectComment = async (req, res) => {
     res.json({
       success: true,
       message: "Comment rejected successfully",
-      data: comment
+      data: comment,
     });
   } catch (error) {
     console.error("❌ Reject comment error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to reject comment",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1449,7 +1616,7 @@ export const deleteComment = async (req, res) => {
     if (!comment) {
       return res.status(404).json({
         success: false,
-        message: "Comment not found"
+        message: "Comment not found",
       });
     }
 
@@ -1458,14 +1625,14 @@ export const deleteComment = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Comment deleted successfully"
+      message: "Comment deleted successfully",
     });
   } catch (error) {
     console.error("❌ Delete comment error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to delete comment",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1477,7 +1644,7 @@ export const getCommentStats = async (req, res) => {
       BlogComment.countDocuments({ status: "pending" }),
       BlogComment.countDocuments({ status: "approved" }),
       BlogComment.countDocuments({ status: "rejected" }),
-      BlogComment.countDocuments({ status: "spam" })
+      BlogComment.countDocuments({ status: "spam" }),
     ]);
 
     const recent = await BlogComment.find()
@@ -1494,15 +1661,15 @@ export const getCommentStats = async (req, res) => {
         approved,
         rejected,
         spam,
-        recent
-      }
+        recent,
+      },
     });
   } catch (error) {
     console.error("❌ Get comment stats error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch comment stats",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1518,17 +1685,17 @@ export const toggleLike = async (req, res) => {
     if (!post) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
     if (userId) {
       const likedBy = post.likedBy || [];
-      const hasLiked = likedBy.some(id => id.toString() === userId);
+      const hasLiked = likedBy.some((id) => id.toString() === userId);
 
       if (hasLiked) {
         post.likes = Math.max(0, post.likes - 1);
-        post.likedBy = likedBy.filter(id => id.toString() !== userId);
+        post.likedBy = likedBy.filter((id) => id.toString() !== userId);
       } else {
         post.likes += 1;
         post.likedBy = [...likedBy, userId];
@@ -1541,14 +1708,14 @@ export const toggleLike = async (req, res) => {
 
     res.json({
       success: true,
-      data: { likes: post.likes }
+      data: { likes: post.likes },
     });
   } catch (error) {
     console.error("❌ Toggle like error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to toggle like",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1561,14 +1728,14 @@ export const incrementViews = async (req, res) => {
 
     res.json({
       success: true,
-      message: "View counted"
+      message: "View counted",
     });
   } catch (error) {
     console.error("❌ Increment views error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to increment views",
-      error: error.message
+      error: error.message,
     });
   }
 };
