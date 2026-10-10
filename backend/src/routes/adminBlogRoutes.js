@@ -1,4 +1,4 @@
-// routes/adminBlogRoutes.js - UPDATED FOR GALLERY IMAGES
+// routes/adminBlogRoutes.js - COMPLETE FIXED
 import express from "express";
 import {
   createBlogPost,
@@ -22,7 +22,7 @@ import {
   approveComment,
   rejectComment,
   deleteComment,
-  getCommentStats
+  getCommentStats,
 } from "../controllers/blogController.js";
 
 import {
@@ -33,7 +33,7 @@ import {
   updateAuthor,
   deleteAuthor,
   getAuthorStats,
-  getAuthorsForSelect
+  getAuthorsForSelect,
 } from "../controllers/adminAuthorController.js";
 
 import {
@@ -43,11 +43,11 @@ import {
   createTag,
   updateTag,
   deleteTag,
-  getTagStats
+  getTagStats,
 } from "../controllers/adminTagController.js";
 
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
-import { upload, uploadMultiple } from "../../config/multer.js";
+import { upload } from "../../config/multer.js";
 
 const router = express.Router();
 
@@ -57,14 +57,17 @@ router.use(adminOnly);
 
 // ==================== POST MANAGEMENT ====================
 router.get("/posts", getAllBlogPosts);
+router.get("/posts/stats", getPostStats);           // ⚠️ MUST be before /posts/:id
+router.get("/posts/category/:category", getPostsByCategory);
+router.get("/posts/author/:authorId", getPostsByAuthor);
 router.get("/posts/:id", getBlogPostById);
 
-// IMPORTANT: Use upload.fields() to handle both featuredImage and galleryImages
+// ✅ FIXED: Use upload.fields() and pass through controller's file extractor
 router.post(
   "/posts",
   upload.fields([
     { name: "featuredImage", maxCount: 1 },
-    { name: "galleryImages", maxCount: 10 }
+    { name: "galleryImages", maxCount: 10 },
   ]),
   createBlogPost
 );
@@ -73,7 +76,7 @@ router.put(
   "/posts/:id",
   upload.fields([
     { name: "featuredImage", maxCount: 1 },
-    { name: "galleryImages", maxCount: 10 }
+    { name: "galleryImages", maxCount: 10 },
   ]),
   updateBlogPost
 );
@@ -83,9 +86,6 @@ router.delete("/posts/bulk", bulkDeletePosts);
 router.patch("/posts/:id/featured", toggleFeatured);
 router.patch("/posts/:id/publish", publishBlogPost);
 router.patch("/posts/:id/archive", archiveBlogPost);
-router.get("/posts/stats", getPostStats);
-router.get("/posts/category/:category", getPostsByCategory);
-router.get("/posts/author/:authorId", getPostsByAuthor);
 
 // ==================== CATEGORY MANAGEMENT ====================
 router.get("/categories", getAllCategories);
@@ -105,8 +105,8 @@ router.delete("/comments/:id", deleteComment);
 router.get("/authors", getAllAuthors);
 router.get("/authors/select", getAuthorsForSelect);
 router.get("/authors/stats", getAuthorStats);
-router.get("/authors/:id", getAuthorById);
 router.get("/authors/slug/:slug", getAuthorBySlug);
+router.get("/authors/:id", getAuthorById);
 router.post("/authors", createAuthor);
 router.put("/authors/:id", updateAuthor);
 router.delete("/authors/:id", deleteAuthor);
@@ -114,8 +114,8 @@ router.delete("/authors/:id", deleteAuthor);
 // ==================== TAG MANAGEMENT ====================
 router.get("/tags", getAllTags);
 router.get("/tags/stats", getTagStats);
-router.get("/tags/:id", getTagById);
 router.get("/tags/slug/:slug", getTagBySlug);
+router.get("/tags/:id", getTagById);
 router.post("/tags", createTag);
 router.put("/tags/:id", updateTag);
 router.delete("/tags/:id", deleteTag);

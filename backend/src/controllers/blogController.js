@@ -1,8 +1,8 @@
-// controllers/blogController.js - COMPLETE FIXED v2
 import mongoose from "mongoose";
 import BlogPost from "../models/BlogPost.js";
 import BlogCategory from "../models/BlogCategory.js";
 import BlogComment from "../models/BlogComment.js";
+import BlogAuthor from "../models/BlogAuthor.js";  // ✅ ADD THIS
 import User from "../models/User.js";
 import { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinary.js";
 
@@ -10,9 +10,34 @@ import { uploadToCloudinary, deleteFromCloudinary } from "../../config/cloudinar
 export const createBlogPost = async (req, res) => {
   try {
     console.log("📝 Create blog post request received");
-    console.log("📋 Request body:", req.body);
-    console.log("📎 File:", req.file ? "Present" : "None");
+    console.log("📋 Request body keys:", Object.keys(req.body));
+    console.log("📎 req.file:", req.file ? req.file.originalname : "None");
+    console.log(
+      "📎 req.files:",
+      req.files ? Object.keys(req.files) : "None"
+    );
     console.log("👤 User:", req.user?.id);
+
+    // ✅ FIX #1: Normalize files (upload.fields puts them in req.files)
+    let featuredImageFile = null;
+    let galleryImageFiles = [];
+
+    if (req.file) {
+      featuredImageFile = req.file;
+    } else if (req.files) {
+      if (req.files.featuredImage && req.files.featuredImage[0]) {
+        featuredImageFile = req.files.featuredImage[0];
+      }
+      if (req.files.galleryImages && req.files.galleryImages.length > 0) {
+        galleryImageFiles = req.files.galleryImages;
+      }
+    }
+
+    console.log(
+      "📎 Normalized featuredImageFile:",
+      featuredImageFile ? featuredImageFile.originalname : "None"
+    );
+    console.log("📎 Normalized galleryImageFiles:", galleryImageFiles.length);
 
     const {
       title,
@@ -31,36 +56,45 @@ export const createBlogPost = async (req, res) => {
       authorBio,
       authorTitle,
       authorImage,
+      authorId,        // ✅ from Author Management
+      authorName: authorNameFromForm,  // ✅ fallback manual name
       references,
       learningObjectives,
       statistics,
       allowComments,
       showAuthor,
       showShareButtons,
-      galleryImages,
+      galleryImages,   // JSON string of existing URLs
       relatedPosts,
       readingTime,
-      featuredImageUrl, // 👈 NEW: URL string fallback for existing images
+      featuredImageUrl, // URL string fallback
     } = req.body;
 
-    // Validate required fields
-    if (!title || !content || !category) {
-      return res.status(400).json({
-        success: false,
-        message: "Title, content, and category are required",
-      });
+    // ============================================
+    // VALIDATION
+    // ============================================
+    if (!title || !title.trim()) {
+      return res.status(400).json({ success: false, message: "Title is required" });
+    }
+    if (!content || !content.trim()) {
+      return res.status(400).json({ success: false, message: "Content is required" });
+    }
+    if (!category || !category.trim()) {
+      return res.status(400).json({ success: false, message: "Category is required" });
+    }
+    if (!req.user?.id) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
     // ============================================
-    // FEATURED IMAGE — priority: new file > existing URL > null
+    // FEATURED IMAGE
     // ============================================
     let featuredImage = null;
 
-    if (req.file) {
-      // Case 1: A new file was uploaded
+    if (featuredImageFile) {
       try {
         console.log("📤 Uploading featured image to Cloudinary...");
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadToCloudinary(featuredImageFile.buffer, {
           folder: "blog/featured",
           public_id: `featured_${Date.now()}`,
           transformation: [
@@ -74,7 +108,7 @@ export const createBlogPost = async (req, res) => {
         console.error("❌ Cloudinary upload error:", uploadError);
         return res.status(500).json({
           success: false,
-          message: "Failed to upload image",
+          message: "Failed to upload featured image",
           error: uploadError.message,
         });
       }
@@ -83,99 +117,128 @@ export const createBlogPost = async (req, res) => {
       typeof featuredImageUrl === "string" &&
       featuredImageUrl.trim() !== ""
     ) {
-      // Case 2: A URL string was provided (no file, but explicit URL)
       featuredImage = featuredImageUrl.trim();
       console.log("✅ Using provided featured image URL:", featuredImage);
     }
-    // Case 3: No image at all → featuredImage stays null
 
     // ============================================
-    // GALLERY IMAGES — accept string or array
+    // GALLERY IMAGES
     // ============================================
     let processedGalleryImages = [];
+
+    // Parse existing URL strings from JSON body
     if (galleryImages) {
       try {
         if (typeof galleryImages === "string") {
-          processedGalleryImages = JSON.parse(galleryImages);
+          const parsed = JSON.parse(galleryImages);
+          if (Array.isArray(parsed)) processedGalleryImages = parsed;
         } else if (Array.isArray(galleryImages)) {
-          processedGalleryImages = galleryImages;
-        } else if (
-          typeof galleryImages === "string" &&
-          galleryImages.startsWith("http")
-        ) {
-          processedGalleryImages = [galleryImages];
+          processedGalleryImages = [...galleryImages];
         }
-        console.log("📸 Processed gallery images:", processedGalleryImages);
       } catch (e) {
-        console.log("⚠️ Failed to parse galleryImages:", e.message);
-        processedGalleryImages = [];
+        console.log("⚠️ Failed to parse galleryImages JSON:", e.message);
+      }
+    }
+
+    // Upload new gallery files
+    if (galleryImageFiles.length > 0) {
+      console.log(`📤 Uploading ${galleryImageFiles.length} gallery images...`);
+      for (const file of galleryImageFiles) {
+        try {
+          const result = await uploadToCloudinary(file.buffer, {
+            folder: "blog/gallery",
+            public_id: `gallery_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            transformation: [{ width: 1200, quality: "auto" }],
+          });
+          processedGalleryImages.push(result.secure_url);
+        } catch (err) {
+          console.error("❌ Gallery upload error:", err.message);
+        }
       }
     }
 
     // ============================================
-    // AUTHOR DETAILS
+    // AUTHOR RESOLUTION
+    // Priority: authorId (BlogAuthor) > manual authorName > logged-in admin
     // ============================================
-    const author = await User.findById(req.user.id);
-    if (!author) {
-      return res.status(404).json({
-        success: false,
-        message: "Author not found",
-      });
+    let resolvedAuthorId = null;
+    let resolvedAuthorName = "";
+    let resolvedAuthorTitle = "Contributor";
+    let resolvedAuthorBio = "";
+    let resolvedAuthorImage = "";
+
+    if (authorId && mongoose.Types.ObjectId.isValid(authorId)) {
+      const blogAuthor = await BlogAuthor.findById(authorId).lean();
+      if (blogAuthor) {
+        resolvedAuthorId = blogAuthor._id;
+        resolvedAuthorName = blogAuthor.name;
+        resolvedAuthorTitle = blogAuthor.title || authorTitle || "Contributor";
+        resolvedAuthorBio = blogAuthor.bio || authorBio || "";
+        resolvedAuthorImage = blogAuthor.avatar || authorImage || "";
+        console.log("✅ Resolved author from BlogAuthor:", resolvedAuthorName);
+      }
     }
 
-    const authorName = author.name;
-    const authorTitleFinal = authorTitle || author.title || "Contributor";
-    const authorBioFinal = authorBio || author.bio || "";
-    const authorImageFinal = authorImage || author.avatar || "";
+    if (!resolvedAuthorName && authorNameFromForm && authorNameFromForm.trim()) {
+      resolvedAuthorName = authorNameFromForm.trim();
+      resolvedAuthorTitle = authorTitle || "Contributor";
+      resolvedAuthorBio = authorBio || "";
+      resolvedAuthorImage = authorImage || "";
+      console.log("✅ Using manual author name:", resolvedAuthorName);
+    }
+
+    if (!resolvedAuthorName) {
+      // Fallback to logged-in admin
+      const adminUser = await User.findById(req.user.id).lean();
+      resolvedAuthorName =
+        adminUser?.name || adminUser?.email?.split("@")[0] || "Admin";
+      resolvedAuthorTitle = adminUser?.title || authorTitle || "Contributor";
+      resolvedAuthorBio = adminUser?.bio || authorBio || "";
+      resolvedAuthorImage = adminUser?.avatar || authorImage || "";
+      console.log("✅ Fallback to admin as author:", resolvedAuthorName);
+    }
 
     // ============================================
     // SLUG
     // ============================================
     let slug = title
       .toLowerCase()
+      .trim()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
+    if (!slug) slug = `post-${Date.now()}`;
 
     const existingPost = await BlogPost.findOne({ slug });
-    if (existingPost) {
-      slug += `-${Date.now()}`;
-    }
+    if (existingPost) slug += `-${Date.now()}`;
 
     // ============================================
     // JSON FIELDS
     // ============================================
-    const parsedTags = tags
-      ? typeof tags === "string"
-        ? JSON.parse(tags)
-        : tags
-      : [];
-    const parsedReferences = references
-      ? typeof references === "string"
-        ? JSON.parse(references)
-        : references
-      : [];
-    const parsedLearningObjectives = learningObjectives
-      ? typeof learningObjectives === "string"
-        ? JSON.parse(learningObjectives)
-        : learningObjectives
-      : [];
-    const parsedStatistics = statistics
-      ? typeof statistics === "string"
-        ? JSON.parse(statistics)
-        : statistics
-      : [];
-    const parsedRelatedPosts = relatedPosts
-      ? typeof relatedPosts === "string"
-        ? JSON.parse(relatedPosts)
-        : relatedPosts
-      : [];
+    const safeParse = (val, fallback) => {
+      if (val === undefined || val === null || val === "") return fallback;
+      if (typeof val === "string") {
+        try {
+          return JSON.parse(val);
+        } catch {
+          return fallback;
+        }
+      }
+      return val;
+    };
+
+    const parsedTags = safeParse(tags, []);
+    const parsedReferences = safeParse(references, []);
+    const parsedLearningObjectives = safeParse(learningObjectives, []);
+    const parsedStatistics = safeParse(statistics, []);
+    const parsedRelatedPosts = safeParse(relatedPosts, []);
 
     // ============================================
-    // PUBLISH DATE
+    // PUBLISH DATE — ✅ FIX: don't send "null" string
     // ============================================
     let publishDateFinal = null;
-    if (publishDate) {
-      publishDateFinal = new Date(publishDate);
+    if (publishDate && publishDate !== "null" && publishDate !== "") {
+      const d = new Date(publishDate);
+      if (!isNaN(d.getTime())) publishDateFinal = d;
     } else if (status === "published") {
       publishDateFinal = new Date();
     }
@@ -194,11 +257,11 @@ export const createBlogPost = async (req, res) => {
       videoUrl: videoUrl || "",
       videoEmbed: videoEmbed || "",
       audioUrl: audioUrl || "",
-      author: req.user.id,
-      authorName,
-      authorTitle: authorTitleFinal,
-      authorBio: authorBioFinal,
-      authorImage: authorImageFinal,
+      author: resolvedAuthorId,
+      authorName: resolvedAuthorName,
+      authorTitle: resolvedAuthorTitle,
+      authorBio: resolvedAuthorBio,
+      authorImage: resolvedAuthorImage,
       status,
       featured: featured === true || featured === "true",
       publishDate: publishDateFinal,
@@ -235,13 +298,13 @@ export const createBlogPost = async (req, res) => {
       { upsert: true }
     );
 
-    // Populate author details for response
+    // Populate for response
     const populatedPost = await BlogPost.findById(newPost._id)
-      .populate("author", "name email avatar role")
+      .populate("author", "name email avatar role title")
       .populate("relatedPosts", "title slug featuredImage readingTime")
       .lean();
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Blog post created successfully",
       data: populatedPost,
@@ -249,39 +312,55 @@ export const createBlogPost = async (req, res) => {
   } catch (error) {
     console.error("❌ Create blog post error:", error);
     console.error("Stack:", error.stack);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Failed to create blog post",
+      message: error.message || "Failed to create blog post",
       error: error.message,
     });
   }
 };
-
 // ==================== UPDATE BLOG POST - FULLY FIXED ====================
 export const updateBlogPost = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = { ...req.body };
-    console.log("📝 Update blog post:", id);
-    console.log("📎 File:", req.file ? "Present" : "None");
-    console.log("🔑 featuredImageUrl:", updates.featuredImageUrl);
 
-    // Find existing post
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid post ID" });
+    }
+
+    console.log("📝 Update blog post:", id);
+    console.log("📋 Body keys:", Object.keys(req.body));
+    console.log("📎 req.file:", req.file ? req.file.originalname : "None");
+    console.log("📎 req.files:", req.files ? Object.keys(req.files) : "None");
+
+    // ✅ FIX #1: Normalize files
+    let featuredImageFile = null;
+    let galleryImageFiles = [];
+
+    if (req.file) {
+      featuredImageFile = req.file;
+    } else if (req.files) {
+      if (req.files.featuredImage && req.files.featuredImage[0]) {
+        featuredImageFile = req.files.featuredImage[0];
+      }
+      if (req.files.galleryImages && req.files.galleryImages.length > 0) {
+        galleryImageFiles = req.files.galleryImages;
+      }
+    }
+
     const existingPost = await BlogPost.findById(id);
     if (!existingPost) {
-      return res.status(404).json({
-        success: false,
-        message: "Blog post not found",
-      });
+      return res.status(404).json({ success: false, message: "Blog post not found" });
     }
+
+    const updates = { ...req.body };
 
     // ============================================
     // FEATURED IMAGE — three-way branching
     // ============================================
-    if (req.file) {
-      // Case 1: New file uploaded → replace existing
+    if (featuredImageFile) {
+      // Case 1: New file uploaded → replace
       try {
-        // Delete old image from Cloudinary if exists
         if (existingPost.featuredImage) {
           try {
             const oldPublicId = existingPost.featuredImage
@@ -294,7 +373,7 @@ export const updateBlogPost = async (req, res) => {
           }
         }
 
-        const result = await uploadToCloudinary(req.file.buffer, {
+        const result = await uploadToCloudinary(featuredImageFile.buffer, {
           folder: "blog/featured",
           public_id: `featured_${Date.now()}`,
           transformation: [
@@ -303,7 +382,7 @@ export const updateBlogPost = async (req, res) => {
           ],
         });
         updates.featuredImage = result.secure_url;
-        console.log("✅ Featured image replaced with new upload:", updates.featuredImage);
+        console.log("✅ Featured image replaced:", updates.featuredImage);
       } catch (uploadError) {
         console.error("❌ Cloudinary upload error:", uploadError);
         return res.status(500).json({
@@ -313,11 +392,10 @@ export const updateBlogPost = async (req, res) => {
         });
       }
     } else if (updates.featuredImageUrl !== undefined) {
-      // Case 2: URL string sent from frontend
       const url = (updates.featuredImageUrl || "").trim();
 
       if (url === "") {
-        // 2a. Empty string → user removed the image
+        // Remove image
         if (existingPost.featuredImage) {
           try {
             const oldPublicId = existingPost.featuredImage
@@ -332,7 +410,7 @@ export const updateBlogPost = async (req, res) => {
         updates.featuredImage = null;
         console.log("✅ Featured image cleared");
       } else if (url !== existingPost.featuredImage) {
-        // 2b. Different URL → replace it
+        // Replace with new URL
         if (existingPost.featuredImage && existingPost.featuredImage !== url) {
           try {
             const oldPublicId = existingPost.featuredImage
@@ -347,20 +425,76 @@ export const updateBlogPost = async (req, res) => {
         updates.featuredImage = url;
         console.log("✅ Featured image updated to URL:", url);
       } else {
-        // 2c. Same URL → leave untouched
         console.log("ℹ️ Featured image unchanged");
       }
-
-      // Remove helper field so it doesn't get written to the DB
       delete updates.featuredImageUrl;
     }
-    // Case 3: No file, no URL field → leave existing image untouched
 
     // ============================================
-    // PARSE JSON FIELDS
+    // GALLERY IMAGES — merge existing URLs + new files
+    // ============================================
+    let mergedGallery = [];
+
+    if (updates.galleryImages !== undefined) {
+      try {
+        if (typeof updates.galleryImages === "string") {
+          const parsed = JSON.parse(updates.galleryImages);
+          if (Array.isArray(parsed)) mergedGallery = parsed;
+        } else if (Array.isArray(updates.galleryImages)) {
+          mergedGallery = [...updates.galleryImages];
+        }
+      } catch (e) {
+        console.log("⚠️ Failed to parse galleryImages:", e.message);
+      }
+      delete updates.galleryImages;
+    } else {
+      mergedGallery = [...(existingPost.galleryImages || [])];
+    }
+
+    if (galleryImageFiles.length > 0) {
+      console.log(`📤 Uploading ${galleryImageFiles.length} new gallery images...`);
+      for (const file of galleryImageFiles) {
+        try {
+          const result = await uploadToCloudinary(file.buffer, {
+            folder: "blog/gallery",
+            public_id: `gallery_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            transformation: [{ width: 1200, quality: "auto" }],
+          });
+          mergedGallery.push(result.secure_url);
+        } catch (err) {
+          console.error("❌ Gallery upload error:", err.message);
+        }
+      }
+    }
+
+    updates.galleryImages = mergedGallery;
+
+    // ============================================
+    // AUTHOR RESOLUTION (same logic as create)
+    // ============================================
+    if (updates.authorId !== undefined) {
+      if (
+        updates.authorId &&
+        mongoose.Types.ObjectId.isValid(updates.authorId)
+      ) {
+        const blogAuthor = await BlogAuthor.findById(updates.authorId).lean();
+        if (blogAuthor) {
+          updates.author = blogAuthor._id;
+          updates.authorName = blogAuthor.name;
+          updates.authorTitle =
+            blogAuthor.title || updates.authorTitle || "Contributor";
+          updates.authorBio = blogAuthor.bio || updates.authorBio || "";
+          updates.authorImage = blogAuthor.avatar || updates.authorImage || "";
+          console.log("✅ Author resolved:", blogAuthor.name);
+        }
+      }
+      delete updates.authorId;
+    }
+
+    // ============================================
+    // JSON FIELDS
     // ============================================
     const jsonFields = [
-      "galleryImages",
       "tags",
       "references",
       "learningObjectives",
@@ -368,14 +502,25 @@ export const updateBlogPost = async (req, res) => {
       "relatedPosts",
     ];
     for (const field of jsonFields) {
-      if (updates[field] && typeof updates[field] === "string") {
+      if (updates[field] !== undefined && typeof updates[field] === "string") {
         try {
           updates[field] = JSON.parse(updates[field]);
         } catch (e) {
           console.log(`⚠️ Failed to parse ${field}:`, e.message);
-          updates[field] = [];
+          // Don't wipe — just skip
+          delete updates[field];
         }
       }
+    }
+
+    // ============================================
+    // PUBLISH DATE — ✅ FIX: don't set "null" string
+    // ============================================
+    if (updates.publishDate === "null" || updates.publishDate === "") {
+      updates.publishDate = null;
+    } else if (updates.publishDate) {
+      const d = new Date(updates.publishDate);
+      updates.publishDate = isNaN(d.getTime()) ? null : d;
     }
 
     // ============================================
@@ -384,36 +529,67 @@ export const updateBlogPost = async (req, res) => {
     if (updates.title && updates.title !== existingPost.title) {
       let newSlug = updates.title
         .toLowerCase()
+        .trim()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
+      if (!newSlug) newSlug = `post-${Date.now()}`;
 
       const existingSlug = await BlogPost.findOne({
         slug: newSlug,
         _id: { $ne: id },
       });
-      if (existingSlug) {
-        newSlug += `-${Date.now()}`;
-      }
+      if (existingSlug) newSlug += `-${Date.now()}`;
       updates.slug = newSlug;
     }
 
     // ============================================
-    // PUBLISH DATE (if status changed to published)
+    // STATUS → isPublished + publishDate
     // ============================================
-    if (updates.status === "published" && existingPost.status !== "published") {
-      updates.publishDate = new Date();
-      updates.isPublished = true;
+    if (updates.status) {
+      updates.isPublished = updates.status === "published";
+      if (
+        updates.status === "published" &&
+        existingPost.status !== "published" &&
+        !updates.publishDate
+      ) {
+        updates.publishDate = new Date();
+      }
     }
 
     // ============================================
     // READING TIME
     // ============================================
-    if (updates.readingTime) {
-      updates.readingTime = parseInt(updates.readingTime);
+    if (updates.readingTime !== undefined) {
+      updates.readingTime = parseInt(updates.readingTime) || 5;
     }
 
     // ============================================
-    // UPDATE POST
+    // BOOLEAN COERCION
+    // ============================================
+    ["featured", "allowComments", "showAuthor", "showShareButtons"].forEach(
+      (field) => {
+        if (updates[field] !== undefined) {
+          updates[field] =
+            updates[field] === true || updates[field] === "true";
+        }
+      }
+    );
+
+    // ============================================
+    // REMOVE FIELDS WE SHOULDN'T UPDATE DIRECTLY
+    // ============================================
+    delete updates._id;
+    delete updates.__v;
+    delete updates.createdAt;
+    delete updates.updatedAt;
+    delete updates.views;
+    delete updates.likes;
+    delete updates.comments;
+    delete updates.likedBy;
+    delete updates.bookmarkedBy;
+
+    // ============================================
+    // UPDATE
     // ============================================
     const updatedPost = await BlogPost.findByIdAndUpdate(
       id,
@@ -430,21 +606,23 @@ export const updateBlogPost = async (req, res) => {
       });
     }
 
-    res.json({
+    console.log("✅ Post updated:", updatedPost._id);
+
+    return res.json({
       success: true,
       message: "Blog post updated successfully",
       data: updatedPost,
     });
   } catch (error) {
     console.error("❌ Update blog post error:", error);
-    res.status(500).json({
+    console.error("Stack:", error.stack);
+    return res.status(500).json({
       success: false,
-      message: "Failed to update blog post",
+      message: error.message || "Failed to update blog post",
       error: error.message,
     });
   }
 };
-
 // ==================== GET ALL BLOG POSTS ====================
 export const getAllBlogPosts = async (req, res) => {
   try {

@@ -527,110 +527,165 @@ const AdminCreateBlogPost = () => {
 
   // ==================== SAVE / PUBLISH ====================
 
-  const handleSave = async (status = 'draft') => {
-    if (!validateForm()) {
-      toast.error('Please fix the errors before saving');
-      return;
+const handleSave = async (status = "draft") => {
+  console.log("🚀 handleSave called with status:", status);
+
+  if (!validateForm()) {
+    toast.error("Please fix the errors before saving");
+    return;
+  }
+
+  try {
+    setSaving(true);
+    console.log("📦 Building FormData...");
+
+    const formDataToSend = new FormData();
+
+    // Basic fields
+    formDataToSend.append("title", formData.title || "");
+    formDataToSend.append("subtitle", formData.subtitle || "");
+    formDataToSend.append("content", formData.content || "");
+    formDataToSend.append("category", formData.category || "");
+    formDataToSend.append("status", status);
+    formDataToSend.append("featured", formData.featured ? "true" : "false");
+    formDataToSend.append("readingTime", String(formData.readingTime || 5));
+    formDataToSend.append(
+      "allowComments",
+      formData.allowComments ? "true" : "false"
+    );
+    formDataToSend.append("showAuthor", formData.showAuthor ? "true" : "false");
+    formDataToSend.append(
+      "showShareButtons",
+      formData.showShareButtons ? "true" : "false"
+    );
+
+    // Media fields
+    formDataToSend.append("videoUrl", formData.videoUrl || "");
+    formDataToSend.append("videoEmbed", formData.videoEmbed || "");
+    formDataToSend.append("audioUrl", formData.audioUrl || "");
+
+    // ✅ AUTHOR: send both authorId (BlogAuthor._id) AND fallback name fields
+    if (formData.authorId) {
+      formDataToSend.append("authorId", formData.authorId);
+    }
+    formDataToSend.append("authorName", formData.authorName || "");
+    formDataToSend.append("authorTitle", formData.authorTitle || "");
+    formDataToSend.append("authorBio", formData.authorBio || "");
+    formDataToSend.append("authorImage", formData.authorImage || "");
+
+    // SEO
+    formDataToSend.append("metaDescription", formData.metaDescription || "");
+    formDataToSend.append("metaKeywords", formData.metaKeywords || "");
+
+    // JSON fields
+    formDataToSend.append("tags", JSON.stringify(formData.tags || []));
+    formDataToSend.append("references", JSON.stringify(formData.references || []));
+    formDataToSend.append(
+      "learningObjectives",
+      JSON.stringify(formData.learningObjectives || [])
+    );
+    formDataToSend.append(
+      "statistics",
+      JSON.stringify(formData.statistics || [])
+    );
+    formDataToSend.append(
+      "relatedPosts",
+      JSON.stringify(formData.relatedPosts || [])
+    );
+
+    // ✅ GALLERY: separate existing URL strings from new File objects
+    const galleryUrls = (formData.galleryImages || []).filter(
+      (img) => typeof img === "string"
+    );
+    const galleryFiles = (formData.galleryImages || []).filter(
+      (img) => img instanceof File
+    );
+
+    if (galleryUrls.length > 0) {
+      formDataToSend.append("galleryImages", JSON.stringify(galleryUrls));
+    }
+    galleryFiles.forEach((file) => {
+      formDataToSend.append("galleryImages", file);
+    });
+
+    // Publish date — only append if it's a valid string
+    if (
+      formData.publishDate &&
+      formData.publishDate !== "null" &&
+      formData.publishDate !== ""
+    ) {
+      formDataToSend.append("publishDate", formData.publishDate);
     }
 
-    try {
-      setSaving(true);
-      
-      const formDataToSend = new FormData();
-      
-      // Basic fields
-      formDataToSend.append('title', formData.title);
-      formDataToSend.append('subtitle', formData.subtitle || '');
-      formDataToSend.append('content', formData.content);
-      formDataToSend.append('category', formData.category);
-      formDataToSend.append('status', status);
-      formDataToSend.append('featured', formData.featured);
-      formDataToSend.append('readingTime', formData.readingTime);
-      formDataToSend.append('allowComments', formData.allowComments);
-      formDataToSend.append('showAuthor', formData.showAuthor);
-      formDataToSend.append('showShareButtons', formData.showShareButtons);
-      
-      // Media fields
-      formDataToSend.append('videoUrl', formData.videoUrl || '');
-      formDataToSend.append('videoEmbed', formData.videoEmbed || '');
-      formDataToSend.append('audioUrl', formData.audioUrl || '');
-      
-      // Author fields - use both ID and direct values
-      if (formData.authorId) {
-        formDataToSend.append('author', formData.authorId);
-      }
-      formDataToSend.append('authorName', formData.authorName || '');
-      formDataToSend.append('authorTitle', formData.authorTitle || '');
-      formDataToSend.append('authorBio', formData.authorBio || '');
-      formDataToSend.append('authorImage', formData.authorImage || '');
-      
-      // SEO
-      formDataToSend.append('metaDescription', formData.metaDescription || '');
-      formDataToSend.append('metaKeywords', formData.metaKeywords || '');
-      
-      // JSON fields
-      formDataToSend.append('tags', JSON.stringify(formData.tags));
-      formDataToSend.append('references', JSON.stringify(formData.references));
-      formDataToSend.append('learningObjectives', JSON.stringify(formData.learningObjectives));
-      formDataToSend.append('statistics', JSON.stringify(formData.statistics));
-      formDataToSend.append('relatedPosts', JSON.stringify(formData.relatedPosts));
-      
-      // Gallery images - handle both URLs and files
-      const galleryUrls = formData.galleryImages.filter(img => typeof img === 'string');
-      if (galleryUrls.length > 0) {
-        formDataToSend.append('galleryImages', JSON.stringify(galleryUrls));
-      }
-      
-      // Publish date
-      if (formData.publishDate) {
-        formDataToSend.append('publishDate', formData.publishDate);
-      }
-      
-      // Featured image - if it's a File object, append it
-      // Featured image — handle three cases:
-// 1. New File object → send as multipart file
-// 2. Existing URL string → send as text field so backend preserves it
-// 3. Explicit null (user removed it) → send empty string to clear it
-if (formData.featuredImage instanceof File) {
-  formDataToSend.append('featuredImage', formData.featuredImage);
-} else if (typeof formData.featuredImage === 'string' && formData.featuredImage.trim() !== '') {
-  formDataToSend.append('featuredImageUrl', formData.featuredImage);
-} else if (formData.featuredImage === null || formData.featuredImage === '') {
-  formDataToSend.append('featuredImageUrl', '');
-}
+    // Featured image — three cases
+    if (formData.featuredImage instanceof File) {
+      formDataToSend.append("featuredImage", formData.featuredImage);
+    } else if (
+      typeof formData.featuredImage === "string" &&
+      formData.featuredImage.trim() !== ""
+    ) {
+      formDataToSend.append("featuredImageUrl", formData.featuredImage);
+    } else {
+      // null or "" → explicit removal
+      formDataToSend.append("featuredImageUrl", "");
+    }
 
-      let response;
-      if (isEditing) {
-        response = await blogAPI.updatePost(id, formDataToSend);
+    // Debug: log FormData contents
+    console.log("📦 FormData entries:");
+    for (let pair of formDataToSend.entries()) {
+      if (pair[1] instanceof File) {
+        console.log(`  ${pair[0]}: File(${pair[1].name})`);
       } else {
-        response = await blogAPI.createPost(formDataToSend);
+        console.log(`  ${pair[0]}: ${String(pair[1]).slice(0, 100)}`);
       }
-      
-      if (response.success) {
-        toast.success(isEditing ? 'Post updated successfully!' : 'Post created successfully!');
-        if (status === 'published') {
-          navigate('/admin/blog/posts');
-        } else {
-          toast.info('Draft saved successfully');
-          if (!isEditing) {
-            navigate(`/admin/blog/edit/${response.data._id}`);
-          }
+    }
+
+    let response;
+    if (isEditing) {
+      console.log(`📤 Updating post ${id}...`);
+      response = await blogAPI.updatePost(id, formDataToSend);
+    } else {
+      console.log("📤 Creating new post...");
+      response = await blogAPI.createPost(formDataToSend);
+    }
+
+    console.log("📥 Response:", response);
+
+    if (response && response.success) {
+      toast.success(
+        isEditing ? "Post updated successfully!" : "Post created successfully!"
+      );
+
+      if (status === "published") {
+        navigate("/admin/blog/posts");
+      } else {
+        toast.success("Draft saved successfully");
+        if (!isEditing && response.data?._id) {
+          navigate(`/admin/blog/edit/${response.data._id}`);
         }
-      } else {
-        toast.error(response.message || 'Failed to save post');
       }
-    } catch (error) {
-      console.error('Error saving post:', error);
-      toast.error(error.response?.data?.message || 'Failed to save post');
-    } finally {
-      setSaving(false);
+    } else {
+      const msg = response?.message || "Failed to save post";
+      console.error("❌ Save failed:", msg);
+      toast.error(msg);
     }
-  };
+  } catch (error) {
+    console.error("❌ handleSave error:", error);
+    console.error("   Error response:", error.response);
+    console.error("   Error data:", error.response?.data);
 
-  const handlePublish = () => {
-    handleSave('published');
-  };
+    const serverMessage =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Failed to save post";
 
+    toast.error(serverMessage);
+  } finally {
+    setSaving(false);
+    console.log("🏁 handleSave finished");
+  }
+};
   // ==================== CONTENT EDITOR ====================
 
   const insertText = (before, after = '') => {

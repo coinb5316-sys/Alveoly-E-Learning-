@@ -1,453 +1,244 @@
-// src/api/blogApi.js - FIXED (no manual Content-Type)
+// src/api/blogApi.js - COMPLETE FIXED
 import API from "./axios";
 
 const blogAPI = {
   // ==================== POST OPERATIONS ====================
 
   getPosts: async (params = {}) => {
-    try {
-      const response = await API.get("/blog/posts", { params });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching blog posts:", error);
-      throw error;
-    }
+    const response = await API.get("/blog/posts", { params });
+    return response.data;
   },
 
   getPostById: async (id) => {
-    try {
-      const response = await API.get(`/blog/posts/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching blog post:", error);
-      throw error;
-    }
+    const response = await API.get(`/blog/posts/${id}`);
+    return response.data;
   },
 
   getPostBySlug: async (slug) => {
-    try {
-      const response = await API.get(`/blog/posts/slug/${slug}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching blog post by slug:", error);
-      throw error;
-    }
+    const response = await API.get(`/blog/posts/slug/${slug}`);
+    return response.data;
   },
 
+  // ✅ FIXED: Removed manual Content-Type (Axios sets boundary automatically)
+  // Admin endpoints are under /admin/blog (singular)
   createPost: async (formData) => {
-    try {
-      // ✅ DO NOT set Content-Type manually — Axios sets it with the boundary
-      const response = await API.post("/admin/blog/posts", formData);
-      return response.data;
-    } catch (error) {
-      console.error("Error creating blog post:", error);
-      throw error;
-    }
+    const response = await API.post("/admin/blog/posts", formData, {
+      headers: { "Content-Type": undefined }, // let Axios set multipart boundary
+      timeout: 120000, // 2 minutes for uploads
+    });
+    return response.data;
   },
 
   updatePost: async (id, formData) => {
-    try {
-      // ✅ DO NOT set Content-Type manually
-      const response = await API.put(`/admin/blog/posts/${id}`, formData);
-      return response.data;
-    } catch (error) {
-      console.error("Error updating blog post:", error);
-      throw error;
-    }
+    const response = await API.put(`/admin/blog/posts/${id}`, formData, {
+      headers: { "Content-Type": undefined },
+      timeout: 120000,
+    });
+    return response.data;
   },
 
   deletePost: async (id) => {
-    try {
-      const response = await API.delete(`/admin/blog/posts/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error deleting blog post:", error);
-      throw error;
-    }
+    const response = await API.delete(`/admin/blog/posts/${id}`);
+    return response.data;
   },
 
   bulkDeletePosts: async (postIds) => {
-    try {
-      const response = await API.delete("/admin/blog/posts/bulk", {
-        data: { postIds },
-      });
-      return response.data;
-    } catch (error) {
-      console.error("Error bulk deleting posts:", error);
-      throw error;
-    }
+    const response = await API.delete("/admin/blog/posts/bulk", {
+      data: { postIds },
+    });
+    return response.data;
   },
 
   toggleFeatured: async (id) => {
-    try {
-      const response = await API.patch(`/admin/blog/posts/${id}/featured`);
-      return response.data;
-    } catch (error) {
-      console.error("Error toggling featured:", error);
-      throw error;
-    }
+    const response = await API.patch(`/admin/blog/posts/${id}/featured`);
+    return response.data;
   },
 
   publishPost: async (id) => {
-    try {
-      const response = await API.patch(`/admin/blog/posts/${id}/publish`);
-      return response.data;
-    } catch (error) {
-      console.error("Error publishing post:", error);
-      throw error;
-    }
+    const response = await API.patch(`/admin/blog/posts/${id}/publish`);
+    return response.data;
   },
 
   archivePost: async (id) => {
-    try {
-      const response = await API.patch(`/admin/blog/posts/${id}/archive`);
-      return response.data;
-    } catch (error) {
-      console.error("Error archiving post:", error);
-      throw error;
-    }
+    const response = await API.patch(`/admin/blog/posts/${id}/archive`);
+    return response.data;
   },
 
   getPostStats: async () => {
-    try {
-      const response = await API.get("/admin/blog/posts/stats");
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching post stats:", error);
-      throw error;
-    }
+    const response = await API.get("/admin/blog/posts/stats");
+    return response.data;
   },
 
   // ==================== CATEGORY OPERATIONS ====================
 
   getCategories: async () => {
-    try {
-      const response = await API.get("/blog/categories");
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching categories:", error);
-      throw error;
-    }
+    const response = await API.get("/blog/categories");
+    return response.data;
   },
 
   getCategoryBySlug: async (slug) => {
-    try {
-      const response = await API.get(`/blog/categories/${slug}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching category:", error);
-      throw error;
-    }
+    const response = await API.get(`/blog/categories/${slug}`);
+    return response.data;
   },
 
   createCategory: async (data) => {
-    try {
-      const response = await API.post("/admin/blog/categories", data);
-      return response.data;
-    } catch (error) {
-      console.error("Error creating category:", error);
-      throw error;
-    }
+    const response = await API.post("/admin/blog/categories", data);
+    return response.data;
   },
 
   updateCategory: async (id, data) => {
-    try {
-      const response = await API.put(`/admin/blog/categories/${id}`, data);
-      return response.data;
-    } catch (error) {
-      console.error("Error updating category:", error);
-      throw error;
-    }
+    const response = await API.put(`/admin/blog/categories/${id}`, data);
+    return response.data;
   },
 
   deleteCategory: async (id) => {
-    try {
-      const response = await API.delete(`/admin/blog/categories/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error deleting category:", error);
-      throw error;
-    }
+    const response = await API.delete(`/admin/blog/categories/${id}`);
+    return response.data;
   },
 
   // ==================== COMMENT OPERATIONS ====================
 
   getComments: async (postId, params = {}) => {
-    try {
-      const response = await API.get(`/blog/comments/${postId}`, { params });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching comments:", error);
-      throw error;
-    }
+    const response = await API.get(`/blog/comments/${postId}`, { params });
+    return response.data;
   },
 
   addComment: async (postId, data) => {
-    try {
-      const response = await API.post(`/blog/comments/${postId}`, data);
-      return response.data;
-    } catch (error) {
-      console.error("Error adding comment:", error);
-      throw error;
-    }
+    const response = await API.post(`/blog/comments/${postId}`, data);
+    return response.data;
   },
 
   approveComment: async (id) => {
-    try {
-      const response = await API.put(`/admin/blog/comments/${id}/approve`);
-      return response.data;
-    } catch (error) {
-      console.error("Error approving comment:", error);
-      throw error;
-    }
+    const response = await API.put(`/admin/blog/comments/${id}/approve`);
+    return response.data;
   },
 
   rejectComment: async (id) => {
-    try {
-      const response = await API.put(`/admin/blog/comments/${id}/reject`);
-      return response.data;
-    } catch (error) {
-      console.error("Error rejecting comment:", error);
-      throw error;
-    }
+    const response = await API.put(`/admin/blog/comments/${id}/reject`);
+    return response.data;
   },
 
   deleteComment: async (id) => {
-    try {
-      const response = await API.delete(`/admin/blog/comments/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error deleting comment:", error);
-      throw error;
-    }
+    const response = await API.delete(`/admin/blog/comments/${id}`);
+    return response.data;
   },
 
   getCommentStats: async () => {
-    try {
-      const response = await API.get("/admin/blog/comments/stats");
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching comment stats:", error);
-      throw error;
-    }
+    const response = await API.get("/admin/blog/comments/stats");
+    return response.data;
   },
 
   // ==================== AUTHOR OPERATIONS ====================
 
   getAuthors: async (params = {}) => {
-    try {
-      const response = await API.get("/admin/blog/authors", { params });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching authors:", error);
-      throw error;
-    }
+    const response = await API.get("/admin/blog/authors", { params });
+    return response.data;
   },
 
   getAuthorsForSelect: async () => {
-    try {
-      const response = await API.get("/admin/blog/authors/select");
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching authors for select:", error);
-      throw error;
-    }
+    const response = await API.get("/admin/blog/authors/select");
+    return response.data;
   },
 
   getAuthorById: async (id) => {
-    try {
-      const response = await API.get(`/admin/blog/authors/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching author:", error);
-      throw error;
-    }
+    const response = await API.get(`/admin/blog/authors/${id}`);
+    return response.data;
   },
 
   getAuthorBySlug: async (slug) => {
-    try {
-      const response = await API.get(`/admin/blog/authors/slug/${slug}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching author by slug:", error);
-      throw error;
-    }
+    const response = await API.get(`/admin/blog/authors/slug/${slug}`);
+    return response.data;
   },
 
   createAuthor: async (data) => {
-    try {
-      const response = await API.post("/admin/blog/authors", data);
-      return response.data;
-    } catch (error) {
-      console.error("Error creating author:", error);
-      throw error;
-    }
+    const response = await API.post("/admin/blog/authors", data);
+    return response.data;
   },
 
   updateAuthor: async (id, data) => {
-    try {
-      const response = await API.put(`/admin/blog/authors/${id}`, data);
-      return response.data;
-    } catch (error) {
-      console.error("Error updating author:", error);
-      throw error;
-    }
+    const response = await API.put(`/admin/blog/authors/${id}`, data);
+    return response.data;
   },
 
   deleteAuthor: async (id) => {
-    try {
-      const response = await API.delete(`/admin/blog/authors/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error deleting author:", error);
-      throw error;
-    }
+    const response = await API.delete(`/admin/blog/authors/${id}`);
+    return response.data;
   },
 
   getAuthorStats: async () => {
-    try {
-      const response = await API.get("/admin/blog/authors/stats");
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching author stats:", error);
-      throw error;
-    }
+    const response = await API.get("/admin/blog/authors/stats");
+    return response.data;
   },
 
   // ==================== TAG OPERATIONS ====================
 
   getTags: async (params = {}) => {
-    try {
-      const response = await API.get("/admin/blog/tags", { params });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching tags:", error);
-      throw error;
-    }
+    const response = await API.get("/admin/blog/tags", { params });
+    return response.data;
   },
 
   getTagById: async (id) => {
-    try {
-      const response = await API.get(`/admin/blog/tags/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching tag:", error);
-      throw error;
-    }
+    const response = await API.get(`/admin/blog/tags/${id}`);
+    return response.data;
   },
 
   getTagBySlug: async (slug) => {
-    try {
-      const response = await API.get(`/admin/blog/tags/slug/${slug}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching tag by slug:", error);
-      throw error;
-    }
+    const response = await API.get(`/admin/blog/tags/slug/${slug}`);
+    return response.data;
   },
 
   createTag: async (data) => {
-    try {
-      const response = await API.post("/admin/blog/tags", data);
-      return response.data;
-    } catch (error) {
-      console.error("Error creating tag:", error);
-      throw error;
-    }
+    const response = await API.post("/admin/blog/tags", data);
+    return response.data;
   },
 
   updateTag: async (id, data) => {
-    try {
-      const response = await API.put(`/admin/blog/tags/${id}`, data);
-      return response.data;
-    } catch (error) {
-      console.error("Error updating tag:", error);
-      throw error;
-    }
+    const response = await API.put(`/admin/blog/tags/${id}`, data);
+    return response.data;
   },
 
   deleteTag: async (id) => {
-    try {
-      const response = await API.delete(`/admin/blog/tags/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error deleting tag:", error);
-      throw error;
-    }
+    const response = await API.delete(`/admin/blog/tags/${id}`);
+    return response.data;
   },
 
   getTagStats: async () => {
-    try {
-      const response = await API.get("/admin/blog/tags/stats");
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching tag stats:", error);
-      throw error;
-    }
+    const response = await API.get("/admin/blog/tags/stats");
+    return response.data;
   },
 
   // ==================== SEARCH OPERATIONS ====================
 
   searchPosts: async (query, params = {}) => {
-    try {
-      const response = await API.get("/blog/posts/search", {
-        params: { q: query, ...params },
-      });
-      return response.data;
-    } catch (error) {
-      console.error("Error searching posts:", error);
-      throw error;
-    }
+    const response = await API.get("/blog/posts/search", {
+      params: { q: query, ...params },
+    });
+    return response.data;
   },
 
   getPostsByCategory: async (category, params = {}) => {
-    try {
-      const response = await API.get(`/blog/posts/category/${category}`, { params });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching posts by category:", error);
-      throw error;
-    }
+    const response = await API.get(`/blog/posts/category/${category}`, { params });
+    return response.data;
   },
 
   getPostsByAuthor: async (authorId, params = {}) => {
-    try {
-      const response = await API.get(`/blog/posts/author/${authorId}`, { params });
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching posts by author:", error);
-      throw error;
-    }
+    const response = await API.get(`/blog/posts/author/${authorId}`, { params });
+    return response.data;
   },
 
   getRelatedPosts: async (id) => {
-    try {
-      const response = await API.get(`/blog/posts/${id}/related`);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching related posts:", error);
-      throw error;
-    }
+    const response = await API.get(`/blog/posts/${id}/related`);
+    return response.data;
   },
 
   incrementViews: async (id) => {
-    try {
-      const response = await API.post(`/blog/posts/${id}/view`);
-      return response.data;
-    } catch (error) {
-      console.error("Error incrementing views:", error);
-      throw error;
-    }
+    const response = await API.post(`/blog/posts/${id}/view`);
+    return response.data;
   },
 
   toggleLike: async (id) => {
-    try {
-      const response = await API.post(`/blog/posts/${id}/like`);
-      return response.data;
-    } catch (error) {
-      console.error("Error toggling like:", error);
-      throw error;
-    }
+    const response = await API.post(`/blog/posts/${id}/like`);
+    return response.data;
   },
 };
 
