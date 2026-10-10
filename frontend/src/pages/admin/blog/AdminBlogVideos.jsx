@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogVideos.jsx — EDITORIAL ADMIN
-// Video management for The Alveoly Journal.
+// src/pages/admin/blog/AdminBlogVideos.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -10,8 +9,7 @@ import {
 } from "lucide-react";
 import { Youtube } from "../../../components/icons/BrandIcons";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend ready
-import { videos as mockVideos } from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
@@ -26,38 +24,25 @@ const formatShortDate = (d) =>
       })
     : "";
 
-/* Extract a YouTube video ID from any of the common URL formats.
-   Handles:
-     - https://www.youtube.com/watch?v=VIDEO_ID
-     - https://youtu.be/VIDEO_ID
-     - https://www.youtube.com/embed/VIDEO_ID
-     - https://www.youtube.com/shorts/VIDEO_ID
-     - just "VIDEO_ID" (11 chars, alphanumeric + _ -)                */
 const extractYouTubeId = (input = "") => {
   const s = String(input).trim();
   if (!s) return "";
-
-  // Bare ID
   if (/^[\w-]{11}$/.test(s)) return s;
 
   try {
     const url = new URL(s);
-    // youtu.be/ID
     if (url.hostname.includes("youtu.be")) {
       return url.pathname.replace(/^\//, "").split("/")[0];
     }
-    // youtube.com/watch?v=ID
     if (url.searchParams.get("v")) {
       return url.searchParams.get("v");
     }
-    // youtube.com/embed/ID or /shorts/ID or /v/ID
     const m = url.pathname.match(/\/(embed|shorts|v)\/([\w-]{11})/);
     if (m) return m[2];
   } catch (e) {
     /* fall through */
   }
 
-  // Last resort: find an 11-char token
   const token = s.match(/[\w-]{11}/);
   return token ? token[0] : "";
 };
@@ -67,6 +52,7 @@ const thumbnailFor = (videoId) =>
 
 const emptyVideo = () => ({
   id: "",
+  _id: "",
   youtubeId: "",
   title: "",
   description: "",
@@ -74,7 +60,19 @@ const emptyVideo = () => ({
   category: "",
   publishedAt: new Date().toISOString().slice(0, 10),
   featured: false,
-  status: "draft", // draft | published | archived
+  status: "draft",
+});
+
+/* Normalize server → local shape */
+const normalizeVideo = (v) => ({
+  ...v,
+  id: v._id || v.id,
+  featured: v.featured === true,
+  status: v.status || "draft",
+  publishedAt:
+    v.publishedAt instanceof Date
+      ? v.publishedAt.toISOString()
+      : v.publishedAt,
 });
 
 /* ============================================================
@@ -174,7 +172,6 @@ const VideoPreview = ({ open, video, onClose }) => (
           onClick={(e) => e.stopPropagation()}
         >
           <div className="bg-white dark:bg-stone-950 rounded-2xl overflow-hidden border border-stone-200 dark:border-stone-800">
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 dark:border-stone-800">
               <div className="min-w-0 flex-1">
                 <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1">
@@ -192,7 +189,6 @@ const VideoPreview = ({ open, video, onClose }) => (
               </button>
             </div>
 
-            {/* Video */}
             <div className="aspect-video bg-black">
               <iframe
                 src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1`}
@@ -203,7 +199,6 @@ const VideoPreview = ({ open, video, onClose }) => (
               />
             </div>
 
-            {/* Meta */}
             <div className="flex items-center justify-between gap-4 px-5 py-4 border-t border-stone-200 dark:border-stone-800">
               <div className="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500 dark:text-stone-500">
                 {video.category && (
@@ -269,7 +264,7 @@ const VideoDrawer = ({ open, onClose, initial, onSave, saving }) => {
     if (!validate()) return;
     onSave({
       ...form,
-      id: form.id || `vid-${Date.now()}`,
+      youtubeId: form.youtubeId.trim(),
     });
   };
 
@@ -291,7 +286,6 @@ const VideoDrawer = ({ open, onClose, initial, onSave, saving }) => {
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
             className="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-white dark:bg-stone-950 z-50 flex flex-col border-l border-stone-200 dark:border-stone-800"
           >
-            {/* Header */}
             <div className="flex-shrink-0 px-6 py-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400 font-semibold mb-1">
@@ -311,9 +305,7 @@ const VideoDrawer = ({ open, onClose, initial, onSave, saving }) => {
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              {/* Live thumbnail preview */}
               <div className="rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-900 aspect-video flex items-center justify-center border border-stone-200 dark:border-stone-800">
                 {form.youtubeId ? (
                   <div className="relative w-full h-full group">
@@ -321,7 +313,6 @@ const VideoDrawer = ({ open, onClose, initial, onSave, saving }) => {
                       src={thumbnailFor(form.youtubeId)}
                       alt=""
                       onError={(e) => {
-                        // maxresdefault sometimes 404s — fall back to hqdefault
                         e.currentTarget.src = `https://img.youtube.com/vi/${form.youtubeId}/hqdefault.jpg`;
                       }}
                       className="w-full h-full object-cover"
@@ -354,8 +345,6 @@ const VideoDrawer = ({ open, onClose, initial, onSave, saving }) => {
                     value={form.youtubeId}
                     onChange={(e) => {
                       const raw = e.target.value;
-                      // If the user is typing the raw ID, keep as-is.
-                      // If they paste a URL, extract it immediately.
                       if (raw.length > 20) {
                         const id = extractYouTubeId(raw);
                         if (id) update("youtubeId", id);
@@ -480,7 +469,6 @@ const VideoDrawer = ({ open, onClose, initial, onSave, saving }) => {
               </label>
             </div>
 
-            {/* Footer */}
             <div className="flex-shrink-0 px-6 py-4 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-3">
               <button
                 onClick={onClose}
@@ -579,7 +567,7 @@ const ConfirmDelete = ({ open, video, onCancel, onConfirm, deleting }) => (
 );
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const AdminBlogVideos = () => {
@@ -598,17 +586,22 @@ const AdminBlogVideos = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await blogAPI.getVideos();
+      setVideos((res.data || []).map(normalizeVideo));
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load videos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Replace with blogAPI.getVideos()
-    setVideos(
-      mockVideos.map((v) => ({
-        ...v,
-        status: v.status || "published",
-        featured: !!v.featured,
-      }))
-    );
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
@@ -674,50 +667,88 @@ const AdminBlogVideos = () => {
 
   const handleSave = async (payload) => {
     setSaving(true);
-    // Replace with blogAPI.createVideo / updateVideo
-    await new Promise((r) => setTimeout(r, 400));
-    setVideos((prev) => {
-      const exists = prev.find((v) => v.id === payload.id);
-      if (exists) return prev.map((v) => (v.id === payload.id ? payload : v));
-      return [payload, ...prev];
-    });
-    toast.success(editing?.id ? "Video updated" : "Video added");
-    setSaving(false);
-    setDrawerOpen(false);
+    try {
+      const body = {
+        youtubeId: payload.youtubeId.trim(),
+        title: payload.title.trim(),
+        description: payload.description || "",
+        duration: payload.duration.trim(),
+        category: payload.category.trim(),
+        featured: payload.featured === true,
+        status: payload.status || "draft",
+        publishedAt: payload.publishedAt || new Date().toISOString(),
+      };
+
+      if (editing?.id) {
+        await blogAPI.updateVideo(editing.id, body);
+        toast.success("Video updated");
+      } else {
+        await blogAPI.createVideo(body);
+        toast.success("Video added");
+      }
+
+      await fetchData();
+      setDrawerOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to save video");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setVideos((prev) => prev.filter((v) => v.id !== deleteTarget.id));
-    toast.success("Video removed");
-    setDeleting(false);
-    setDeleteTarget(null);
+    try {
+      await blogAPI.deleteVideo(deleteTarget.id);
+      setVideos((prev) => prev.filter((v) => v.id !== deleteTarget.id));
+      toast.success("Video removed");
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to remove video");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const toggleFeatured = (v) => {
+  const toggleFeatured = async (v) => {
+    const next = !v.featured;
     setVideos((prev) =>
-      prev.map((x) =>
-        x.id === v.id ? { ...x, featured: !x.featured } : x
-      )
+      prev.map((x) => (x.id === v.id ? { ...x, featured: next } : x))
     );
-    toast.success(
-      `"${v.title}" ${v.featured ? "unfeatured" : "featured"}`
-    );
+    try {
+      await blogAPI.updateVideo(v.id, { featured: next });
+      toast.success(`"${v.title}" ${next ? "featured" : "unfeatured"}`);
+    } catch (err) {
+      setVideos((prev) =>
+        prev.map((x) =>
+          x.id === v.id ? { ...x, featured: v.featured } : x
+        )
+      );
+      toast.error("Failed to update video");
+    }
   };
 
-  const toggleStatus = (v) => {
+  const toggleStatus = async (v) => {
     const next = v.status === "published" ? "draft" : "published";
     setVideos((prev) =>
       prev.map((x) => (x.id === v.id ? { ...x, status: next } : x))
     );
-    toast.success(next === "published" ? "Published" : "Moved to draft");
+    try {
+      await blogAPI.updateVideo(v.id, { status: next });
+      toast.success(next === "published" ? "Published" : "Moved to draft");
+    } catch (err) {
+      setVideos((prev) =>
+        prev.map((x) => (x.id === v.id ? { ...x, status: v.status } : x))
+      );
+      toast.error("Failed to update status");
+    }
   };
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (same UI as before) ---------- */
   return (
     <div className="space-y-6 pb-24">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400 font-semibold mb-2">
@@ -744,7 +775,7 @@ const AdminBlogVideos = () => {
         </button>
       </div>
 
-      {/* ---------- STATS ---------- */}
+      {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Videos", value: stats.count },
@@ -766,7 +797,7 @@ const AdminBlogVideos = () => {
         ))}
       </div>
 
-      {/* ---------- TOOLBAR ---------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -815,7 +846,7 @@ const AdminBlogVideos = () => {
         </div>
       </div>
 
-      {/* ---------- LIST ---------- */}
+      {/* LIST */}
       {loading ? (
         <div className="py-20 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
@@ -850,7 +881,6 @@ const AdminBlogVideos = () => {
               transition={{ delay: Math.min(i * 0.03, 0.3) }}
               className="group rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 overflow-hidden flex flex-col"
             >
-              {/* Thumbnail */}
               <button
                 onClick={() => setPreviewTarget(v)}
                 className="relative aspect-video bg-stone-100 dark:bg-stone-900 block group/thumb overflow-hidden"
@@ -870,21 +900,18 @@ const AdminBlogVideos = () => {
                   </div>
                 )}
 
-                {/* Dark overlay + play button */}
                 <div className="absolute inset-0 bg-black/30 group-hover/thumb:bg-black/40 transition flex items-center justify-center">
                   <div className="w-12 h-12 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center group-hover/thumb:scale-110 transition">
                     <Play className="w-4 h-4 text-stone-900 ml-0.5" />
                   </div>
                 </div>
 
-                {/* Duration badge */}
                 {v.duration && (
                   <div className="absolute bottom-3 right-3 px-2 py-1 rounded bg-black/80 backdrop-blur-sm text-white text-[10px] font-semibold tracking-wider">
                     {v.duration}
                   </div>
                 )}
 
-                {/* Featured badge */}
                 {v.featured && (
                   <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-amber-500/90 backdrop-blur-sm text-white text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1">
                     <Star className="w-2.5 h-2.5" />
@@ -892,13 +919,11 @@ const AdminBlogVideos = () => {
                   </div>
                 )}
 
-                {/* Status badge */}
                 <div className="absolute top-3 right-3">
                   <StatusBadge status={v.status} />
                 </div>
               </button>
 
-              {/* Body */}
               <div className="flex-1 p-5 flex flex-col">
                 {v.category && (
                   <p className="text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
@@ -916,7 +941,6 @@ const AdminBlogVideos = () => {
                   </p>
                 )}
 
-                {/* Footer */}
                 <div className="mt-auto pt-4 border-t border-stone-100 dark:border-stone-900">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-stone-500">
@@ -981,7 +1005,6 @@ const AdminBlogVideos = () => {
         </div>
       )}
 
-      {/* ---------- FOOTER HINT ---------- */}
       {!loading && filtered.length > 0 && (
         <p className="text-xs text-stone-500 dark:text-stone-500 text-center">
           {filtered.length}{" "}
@@ -991,7 +1014,6 @@ const AdminBlogVideos = () => {
         </p>
       )}
 
-      {/* ---------- DRAWER ---------- */}
       <VideoDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -1000,14 +1022,12 @@ const AdminBlogVideos = () => {
         saving={saving}
       />
 
-      {/* ---------- PREVIEW ---------- */}
       <VideoPreview
         open={!!previewTarget}
         video={previewTarget}
         onClose={() => setPreviewTarget(null)}
       />
 
-      {/* ---------- DELETE ---------- */}
       <ConfirmDelete
         open={!!deleteTarget}
         video={deleteTarget}

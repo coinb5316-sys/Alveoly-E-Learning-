@@ -1,6 +1,5 @@
-// src/pages/blog/BlogVideos.jsx — THE ALVEOLY JOURNAL VIDEO LIBRARY
-// Standalone editorial video page. Mock data. No component imports.
-import React, { useMemo, useState } from "react";
+// src/pages/blog/BlogVideos.jsx — THE ALVEOLY JOURNAL VIDEO LIBRARY (LIVE API)
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -8,11 +7,7 @@ import {
   FaMicrophone, FaStream, FaTag, FaTwitter, FaLinkedin, FaInstagram,
   FaYoutube, FaRss, FaVideo, FaEye, FaBookOpen, FaCheckCircle,
 } from "react-icons/fa";
-import {
-  posts as allPosts,
-  videos as allVideos,
-  categories,
-} from "../../data/blogData";
+import { publicBlogAPI as blogAPI } from "../../api/blogApi";
 
 /* ============================================================
    UTILITIES
@@ -27,12 +22,7 @@ const formatShortDate = (d) =>
       })
     : "";
 
-const slugify = (s) =>
-  String(s)
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-");
+const postImage = (p) => p.image || p.featuredImage || "";
 
 /* ============================================================
    PRIMITIVES
@@ -257,7 +247,7 @@ const JournalFooter = () => {
 };
 
 /* ============================================================
-   VIDEO EMBED (local)
+   VIDEO EMBED
 ============================================================ */
 
 const VideoEmbed = ({ video, autoplay = false }) => (
@@ -275,63 +265,104 @@ const VideoEmbed = ({ video, autoplay = false }) => (
 );
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE PUBLIC API
 ============================================================ */
 
 const BlogVideos = () => {
+  const [videos, setVideos] = useState([]);
+  const [pairedArticles, setPairedArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState("all");
 
-  /* Derive category options from the videos themselves */
+  /* ---------- Fetch videos + paired articles ---------- */
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [vidsRes, postsRes] = await Promise.all([
+          blogAPI.getVideos(),
+          blogAPI.getPosts({ limit: 30, publishedOnly: true }),
+        ]);
+        if (cancelled) return;
+
+        setVideos(vidsRes.data || []);
+        const posts = postsRes.data?.posts || [];
+        const reviewed = posts.filter((p) => p.medicallyReviewed);
+        const pool = reviewed.length > 0 ? reviewed : posts;
+        setPairedArticles(
+          pool
+            .sort(
+              (a, b) =>
+                new Date(b.publishedAt) - new Date(a.publishedAt)
+            )
+            .slice(0, 3)
+        );
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setVideos([]);
+          setPairedArticles([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* ---------- Derive category options ---------- */
   const videoCategories = useMemo(() => {
     const set = new Set();
-    allVideos.forEach((v) => {
+    videos.forEach((v) => {
       if (v.category) set.add(v.category);
     });
     return ["all", ...[...set].sort()];
-  }, []);
+  }, [videos]);
 
-  /* Filter */
+  /* ---------- Filter + sort ---------- */
   const filtered = useMemo(() => {
-    let list = [...allVideos];
+    let list = [...videos];
     if (categoryFilter !== "all") {
       list = list.filter((v) => v.category === categoryFilter);
     }
     list.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
     return list;
-  }, [categoryFilter]);
+  }, [videos, categoryFilter]);
 
-  /* Lead video + rest */
   const lead = filtered[0];
   const rest = filtered.slice(1);
 
-  /* Stats */
+  /* ---------- Total runtime ---------- */
   const totalRuntime = useMemo(() => {
-    // duration is stored as "MM:SS" or "M:SS"
     let total = 0;
-    allVideos.forEach((v) => {
+    videos.forEach((v) => {
       if (!v.duration) return;
       const [m, s] = v.duration.split(":").map((x) => parseInt(x, 10));
       if (!isNaN(m) && !isNaN(s)) total += m * 60 + s;
     });
-    const mins = Math.round(total / 60);
-    return mins;
-  }, []);
+    return Math.round(total / 60);
+  }, [videos]);
 
-  /* Related articles that pair with videos — pick recent medically reviewed pieces */
-  const pairedArticles = useMemo(
-    () =>
-      allPosts
-        .filter((p) => p.medicallyReviewed)
-        .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
-        .slice(0, 3),
-    []
-  );
+  /* ---------- Loading ---------- */
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 dark:border-stone-700 dark:border-t-stone-100 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
       <JournalNav />
 
-      {/* ---------- MASTHEAD ---------- */}
+      {/* MASTHEAD */}
       <header className="border-b border-stone-200 dark:border-stone-800">
         <div className="max-w-5xl mx-auto px-5 pt-12 md:pt-16 pb-10">
           <Link
@@ -356,15 +387,14 @@ const BlogVideos = () => {
             time.
           </p>
 
-          {/* Stats strip */}
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-stone-500 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-800">
             <span>
               <strong className="font-semibold text-stone-900 dark:text-stone-100">
-                {allVideos.length}
+                {videos.length}
               </strong>{" "}
-              {allVideos.length === 1 ? "video" : "videos"}
+              {videos.length === 1 ? "video" : "videos"}
             </span>
-            {videoCategories.length > 1 && (
+            {videoCategories.length > 2 && (
               <>
                 <span className="text-stone-300 dark:text-stone-700">·</span>
                 <span>
@@ -411,7 +441,7 @@ const BlogVideos = () => {
         </div>
       </header>
 
-      {/* ---------- FEATURED + LIST ---------- */}
+      {/* FEATURED + LIST */}
       <section className="max-w-6xl mx-auto px-5 py-12 md:py-16">
         {!lead ? (
           <div className="py-20 text-center max-w-md mx-auto">
@@ -431,7 +461,7 @@ const BlogVideos = () => {
           </div>
         ) : (
           <>
-            {/* ---------- FEATURED VIDEO ---------- */}
+            {/* FEATURED */}
             <motion.article
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -489,7 +519,7 @@ const BlogVideos = () => {
               </div>
             </motion.article>
 
-            {/* ---------- REST OF VIDEOS ---------- */}
+            {/* REST */}
             {rest.length > 0 && (
               <>
                 <div className="flex items-center gap-4 mb-8">
@@ -503,7 +533,7 @@ const BlogVideos = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-12">
                   {rest.map((video, i) => (
                     <motion.article
-                      key={video.id}
+                      key={video._id || video.id}
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{
@@ -551,7 +581,7 @@ const BlogVideos = () => {
         )}
       </section>
 
-      {/* ---------- PAIRED ARTICLES ---------- */}
+      {/* PAIRED ARTICLES */}
       {pairedArticles.length > 0 && (
         <section className="border-t border-stone-200 dark:border-stone-800">
           <div className="max-w-6xl mx-auto px-5 py-14">
@@ -565,23 +595,27 @@ const BlogVideos = () => {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               {pairedArticles.map((post) => {
-                const cat = categories.find((c) => c.id === post.categoryId);
+                const img = postImage(post);
+                const catName =
+                  post.categoryId?.name || post.category?.name || "";
                 return (
                   <Link
-                    key={post.id}
+                    key={post._id || post.id}
                     to={`/blog/${post.slug}`}
                     className="group"
                   >
-                    {post.image && (
+                    {img && (
                       <img
-                        src={post.image}
+                        src={img}
                         alt={post.title}
                         className="w-full aspect-[16/10] object-cover rounded-md mb-4 group-hover:opacity-95 transition"
                       />
                     )}
-                    <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
-                      {cat?.name}
-                    </p>
+                    {catName && (
+                      <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
+                        {catName}
+                      </p>
+                    )}
                     <h3 className="font-serif text-base font-bold leading-snug text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2 mb-2">
                       {post.title}
                     </h3>
@@ -597,7 +631,7 @@ const BlogVideos = () => {
         </section>
       )}
 
-      {/* ---------- OTHER MEDIA ---------- */}
+      {/* OTHER MEDIA */}
       <section className="border-t border-stone-200 dark:border-stone-800">
         <div className="max-w-6xl mx-auto px-5 py-14">
           <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-6">
