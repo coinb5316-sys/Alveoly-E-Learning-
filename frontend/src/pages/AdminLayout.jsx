@@ -45,6 +45,8 @@ import {
   Scale,
   ShieldCheck,
   Megaphone,
+  Archive,
+  Mail,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationPanel from "../components/NotificationPanel";
@@ -243,6 +245,18 @@ const AdminLayout = () => {
           icon: Newspaper,
           color: "text-rose-500",
         },
+        {
+      to: "/admin/blog/archive",
+      label: "Archive",
+      icon: Archive,           // add this icon to your lucide import list
+      color: "text-indigo-500",
+    },
+    {
+      to: "/admin/blog/subscribers",
+      label: "Subscribers",
+      icon: Mail,               // add this icon to your lucide import list
+      color: "text-sky-500",
+    },
         {
           to: "/admin/blog/create",
           label: "Create Post",

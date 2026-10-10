@@ -149,6 +149,8 @@ import EditorialPolicy from "./pages/EditorialPolicy";
 import AdvertisingPolicy from "./pages/AdvertisingPolicy";
 import MedicalReviewPolicy from "./pages/MedicalReviewPolicy";
 import Sitemap from "./pages/Sitemap";
+import AdminBlogSubscribers from "./pages/admin/blog/AdminBlogSubscribers";
+import AdminBlogArchive from "./pages/admin/blog/AdminBlogArchive";
 
 function App() {
   /* ---------- Splash ---------- */
@@ -359,6 +361,8 @@ function App() {
             <Route path="blog/videos" element={<AdminBlogVideos />} />
             <Route path="blog/media" element={<AdminBlogMedia />} />
             <Route path="blog/testimonials" element={<AdminBlogTestimonials />} />
+            <Route path="blog/subscribers" element={<AdminBlogSubscribers />} />
+            <Route path="blog/archive" element={<AdminBlogArchive />} />
 
             {/* ---------- Blog trust policies (editors) ----------
                 These three stubs will be replaced by dedicated
