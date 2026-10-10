@@ -1,7 +1,7 @@
 // src/pages/admin/blog/AdminBlogAuthors.jsx — EDITORIAL ADMIN
 // Author management for The Alveoly Journal. Matches public editorial design.
 import React, { useEffect, useMemo, useState } from "react";
-// AFTER (works)
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Plus, X, Edit3, Trash2, Check, Mail, Link2,
   Globe, GraduationCap, Award, AlertCircle, Loader2,
@@ -235,7 +235,18 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
 
   useEffect(() => {
     if (open) {
-      setForm(initial ? { ...emptyAuthor(), ...initial, social: { ...emptyAuthor().social, ...(initial.social || {}) } } : emptyAuthor());
+      setForm(
+        initial
+          ? {
+              ...emptyAuthor(),
+              ...initial,
+              social: {
+                ...emptyAuthor().social,
+                ...(initial.social || {}),
+              },
+            }
+          : emptyAuthor()
+      );
       setErrors({});
     }
   }, [open, initial]);
@@ -292,7 +303,9 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
                   {initial?.id ? "Edit author" : "New author"}
                 </p>
                 <h2 className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-50">
-                  {initial?.id ? form.name || "Edit author" : "Add a contributor"}
+                  {initial?.id
+                    ? form.name || "Edit author"
+                    : "Add a contributor"}
                 </h2>
               </div>
               <button
@@ -309,7 +322,10 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
               <div className="flex items-center gap-4">
                 <Avatar author={form} size="lg" />
                 <div className="flex-1">
-                  <Field label="Avatar URL" hint="Paste an image URL. Leave empty to use initials.">
+                  <Field
+                    label="Avatar URL"
+                    hint="Paste an image URL. Leave empty to use initials."
+                  >
                     <TextInput
                       value={form.avatar}
                       onChange={(e) => update("avatar", e.target.value)}
@@ -328,7 +344,10 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
               </Field>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Role" hint="Short title, e.g. Chief Medical Editor">
+                <Field
+                  label="Role"
+                  hint="Short title, e.g. Chief Medical Editor"
+                >
                   <TextInput
                     value={form.role}
                     onChange={(e) => update("role", e.target.value)}
@@ -344,7 +363,11 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
                 </Field>
               </div>
 
-              <Field label="Email" hint="Internal use only. Not shown publicly unless you add it to Social." error={errors.email}>
+              <Field
+                label="Email"
+                hint="Internal use only. Not shown publicly unless you add it to Social."
+                error={errors.email}
+              >
                 <TextInput
                   type="email"
                   value={form.email}
@@ -353,7 +376,10 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
                 />
               </Field>
 
-              <Field label="Bio" hint="2–4 sentences. This appears on author pages.">
+              <Field
+                label="Bio"
+                hint="2–4 sentences. This appears on author pages."
+              >
                 <TextArea
                   value={form.bio}
                   onChange={(e) => update("bio", e.target.value)}
@@ -362,7 +388,10 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
                 />
               </Field>
 
-              <Field label="Areas of expertise" hint="Press Enter after each one.">
+              <Field
+                label="Areas of expertise"
+                hint="Press Enter after each one."
+              >
                 <SpecialtyInput
                   values={form.specialties}
                   onChange={(v) => update("specialties", v)}
@@ -389,7 +418,9 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
                       <div className="flex-1">
                         <TextInput
                           value={form.social[key]}
-                          onChange={(e) => update(`social.${key}`, e.target.value)}
+                          onChange={(e) =>
+                            update(`social.${key}`, e.target.value)
+                          }
                           placeholder={
                             key === "email"
                               ? "name@example.com"
@@ -660,7 +691,9 @@ const AdminBlogAuthors = () => {
     setAuthors((prev) =>
       prev.map((a) => (a.id === author.id ? { ...a, active: !a.active } : a))
     );
-    toast.success(`${author.name} ${author.active ? "deactivated" : "activated"}`);
+    toast.success(
+      `${author.name} ${author.active ? "deactivated" : "activated"}`
+    );
   };
 
   /* ---------- Render ---------- */
@@ -704,9 +737,8 @@ const AdminBlogAuthors = () => {
           },
           {
             label: "Stories attributed",
-            value: posts.filter((p) =>
-              authors.some((a) => a.id === p.authorId)
-            ).length,
+            value: posts.filter((p) => authors.some((a) => a.id === p.authorId))
+              .length,
           },
         ].map((s) => (
           <div
@@ -796,7 +828,9 @@ const AdminBlogAuthors = () => {
                 animate={{ opacity: 1 }}
                 transition={{ delay: Math.min(i * 0.02, 0.3) }}
                 className={`flex items-start md:items-center gap-4 px-5 py-5 ${
-                  i > 0 ? "border-t border-stone-100 dark:border-stone-900" : ""
+                  i > 0
+                    ? "border-t border-stone-100 dark:border-stone-900"
+                    : ""
                 } hover:bg-stone-50/50 dark:hover:bg-stone-900/30 transition group`}
               >
                 <Avatar author={a} size="lg" />
