@@ -2,7 +2,7 @@
 import Post from "../../models/Post.js";
 import Author from "../../models/Author.js";
 import Category from "../../models/Category.js";
-import { uploadToCloudinary } from "../../config/cloudinary.js";
+import { uploadToCloudinary } from "../../../config/cloudinary.js";
 
 /* ---------- Helpers ---------- */
 const parseJSONField = (val, fallback) => {

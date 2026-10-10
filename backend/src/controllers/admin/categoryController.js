@@ -1,7 +1,7 @@
 // server/controllers/admin/categoryController.js
 import Category from "../../models/Category.js";
 import Post from "../../models/Post.js";
-import { uploadToCloudinary } from "../../config/cloudinary.js";
+import { uploadToCloudinary } from "../../../config/cloudinary.js";
 
 export const getCategories = async (req, res) => {
   try {

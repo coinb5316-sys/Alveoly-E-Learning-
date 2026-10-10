@@ -1,6 +1,6 @@
 // server/controllers/admin/podcastController.js
 import Podcast from "../../models/Podcast.js";
-import { uploadToCloudinary } from "../../config/cloudinary.js";
+import { uploadToCloudinary } from "../../../config/cloudinary.js";
 
 export const getPodcasts = async (req, res) => {
   try {

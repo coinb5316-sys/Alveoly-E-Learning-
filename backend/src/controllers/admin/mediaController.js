@@ -2,7 +2,7 @@
 import Post from "../../models/Post.js";
 import Podcast from "../../models/Podcast.js";
 import Author from "../../models/Author.js";
-import { uploadToCloudinary } from "../../config/cloudinary.js";
+import { uploadToCloudinary } from "../../../config/cloudinary.js";
 
 /* Build a catalog of every image URL in the journal + its usages */
 export const getMedia = async (req, res) => {
