@@ -1,4 +1,4 @@
-// routes/blogRoutes.js - COMPLETE FIXED
+// routes/blogRoutes.js - COMPLETE FIXED (no dead import)
 import express from "express";
 import {
   // Posts
@@ -32,13 +32,13 @@ import {
   rejectComment,
   deleteComment,
   getCommentStats,
-  // Likes/Views
+  // Likes / Views
   toggleLike,
-  incrementViews
+  incrementViews,
 } from "../controllers/blogController.js";
+
 import { protect, adminOnly } from "../middleware/authMiddleware.js";
 import { upload } from "../../config/multer.js";
-import { createAuthor, deleteAuthor, getAuthors, updateAuthor } from "../controllers/blogAuthorController.js";
 
 const router = express.Router();
 
@@ -66,8 +66,10 @@ router.get("/categories/:slug", getCategoryBySlug);
 router.get("/comments/:postId", getComments);
 router.post("/comments/:postId", addComment);
 
-// ==================== ADMIN ROUTES - PROTECTED ====================
-// These are also available through /admin/blog but kept here for backward compatibility
+// ==================== ADMIN-UNDER-BLOG ROUTES ====================
+// NOTE: Author routes have moved to routes/adminBlogRoutes.js
+// (mounted at /api/admin/blog). Do NOT re-import blogAuthorController here.
+
 router.post("/admin/posts", protect, adminOnly, upload.single("featuredImage"), createBlogPost);
 router.put("/admin/posts/:id", protect, adminOnly, upload.single("featuredImage"), updateBlogPost);
 router.delete("/admin/posts/:id", protect, adminOnly, deleteBlogPost);
@@ -75,11 +77,6 @@ router.delete("/admin/posts/bulk", protect, adminOnly, bulkDeletePosts);
 router.patch("/admin/posts/:id/featured", protect, adminOnly, toggleFeatured);
 router.patch("/admin/posts/:id/publish", protect, adminOnly, publishBlogPost);
 router.patch("/admin/posts/:id/archive", protect, adminOnly, archiveBlogPost);
-
-router.get("/admin/authors", protect, adminOnly, getAuthors);
-router.post("/admin/authors", protect, adminOnly, createAuthor);
-router.put("/admin/authors/:id", protect, adminOnly, updateAuthor);
-router.delete("/admin/authors/:id", protect, adminOnly, deleteAuthor);
 
 // Admin category routes
 router.post("/admin/categories", protect, adminOnly, createCategory);
