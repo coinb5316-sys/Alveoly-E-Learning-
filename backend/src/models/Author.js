@@ -1,4 +1,4 @@
-// server/models/Author.js
+// backend/src/models/Author.js
 import mongoose from "mongoose";
 
 const socialSchema = new mongoose.Schema(
@@ -25,14 +25,16 @@ const authorSchema = new mongoose.Schema(
     specialties: [{ type: String }],
     social: { type: socialSchema, default: () => ({}) },
     active: { type: Boolean, default: true },
-    // Denormalized for fast public reads
     postCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
 
-// Auto-slug from name
-authorSchema.pre("save", function (next) {
+// ✅ Async-style hook — NO `next` parameter.
+// Mongoose 6/7/8 all treat this as an awaited async hook.
+// Do NOT add a `next` parameter here or you'll reintroduce the
+// `TypeError: next is not a function` on Mongoose 8.
+authorSchema.pre("save", function () {
   if (this.isModified("name") && !this.slug) {
     this.slug = this.name
       .toLowerCase()
@@ -40,8 +42,21 @@ authorSchema.pre("save", function (next) {
       .replace(/[^\w\s-]/g, "")
       .replace(/\s+/g, "-");
   }
-  next();
 });
+
+// Also handle the case where name is modified but a slug already existed
+// and the user wants it to update. Uncomment if you want slug to auto-refresh
+// on rename:
+//
+// authorSchema.pre("save", function () {
+//   if (this.isModified("name")) {
+//     this.slug = this.name
+//       .toLowerCase()
+//       .trim()
+//       .replace(/[^\w\s-]/g, "")
+//       .replace(/\s+/g, "-");
+//   }
+// });
 
 authorSchema.index({ name: "text", role: "text", specialties: "text" });
 
