@@ -1,10 +1,9 @@
-// src/api/blogApi.js - COMPLETE WITH AUTHOR AND TAG METHODS
+// src/api/blogApi.js - FIXED (no manual Content-Type)
 import API from "./axios";
 
-// Base API service for blog operations
 const blogAPI = {
   // ==================== POST OPERATIONS ====================
-  
+
   getPosts: async (params = {}) => {
     try {
       const response = await API.get("/blog/posts", { params });
@@ -37,11 +36,8 @@ const blogAPI = {
 
   createPost: async (formData) => {
     try {
-      const response = await API.post("/admin/blog/posts", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      // ✅ DO NOT set Content-Type manually — Axios sets it with the boundary
+      const response = await API.post("/admin/blog/posts", formData);
       return response.data;
     } catch (error) {
       console.error("Error creating blog post:", error);
@@ -51,11 +47,8 @@ const blogAPI = {
 
   updatePost: async (id, formData) => {
     try {
-      const response = await API.put(`/admin/blog/posts/${id}`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      // ✅ DO NOT set Content-Type manually
+      const response = await API.put(`/admin/blog/posts/${id}`, formData);
       return response.data;
     } catch (error) {
       console.error("Error updating blog post:", error);

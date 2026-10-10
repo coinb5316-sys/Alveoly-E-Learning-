@@ -1,12 +1,17 @@
 // config/multer.js - COMPLETE FIXED
 import multer from "multer";
 
-// Memory storage - files stored as Buffer in memory
 const storage = multer.memoryStorage();
 
-// File filter for images only
 const imageFilter = (req, file, cb) => {
-  const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
+  const allowedTypes = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+  ];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -14,34 +19,24 @@ const imageFilter = (req, file, cb) => {
   }
 };
 
-// Single image upload for featured images
+// Single upload
 const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  },
-  fileFilter: imageFilter
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: imageFilter,
 });
 
-// Multiple images upload for gallery
+// Array upload for gallery (10 max)
 const uploadMultiple = multer({
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024
-  },
-  fileFilter: imageFilter
-}).array("galleryImages", 10);
-
-// Any file upload (for future use)
-const uploadAny = multer({
-  storage: storage,
-  limits: {
-    fileSize: 50 * 1024 * 1024
-  }
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: imageFilter,
 });
 
-export {
-  upload,
-  uploadMultiple,
-  uploadAny
-};
+// Any file type
+const uploadAny = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
+
+export { upload, uploadMultiple, uploadAny };
