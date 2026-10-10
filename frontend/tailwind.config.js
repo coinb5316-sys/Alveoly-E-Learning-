@@ -48,7 +48,38 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      typography: (theme) => ({
+        DEFAULT: {
+          css: {
+            maxWidth: "none",
+          },
+        },
+        // ✅ Dark-mode prose so blog articles stay readable in dark theme
+        invert: {
+          css: {
+            color: theme("colors.gray.300"),
+            "h1, h2, h3, h4": {
+              color: theme("colors.white"),
+            },
+            a: {
+              color: theme("colors.teal.400"),
+            },
+            strong: {
+              color: theme("colors.white"),
+            },
+            blockquote: {
+              color: theme("colors.gray.400"),
+              borderLeftColor: theme("colors.teal.500"),
+            },
+            code: {
+              color: theme("colors.gray.200"),
+            },
+          },
+        },
+      }),
     },
   },
-  plugins: [],
-}
+  plugins: [
+    require('@tailwindcss/typography'),
+  ],
+};

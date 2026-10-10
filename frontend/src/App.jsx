@@ -104,6 +104,20 @@ import LegalPage from "./pages/LegalPage";
 import PharmacyPage from "./pages/PharmacyPage";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 
+import Blog from "./pages/Blog";
+import BlogPost from "./pages/blog/BlogPost";
+import BlogCategory from "./pages/blog/BlogCategory";
+import BlogAuthor from "./pages/blog/BlogAuthor";
+import BlogSearch from "./pages/blog/BlogSearch";
+import BlogTag from "./pages/blog/BlogTag";
+import BlogArchive from "./pages/blog/BlogArchive";
+import BlogPodcasts from "./pages/blog/BlogPodcasts";
+import BlogVideos from "./pages/blog/BlogVideos";
+import EditorialPolicy from "./pages/EditorialPolicy";
+import AdvertisingPolicy from "./pages/AdvertisingPolicy";
+import MedicalReviewPolicy from "./pages/MedicalReviewPolicy";
+import Sitemap from "./pages/Sitemap";
+
 // ⬇️ NEW: Splash Screen import
 import SplashScreen from "./components/SplashScreen";
 
@@ -177,6 +191,21 @@ function App() {
           <Route path="/programs/:id" element={<ProgramDetail />} />
           <Route path="/admissions" element={<Admissions />} />
           <Route path="/contact_us" element={<Contact />} />
+
+          /* ==================== BLOG ROUTES ==================== */
+<Route path="/blog" element={<Blog />} />
+<Route path="/blog/:slug" element={<BlogPost />} />
+<Route path="/blog/category/:slug" element={<BlogCategory />} />
+<Route path="/blog/author/:id" element={<BlogAuthor />} />
+<Route path="/blog/search" element={<BlogSearch />} />
+<Route path="/blog/tag/:tag" element={<BlogTag />} />
+<Route path="/blog/archive" element={<BlogArchive />} />
+<Route path="/blog/podcasts" element={<BlogPodcasts />} />
+<Route path="/blog/videos" element={<BlogVideos />} />
+<Route path="/editorial-policy" element={<EditorialPolicy />} />
+<Route path="/advertising-policy" element={<AdvertisingPolicy />} />
+<Route path="/medical-review-policy" element={<MedicalReviewPolicy />} />
+<Route path="/sitemap" element={<Sitemap />} />
 
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
