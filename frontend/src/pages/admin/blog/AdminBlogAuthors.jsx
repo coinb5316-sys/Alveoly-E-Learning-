@@ -1,13 +1,18 @@
 // src/pages/admin/blog/AdminBlogAuthors.jsx — EDITORIAL ADMIN
 // Author management for The Alveoly Journal. Matches public editorial design.
 import React, { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+// AFTER (works)
 import {
   Search, Plus, X, Edit3, Trash2, Check, Mail, Link2,
-  Twitter, Linkedin, Instagram, Youtube, Globe, GraduationCap,
-  Award, AlertCircle, Loader2, ChevronDown, Save, User,
-  BookOpen, Heart, Eye, MoreVertical,
+  Globe, GraduationCap, Award, AlertCircle, Loader2,
+  ChevronDown, Save, User, BookOpen, Heart, Eye, MoreVertical,
 } from "lucide-react";
+import {
+  FaTwitter as Twitter,
+  FaLinkedin as Linkedin,
+  FaInstagram as Instagram,
+  FaYoutube as Youtube,
+} from "react-icons/fa";
 import { toast } from "react-hot-toast";
 // If you have a blogAPI module, uncomment and use it. Otherwise this
 // page works against mock data from ../../../data/blogData
