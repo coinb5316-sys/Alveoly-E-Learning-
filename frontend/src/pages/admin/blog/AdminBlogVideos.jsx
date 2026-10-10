@@ -5,9 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Plus, X, Edit3, Trash2, Loader2, Save, AlertCircle,
   Video, Play, ExternalLink, Star, Clock, Calendar, Eye,
-  Film, Check, Copy, RotateCw, Youtube, Link2,
+  Film, Check, Copy, RotateCw, Link2,
   Maximize2, ChevronDown,
 } from "lucide-react";
+import { Youtube } from "../../../components/icons/BrandIcons";
 import { toast } from "react-hot-toast";
 // import blogAPI from "../../../api/blogApi"; // ← enable when backend ready
 import { videos as mockVideos } from "../../../data/blogData";
