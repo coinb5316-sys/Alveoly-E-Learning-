@@ -98,7 +98,7 @@ const AdminCreateBlogPost = () => {
   const contentEditorRef = useRef(null);
   const fileInputRef = useRef(null);
   const galleryInputRef = useRef(null);
-  
+
   const [formData, setFormData] = useState({
     title: '',
     subtitle: '',
@@ -115,7 +115,7 @@ const AdminCreateBlogPost = () => {
     publishDate: null,
     metaDescription: '',
     metaKeywords: '',
-    authorId: '', // Changed to store author ID
+    authorId: '',
     authorName: '',
     authorTitle: '',
     authorBio: '',
@@ -129,7 +129,7 @@ const AdminCreateBlogPost = () => {
     showAuthor: true,
     showShareButtons: true
   });
-  
+
   const [categories, setCategories] = useState([]);
   const [allPosts, setAllPosts] = useState([]);
   const [authors, setAuthors] = useState([]);
@@ -206,7 +206,6 @@ const AdminCreateBlogPost = () => {
       }
     } catch (error) {
       console.error('Error fetching authors:', error);
-      // Fallback: try the regular authors endpoint
       try {
         const fallbackResponse = await blogAPI.getAuthors({ limit: 100 });
         if (fallbackResponse.success) {
@@ -222,25 +221,23 @@ const AdminCreateBlogPost = () => {
     try {
       setLoading(true);
       const response = await blogAPI.getPostById(id);
-      
+
       if (response.success) {
         const post = response.data;
-        
-        // Find author if exists
+
         let authorId = '';
         let authorName = post.authorName || '';
         let authorTitle = post.authorTitle || '';
         let authorBio = post.authorBio || '';
         let authorImage = post.authorImage || '';
-        
+
         if (post.author && post.author._id) {
           authorId = post.author._id;
           authorName = post.author.name || post.authorName || '';
           authorTitle = post.author.title || post.authorTitle || '';
           authorBio = post.author.bio || post.authorBio || '';
           authorImage = post.author.avatar || post.authorImage || '';
-          
-          // Find the author in the authors list
+
           const foundAuthor = authors.find(a => a._id === post.author._id);
           if (foundAuthor) {
             setSelectedAuthorDetails(foundAuthor);
@@ -249,7 +246,7 @@ const AdminCreateBlogPost = () => {
             authorImage = foundAuthor.avatar || authorImage;
           }
         }
-        
+
         setFormData({
           title: post.title || '',
           subtitle: post.subtitle || '',
@@ -280,7 +277,7 @@ const AdminCreateBlogPost = () => {
           showAuthor: post.showAuthor !== undefined ? post.showAuthor : true,
           showShareButtons: post.showShareButtons !== undefined ? post.showShareButtons : true
         });
-        
+
         if (post.featuredImage) {
           setImagePreview(post.featuredImage);
         }
@@ -347,7 +344,7 @@ const AdminCreateBlogPost = () => {
   };
 
   // ==================== AUTHOR SELECTION HANDLERS ====================
-  
+
   const handleSelectAuthor = (author) => {
     setSelectedAuthorDetails(author);
     setFormData(prev => ({
@@ -377,7 +374,7 @@ const AdminCreateBlogPost = () => {
   const getFilteredAuthors = () => {
     if (!authorSearch.trim()) return [];
     return authors
-      .filter(a => 
+      .filter(a =>
         a.name.toLowerCase().includes(authorSearch.toLowerCase()) ||
         a.email.toLowerCase().includes(authorSearch.toLowerCase()) ||
         (a.title && a.title.toLowerCase().includes(authorSearch.toLowerCase()))
@@ -504,8 +501,8 @@ const AdminCreateBlogPost = () => {
   const getFilteredRelatedPosts = () => {
     if (!relatedSearch.trim()) return [];
     return allPosts
-      .filter(p => 
-        p._id !== id && 
+      .filter(p =>
+        p._id !== id &&
         !formData.relatedPosts.includes(p._id) &&
         p.title.toLowerCase().includes(relatedSearch.toLowerCase())
       )
@@ -520,183 +517,188 @@ const AdminCreateBlogPost = () => {
     if (!formData.content.trim()) newErrors.content = 'Content is required';
     if (!formData.category) newErrors.category = 'Category is required';
     if (!formData.authorId && !formData.authorName) newErrors.author = 'Author is required';
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   // ==================== SAVE / PUBLISH ====================
 
-const handleSave = async (status = "draft") => {
-  console.log("🚀 handleSave called with status:", status);
+  const handleSave = async (status = "draft") => {
+    console.log("🚀 handleSave called with status:", status);
 
-  if (!validateForm()) {
-    toast.error("Please fix the errors before saving");
-    return;
-  }
-
-  try {
-    setSaving(true);
-    console.log("📦 Building FormData...");
-
-    const formDataToSend = new FormData();
-
-    // Basic fields
-    formDataToSend.append("title", formData.title || "");
-    formDataToSend.append("subtitle", formData.subtitle || "");
-    formDataToSend.append("content", formData.content || "");
-    formDataToSend.append("category", formData.category || "");
-    formDataToSend.append("status", status);
-    formDataToSend.append("featured", formData.featured ? "true" : "false");
-    formDataToSend.append("readingTime", String(formData.readingTime || 5));
-    formDataToSend.append(
-      "allowComments",
-      formData.allowComments ? "true" : "false"
-    );
-    formDataToSend.append("showAuthor", formData.showAuthor ? "true" : "false");
-    formDataToSend.append(
-      "showShareButtons",
-      formData.showShareButtons ? "true" : "false"
-    );
-
-    // Media fields
-    formDataToSend.append("videoUrl", formData.videoUrl || "");
-    formDataToSend.append("videoEmbed", formData.videoEmbed || "");
-    formDataToSend.append("audioUrl", formData.audioUrl || "");
-
-    // ✅ AUTHOR: send both authorId (BlogAuthor._id) AND fallback name fields
-    if (formData.authorId) {
-      formDataToSend.append("authorId", formData.authorId);
-    }
-    formDataToSend.append("authorName", formData.authorName || "");
-    formDataToSend.append("authorTitle", formData.authorTitle || "");
-    formDataToSend.append("authorBio", formData.authorBio || "");
-    formDataToSend.append("authorImage", formData.authorImage || "");
-
-    // SEO
-    formDataToSend.append("metaDescription", formData.metaDescription || "");
-    formDataToSend.append("metaKeywords", formData.metaKeywords || "");
-
-    // JSON fields
-    formDataToSend.append("tags", JSON.stringify(formData.tags || []));
-    formDataToSend.append("references", JSON.stringify(formData.references || []));
-    formDataToSend.append(
-      "learningObjectives",
-      JSON.stringify(formData.learningObjectives || [])
-    );
-    formDataToSend.append(
-      "statistics",
-      JSON.stringify(formData.statistics || [])
-    );
-    formDataToSend.append(
-      "relatedPosts",
-      JSON.stringify(formData.relatedPosts || [])
-    );
-
-    // ✅ GALLERY: separate existing URL strings from new File objects
-    const galleryUrls = (formData.galleryImages || []).filter(
-      (img) => typeof img === "string"
-    );
-    const galleryFiles = (formData.galleryImages || []).filter(
-      (img) => img instanceof File
-    );
-
-    if (galleryUrls.length > 0) {
-      formDataToSend.append("galleryImages", JSON.stringify(galleryUrls));
-    }
-    galleryFiles.forEach((file) => {
-      formDataToSend.append("galleryImages", file);
-    });
-
-    // Publish date — only append if it's a valid string
-    if (
-      formData.publishDate &&
-      formData.publishDate !== "null" &&
-      formData.publishDate !== ""
-    ) {
-      formDataToSend.append("publishDate", formData.publishDate);
+    if (!validateForm()) {
+      toast.error("Please fix the errors before saving");
+      return;
     }
 
-    // Featured image — three cases
-    if (formData.featuredImage instanceof File) {
-      formDataToSend.append("featuredImage", formData.featuredImage);
-    } else if (
-      typeof formData.featuredImage === "string" &&
-      formData.featuredImage.trim() !== ""
-    ) {
-      formDataToSend.append("featuredImageUrl", formData.featuredImage);
-    } else {
-      // null or "" → explicit removal
-      formDataToSend.append("featuredImageUrl", "");
-    }
+    try {
+      setSaving(true);
+      console.log("📦 Building FormData...");
 
-    // Debug: log FormData contents
-    console.log("📦 FormData entries:");
-    for (let pair of formDataToSend.entries()) {
-      if (pair[1] instanceof File) {
-        console.log(`  ${pair[0]}: File(${pair[1].name})`);
-      } else {
-        console.log(`  ${pair[0]}: ${String(pair[1]).slice(0, 100)}`);
-      }
-    }
+      const formDataToSend = new FormData();
 
-    let response;
-    if (isEditing) {
-      console.log(`📤 Updating post ${id}...`);
-      response = await blogAPI.updatePost(id, formDataToSend);
-    } else {
-      console.log("📤 Creating new post...");
-      response = await blogAPI.createPost(formDataToSend);
-    }
-
-    console.log("📥 Response:", response);
-
-    if (response && response.success) {
-      toast.success(
-        isEditing ? "Post updated successfully!" : "Post created successfully!"
+      // Basic fields
+      formDataToSend.append("title", formData.title || "");
+      formDataToSend.append("subtitle", formData.subtitle || "");
+      formDataToSend.append("content", formData.content || "");
+      formDataToSend.append("category", formData.category || "");
+      formDataToSend.append("status", status);
+      formDataToSend.append("featured", formData.featured ? "true" : "false");
+      formDataToSend.append("readingTime", String(formData.readingTime || 5));
+      formDataToSend.append(
+        "allowComments",
+        formData.allowComments ? "true" : "false"
+      );
+      formDataToSend.append("showAuthor", formData.showAuthor ? "true" : "false");
+      formDataToSend.append(
+        "showShareButtons",
+        formData.showShareButtons ? "true" : "false"
       );
 
-      if (status === "published") {
-        navigate("/admin/blog/posts");
+      // Media fields
+      formDataToSend.append("videoUrl", formData.videoUrl || "");
+      formDataToSend.append("videoEmbed", formData.videoEmbed || "");
+      formDataToSend.append("audioUrl", formData.audioUrl || "");
+
+      // AUTHOR: send both authorId (BlogAuthor._id) AND fallback name fields
+      if (formData.authorId) {
+        formDataToSend.append("authorId", formData.authorId);
+      }
+      formDataToSend.append("authorName", formData.authorName || "");
+      formDataToSend.append("authorTitle", formData.authorTitle || "");
+      formDataToSend.append("authorBio", formData.authorBio || "");
+      formDataToSend.append("authorImage", formData.authorImage || "");
+
+      // SEO
+      formDataToSend.append("metaDescription", formData.metaDescription || "");
+      formDataToSend.append("metaKeywords", formData.metaKeywords || "");
+
+      // JSON fields
+      formDataToSend.append("tags", JSON.stringify(formData.tags || []));
+      formDataToSend.append("references", JSON.stringify(formData.references || []));
+      formDataToSend.append(
+        "learningObjectives",
+        JSON.stringify(formData.learningObjectives || [])
+      );
+      formDataToSend.append(
+        "statistics",
+        JSON.stringify(formData.statistics || [])
+      );
+      formDataToSend.append(
+        "relatedPosts",
+        JSON.stringify(formData.relatedPosts || [])
+      );
+
+      // GALLERY: separate existing URL strings from new File objects
+      const galleryUrls = (formData.galleryImages || []).filter(
+        (img) => typeof img === "string"
+      );
+      const galleryFiles = (formData.galleryImages || []).filter(
+        (img) => img instanceof File
+      );
+
+      if (galleryUrls.length > 0) {
+        formDataToSend.append("galleryImages", JSON.stringify(galleryUrls));
+      }
+      galleryFiles.forEach((file) => {
+        formDataToSend.append("galleryImages", file);
+      });
+
+      // Publish date — only append if it's a valid string
+      if (
+        formData.publishDate &&
+        formData.publishDate !== "null" &&
+        formData.publishDate !== ""
+      ) {
+        formDataToSend.append("publishDate", formData.publishDate);
+      }
+
+      // Featured image — three cases
+      if (formData.featuredImage instanceof File) {
+        formDataToSend.append("featuredImage", formData.featuredImage);
+      } else if (
+        typeof formData.featuredImage === "string" &&
+        formData.featuredImage.trim() !== ""
+      ) {
+        formDataToSend.append("featuredImageUrl", formData.featuredImage);
       } else {
-        toast.success("Draft saved successfully");
-        if (!isEditing && response.data?._id) {
-          navigate(`/admin/blog/edit/${response.data._id}`);
+        formDataToSend.append("featuredImageUrl", "");
+      }
+
+      // Debug: log FormData contents
+      console.log("📦 FormData entries:");
+      for (let pair of formDataToSend.entries()) {
+        if (pair[1] instanceof File) {
+          console.log(`  ${pair[0]}: File(${pair[1].name})`);
+        } else {
+          console.log(`  ${pair[0]}: ${String(pair[1]).slice(0, 100)}`);
         }
       }
-    } else {
-      const msg = response?.message || "Failed to save post";
-      console.error("❌ Save failed:", msg);
-      toast.error(msg);
+
+      let response;
+      if (isEditing) {
+        console.log(`📤 Updating post ${id}...`);
+        response = await blogAPI.updatePost(id, formDataToSend);
+      } else {
+        console.log("📤 Creating new post...");
+        response = await blogAPI.createPost(formDataToSend);
+      }
+
+      console.log("📥 Response:", response);
+
+      if (response && response.success) {
+        toast.success(
+          isEditing ? "Post updated successfully!" : "Post created successfully!"
+        );
+
+        if (status === "published") {
+          navigate("/admin/blog/posts");
+        } else {
+          toast.success("Draft saved successfully");
+          if (!isEditing && response.data?._id) {
+            navigate(`/admin/blog/edit/${response.data._id}`);
+          }
+        }
+      } else {
+        const msg = response?.message || "Failed to save post";
+        console.error("❌ Save failed:", msg);
+        toast.error(msg);
+      }
+    } catch (error) {
+      console.error("❌ handleSave error:", error);
+      console.error("   Error response:", error.response);
+      console.error("   Error data:", error.response?.data);
+
+      const serverMessage =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to save post";
+
+      toast.error(serverMessage);
+    } finally {
+      setSaving(false);
+      console.log("🏁 handleSave finished");
     }
-  } catch (error) {
-    console.error("❌ handleSave error:", error);
-    console.error("   Error response:", error.response);
-    console.error("   Error data:", error.response?.data);
+  };
 
-    const serverMessage =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
-      "Failed to save post";
+  // ✅ FIX: This was missing — that's why `handlePublish is not defined`
+  const handlePublish = () => {
+    handleSave("published");
+  };
 
-    toast.error(serverMessage);
-  } finally {
-    setSaving(false);
-    console.log("🏁 handleSave finished");
-  }
-};
   // ==================== CONTENT EDITOR ====================
 
   const insertText = (before, after = '') => {
     const textarea = contentEditorRef.current;
     if (!textarea) return;
-    
+
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selectedText = textarea.value.substring(start, end);
     const newText = before + selectedText + after;
-    
+
     setFormData(prev => ({
       ...prev,
       content: prev.content.substring(0, start) + newText + prev.content.substring(end)
@@ -713,18 +715,24 @@ const handleSave = async (status = "draft") => {
     { icon: List, action: () => insertText('<ul>\n  <li>', '</li>\n</ul>'), label: 'List' },
     { type: 'divider' },
     { icon: Quote, action: () => insertText('<blockquote>\n  ', '\n</blockquote>'), label: 'Quote' },
-    { icon: LinkIcon, action: () => {
-      const url = prompt('Enter URL:');
-      if (url) insertText(`<a href="${url}">`, '</a>');
-    }, label: 'Link' },
-    { icon: Image, action: () => {
-      const url = prompt('Enter image URL:');
-      if (url) insertText(`<img src="${url}" alt="Image" />`, '');
-    }, label: 'Image' },
-    { icon: Video, action: () => {
-      const url = prompt('Enter video URL (YouTube/Vimeo):');
-      if (url) insertText(`<figure>\n  <iframe src="${url}" allowfullscreen></iframe>\n  <figcaption>Video caption</figcaption>\n</figure>`, '');
-    }, label: 'Video' },
+    {
+      icon: LinkIcon, action: () => {
+        const url = prompt('Enter URL:');
+        if (url) insertText(`<a href="${url}">`, '</a>');
+      }, label: 'Link'
+    },
+    {
+      icon: Image, action: () => {
+        const url = prompt('Enter image URL:');
+        if (url) insertText(`<img src="${url}" alt="Image" />`, '');
+      }, label: 'Image'
+    },
+    {
+      icon: Video, action: () => {
+        const url = prompt('Enter video URL (YouTube/Vimeo):');
+        if (url) insertText(`<figure>\n  <iframe src="${url}" allowfullscreen></iframe>\n  <figcaption>Video caption</figcaption>\n</figure>`, '');
+      }, label: 'Video'
+    },
     { type: 'divider' },
     { icon: AlignLeft, action: () => insertText('<p style="text-align: left;">', '</p>'), label: 'Align Left' },
     { icon: AlignCenter, action: () => insertText('<p style="text-align: center;">', '</p>'), label: 'Align Center' },
@@ -1024,7 +1032,7 @@ const handleSave = async (status = "draft") => {
                   <Plus className="h-4 w-4" />
                 </button>
               </div>
-              
+
               {showTagSuggestions && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
                   {availableTags
@@ -1043,7 +1051,7 @@ const handleSave = async (status = "draft") => {
                 </div>
               )}
             </div>
-            
+
             <div className="flex flex-wrap gap-2 mt-3">
               {formData.tags.map(tag => (
                 <span
@@ -1087,7 +1095,7 @@ const handleSave = async (status = "draft") => {
                   />
                 </div>
               </div>
-              
+
               {showRelatedDropdown && getFilteredRelatedPosts().length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
                   {getFilteredRelatedPosts().map(post => (
@@ -1103,7 +1111,7 @@ const handleSave = async (status = "draft") => {
                 </div>
               )}
             </div>
-            
+
             <div className="flex flex-wrap gap-2 mt-3">
               {formData.relatedPosts.map(postId => {
                 const post = allPosts.find(p => p._id === postId);
@@ -1243,13 +1251,13 @@ const handleSave = async (status = "draft") => {
             </div>
           </div>
 
-          {/* Author Selection - UPDATED WITH FULL AUTHOR FETCH */}
+          {/* Author Selection */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-4">
               <User className="h-4 w-4" />
               Author <span className="text-red-500">*</span>
             </h3>
-            
+
             {selectedAuthorDetails ? (
               <div className="bg-blue-50 dark:bg-blue-950/30 rounded-xl p-4 border border-blue-200 dark:border-blue-800/50">
                 <div className="flex items-start gap-4">
@@ -1327,7 +1335,6 @@ const handleSave = async (status = "draft") => {
                     onClick={() => {
                       setAuthorSearch('');
                       setShowAuthorDropdown(false);
-                      // Refresh authors list
                       fetchAuthors();
                     }}
                     className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition"
@@ -1336,7 +1343,7 @@ const handleSave = async (status = "draft") => {
                     <RefreshCw className="h-4 w-4" />
                   </button>
                 </div>
-                
+
                 {showAuthorDropdown && getFilteredAuthors().length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-64 overflow-y-auto z-20">
                     {getFilteredAuthors().map(author => (
@@ -1381,7 +1388,7 @@ const handleSave = async (status = "draft") => {
                     ))}
                   </div>
                 )}
-                
+
                 {showAuthorDropdown && getFilteredAuthors().length === 0 && authorSearch.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 text-center z-20">
                     <p className="text-sm text-gray-500 dark:text-gray-400">No authors found matching "{authorSearch}"</p>
@@ -1389,7 +1396,6 @@ const handleSave = async (status = "draft") => {
                       <button
                         onClick={() => {
                           setShowAuthorDropdown(false);
-                          // Allow manual entry as fallback
                           setFormData(prev => ({
                             ...prev,
                             authorName: authorSearch,
@@ -1409,15 +1415,14 @@ const handleSave = async (status = "draft") => {
                 )}
               </div>
             )}
-            
+
             {errors.author && (
               <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
                 <AlertCircle className="h-4 w-4" />
                 {errors.author}
               </p>
             )}
-            
-            {/* Manual author fields (shown when no author is selected, or for additional info) */}
+
             {!selectedAuthorDetails && (
               <div className="mt-4 space-y-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                 <div>
@@ -1474,12 +1479,11 @@ const handleSave = async (status = "draft") => {
                 </div>
               </div>
             )}
-            
-            {/* Show author details if selected */}
+
             {selectedAuthorDetails && (
               <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400">
                 <p>Author information loaded from <span className="font-medium text-blue-600 dark:text-blue-400">Author Management</span></p>
-                <p className="mt-1">To update author details, go to <button 
+                <p className="mt-1">To update author details, go to <button
                   onClick={() => navigate('/admin/blog/authors')}
                   className="text-blue-600 dark:text-blue-400 hover:underline"
                 >
@@ -1580,7 +1584,7 @@ const handleSave = async (status = "draft") => {
           {/* Status Options */}
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-4">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Post Settings</h3>
-            
+
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -1676,7 +1680,7 @@ const handleSave = async (status = "draft") => {
               <FileText className="h-4 w-4" />
               SEO Settings
             </h3>
-            
+
             <div>
               <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
                 Meta Description
@@ -1778,20 +1782,16 @@ const handleSave = async (status = "draft") => {
                 </button>
               </div>
               <div className="p-6 space-y-6">
-                {/* Featured Image */}
                 {imagePreview && (
                   <img src={imagePreview} alt={formData.title} className="w-full h-64 object-cover rounded-xl" />
                 )}
-                
-                {/* Title */}
+
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{formData.title}</h1>
-                
-                {/* Subtitle */}
+
                 {formData.subtitle && (
                   <p className="text-xl text-gray-600 dark:text-gray-400">{formData.subtitle}</p>
                 )}
-                
-                {/* Author Info */}
+
                 <div className="flex items-center gap-3">
                   {formData.authorImage ? (
                     <img src={formData.authorImage} alt={formData.authorName || formData.author} className="w-12 h-12 rounded-full object-cover" />
@@ -1805,14 +1805,12 @@ const handleSave = async (status = "draft") => {
                     <p className="text-sm text-gray-500 dark:text-gray-400">{formData.authorTitle || formData.authorBio || 'Author bio'}</p>
                   </div>
                 </div>
-                
-                {/* Content */}
+
                 <div
                   className="prose prose-lg prose-blue max-w-none dark:prose-invert"
                   dangerouslySetInnerHTML={{ __html: formData.content }}
                 />
-                
-                {/* Gallery Images */}
+
                 {galleryPreviews.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {galleryPreviews.map((img, index) => (
@@ -1820,15 +1818,13 @@ const handleSave = async (status = "draft") => {
                     ))}
                   </div>
                 )}
-                
-                {/* Video */}
+
                 {formData.videoUrl && (
                   <div className="aspect-video bg-black rounded-lg overflow-hidden">
                     <iframe src={formData.videoUrl} className="w-full h-full" allowFullScreen title="Video" />
                   </div>
                 )}
-                
-                {/* Audio / Podcast */}
+
                 {formData.audioUrl && (
                   <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Podcast</h3>
@@ -1838,8 +1834,7 @@ const handleSave = async (status = "draft") => {
                     </audio>
                   </div>
                 )}
-                
-                {/* Statistics */}
+
                 {formData.statistics.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-8">
                     {formData.statistics.map((stat, index) => (
@@ -1852,8 +1847,7 @@ const handleSave = async (status = "draft") => {
                     ))}
                   </div>
                 )}
-                
-                {/* Learning Objectives */}
+
                 {formData.learningObjectives.length > 0 && (
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-6 border border-blue-100 dark:border-blue-800/50">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
@@ -1870,8 +1864,7 @@ const handleSave = async (status = "draft") => {
                     </ul>
                   </div>
                 )}
-                
-                {/* Related Posts */}
+
                 {formData.relatedPosts.length > 0 && (
                   <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Related Articles</h3>
@@ -1893,8 +1886,7 @@ const handleSave = async (status = "draft") => {
                     </div>
                   </div>
                 )}
-                
-                {/* References */}
+
                 {formData.references.length > 0 && (
                   <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">References</h3>
@@ -1908,8 +1900,7 @@ const handleSave = async (status = "draft") => {
                     </ul>
                   </div>
                 )}
-                
-                {/* Tags */}
+
                 {formData.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200 dark:border-gray-800">
                     {formData.tags.map((tag) => (
