@@ -1,4 +1,4 @@
-// AdminLayout.jsx - Updated with BLOG section
+// AdminLayout.jsx - Updated with full BLOG section
 import { useState, useEffect } from "react";
 import { Outlet, useLocation, NavLink } from "react-router-dom";
 import {
@@ -35,14 +35,26 @@ import {
   Newspaper,
   Tag,
   PenTool,
-  Image,
+  Image as ImageIcon,
   Calendar,
   Eye,
-  Star
+  Star,
+  Mic,
+  Film,
+  Quote,
+  Scale,
+  ShieldCheck,
+  Megaphone,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationPanel from "../components/NotificationPanel";
-import { FaBrain, FaCheckCircle, FaCommentDots, FaEnvelope, FaRobot } from "react-icons/fa";
+import {
+  FaBrain,
+  FaCheckCircle,
+  FaCommentDots,
+  FaEnvelope,
+  FaRobot,
+} from "react-icons/fa";
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -55,7 +67,7 @@ const AdminLayout = () => {
   const { logout, user } = useAuth();
   const location = useLocation();
 
-  // Handle scroll effect for header
+  /* ---------- SCROLL EFFECT ---------- */
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 10);
@@ -64,14 +76,16 @@ const AdminLayout = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Initialize and handle dark mode with system preference
+  /* ---------- DARK MODE ---------- */
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
-    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    
+    const systemPrefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    ).matches;
+
     const isDark = savedTheme === "dark" || (!savedTheme && systemPrefersDark);
     setDarkMode(isDark);
-    
+
     if (isDark) {
       document.documentElement.classList.add("dark");
     } else {
@@ -83,7 +97,7 @@ const AdminLayout = () => {
     const newDarkMode = !darkMode;
     setDarkMode(newDarkMode);
     localStorage.setItem("theme", newDarkMode ? "dark" : "light");
-    
+
     if (newDarkMode) {
       document.documentElement.classList.add("dark");
     } else {
@@ -91,7 +105,6 @@ const AdminLayout = () => {
     }
   };
 
-  // Listen for system theme changes
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (e) => {
@@ -105,65 +118,312 @@ const AdminLayout = () => {
         }
       }
     };
-    
+
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, []);
 
   const handleNotificationClick = (notification) => {
     console.log("Notification clicked:", notification);
-    setNotificationBadge(prev => Math.max(0, prev - 1));
+    setNotificationBadge((prev) => Math.max(0, prev - 1));
   };
 
   const toggleSection = (sectionName) => {
-    setCollapsedSections(prev => ({
+    setCollapsedSections((prev) => ({
       ...prev,
-      [sectionName]: !prev[sectionName]
+      [sectionName]: !prev[sectionName],
     }));
   };
 
+  /* ============================================================
+     MENU
+     Every route that exists in App.js is represented here.
+     The Blog group mirrors the public journal 1:1.
+  ============================================================ */
   const menuItems = [
-    { section: "Core", items: [
-      { to: "/admin", label: "Dashboard", icon: LayoutDashboard, color: "text-blue-500" },
-      { to: "/admin/performance", label: "Analytics", icon: BarChart3, color: "text-purple-500" },
-      { to: "/admin/questions", label: "Question Bank", icon: HelpCircle, color: "text-green-500" },
-      { to: "/admin/question-approval", label: "Question Approval", icon: FaCheckCircle, color: "text-yellow-500" },
-      { to: "/admin/programs", label: "Programs", icon: BookOpen, color: "text-teal-500" },
-      { to: "/admin/courses", label: "Courses", icon: Layers, color: "text-light-blue-500" },
-      { to: "/admin/subjects", label: "Subjects", icon: BookOpen, color: "text-orange-500" },
-      { to: "/admin/topics", label: "Topics", icon: FolderTree, color: "text-indigo-500" },
-      { to: "/admin/users", label: "Users", icon: Users, color: "text-cyan-500" },
-      { to: "/admin/payments", label: "Revenue", icon: DollarSign, color: "text-yellow-500" },
-      { to: "/admin/ai", label: "AI Manager", icon: FaRobot, color: "text-purple-500" },
-      { to: "/admin/ai-plans", label: "AI Plans Manager", icon: FaRobot, color: "text-pink-500" },
-      { to: "/admin/ai-generator", label: "AI Questions Generator", icon: FaRobot, color: "text-aqua-500" },
-    ]},
-    { section: "Content", items: [
-      { to: "/admin/lecturers", label: "Lecturers", icon: GraduationCap, color: "text-pink-500" },
-      { to: "/admin/content-payment", label: "Content Payment", icon: DollarSign, color: "text-indigo-500" },
-      { to: "/admin/plans", label: "Plans", icon: Zap, color: "text-red-500" },
-      { to: "/admin/content", label: "Content Library", icon: FileText, color: "text-emerald-500" },
-    ]},
-    
-    { section: "Engagement", items: [
-      { to: "/admin/results", label: "Student Results", icon: TrendingUp, color: "text-violet-500" },
-      { to: "/admin/testimonials", label: "Testimonials", icon: Award, color: "text-amber-500" },
-      { to: "/admin/in-box", label: "Feedback", icon: MessageSquare, color: "text-rose-500" },
-    ]},
-    { section: "System", items: [
-      { to: "/admin/settings", label: "Settings", icon: Settings, color: "text-gray-500" },
-      { to: "/admin/security", label: "Security", icon: Shield, color: "text-gray-500" },
-      { to: "/admin/help", label: "Help & Support", icon: LifeBuoy, color: "text-gray-500" },
-      { to: "/admin/live-classes", label: "Live Classes", icon: Video, color: "text-red-500" },
-    ]},
+    /* ---------- CORE ---------- */
+    {
+      section: "Core",
+      items: [
+        {
+          to: "/admin/dashboard",
+          label: "Dashboard",
+          icon: LayoutDashboard,
+          color: "text-blue-500",
+        },
+        {
+          to: "/admin/performance",
+          label: "Analytics",
+          icon: BarChart3,
+          color: "text-purple-500",
+        },
+        {
+          to: "/admin/questions",
+          label: "Question Bank",
+          icon: HelpCircle,
+          color: "text-green-500",
+        },
+        {
+          to: "/admin/question-approval",
+          label: "Question Approval",
+          icon: FaCheckCircle,
+          color: "text-yellow-500",
+        },
+        {
+          to: "/admin/programs",
+          label: "Programs",
+          icon: BookOpen,
+          color: "text-teal-500",
+        },
+        {
+          to: "/admin/courses",
+          label: "Courses",
+          icon: Layers,
+          color: "text-sky-500",
+        },
+        {
+          to: "/admin/subjects",
+          label: "Subjects",
+          icon: BookOpen,
+          color: "text-orange-500",
+        },
+        {
+          to: "/admin/topics",
+          label: "Topics",
+          icon: FolderTree,
+          color: "text-indigo-500",
+        },
+        {
+          to: "/admin/users",
+          label: "Users",
+          icon: Users,
+          color: "text-cyan-500",
+        },
+        {
+          to: "/admin/payments",
+          label: "Revenue",
+          icon: DollarSign,
+          color: "text-yellow-500",
+        },
+      ],
+    },
+
+    /* ---------- AI ---------- */
+    {
+      section: "AI Tools",
+      items: [
+        {
+          to: "/admin/ai",
+          label: "AI Manager",
+          icon: FaRobot,
+          color: "text-purple-500",
+        },
+        {
+          to: "/admin/ai-plans",
+          label: "AI Plans Manager",
+          icon: FaRobot,
+          color: "text-pink-500",
+        },
+        {
+          to: "/admin/ai-generator",
+          label: "AI Questions Generator",
+          icon: FaRobot,
+          color: "text-cyan-500",
+        },
+      ],
+    },
+
+    /* ---------- BLOG / JOURNAL ---------- */
+    {
+      section: "The Journal",
+      items: [
+        {
+          to: "/admin/blog/posts",
+          label: "All Posts",
+          icon: Newspaper,
+          color: "text-rose-500",
+        },
+        {
+          to: "/admin/blog/create",
+          label: "Create Post",
+          icon: PenTool,
+          color: "text-blue-500",
+        },
+        {
+          to: "/admin/blog/categories",
+          label: "Categories",
+          icon: FolderTree,
+          color: "text-teal-500",
+        },
+        {
+          to: "/admin/blog/tags",
+          label: "Tags",
+          icon: Tag,
+          color: "text-indigo-500",
+        },
+        {
+          to: "/admin/blog/authors",
+          label: "Authors",
+          icon: UserCircle,
+          color: "text-purple-500",
+        },
+        {
+          to: "/admin/blog/comments",
+          label: "Comments",
+          icon: FaCommentDots,
+          color: "text-emerald-500",
+        },
+        {
+          to: "/admin/blog/podcasts",
+          label: "Podcasts",
+          icon: Mic,
+          color: "text-orange-500",
+        },
+        {
+          to: "/admin/blog/videos",
+          label: "Videos",
+          icon: Film,
+          color: "text-red-500",
+        },
+        {
+          to: "/admin/blog/media",
+          label: "Media Library",
+          icon: ImageIcon,
+          color: "text-cyan-500",
+        },
+        {
+          to: "/admin/blog/testimonials",
+          label: "Testimonials",
+          icon: Quote,
+          color: "text-amber-500",
+        },
+      ],
+    },
+
+    /* ---------- EDITORIAL TRUST ---------- */
+    {
+      section: "Trust & Policies",
+      items: [
+        {
+          to: "/admin/blog/editorial-policy",
+          label: "Editorial Policy",
+          icon: ShieldCheck,
+          color: "text-emerald-500",
+        },
+        {
+          to: "/admin/blog/medical-review-policy",
+          label: "Medical Review",
+          icon: Shield,
+          color: "text-teal-500",
+        },
+        {
+          to: "/admin/blog/advertising-policy",
+          label: "Advertising Policy",
+          icon: Megaphone,
+          color: "text-rose-500",
+        },
+      ],
+    },
+
+    /* ---------- CONTENT / LECTURERS ---------- */
+    {
+      section: "Content",
+      items: [
+        {
+          to: "/admin/lecturers",
+          label: "Lecturers",
+          icon: GraduationCap,
+          color: "text-pink-500",
+        },
+        {
+          to: "/admin/content-payment",
+          label: "Content Payment",
+          icon: DollarSign,
+          color: "text-indigo-500",
+        },
+        {
+          to: "/admin/plans",
+          label: "Plans",
+          icon: Zap,
+          color: "text-red-500",
+        },
+        {
+          to: "/admin/content",
+          label: "Content Library",
+          icon: FileText,
+          color: "text-emerald-500",
+        },
+        {
+          to: "/admin/live-classes",
+          label: "Live Classes",
+          icon: Video,
+          color: "text-red-500",
+        },
+      ],
+    },
+
+    /* ---------- ENGAGEMENT ---------- */
+    {
+      section: "Engagement",
+      items: [
+        {
+          to: "/admin/results",
+          label: "Student Results",
+          icon: TrendingUp,
+          color: "text-violet-500",
+        },
+        {
+          to: "/admin/testimonials",
+          label: "Testimonials",
+          icon: Award,
+          color: "text-amber-500",
+        },
+        {
+          to: "/admin/in-box",
+          label: "Feedback",
+          icon: MessageSquare,
+          color: "text-rose-500",
+        },
+        {
+          to: "/admin/notifications",
+          label: "Notifications",
+          icon: Bell,
+          color: "text-yellow-500",
+        },
+      ],
+    },
+
+    /* ---------- SYSTEM ---------- */
+    {
+      section: "System",
+      items: [
+        {
+          to: "/admin/settings",
+          label: "Settings",
+          icon: Settings,
+          color: "text-gray-500",
+        },
+        {
+          to: "/admin/security",
+          label: "Security",
+          icon: Shield,
+          color: "text-gray-500",
+        },
+        {
+          to: "/admin/help",
+          label: "Help & Support",
+          icon: LifeBuoy,
+          color: "text-gray-500",
+        },
+      ],
+    },
   ];
 
-  // Get user initials for avatar
   const getUserInitials = () => {
     if (!user?.name) return "A";
     return user.name
       .split(" ")
-      .map(word => word[0])
+      .map((word) => word[0])
       .join("")
       .toUpperCase()
       .slice(0, 2);
@@ -179,13 +439,13 @@ const AdminLayout = () => {
         />
       )}
 
-      {/* Sidebar - Fully Scrollable */}
+      {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transform transition-transform duration-300 ease-out md:relative md:translate-x-0 flex flex-col h-full ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Logo area - Fixed */}
+        {/* Logo */}
         <div className="flex-shrink-0 flex h-16 items-center justify-between px-6 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
@@ -203,11 +463,11 @@ const AdminLayout = () => {
           </button>
         </div>
 
-        {/* Navigation - Scrollable */}
+        {/* Nav */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
           {menuItems.map((section) => {
             const isCollapsed = collapsedSections[section.section] || false;
-            
+
             return (
               <div key={section.section} className="mb-4">
                 <button
@@ -215,16 +475,26 @@ const AdminLayout = () => {
                   className="w-full flex items-center justify-between px-3 mb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 >
                   <span>{section.section}</span>
-                  <ChevronDown className={`h-3 w-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                  <ChevronDown
+                    className={`h-3 w-3 transition-transform ${
+                      isCollapsed ? "-rotate-90" : ""
+                    }`}
+                  />
                 </button>
-                <div className={`space-y-0.5 overflow-hidden transition-all duration-300 ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[1000px] opacity-100'}`}>
+                <div
+                  className={`space-y-0.5 overflow-hidden transition-all duration-300 ${
+                    isCollapsed
+                      ? "max-h-0 opacity-0"
+                      : "max-h-[1200px] opacity-100"
+                  }`}
+                >
                   {section.items.map((item) => {
                     const Icon = item.icon;
-                    const isActive = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
                     return (
                       <NavLink
                         key={item.to}
                         to={item.to}
+                        end={item.to === "/admin/blog/posts"}
                         onClick={() => setSidebarOpen(false)}
                         className={({ isActive }) =>
                           `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
@@ -234,9 +504,21 @@ const AdminLayout = () => {
                           }`
                         }
                       >
-                        <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? item.color : ""}`} />
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {isActive && <ChevronRight className="h-3 w-3 flex-shrink-0" />}
+                        {({ isActive }) => (
+                          <>
+                            <Icon
+                              className={`h-4 w-4 flex-shrink-0 ${
+                                isActive ? item.color : ""
+                              }`}
+                            />
+                            <span className="flex-1 truncate">
+                              {item.label}
+                            </span>
+                            {isActive && (
+                              <ChevronRight className="h-3 w-3 flex-shrink-0" />
+                            )}
+                          </>
+                        )}
                       </NavLink>
                     );
                   })}
@@ -246,12 +528,16 @@ const AdminLayout = () => {
           })}
         </div>
 
-        {/* User profile - Fixed at bottom */}
+        {/* User footer */}
         <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900">
           <div className="flex items-center gap-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 p-3 transition-all hover:bg-gray-100 dark:hover:bg-gray-800">
             <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
               {user?.avatar ? (
-                <img src={user.avatar} alt={user.name} className="h-9 w-9 rounded-full object-cover" />
+                <img
+                  src={user.avatar}
+                  alt={user.name}
+                  className="h-9 w-9 rounded-full object-cover"
+                />
               ) : (
                 <span className="text-white text-sm font-semibold">
                   {getUserInitials()}
@@ -277,9 +563,8 @@ const AdminLayout = () => {
         </div>
       </aside>
 
-      {/* Main content area */}
+      {/* Main */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header - Fixed */}
         <header
           className={`flex-shrink-0 sticky top-0 z-30 transition-all duration-200 ${
             scrolled
@@ -296,7 +581,6 @@ const AdminLayout = () => {
                 <Menu className="h-5 w-5" />
               </button>
 
-              {/* Welcome text with actual user name */}
               <div className="hidden md:block min-w-0">
                 <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
                   Welcome back,
@@ -306,11 +590,17 @@ const AdminLayout = () => {
                 </p>
               </div>
 
-              {/* Page title from location */}
               <div className="hidden lg:block ml-4">
-                <span className="text-xs text-gray-400 dark:text-gray-500">/</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  /
+                </span>
                 <span className="text-xs text-gray-500 dark:text-gray-400 ml-1 capitalize">
-                  {location.pathname.split("/").pop() || "Dashboard"}
+                  {location.pathname
+                    .replace("/admin", "")
+                    .split("/")
+                    .filter(Boolean)
+                    .slice(-2)
+                    .join(" / ") || "Dashboard"}
                 </span>
               </div>
             </div>
@@ -328,7 +618,7 @@ const AdminLayout = () => {
                 )}
               </button>
 
-              <button 
+              <button
                 onClick={() => setNotificationsOpen(true)}
                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
               >
@@ -340,7 +630,7 @@ const AdminLayout = () => {
 
               <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-0.5 md:mx-1" />
 
-              <button 
+              <button
                 onClick={logout}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-sm font-medium transition-all shadow-lg shadow-red-500/25 hover:shadow-xl"
               >
@@ -351,18 +641,15 @@ const AdminLayout = () => {
           </div>
         </header>
 
-        {/* Page content - Scrollable */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
           <div className="container mx-auto px-4 md:px-6 py-4 md:py-6 max-w-7xl">
             <Outlet />
           </div>
-          {/* Bottom spacer for comfortable scrolling */}
           <div className="h-4" />
         </main>
       </div>
 
-      {/* Notification Panel */}
-      <NotificationPanel 
+      <NotificationPanel
         isOpen={notificationsOpen}
         onClose={() => setNotificationsOpen(false)}
         onNotificationClick={handleNotificationClick}
