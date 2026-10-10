@@ -1,200 +1,180 @@
-// src/pages/BlogPostPage.jsx - PROFESSIONAL REDESIGN
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// src/pages/BlogPostPage.jsx - EDITORIAL HUMAN-LIKE REDESIGN
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
 import {
   FaHeart, FaRegHeart, FaShareAlt, FaBookmark, FaRegBookmark,
-  FaComment, FaClock, FaCalendarAlt, FaUser, FaTag, FaEye,
-  FaTwitter, FaLinkedin, FaFacebook, FaWhatsapp, FaEnvelope,
-  FaLink, FaCheckCircle, FaGraduationCap, FaVideo, FaImage,
-  FaFileAlt, FaThumbsUp, FaArrowLeft, FaArrowRight, FaLightbulb,
-  FaChartLine, FaUserCircle, FaSpinner, FaFire, FaHeadphones,
-  FaPlay, FaPause, FaVolumeUp, FaVolumeMute, FaInstagram,
-  FaYoutube, FaGlobe, FaAward, FaBriefcase, FaQuoteLeft,
-  FaCopy, FaPrint, FaEllipsisH, FaChevronUp, FaChevronDown,
-  FaListUl, FaParagraph, FaExternalLinkAlt, FaRegClock,
-  FaRegEye, FaRegComment, FaRegBookmark as FaRegBookmarkAlt,
-  FaStickyNote, FaHighlighter, FaSearchPlus, FaSearchMinus
+  FaComment, FaClock, FaCalendarAlt, FaEye, FaTwitter, FaLinkedin,
+  FaFacebook, FaWhatsapp, FaEnvelope, FaLink, FaCheckCircle,
+  FaGraduationCap, FaVideo, FaFileAlt, FaThumbsUp, FaArrowLeft,
+  FaArrowRight, FaLightbulb, FaSpinner, FaHeadphones, FaPlay,
+  FaPause, FaInstagram, FaYoutube, FaGlobe, FaQuoteLeft,
+  FaChevronUp, FaChevronDown, FaCopy, FaPrint, FaListUl,
+  FaMinus, FaPlus, FaTimes, FaRegClock
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import blogAPI from '../api/blogApi';
 import { useAuth } from '../context/AuthContext';
 
-// ==================== UTILITY COMPONENTS ====================
+const ReactPlayer = lazy(() => import('react-player'));
 
-const ReadingProgressBar = () => {
+// ==================== HELPER: READING PROGRESS ====================
+const ReadingProgress = () => {
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
-    stiffness: 100,
+    stiffness: 120,
     damping: 30,
-    restDelta: 0.001
+    restDelta: 0.001,
   });
 
   return (
     <motion.div
-      className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 origin-left z-50"
+      className="fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-500 to-rose-500 origin-left z-50"
       style={{ scaleX }}
     />
   );
 };
 
-const TableOfContents = ({ content }) => {
+// ==================== HELPER: TABLE OF CONTENTS ====================
+const TableOfContents = ({ content, onClose }) => {
   const [headings, setHeadings] = useState([]);
   const [activeId, setActiveId] = useState('');
-  const [isOpen, setIsOpen] = useState(true);
 
   useEffect(() => {
-    // Parse headings from HTML content
+    if (!content) return;
     const parser = new DOMParser();
     const doc = parser.parseFromString(content, 'text/html');
-    const headingElements = doc.querySelectorAll('h1, h2, h3, h4');
-    
-    const parsedHeadings = Array.from(headingElements).map((heading, index) => ({
-      id: `heading-${index}`,
-      text: heading.textContent,
-      level: parseInt(heading.tagName.charAt(1))
+    const els = doc.querySelectorAll('h2, h3');
+    const parsed = Array.from(els).map((el, i) => ({
+      id: `section-${i}`,
+      text: el.textContent,
+      level: parseInt(el.tagName.charAt(1)),
     }));
-    
-    setHeadings(parsedHeadings);
+    setHeadings(parsed);
   }, [content]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveId(entry.target.id);
-          }
+          if (entry.isIntersecting) setActiveId(entry.target.id);
         });
       },
-      { rootMargin: '-100px 0px -80% 0px' }
+      { rootMargin: '-80px 0px -70% 0px' }
     );
-
-    headings.forEach((heading) => {
-      const element = document.getElementById(heading.id);
-      if (element) observer.observe(element);
+    headings.forEach((h) => {
+      const el = document.getElementById(h.id);
+      if (el) observer.observe(el);
     });
-
     return () => observer.disconnect();
   }, [headings]);
 
   if (headings.length === 0) return null;
 
   return (
-    <div className="hidden xl:block fixed right-8 top-32 w-64">
-      <motion.div
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-800 p-5"
-      >
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center justify-between w-full text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3"
-        >
-          <span className="flex items-center gap-2">
-            <FaListUl className="text-blue-600" />
-            Table of Contents
-          </span>
-          {isOpen ? <FaChevronUp className="text-xs" /> : <FaChevronDown className="text-xs" />}
-        </button>
-        
-        <AnimatePresence>
-          {isOpen && (
-            <motion.nav
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="space-y-1 overflow-hidden"
-            >
-              {headings.map((heading) => (
-                <a
-                  key={heading.id}
-                  href={`#${heading.id}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    document.getElementById(heading.id)?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className={`block text-sm py-1.5 px-2 rounded-lg transition-all duration-200 ${
-                    activeId === heading.id
-                      ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 font-medium'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
-                  }`}
-                  style={{ paddingLeft: `${(heading.level - 1) * 12 + 8}px` }}
-                >
-                  {heading.text}
-                </a>
-              ))}
-            </motion.nav>
-          )}
-        </AnimatePresence>
-      </motion.div>
+    <div className="bg-stone-50 dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+          In this article
+        </span>
+        {onClose && (
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 lg:hidden">
+            <FaTimes className="text-xs" />
+          </button>
+        )}
+      </div>
+      <nav className="space-y-1.5">
+        {headings.map((h) => (
+          <a
+            key={h.id}
+            href={`#${h.id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              onClose?.();
+            }}
+            className={`block text-sm leading-snug transition-colors ${
+              activeId === h.id
+                ? 'text-rose-600 dark:text-rose-400 font-medium'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+            }`}
+            style={{ paddingLeft: h.level === 3 ? '1rem' : '0' }}
+          >
+            {activeId === h.id && <span className="mr-1.5">→</span>}
+            {h.text}
+          </a>
+        ))}
+      </nav>
     </div>
   );
 };
 
-const ShareMenu = ({ post, onShare }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef(null);
+// ==================== HELPER: SHARE DROPDOWN ====================
+const ShareDropdown = ({ title }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
+    const onClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  const shareOptions = [
-    { icon: FaTwitter, label: 'Twitter', color: '#1da1f2', url: `https://twitter.com/intent/tweet?text=${encodeURIComponent(post.title)}&url=${encodeURIComponent(window.location.href)}` },
-    { icon: FaLinkedin, label: 'LinkedIn', color: '#0a66c2', url: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}` },
-    { icon: FaFacebook, label: 'Facebook', color: '#1877f2', url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}` },
-    { icon: FaWhatsapp, label: 'WhatsApp', color: '#25d366', url: `https://wa.me/?text=${encodeURIComponent(post.title + ' ' + window.location.href)}` },
-    { icon: FaEnvelope, label: 'Email', color: '#ea4335', url: `mailto:?subject=${encodeURIComponent(post.title)}&body=${encodeURIComponent(window.location.href)}` },
+  const url = typeof window !== 'undefined' ? window.location.href : '';
+  const encoded = encodeURIComponent(url);
+  const encodedTitle = encodeURIComponent(title);
+
+  const links = [
+    { icon: FaTwitter, label: 'Twitter', href: `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encoded}`, color: 'hover:text-sky-500' },
+    { icon: FaLinkedin, label: 'LinkedIn', href: `https://www.linkedin.com/sharing/share-offsite/?url=${encoded}`, color: 'hover:text-blue-600' },
+    { icon: FaFacebook, label: 'Facebook', href: `https://www.facebook.com/sharer/sharer.php?u=${encoded}`, color: 'hover:text-blue-700' },
+    { icon: FaWhatsapp, label: 'WhatsApp', href: `https://wa.me/?text=${encodedTitle}%20${encoded}`, color: 'hover:text-green-500' },
+    { icon: FaEnvelope, label: 'Email', href: `mailto:?subject=${encodedTitle}&body=${encoded}`, color: 'hover:text-rose-500' },
   ];
 
   return (
-    <div ref={menuRef} className="relative">
+    <div className="relative" ref={ref}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
+        onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 transition-colors"
       >
-        <FaShareAlt className="text-sm" />
-        <span className="text-sm font-medium">Share</span>
+        <FaShareAlt className="text-xs" />
+        Share
       </button>
 
       <AnimatePresence>
-        {isOpen && (
+        {open && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 p-2 min-w-[200px] z-50"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-full mt-2 bg-white dark:bg-stone-900 rounded-xl shadow-xl border border-stone-200 dark:border-stone-800 p-1.5 min-w-[180px] z-40"
           >
-            {shareOptions.map((option) => (
+            {links.map((l) => (
               <a
-                key={option.label}
-                href={option.url}
+                key={l.label}
+                href={l.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                onClick={() => setIsOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors ${l.color}`}
               >
-                <option.icon style={{ color: option.color }} className="text-lg" />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{option.label}</span>
+                <l.icon className="text-sm" />
+                {l.label}
               </a>
             ))}
             <button
               onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-                toast.success('Link copied to clipboard!');
-                setIsOpen(false);
+                navigator.clipboard.writeText(url);
+                toast.success('Link copied');
+                setOpen(false);
               }}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors w-full"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors w-full"
             >
-              <FaLink className="text-lg text-gray-600 dark:text-gray-400" />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Copy link</span>
+              <FaLink className="text-sm" />
+              Copy link
             </button>
           </motion.div>
         )}
@@ -203,123 +183,37 @@ const ShareMenu = ({ post, onShare }) => {
   );
 };
 
-const AuthorCard = ({ author, postAuthorName, postAuthorTitle, postAuthorBio, postAuthorImage }) => {
-  const name = author?.name || postAuthorName || 'Unknown Author';
-  const title = author?.title || postAuthorTitle || 'Contributor';
-  const bio = author?.bio || postAuthorBio || '';
-  const image = author?.avatar || author?.image || postAuthorImage;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800"
-    >
-      <div className="flex items-start gap-4">
-        {image ? (
-          <img
-            src={image}
-            alt={name}
-            className="w-20 h-20 rounded-2xl object-cover border-2 border-blue-100 dark:border-blue-900/50"
-          />
-        ) : (
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
-            {name.charAt(0)}
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{name}</h4>
-          <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{title}</p>
-          {bio && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-3">{bio}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Author Stats */}
-      <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
-        <div className="text-center">
-          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{author?.postCount || 0}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Articles</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{author?.totalLikes || 0}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Likes</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{author?.totalViews || 0}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Views</p>
-        </div>
-      </div>
-
-      {/* Social Links */}
-      {author?.social && (
-        <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-          {author.social.twitter && (
-            <a href={author.social.twitter} target="_blank" rel="noopener noreferrer"
-               className="p-2 text-gray-400 hover:text-[#1da1f2] transition-colors rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-              <FaTwitter />
-            </a>
-          )}
-          {author.social.linkedin && (
-            <a href={author.social.linkedin} target="_blank" rel="noopener noreferrer"
-               className="p-2 text-gray-400 hover:text-[#0a66c2] transition-colors rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-              <FaLinkedin />
-            </a>
-          )}
-          {author.social.website && (
-            <a href={author.social.website} target="_blank" rel="noopener noreferrer"
-               className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-              <FaGlobe />
-            </a>
-          )}
-        </div>
-      )}
-
-      <Link
-        to={`/blog/author/${author?._id || author?.id}`}
-        className="block text-center mt-4 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition"
-      >
-        View all articles →
-      </Link>
-    </motion.div>
-  );
-};
-
 // ==================== MAIN COMPONENT ====================
-
 const BlogPostPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [liked, setLiked] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
-  const [activeTab, setActiveTab] = useState('content');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
   const [relatedPosts, setRelatedPosts] = useState([]);
   const [comments, setComments] = useState([]);
   const [likesCount, setLikesCount] = useState(0);
   const [viewsCount, setViewsCount] = useState(0);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const [readingProgress, setReadingProgress] = useState(0);
   const [fontSize, setFontSize] = useState('base');
   const [showTOC, setShowTOC] = useState(false);
+  const [readingTime, setReadingTime] = useState(0);
+
   const audioRef = useRef(null);
   const contentRef = useRef(null);
 
-  // Fetch post data
+  // ---------- Fetch Post ----------
   useEffect(() => {
     const fetchPost = async () => {
       try {
         setLoading(true);
         const response = await blogAPI.getPostBySlug(id);
-        
         if (response.success) {
           const data = response.data;
           setPost(data);
@@ -327,174 +221,140 @@ const BlogPostPage = () => {
           setComments(data.comments || []);
           setLikesCount(data.likes || 0);
           setViewsCount(data.views || 0);
-          
+
           if (isAuthenticated && user && data.likedBy) {
             setLiked(data.likedBy.includes(user._id));
           }
           if (isAuthenticated && user && data.bookmarkedBy) {
             setBookmarked(data.bookmarkedBy.includes(user._id));
           }
-          
           await blogAPI.incrementViews(data._id);
         } else {
-          toast.error(response.message || 'Failed to load blog post');
+          toast.error(response.message || 'Failed to load post');
           navigate('/blog');
         }
-      } catch (error) {
-        console.error('Error fetching blog post:', error);
-        toast.error(error.response?.data?.message || 'Failed to load blog post');
+      } catch (err) {
+        console.error(err);
+        toast.error('Could not load this article');
         navigate('/blog');
       } finally {
         setLoading(false);
       }
     };
-    
     fetchPost();
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   }, [id, navigate, user, isAuthenticated]);
 
-  // Reading progress tracking
-  useEffect(() => {
-    const handleScroll = () => {
-      if (contentRef.current) {
-        const element = contentRef.current;
-        const totalHeight = element.scrollHeight - element.clientHeight;
-        const progress = (window.scrollY / totalHeight) * 100;
-        setReadingProgress(Math.min(100, Math.max(0, progress)));
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Add IDs to headings for TOC
+  // ---------- Add heading IDs for TOC ----------
   useEffect(() => {
     if (post?.content && contentRef.current) {
-      const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4');
-      headings.forEach((heading, index) => {
-        heading.id = `heading-${index}`;
+      const els = contentRef.current.querySelectorAll('h2, h3');
+      els.forEach((el, i) => {
+        el.id = `section-${i}`;
+        el.style.scrollMarginTop = '5rem';
       });
     }
   }, [post]);
 
+  // ---------- Reading time calc ----------
+  useEffect(() => {
+    if (post?.content) {
+      const text = post.content.replace(/<[^>]*>/g, '');
+      const words = text.trim().split(/\s+/).length;
+      setReadingTime(Math.max(1, Math.ceil(words / 220)));
+    }
+  }, [post]);
+
+  // ---------- Handlers ----------
   const handleLike = async () => {
     if (!isAuthenticated) {
-      toast.error('Please login to like posts');
+      toast.error('Sign in to like this article');
       return;
     }
-    
     try {
       const response = await blogAPI.toggleLike(post._id);
       if (response.success) {
         setLiked(!liked);
-        setLikesCount(prev => liked ? prev - 1 : prev + 1);
-      } else {
-        toast.error(response.message || 'Failed to like post');
+        setLikesCount((p) => (liked ? p - 1 : p + 1));
       }
-    } catch (error) {
-      console.error('Error liking post:', error);
-      toast.error(error.response?.data?.message || 'Failed to like post');
+    } catch (err) {
+      console.error(err);
+      toast.error('Something went wrong');
     }
   };
 
   const handleBookmark = async () => {
     if (!isAuthenticated) {
-      toast.error('Please login to bookmark posts');
+      toast.error('Sign in to save articles');
       return;
     }
-    
     setBookmarked(!bookmarked);
-    toast.success(bookmarked ? 'Removed from bookmarks' : 'Added to bookmarks');
+    toast.success(bookmarked ? 'Removed from your list' : 'Saved to your list');
   };
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
     if (!commentText.trim()) return;
-    
     if (!isAuthenticated) {
-      toast.error('Please login to comment');
+      toast.error('Sign in to join the discussion');
       return;
     }
-    
     try {
       setSubmittingComment(true);
       const response = await blogAPI.addComment(post._id, {
         content: commentText.trim(),
         authorName: user.name,
-        authorEmail: user.email
+        authorEmail: user.email,
       });
-      
       if (response.success) {
-        const newComment = {
-          ...response.data,
-          authorName: user.name,
-          authorAvatar: user.avatar || null
-        };
-        setComments([newComment, ...comments]);
+        setComments([
+          { ...response.data, authorName: user.name, authorAvatar: user.avatar || null },
+          ...comments,
+        ]);
         setCommentText('');
-        toast.success('Comment posted successfully');
-      } else {
-        toast.error(response.message || 'Failed to post comment');
+        toast.success('Comment posted');
       }
-    } catch (error) {
-      console.error('Error posting comment:', error);
-      toast.error(error.response?.data?.message || 'Failed to post comment');
+    } catch (err) {
+      console.error(err);
+      toast.error('Could not post comment');
     } finally {
       setSubmittingComment(false);
     }
   };
 
   const toggleAudio = () => {
-    if (audioRef.current) {
-      if (audioPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
-      }
-      setAudioPlaying(!audioPlaying);
-    }
+    if (!audioRef.current) return;
+    if (audioPlaying) audioRef.current.pause();
+    else audioRef.current.play();
+    setAudioPlaying(!audioPlaying);
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    });
+  const formatDate = (d) =>
+    d ? new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+
+  const formatTimeAgo = (d) => {
+    if (!d) return '';
+    const diff = Date.now() - new Date(d).getTime();
+    const mins = Math.floor(diff / 60000);
+    const hrs = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hrs < 24) return `${hrs}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return formatDate(d);
   };
 
-  const formatTimeAgo = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+  const fontSizeClass =
+    fontSize === 'sm' ? 'text-[17px]' : fontSize === 'lg' ? 'text-[21px]' : 'text-[19px]';
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return formatDate(dateString);
-  };
-
-  const getFontSizeClass = () => {
-    switch (fontSize) {
-      case 'sm': return 'text-base';
-      case 'lg': return 'text-xl';
-      default: return 'text-lg';
-    }
-  };
-
+  // ---------- Loading State ----------
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400 font-medium">Loading article...</p>
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 dark:border-stone-700 dark:border-t-stone-100 rounded-full animate-spin" />
+          <p className="text-sm text-stone-500">Loading story…</p>
         </div>
       </div>
     );
@@ -502,723 +362,679 @@ const BlogPostPage = () => {
 
   if (!post) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="text-center max-w-md mx-auto px-4">
-          <div className="text-6xl mb-4">📄</div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Article Not Found</h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">The article you're looking for doesn't exist or has been removed.</p>
-          <Link to="/blog" className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium">
-            <FaArrowLeft />
-            Back to Blog
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <p className="text-6xl mb-4">📄</p>
+          <h1 className="text-2xl font-serif font-bold text-stone-900 dark:text-stone-100 mb-2">
+            Story not found
+          </h1>
+          <p className="text-stone-600 dark:text-stone-400 mb-6">
+            This article may have been moved or deleted.
+          </p>
+          <Link
+            to="/blog"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-full text-sm font-medium hover:opacity-90 transition"
+          >
+            <FaArrowLeft className="text-xs" />
+            Back to blog
           </Link>
         </div>
       </div>
     );
   }
 
-  const authorName = post.author?.name || post.authorName || 'Unknown';
-  const authorTitle = post.author?.title || post.authorTitle || 'Contributor';
+  const authorName = post.author?.name || post.authorName || 'Anonymous';
+  const authorTitle = post.author?.title || post.authorTitle || '';
   const authorImage = post.author?.avatar || post.author?.image || post.authorImage;
+  const authorBio = post.author?.bio || post.authorBio || '';
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
-      {/* Reading Progress Bar */}
-      <ReadingProgressBar />
+    <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
+      <ReadingProgress />
 
-      {/* Table of Contents */}
-      <TableOfContents content={post.content} />
+      {/* ============ TOP NAV BAR ============ */}
+      <div className="sticky top-0 z-40 bg-white/80 dark:bg-stone-950/80 backdrop-blur-md border-b border-stone-200/60 dark:border-stone-800/60">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          <Link
+            to="/blog"
+            className="inline-flex items-center gap-2 text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition"
+          >
+            <FaArrowLeft className="text-xs" />
+            <span className="hidden sm:inline">All stories</span>
+          </Link>
 
-      {/* ==================== HERO SECTION ==================== */}
-      <header className="relative">
-        {/* Background Image with Overlay */}
-        <div className="absolute inset-0 h-[70vh]">
-          {post.featuredImage ? (
-            <img
-              src={post.featuredImage}
-              alt={post.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900" />
+          <div className="flex items-center gap-4">
+            {/* Font size controls */}
+            <div className="hidden sm:flex items-center gap-1 border border-stone-200 dark:border-stone-800 rounded-full p-0.5">
+              <button
+                onClick={() => setFontSize('sm')}
+                className={`w-7 h-7 rounded-full text-xs font-medium transition ${
+                  fontSize === 'sm' ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900' : 'text-stone-500 hover:text-stone-800'
+                }`}
+                title="Small"
+              >
+                A
+              </button>
+              <button
+                onClick={() => setFontSize('base')}
+                className={`w-7 h-7 rounded-full text-sm font-medium transition ${
+                  fontSize === 'base' ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900' : 'text-stone-500 hover:text-stone-800'
+                }`}
+                title="Medium"
+              >
+                A
+              </button>
+              <button
+                onClick={() => setFontSize('lg')}
+                className={`w-7 h-7 rounded-full text-base font-medium transition ${
+                  fontSize === 'lg' ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900' : 'text-stone-500 hover:text-stone-800'
+                }`}
+                title="Large"
+              >
+                A
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowTOC(true)}
+              className="lg:hidden text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 transition"
+            >
+              <FaListUl />
+            </button>
+            <ShareDropdown title={post.title} />
+          </div>
+        </div>
+      </div>
+
+      {/* ============ ARTICLE HEADER ============ */}
+      <header className="max-w-3xl mx-auto px-5 pt-12 md:pt-20 pb-8">
+        {/* Category + Date */}
+        <div className="flex items-center gap-3 text-sm text-stone-500 dark:text-stone-400 mb-6">
+          {post.category && (
+            <>
+              <Link
+                to={`/blog/category/${post.category.toLowerCase().replace(/\s+/g, '-')}`}
+                className="uppercase tracking-wider text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 transition"
+              >
+                {post.category}
+              </Link>
+              <span className="text-stone-300 dark:text-stone-700">·</span>
+            </>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-gray-950 via-black/60 to-black/30" />
+          <time>{formatDate(post.publishDate)}</time>
         </div>
 
-        {/* Hero Content */}
-        <div className="relative container mx-auto px-4 pt-32 pb-20 md:pt-40 md:pb-28">
-          <div className="max-w-4xl mx-auto">
-            {/* Breadcrumb */}
-            <motion.nav
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-2 text-sm text-white/70 mb-6"
-            >
-              <Link to="/" className="hover:text-white transition">Home</Link>
-              <span className="text-white/40">/</span>
-              <Link to="/blog" className="hover:text-white transition">Blog</Link>
-              <span className="text-white/40">/</span>
-              <span className="text-white/60 truncate max-w-[200px]">{post.category || 'Article'}</span>
-            </motion.nav>
+        {/* Title */}
+        <h1 className="font-serif text-4xl md:text-5xl lg:text-[3.25rem] leading-[1.1] font-bold tracking-tight text-stone-900 dark:text-stone-50 mb-6">
+          {post.title}
+        </h1>
 
-            {/* Category Badge */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Link
-                to={`/blog/category/${post.category?.toLowerCase().replace(/\s+/g, '-')}`}
-                className="inline-block px-4 py-1.5 bg-white/20 backdrop-blur-md rounded-full text-white text-sm font-medium hover:bg-white/30 transition mb-6"
-              >
-                {post.category || 'Uncategorized'}
-              </Link>
-            </motion.div>
+        {/* Subtitle */}
+        {post.subtitle && (
+          <p className="text-xl md:text-2xl text-stone-600 dark:text-stone-400 leading-relaxed font-light mb-8">
+            {post.subtitle}
+          </p>
+        )}
 
-            {/* Title */}
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className="text-3xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6"
-            >
-              {post.title}
-            </motion.h1>
-
-            {/* Subtitle */}
-            {post.subtitle && (
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="text-lg md:text-xl text-white/80 leading-relaxed max-w-3xl mb-8"
-              >
-                {post.subtitle}
-              </motion.p>
+        {/* Author Row */}
+        <div className="flex items-center justify-between flex-wrap gap-4 pb-8 border-b border-stone-200 dark:border-stone-800">
+          <div className="flex items-center gap-3">
+            {authorImage ? (
+              <img
+                src={authorImage}
+                alt={authorName}
+                className="w-11 h-11 rounded-full object-cover ring-2 ring-stone-100 dark:ring-stone-800"
+              />
+            ) : (
+              <div className="w-11 h-11 rounded-full bg-stone-200 dark:bg-stone-800 flex items-center justify-center font-medium text-stone-700 dark:text-stone-300">
+                {authorName.charAt(0).toUpperCase()}
+              </div>
             )}
+            <div className="text-sm">
+              <p className="font-medium text-stone-900 dark:text-stone-100">{authorName}</p>
+              <p className="text-stone-500 dark:text-stone-500 flex items-center gap-1.5">
+                <FaRegClock className="text-[10px]" />
+                {readingTime} min read
+                <span className="text-stone-300 dark:text-stone-700">·</span>
+                {viewsCount.toLocaleString()} views
+              </p>
+            </div>
+          </div>
 
-            {/* Author & Meta Info */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className="flex flex-wrap items-center gap-6"
+          <div className="flex items-center gap-4 text-stone-500 dark:text-stone-400">
+            <button
+              onClick={handleLike}
+              className={`inline-flex items-center gap-1.5 text-sm transition ${
+                liked ? 'text-rose-600' : 'hover:text-rose-600'
+              }`}
             >
-              {/* Author */}
-              <div className="flex items-center gap-3">
-                {authorImage ? (
-                  <img
-                    src={authorImage}
-                    alt={authorName}
-                    className="w-12 h-12 rounded-full border-2 border-white/30 object-cover"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 border-2 border-white/30 flex items-center justify-center text-white text-lg font-bold">
-                    {authorName.charAt(0)}
-                  </div>
-                )}
-                <div>
-                  <p className="font-semibold text-white">{authorName}</p>
-                  <p className="text-sm text-white/60">{authorTitle}</p>
-                </div>
-              </div>
-
-              {/* Meta */}
-              <div className="flex items-center gap-4 text-sm text-white/70">
-                <span className="flex items-center gap-1.5">
-                  <FaCalendarAlt className="text-white/50" />
-                  {formatDate(post.publishDate)}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <FaClock className="text-white/50" />
-                  {post.readingTime || 5} min read
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <FaEye className="text-white/50" />
-                  {viewsCount.toLocaleString()} views
-                </span>
-              </div>
-            </motion.div>
+              {liked ? <FaHeart /> : <FaRegHeart />}
+              <span className="hidden sm:inline">{likesCount}</span>
+            </button>
+            <button
+              onClick={handleBookmark}
+              className={`inline-flex items-center gap-1.5 text-sm transition ${
+                bookmarked ? 'text-amber-600' : 'hover:text-amber-600'
+              }`}
+            >
+              {bookmarked ? <FaBookmark /> : <FaRegBookmark />}
+            </button>
           </div>
         </div>
       </header>
 
-      {/* ==================== MAIN CONTENT ==================== */}
-      <main className="container mx-auto px-4 py-12">
-        <div className="flex flex-col lg:flex-row gap-12 max-w-7xl mx-auto">
-          {/* Article Content */}
-          <article className="lg:w-2/3 xl:w-3/5">
-            {/* Reading Tools Bar */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="sticky top-4 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md rounded-2xl shadow-lg border border-gray-100 dark:border-gray-800 p-3 mb-8"
-            >
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                {/* Reading Progress */}
-                <div className="flex items-center gap-3">
-                  <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-600 to-purple-600 rounded-full transition-all duration-300"
-                      style={{ width: `${readingProgress}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                    {Math.round(readingProgress)}%
-                  </span>
-                </div>
+      {/* ============ FEATURED IMAGE ============ */}
+      {post.featuredImage && (
+        <div className="max-w-5xl mx-auto px-5 mb-12">
+          <img
+            src={post.featuredImage}
+            alt={post.title}
+            className="w-full h-auto rounded-lg shadow-sm"
+          />
+          {post.imageCaption && (
+            <p className="text-sm text-stone-500 dark:text-stone-500 mt-3 text-center italic">
+              {post.imageCaption}
+            </p>
+          )}
+        </div>
+      )}
 
-                {/* Font Size Controls */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setFontSize('sm')}
-                    className={`p-1.5 rounded-lg transition ${fontSize === 'sm' ? 'bg-blue-100 dark:bg-blue-950/30 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                    title="Small text"
-                  >
-                    <FaSearchMinus className="text-xs" />
-                  </button>
-                  <button
-                    onClick={() => setFontSize('base')}
-                    className={`p-1.5 rounded-lg transition ${fontSize === 'base' ? 'bg-blue-100 dark:bg-blue-950/30 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                    title="Normal text"
-                  >
-                    <FaParagraph className="text-xs" />
-                  </button>
-                  <button
-                    onClick={() => setFontSize('lg')}
-                    className={`p-1.5 rounded-lg transition ${fontSize === 'lg' ? 'bg-blue-100 dark:bg-blue-950/30 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                    title="Large text"
-                  >
-                    <FaSearchPlus className="text-xs" />
-                  </button>
-                </div>
+      {/* ============ BODY LAYOUT ============ */}
+      <div className="max-w-6xl mx-auto px-5 pb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          {/* Left rail — desktop sharing */}
+          <aside className="hidden lg:block lg:col-span-1">
+            <div className="sticky top-24 flex flex-col items-center gap-5 text-stone-400 dark:text-stone-500">
+              <button
+                onClick={handleLike}
+                className={`transition hover:text-rose-600 ${liked ? 'text-rose-600' : ''}`}
+                title="Like"
+              >
+                {liked ? <FaHeart /> : <FaRegHeart />}
+                <span className="block text-[10px] mt-0.5 text-center">{likesCount}</span>
+              </button>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(window.location.href);
-                      toast.success('Link copied!');
-                    }}
-                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-                    title="Copy link"
-                  >
-                    <FaCopy className="text-sm" />
-                  </button>
-                  <button
-                    onClick={() => window.print()}
-                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-                    title="Print"
-                  >
-                    <FaPrint className="text-sm" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+              <button
+                onClick={() => setShowComments(!showComments)}
+                className="transition hover:text-stone-900 dark:hover:text-stone-100"
+                title="Comments"
+              >
+                <FaComment />
+                <span className="block text-[10px] mt-0.5 text-center">{comments.length}</span>
+              </button>
 
+              <button
+                onClick={handleBookmark}
+                className={`transition hover:text-amber-600 ${bookmarked ? 'text-amber-600' : ''}`}
+                title="Save"
+              >
+                {bookmarked ? <FaBookmark /> : <FaRegBookmark />}
+              </button>
+
+              <div className="w-px h-8 bg-stone-200 dark:bg-stone-800" />
+
+              <a
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(post.title)}&url=${encodeURIComponent(window.location.href)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-sky-500"
+                title="Share on Twitter"
+              >
+                <FaTwitter />
+              </a>
+              <a
+                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-blue-600"
+                title="Share on LinkedIn"
+              >
+                <FaLinkedin />
+              </a>
+              <a
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition hover:text-blue-700"
+                title="Share on Facebook"
+              >
+                <FaFacebook />
+              </a>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success('Link copied');
+                }}
+                className="transition hover:text-stone-900 dark:hover:text-stone-100"
+                title="Copy link"
+              >
+                <FaLink />
+              </button>
+            </div>
+          </aside>
+
+          {/* Main article */}
+          <article className="lg:col-span-8 xl:col-span-7">
             {/* Audio Player */}
             {post.audioUrl && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-8 p-5 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl border border-blue-100 dark:border-blue-800/50"
-              >
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={toggleAudio}
-                    className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white hover:shadow-lg transition-all duration-300 flex-shrink-0"
-                  >
-                    {audioPlaying ? <FaPause /> : <FaPlay className="ml-1" />}
-                  </button>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                      Listen to this article
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {post.readingTime || 5} min listen • AI narrated
-                    </p>
-                    <audio
-                      ref={audioRef}
-                      src={post.audioUrl}
-                      onEnded={() => setAudioPlaying(false)}
-                      className="hidden"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FaVolumeUp className="text-gray-400" />
-                  </div>
+              <div className="mb-10 p-4 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 flex items-center gap-4">
+                <button
+                  onClick={toggleAudio}
+                  className="w-12 h-12 rounded-full bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 flex items-center justify-center hover:opacity-90 transition flex-shrink-0"
+                >
+                  {audioPlaying ? <FaPause /> : <FaPlay className="ml-0.5" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <FaHeadphones className="text-xs text-stone-400" />
+                    Listen to this story
+                  </p>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Narrated · {readingTime} min
+                  </p>
                 </div>
-              </motion.div>
+                <audio
+                  ref={audioRef}
+                  src={post.audioUrl}
+                  onEnded={() => setAudioPlaying(false)}
+                  className="hidden"
+                />
+              </div>
             )}
 
-            {/* Article Body */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl p-6 md:p-10 border border-gray-100 dark:border-gray-800"
-            >
-              {/* Content */}
-              <div
-                ref={contentRef}
-                className={`prose prose-lg max-w-none dark:prose-invert ${getFontSizeClass()}
-                  prose-headings:text-gray-900 dark:prose-headings:text-gray-100
-                  prose-headings:font-bold prose-headings:scroll-mt-24
-                  prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-p:leading-relaxed
-                  prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
-                  prose-strong:text-gray-900 dark:prose-strong:text-gray-100
-                  prose-blockquote:border-l-4 prose-blockquote:border-blue-500 prose-blockquote:bg-blue-50 dark:prose-blockquote:bg-blue-950/30 prose-blockquote:px-6 prose-blockquote:py-4 prose-blockquote:rounded-r-xl prose-blockquote:italic
-                  prose-code:bg-gray-100 dark:prose-code:bg-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm
-                  prose-pre:bg-gray-900 dark:prose-pre:bg-gray-950 prose-pre:rounded-xl prose-pre:shadow-lg
-                  prose-img:rounded-2xl prose-img:shadow-lg
-                  prose-li:text-gray-700 dark:prose-li:text-gray-300
-                  prose-hr:border-gray-200 dark:prose-hr:border-gray-800`}
-                dangerouslySetInnerHTML={{ __html: post.content }}
-              />
+            {/* Article content */}
+            <div
+              ref={contentRef}
+              className={`prose-editorial ${fontSizeClass}`}
+              dangerouslySetInnerHTML={{ __html: post.content }}
+            />
 
-              {/* Statistics */}
-              {post.statistics && post.statistics.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-10">
-                  {post.statistics.map((stat, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-5 text-center border border-blue-100 dark:border-blue-800/50"
-                    >
-                      <p className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                        {stat.value}
-                      </p>
-                      <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-1">{stat.label}</p>
-                    </motion.div>
+            {/* Statistics */}
+            {post.statistics?.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 my-12 py-8 border-y border-stone-200 dark:border-stone-800">
+                {post.statistics.map((stat, i) => (
+                  <div key={i} className="text-center">
+                    <p className="font-serif text-2xl md:text-3xl font-bold text-stone-900 dark:text-stone-100">
+                      {stat.value}
+                    </p>
+                    <p className="text-xs uppercase tracking-wider text-stone-500 mt-1">
+                      {stat.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Gallery */}
+            {post.galleryImages?.length > 0 && (
+              <div className="my-12">
+                <div className="grid grid-cols-2 gap-3">
+                  {post.galleryImages.map((img, i) => (
+                    <img
+                      key={i}
+                      src={img}
+                      alt={`Fig. ${i + 1}`}
+                      className="rounded-lg object-cover w-full h-56 hover:opacity-95 transition cursor-zoom-in"
+                    />
                   ))}
                 </div>
-              )}
-
-              {/* Gallery Images */}
-              {post.galleryImages && post.galleryImages.length > 0 && (
-                <div className="my-10">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Gallery</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {post.galleryImages.map((img, index) => (
-                      <motion.img
-                        key={index}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: index * 0.1 }}
-                        src={img}
-                        alt={`Gallery ${index + 1}`}
-                        className="rounded-xl object-cover h-48 w-full hover:scale-105 transition duration-300 cursor-pointer"
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Learning Objectives */}
-              {post.learningObjectives && post.learningObjectives.length > 0 && (
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl p-6 my-10 border border-blue-100 dark:border-blue-800/50">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-4">
-                    <FaGraduationCap className="text-blue-600" />
-                    Learning Objectives
-                  </h3>
-                  <ul className="space-y-3">
-                    {post.learningObjectives.map((obj, index) => (
-                      <li key={index} className="flex items-start gap-3 text-gray-700 dark:text-gray-300">
-                        <FaCheckCircle className="text-green-500 mt-1 flex-shrink-0" />
-                        <span>{obj}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Video Embed */}
-              {post.videoUrl && (
-                <div className="my-10">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-                    <FaVideo className="text-red-500" />
-                    Video
-                  </h3>
-                  <div className="aspect-video bg-black rounded-2xl overflow-hidden shadow-xl">
-                    <iframe
-                      src={post.videoUrl}
-                      className="w-full h-full"
-                      allowFullScreen
-                      title="Video content"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* References */}
-              {post.references && post.references.length > 0 && (
-                <div className="mt-10 pt-8 border-t border-gray-200 dark:border-gray-800">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">References</h3>
-                  <ol className="space-y-3">
-                    {post.references.map((ref, index) => (
-                      <li key={index} className="flex items-start gap-3 text-sm text-gray-600 dark:text-gray-400">
-                        <span className="text-blue-600 dark:text-blue-400 font-bold">[{index + 1}]</span>
-                        <span>{ref}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-
-              {/* Tags */}
-              {post.tags && post.tags.length > 0 && (
-                <div className="mt-10 pt-8 border-t border-gray-200 dark:border-gray-800">
-                  <div className="flex flex-wrap gap-2">
-                    {post.tags.map((tag) => (
-                      <Link
-                        key={tag}
-                        to={`/blog/search?q=${tag}`}
-                        className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-950/30 hover:text-blue-600 dark:hover:text-blue-400 transition"
-                      >
-                        #{tag}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </motion.div>
-
-            {/* Engagement Bar */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800 mt-6"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                {/* Like & Bookmark */}
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleLike}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                      liked
-                        ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 dark:hover:text-red-400'
-                    }`}
-                  >
-                    {liked ? <FaHeart /> : <FaRegHeart />}
-                    <span className="font-medium">{likesCount.toLocaleString()}</span>
-                  </button>
-
-                  <button
-                    onClick={handleBookmark}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                      bookmarked
-                        ? 'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-yellow-50 dark:hover:bg-yellow-950/30 hover:text-yellow-600 dark:hover:text-yellow-400'
-                    }`}
-                  >
-                    {bookmarked ? <FaBookmark /> : <FaRegBookmark />}
-                    <span className="font-medium">{bookmarked ? 'Saved' : 'Save'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowComments(!showComments)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-200 ${
-                      showComments
-                        ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-600 dark:hover:text-blue-400'
-                    }`}
-                  >
-                    <FaComment />
-                    <span className="font-medium">{comments.length}</span>
-                  </button>
-                </div>
-
-                {/* Share */}
-                <ShareMenu post={post} />
+                <p className="text-sm text-stone-500 mt-3 italic">Figures from the article</p>
               </div>
-            </motion.div>
+            )}
 
-            {/* Comments Section */}
-            <AnimatePresence>
-              {showComments && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl p-6 md:p-8 border border-gray-100 dark:border-gray-800 mt-6 overflow-hidden"
-                >
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6 flex items-center gap-2">
-                    <FaComment className="text-blue-600" />
-                    Comments ({comments.length})
-                  </h3>
-
-                  {isAuthenticated ? (
-                    <form onSubmit={handleCommentSubmit} className="mb-8">
-                      <div className="flex gap-3">
-                        {user?.avatar ? (
-                          <img
-                            src={user.avatar}
-                            alt={user.name}
-                            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                            {user?.name?.charAt(0) || 'G'}
-                          </div>
-                        )}
-                        <div className="flex-1">
-                          <textarea
-                            value={commentText}
-                            onChange={(e) => setCommentText(e.target.value)}
-                            placeholder="Share your thoughts..."
-                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none resize-none text-gray-700 dark:text-gray-300 min-h-[100px] transition"
-                            rows={3}
-                          />
-                          <div className="flex justify-end mt-2">
-                            <button
-                              type="submit"
-                              disabled={submittingComment || !commentText.trim()}
-                              className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                            >
-                              {submittingComment ? (
-                                <>
-                                  <FaSpinner className="animate-spin" />
-                                  Posting...
-                                </>
-                              ) : (
-                                'Post Comment'
-                              )}
-                            </button>
-                          </div>
-                        </div>
+            {/* Video */}
+            {post.videoUrl && (
+              <div className="my-12">
+                <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center h-full">
+                        <FaSpinner className="animate-spin text-white text-2xl" />
                       </div>
-                    </form>
-                  ) : (
-                    <div className="mb-8 p-5 bg-gray-50 dark:bg-gray-800 rounded-xl text-center">
-                      <p className="text-gray-600 dark:text-gray-400">
-                        <Link to="/login" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-                          Login
-                        </Link>{' '}
-                        or{' '}
-                        <Link to="/signup" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-                          Sign up
-                        </Link>{' '}
-                        to join the conversation
-                      </p>
-                    </div>
-                  )}
+                    }
+                  >
+                    <ReactPlayer
+                      url={post.videoUrl}
+                      width="100%"
+                      height="100%"
+                      controls
+                      config={{ youtube: { playerVars: { modestbranding: 1, rel: 0 } } }}
+                    />
+                  </Suspense>
+                </div>
+                <p className="text-sm text-stone-500 mt-3 italic">Watch the video</p>
+              </div>
+            )}
 
-                  <div className="space-y-4">
-                    {comments.length === 0 ? (
-                      <div className="text-center py-12">
-                        <FaRegComment className="text-4xl text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-                        <p className="text-gray-500 dark:text-gray-400">No comments yet. Be the first to share your thoughts!</p>
-                      </div>
-                    ) : (
-                      comments.map((comment) => (
-                        <motion.div
-                          key={comment._id || comment.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="flex gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl"
-                        >
-                          {comment.authorAvatar || comment.avatar ? (
-                            <img
-                              src={comment.authorAvatar || comment.avatar}
-                              alt={comment.authorName || comment.user}
-                              className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                              {(comment.authorName || comment.user)?.charAt(0) || 'U'}
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-gray-900 dark:text-gray-100">
-                                {comment.authorName || comment.user}
-                              </span>
-                              <span className="text-xs text-gray-400">•</span>
-                              <span className="text-xs text-gray-400">
-                                {formatTimeAgo(comment.createdAt || comment.date)}
-                              </span>
-                            </div>
-                            <p className="text-gray-700 dark:text-gray-300 mt-1.5">{comment.content || comment.text}</p>
-                            <div className="flex items-center gap-4 mt-3">
-                              <button className="text-sm text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition flex items-center gap-1">
-                                <FaThumbsUp className="text-xs" />
-                                Like
-                              </button>
-                              <button className="text-sm text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
-                                Reply
-                              </button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Learning objectives */}
+            {post.learningObjectives?.length > 0 && (
+              <div className="my-12 p-6 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-lg">
+                <p className="font-serif text-lg font-bold text-stone-900 dark:text-stone-100 mb-3 flex items-center gap-2">
+                  <FaGraduationCap className="text-amber-600" />
+                  What you'll learn
+                </p>
+                <ul className="space-y-2">
+                  {post.learningObjectives.map((obj, i) => (
+                    <li key={i} className="flex items-start gap-3 text-stone-700 dark:text-stone-300">
+                      <FaCheckCircle className="text-amber-600 mt-1 text-sm flex-shrink-0" />
+                      <span>{obj}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-            {/* Author Bio at End */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-8 p-6 bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-900 dark:to-blue-950/30 rounded-3xl border border-gray-100 dark:border-gray-800"
-            >
-              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+            {/* References */}
+            {post.references?.length > 0 && (
+              <div className="mt-16 pt-10 border-t border-stone-200 dark:border-stone-800">
+                <h3 className="font-serif text-xl font-bold mb-5 text-stone-900 dark:text-stone-100">
+                  References
+                </h3>
+                <ol className="space-y-3 text-sm text-stone-600 dark:text-stone-400">
+                  {post.references.map((ref, i) => (
+                    <li key={i} className="flex gap-3 leading-relaxed">
+                      <span className="text-stone-400 font-mono text-xs pt-0.5 flex-shrink-0">
+                        [{i + 1}]
+                      </span>
+                      <span>{ref}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {/* Tags */}
+            {post.tags?.length > 0 && (
+              <div className="mt-12 flex flex-wrap gap-2">
+                {post.tags.map((tag) => (
+                  <Link
+                    key={tag}
+                    to={`/blog/search?q=${tag}`}
+                    className="text-sm px-3 py-1 rounded-full bg-stone-100 dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-800 transition"
+                  >
+                    #{tag}
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {/* Divider */}
+            <div className="my-16 flex items-center justify-center gap-4">
+              <span className="w-12 h-px bg-stone-300 dark:bg-stone-700" />
+              <span className="text-stone-400 dark:text-stone-600 text-xs tracking-widest">◆</span>
+              <span className="w-12 h-px bg-stone-300 dark:bg-stone-700" />
+            </div>
+
+            {/* Author Bio Card */}
+            <div className="p-6 md:p-8 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
+              <div className="flex items-start gap-5">
                 {authorImage ? (
                   <img
                     src={authorImage}
                     alt={authorName}
-                    className="w-20 h-20 rounded-2xl object-cover border-2 border-white dark:border-gray-800 shadow-lg"
+                    className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-stone-300 dark:bg-stone-700 flex items-center justify-center text-2xl font-serif font-bold text-stone-700 dark:text-stone-300 flex-shrink-0">
                     {authorName.charAt(0)}
                   </div>
                 )}
-                <div className="text-center sm:text-left">
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Written by</p>
-                  <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">{authorName}</h4>
-                  <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{authorTitle}</p>
-                  {(post.author?.bio || post.authorBio) && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{post.author?.bio || post.authorBio}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs uppercase tracking-wider text-stone-500 mb-1">
+                    Written by
+                  </p>
+                  <h3 className="font-serif text-lg font-bold text-stone-900 dark:text-stone-100">
+                    {authorName}
+                  </h3>
+                  {authorTitle && (
+                    <p className="text-sm text-stone-600 dark:text-stone-400 mt-0.5">{authorTitle}</p>
                   )}
+                  {authorBio && (
+                    <p className="text-sm text-stone-600 dark:text-stone-400 mt-3 leading-relaxed">
+                      {authorBio}
+                    </p>
+                  )}
+
+                  {/* Social */}
+                  {post.author?.social && (
+                    <div className="flex items-center gap-3 mt-4">
+                      {post.author.social.twitter && (
+                        <a href={post.author.social.twitter} target="_blank" rel="noopener noreferrer"
+                           className="text-stone-400 hover:text-sky-500 transition">
+                          <FaTwitter />
+                        </a>
+                      )}
+                      {post.author.social.linkedin && (
+                        <a href={post.author.social.linkedin} target="_blank" rel="noopener noreferrer"
+                           className="text-stone-400 hover:text-blue-600 transition">
+                          <FaLinkedin />
+                        </a>
+                      )}
+                      {post.author.social.website && (
+                        <a href={post.author.social.website} target="_blank" rel="noopener noreferrer"
+                           className="text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition">
+                          <FaGlobe />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  <Link
+                    to={`/blog/author/${post.author?._id || post.author?.id}`}
+                    className="inline-block mt-4 text-sm font-medium text-stone-900 dark:text-stone-100 underline underline-offset-4 hover:text-rose-600 dark:hover:text-rose-400 transition"
+                  >
+                    More from {authorName.split(' ')[0]}
+                  </Link>
                 </div>
               </div>
-            </motion.div>
-          </article>
+            </div>
 
-          {/* Sidebar */}
-          <aside className="lg:w-1/3 xl:w-2/5 space-y-6">
-            {/* Author Card */}
-            <AuthorCard
-              author={post.author}
-              postAuthorName={post.authorName}
-              postAuthorTitle={post.authorTitle}
-              postAuthorBio={post.authorBio}
-              postAuthorImage={post.authorImage}
-            />
-
-            {/* Newsletter */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-3xl shadow-xl p-6 text-white"
-            >
-              <h4 className="text-lg font-bold mb-2">Stay Updated</h4>
-              <p className="text-white/80 text-sm mb-4">
-                Get the latest healthcare insights delivered to your inbox
-              </p>
-              <div className="flex flex-col gap-2">
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  className="px-4 py-3 rounded-xl bg-white/20 backdrop-blur-sm border border-white/30 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50 transition text-sm"
-                />
-                <button className="px-4 py-3 bg-white text-blue-600 rounded-xl font-semibold hover:shadow-lg transition-all duration-300 text-sm">
-                  Subscribe
+            {/* Interaction bar */}
+            <div className="mt-10 flex items-center justify-between flex-wrap gap-4 py-5 border-y border-stone-200 dark:border-stone-800">
+              <div className="flex items-center gap-6 text-sm text-stone-600 dark:text-stone-400">
+                <button
+                  onClick={handleLike}
+                  className={`inline-flex items-center gap-2 transition ${
+                    liked ? 'text-rose-600' : 'hover:text-rose-600'
+                  }`}
+                >
+                  {liked ? <FaHeart /> : <FaRegHeart />}
+                  {likesCount} {likesCount === 1 ? 'like' : 'likes'}
+                </button>
+                <button
+                  onClick={() => setShowComments(!showComments)}
+                  className="inline-flex items-center gap-2 hover:text-stone-900 dark:hover:text-stone-100 transition"
+                >
+                  <FaComment />
+                  {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
                 </button>
               </div>
-              <p className="text-white/50 text-xs mt-3">No spam. Unsubscribe anytime.</p>
-            </motion.div>
+              <ShareDropdown title={post.title} />
+            </div>
 
-            {/* Related Posts */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800"
-            >
-              <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-                <FaLightbulb className="text-yellow-500" />
-                Related Articles
-              </h4>
-              <div className="space-y-4">
-                {relatedPosts.length === 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No related articles</p>
-                ) : (
-                  relatedPosts.slice(0, 4).map((related) => (
-                    <Link
-                      key={related._id || related.id}
-                      to={`/blog/post/${related.slug || related._id}`}
-                      className="block group"
-                    >
-                      <div className="flex gap-3 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition">
-                        {related.featuredImage ? (
-                          <img
-                            src={related.featuredImage}
-                            alt={related.title}
-                            className="w-20 h-20 object-cover rounded-xl flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-xl flex-shrink-0 flex items-center justify-center">
-                            <FaFileAlt className="text-gray-400" />
+            {/* Comments */}
+            <section className="mt-10" id="comments">
+              <AnimatePresence>
+                {(showComments || comments.length > 0) && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <h3 className="font-serif text-xl font-bold mb-6 text-stone-900 dark:text-stone-100">
+                      Discussion
+                    </h3>
+
+                    {isAuthenticated ? (
+                      <form onSubmit={handleCommentSubmit} className="mb-10">
+                        <div className="flex gap-3">
+                          {user?.avatar ? (
+                            <img src={user.avatar} alt={user.name}
+                                 className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-stone-200 dark:bg-stone-800 flex items-center justify-center font-medium text-stone-700 dark:text-stone-300 flex-shrink-0">
+                              {user?.name?.charAt(0) || 'U'}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <textarea
+                              value={commentText}
+                              onChange={(e) => setCommentText(e.target.value)}
+                              placeholder="Add to the discussion…"
+                              rows={3}
+                              className="w-full px-4 py-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl text-stone-800 dark:text-stone-200 placeholder-stone-400 focus:outline-none focus:border-stone-400 dark:focus:border-stone-600 transition resize-none"
+                            />
+                            <div className="flex justify-end mt-3">
+                              <button
+                                type="submit"
+                                disabled={submittingComment || !commentText.trim()}
+                                className="px-5 py-2 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-full text-sm font-medium hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {submittingComment ? 'Posting…' : 'Post comment'}
+                              </button>
+                            </div>
                           </div>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="mb-10 p-5 rounded-xl bg-stone-50 dark:bg-stone-900 text-center text-sm text-stone-600 dark:text-stone-400 border border-stone-200 dark:border-stone-800">
+                        <Link to="/login" className="font-medium text-stone-900 dark:text-stone-100 underline underline-offset-4">
+                          Sign in
+                        </Link>{' '}
+                        to share your thoughts
+                      </div>
+                    )}
+
+                    <div className="space-y-6">
+                      {comments.length === 0 ? (
+                        <p className="text-center text-stone-500 py-8">
+                          No comments yet. Be the first to write.
+                        </p>
+                      ) : (
+                        comments.map((c) => (
+                          <div key={c._id || c.id} className="flex gap-3 pb-6 border-b border-stone-100 dark:border-stone-800 last:border-0">
+                            {c.authorAvatar || c.avatar ? (
+                              <img src={c.authorAvatar || c.avatar} alt={c.authorName}
+                                   className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-stone-200 dark:bg-stone-800 flex items-center justify-center font-medium text-stone-700 dark:text-stone-300 flex-shrink-0">
+                                {(c.authorName || c.user)?.charAt(0) || 'U'}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="font-medium text-stone-900 dark:text-stone-100">
+                                  {c.authorName || c.user}
+                                </span>
+                                <span className="text-stone-400 text-xs">
+                                  {formatTimeAgo(c.createdAt || c.date)}
+                                </span>
+                              </div>
+                              <p className="mt-1.5 text-stone-700 dark:text-stone-300 leading-relaxed">
+                                {c.content || c.text}
+                              </p>
+                              <button className="mt-2 text-xs text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition">
+                                Reply
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </section>
+          </article>
+
+          {/* Right sidebar */}
+          <aside className="lg:col-span-3 xl:col-span-4 lg:sticky lg:top-24 lg:self-start space-y-8">
+            <TableOfContents content={post.content} />
+
+            {relatedPosts.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-stone-500 mb-4">
+                  More stories
+                </h4>
+                <div className="space-y-5">
+                  {relatedPosts.slice(0, 4).map((r) => (
+                    <Link
+                      key={r._id || r.id}
+                      to={`/blog/post/${r.slug || r._id}`}
+                      className="group block"
+                    >
+                      <div className="flex gap-3">
+                        {r.featuredImage && (
+                          <img
+                            src={r.featuredImage}
+                            alt={r.title}
+                            className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                          />
                         )}
                         <div className="min-w-0">
-                          <h5 className="font-semibold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition line-clamp-2 text-sm">
-                            {related.title}
+                          <h5 className="font-serif text-sm font-medium leading-snug text-stone-900 dark:text-stone-100 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition line-clamp-2">
+                            {r.title}
                           </h5>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
-                            <FaClock className="text-[10px]" />
-                            {related.readingTime || 5} min read
+                          <p className="text-xs text-stone-500 mt-1">
+                            {r.readingTime || 5} min read
                           </p>
                         </div>
                       </div>
                     </Link>
-                  ))
-                )}
-              </div>
-            </motion.div>
-
-            {/* Popular Tags */}
-            {post.tags && post.tags.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="bg-white dark:bg-gray-900 rounded-3xl shadow-xl p-6 border border-gray-100 dark:border-gray-800"
-              >
-                <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Tags</h4>
-                <div className="flex flex-wrap gap-2">
-                  {post.tags.map((tag) => (
-                    <Link
-                      key={tag}
-                      to={`/blog/search?q=${tag}`}
-                      className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-950/30 hover:text-blue-600 dark:hover:text-blue-400 transition"
-                    >
-                      #{tag}
-                    </Link>
                   ))}
                 </div>
-              </motion.div>
+              </div>
             )}
+
+            {/* Newsletter */}
+            <div className="p-5 rounded-2xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900">
+              <p className="font-serif text-lg font-bold mb-2">
+                Get stories worth reading.
+              </p>
+              <p className="text-sm opacity-80 mb-4">
+                A weekly letter on healthcare and nursing education. No noise.
+              </p>
+              <form onSubmit={(e) => e.preventDefault()} className="space-y-2">
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-white/10 dark:bg-stone-900/10 border border-white/20 dark:border-stone-900/20 text-sm placeholder-white/50 dark:placeholder-stone-900/50 focus:outline-none focus:border-white/60 dark:focus:border-stone-900/60 transition"
+                />
+                <button
+                  type="submit"
+                  className="w-full px-4 py-2.5 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 rounded-lg text-sm font-medium hover:opacity-90 transition"
+                >
+                  Subscribe
+                </button>
+              </form>
+            </div>
           </aside>
         </div>
-      </main>
-
-      {/* Footer Navigation */}
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <Link
-            to="/blog"
-            className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition font-medium"
-          >
-            <FaArrowLeft />
-            Back to Blog
-          </Link>
-          <button
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition font-medium"
-          >
-            <FaChevronUp />
-            Back to Top
-          </button>
-        </div>
       </div>
+
+      {/* Mobile TOC drawer */}
+      <AnimatePresence>
+        {showTOC && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowTOC(false)}
+              className="fixed inset-0 bg-black/50 z-50 lg:hidden"
+            />
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25 }}
+              className="fixed left-0 top-0 bottom-0 w-72 max-w-[80vw] bg-white dark:bg-stone-950 z-50 p-5 overflow-y-auto lg:hidden"
+            >
+              <TableOfContents content={post.content} onClose={() => setShowTOC(false)} />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
