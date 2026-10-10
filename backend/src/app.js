@@ -34,8 +34,6 @@ import aiRoutes from "./routes/aiRoutes.js";
 import aiPlanRoutes from "./routes/aiPlanRoutes.js";
 import aiSubscriptionRoutes from "./routes/aiSubscriptionRoutes.js";
 import programRoutes from "./routes/programRoutes.js";
-import blogRoutes from "./routes/blogRoutes.js";
-import adminBlogRoutes from "./routes/adminBlogRoutes.js";
 import nursingGameRoutes from "./routes/nursingGameRoutes.js";
 
 const app = express();
@@ -125,13 +123,6 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/ai-subscriptions", aiSubscriptionRoutes);
 app.use("/api/ai-plans", aiPlanRoutes);
 app.use("/api/programs", programRoutes);
-
-// ================= BLOG ROUTES - FIXED MOUNTING =================
-// Public blog routes - mounted at /api/blog (singular for consistency)
-app.use("/api/blog", blogRoutes);
-// Admin blog routes - mounted at /api/admin/blog
-app.use("/api/admin/blog", adminBlogRoutes);
-
 app.use("/api/nursing-games", nursingGameRoutes);
 
 // ================= HEALTH CHECK =================

@@ -1,17 +1,12 @@
 // config/multer.js - COMPLETE FIXED
 import multer from "multer";
 
+// Memory storage - files stored as Buffer in memory
 const storage = multer.memoryStorage();
 
+// File filter for images only
 const imageFilter = (req, file, cb) => {
-  const allowedTypes = [
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-    "image/svg+xml",
-  ];
+  const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -19,51 +14,34 @@ const imageFilter = (req, file, cb) => {
   }
 };
 
-// Single upload (field: any name set via .single())
+// Single image upload for featured images
 const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: imageFilter,
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: imageFilter
 });
 
-// Array upload for gallery (10 max)
+// Multiple images upload for gallery
 const uploadMultiple = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: imageFilter,
-});
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024
+  },
+  fileFilter: imageFilter
+}).array("galleryImages", 10);
 
-// Any file type
+// Any file upload (for future use)
 const uploadAny = multer({
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  storage: storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024
+  }
 });
 
-// ✅ NEW: Helper to normalize req.files from upload.fields()
-// into a shape the controller can use uniformly.
-export const extractFiles = (req) => {
-  const result = { featuredImage: null, galleryImages: [] };
-
-  if (req.file) {
-    result.featuredImage = req.file;
-  }
-
-  if (req.files) {
-    // upload.fields() → req.files = { featuredImage: [file], galleryImages: [file, ...] }
-    if (Array.isArray(req.files)) {
-      // upload.array() fallback
-      result.galleryImages = req.files;
-    } else {
-      if (req.files.featuredImage && req.files.featuredImage[0]) {
-        result.featuredImage = req.files.featuredImage[0];
-      }
-      if (req.files.galleryImages && req.files.galleryImages.length > 0) {
-        result.galleryImages = req.files.galleryImages;
-      }
-    }
-  }
-
-  return result;
+export {
+  upload,
+  uploadMultiple,
+  uploadAny
 };
-
-export { upload, uploadMultiple, uploadAny };
