@@ -9,7 +9,7 @@ import Video from "../models/Video.js";
 import Comment from "../models/Comment.js";
 import Testimonial from "../models/Testimonial.js";
 import Policy from "../models/Policy.js";
-import { optionalAuth, protect } from "../middleware/auth.js";
+import { optionalAuth, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
