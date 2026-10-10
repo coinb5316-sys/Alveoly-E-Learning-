@@ -1,8 +1,10 @@
-// src/App.js - Updated with Blog Routes + Splash Screen
+// src/App.js — Complete route tree
 import React, { useEffect, useState } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+
+/* ---------- Public pages ---------- */
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/Login";
 import SignupPage from "./pages/Signup";
@@ -13,38 +15,74 @@ import Admissions from "./pages/Admissions";
 import Contact from "./pages/Contact";
 import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+
+/* ---------- Shared ---------- */
 import ProtectedRoute from "./components/ProtectedRoutes";
+import CookieBanner from "./components/CookieBanner";
+import SplashScreen from "./components/SplashScreen";
+
+/* ---------- Student ---------- */
 import StudentDashboard from "./pages/StudentDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
 import StudentLayout from "./pages/StudentLayout";
+import StudentCourses from "./pages/StudentCourses";
+import StudentSubjects from "./pages/StudentSubjects";
+import StudentPlans from "./pages/StudentPlans";
+import StudentPayments from "./pages/StudentPayments";
+import StudentLessons from "./pages/StudentLessons";
+import LessonQuiz from "./components/student/LessionQuiz";
+import StudentExams from "./pages/StudentExams";
+import StudentTrial from "./pages/StudentTrial";
+import StudentProgress from "./pages/StudentProgress";
+import StudentTestimonials from "./pages/StudentTestimonials";
+import StudentContentPayments from "./pages/StudentContentPayments";
+import StudentLiveClasses from "./pages/StudentLiveClasses";
+import StudentExamResults from "./pages/StudentExamResults";
+import AIChat from "./pages/AIChat";
+import NursingGamesHub from "./pages/student/NursingGamesHub";
+import GameMatch from "./pages/student/GameMatch";
+import GameMatchResults from "./pages/student/GameMatchResults";
+import SelectProgramPage from "./pages/SelectProgramPage";
+
+/* ---------- Admin ---------- */
+import AdminDashboard from "./pages/AdminDashboard";
 import AdminLayout from "./pages/AdminLayout";
 import AdminCourses from "./pages/AdminCourses";
 import AdminSubjects from "./pages/AdminSubjects";
 import AdminQuestions from "./pages/AdminQuestions";
 import AdminUsers from "./pages/AdminUsers";
-import StudentCourses from "./pages/StudentCourses";
-import StudentSubjects from "./pages/StudentSubjects";
-import PaymentSuccess from "./pages/PaymentSuccess";
 import AdminPlans from "./pages/AdminPlans";
-import StudentPlans from "./pages/StudentPlans";
 import AdminPayments from "./pages/AdminPayments";
-import StudentPayments from "./pages/StudentPayments";
-import PerformanceDashboard from "./pages/admin/PerformanceDashboard";
 import AdminContent from "./pages/AdminContent";
-import StudentLessons from "./pages/StudentLessons";
-import LessonQuiz from "./components/student/LessionQuiz";
 import AdminExamResults from "./pages/AdminExamResults";
-import StudentExams from "./pages/StudentExams";
-import StudentTrial from "./pages/StudentTrial";
-import StudentProgress from "./pages/StudentProgress";
-import StudentTestimonials from "./pages/StudentTestimonials";
 import AdminTestimonials from "./pages/AdminTestimonials";
 import AdminInbox from "./pages/AdminInbox";
-import ContentPaymentSuccess from "./pages/ContentPaymentSucess";
-import StudentContentPayments from "./pages/StudentContentPayments";
 import AdminContentPayments from "./pages/AdminContentPayments";
-import PlanPaymentSuccess from "./pages/PlanPaymentSuccess";
-import SubjectPaymentSuccess from "./pages/SubjectPaymentSuccess";
+import AdminLecturers from "./pages/AdminLecturers";
+import AdminLecturerDetail from "./pages/AdminLecturerDetail";
+import AdminQuestionApproval from "./pages/AdminQuestionApproval";
+import AdminLiveClasses from "./pages/AdminLiveClasses";
+import AdminCreateLiveClass from "./pages/AdminCreateLiveClass";
+import AdminPrograms from "./pages/AdminPrograms";
+import AdminTopics from "./pages/AdminTopics";
+import AIAdmin from "./pages/AIAdmin";
+import AIPlansAdmin from "./pages/AIPlansAdmin";
+import AIGenerator from "./pages/AdminAIGeneratorU";
+import PerformanceDashboard from "./pages/admin/PerformanceDashboard";
+import AdminNotifications from "./pages/admin/AdminNotifications";
+
+/* ---------- Admin blog (editorial) ---------- */
+import AdminBlogPosts from "./pages/admin/blog/AdminBlogPosts";
+import AdminBlogPostEditor from "./pages/admin/blog/AdminBlogPostEditor";
+import AdminBlogCategories from "./pages/admin/blog/AdminBlogCategories";
+import AdminBlogTags from "./pages/admin/blog/AdminBlogTags";
+import AdminBlogAuthors from "./pages/admin/blog/AdminBlogAuthors";
+import AdminBlogComments from "./pages/admin/blog/AdminBlogComments";
+import AdminBlogPodcasts from "./pages/admin/blog/AdminBlogPodcasts";
+import AdminBlogVideos from "./pages/admin/blog/AdminBlogVideos";
+import AdminBlogMedia from "./pages/admin/blog/AdminBlogMedia";
+import AdminBlogTestimonials from "./pages/admin/blog/AdminBlogTestimonials";
+
+/* ---------- Lecturer ---------- */
 import LecturerLayout from "./pages/LecturerLayout";
 import LecturerDashboard from "./pages/LecturerDashboard";
 import LecturerContentList from "./pages/LecturerContentList";
@@ -56,37 +94,15 @@ import LecturerStudentProgress from "./pages/LecturerStudentProgress";
 import LecturerProfile from "./pages/LecturerProfile";
 import LecturerSettings from "./pages/LecturerSettings";
 import LecturerHelp from "./pages/LecturerHelp";
-import AdminLecturers from "./pages/AdminLecturers";
-import AdminLecturerDetail from "./pages/AdminLecturerDetail";
 import LecturerExams from "./pages/LecturerExams";
-import AdminQuestionApproval from "./pages/AdminQuestionApproval";
 import LecturerPerformance from "./pages/LecturerPerformance";
 import LecturerGradingList from "./pages/LecturerGradingList";
 import LecturerProgressSelect from "./pages/LecturerProgressSelect";
 import LecturerLiveClasses from "./pages/LecturerLiveClasses";
-import LiveClassRoom from "./components/LiveClassRoom";
-import StudentLiveClasses from "./pages/StudentLiveClasses";
-import AdminLiveClasses from "./pages/AdminLiveClasses";
-import AdminCreateLiveClass from "./pages/AdminCreateLiveClass";
-import JoinLiveClass from "./pages/JoinLiveClass";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsOfService from "./pages/TermsOfService";
-import Disclaimer from "./pages/Disclaimer";
-import CookiePolicy from "./pages/CookiePolicy";
-import AIAdmin from "./pages/AIAdmin";
-import AIPlansAdmin from "./pages/AIPlansAdmin";
-import AIGenerator from "./pages/AdminAIGeneratorU";
-import AIChat from "./pages/AIChat";
-import AdminPrograms from "./pages/AdminPrograms";
-import SelectProgramPage from "./pages/SelectProgramPage";
 import NursingGames from "./pages/lecturer/NursingGames";
-import NursingGamesHub from "./pages/student/NursingGamesHub";
-import GameMatch from "./pages/student/GameMatch";
-import GameMatchResults from "./pages/student/GameMatchResults";
-import AdminTopics from "./pages/AdminTopics";
-import Pricing from "./pages/Pricing";
-import CookieBanner from "./components/CookieBanner";
-import StudentExamResults from "./pages/StudentExamResults";
+import LiveClassRoom from "./components/LiveClassRoom";
+
+/* ---------- Careers ---------- */
 import CareerPage from "./pages/CareerPage";
 import CareerWhatWeDo from "./pages/CareerWhatWeDo";
 import LiveAtAlveoly from "./pages/LiveAtAlveoly";
@@ -94,6 +110,12 @@ import CareerBenefits from "./pages/CareerBenefits";
 import CareerJobs from "./pages/CareerJobs";
 import JobDetails from "./pages/JobDetails";
 import JobApplication from "./pages/JobApplication";
+
+/* ---------- Legal / Programs by field ---------- */
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import Disclaimer from "./pages/Disclaimer";
+import CookiePolicy from "./pages/CookiePolicy";
 import MedicalPage from "./pages/Medical";
 import NursingPage from "./pages/NursingPage";
 import AccountingPage from "./pages/AccountingPage";
@@ -102,8 +124,16 @@ import HighSchoolPage from "./pages/HighSchoolPage";
 import GradSchoolPage from "./pages/GradSchoolPage";
 import LegalPage from "./pages/LegalPage";
 import PharmacyPage from "./pages/PharmacyPage";
-import AdminNotifications from "./pages/admin/AdminNotifications";
+import Pricing from "./pages/Pricing";
 
+/* ---------- Payments ---------- */
+import PaymentSuccess from "./pages/PaymentSuccess";
+import ContentPaymentSuccess from "./pages/ContentPaymentSucess";
+import PlanPaymentSuccess from "./pages/PlanPaymentSuccess";
+import SubjectPaymentSuccess from "./pages/SubjectPaymentSuccess";
+import JoinLiveClass from "./pages/JoinLiveClass";
+
+/* ---------- Blog (public journal) ---------- */
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/blog/BlogPost";
 import BlogCategory from "./pages/blog/BlogCategory";
@@ -113,19 +143,16 @@ import BlogTag from "./pages/blog/BlogTag";
 import BlogArchive from "./pages/blog/BlogArchive";
 import BlogPodcasts from "./pages/blog/BlogPodcasts";
 import BlogVideos from "./pages/blog/BlogVideos";
+
+/* ---------- Trust policies (public) ---------- */
 import EditorialPolicy from "./pages/EditorialPolicy";
 import AdvertisingPolicy from "./pages/AdvertisingPolicy";
 import MedicalReviewPolicy from "./pages/MedicalReviewPolicy";
 import Sitemap from "./pages/Sitemap";
 
-// ⬇️ NEW: Splash Screen import
-import SplashScreen from "./components/SplashScreen";
-
 function App() {
-  // ⬇️ NEW: Control splash screen visibility
+  /* ---------- Splash ---------- */
   const [showSplash, setShowSplash] = useState(() => {
-    // Only show splash on first visit within this session
-    // (prevents it from replaying on every navigation)
     const hasVisited = sessionStorage.getItem("alveoly_has_visited");
     return !hasVisited;
   });
@@ -140,7 +167,6 @@ function App() {
     };
   }, []);
 
-  // Lock body scroll while splash is visible
   useEffect(() => {
     if (showSplash) {
       document.body.style.overflow = "hidden";
@@ -159,7 +185,6 @@ function App() {
 
   return (
     <>
-      {/* ⬇️ NEW: Splash screen (renders above everything) */}
       {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
 
       <style>{`
@@ -182,7 +207,9 @@ function App() {
         />
 
         <Routes>
-          {/* ==================== PUBLIC ROUTES ==================== */}
+          {/* ============================================================
+              PUBLIC ROUTES
+          ============================================================ */}
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
@@ -191,29 +218,39 @@ function App() {
           <Route path="/programs/:id" element={<ProgramDetail />} />
           <Route path="/admissions" element={<Admissions />} />
           <Route path="/contact_us" element={<Contact />} />
-
-          /* ==================== BLOG ROUTES ==================== */
-<Route path="/blog" element={<Blog />} />
-<Route path="/blog/:slug" element={<BlogPost />} />
-<Route path="/blog/category/:slug" element={<BlogCategory />} />
-<Route path="/blog/author/:id" element={<BlogAuthor />} />
-<Route path="/blog/search" element={<BlogSearch />} />
-<Route path="/blog/tag/:tag" element={<BlogTag />} />
-<Route path="/blog/archive" element={<BlogArchive />} />
-<Route path="/blog/podcasts" element={<BlogPodcasts />} />
-<Route path="/blog/videos" element={<BlogVideos />} />
-<Route path="/editorial-policy" element={<EditorialPolicy />} />
-<Route path="/advertising-policy" element={<AdvertisingPolicy />} />
-<Route path="/medical-review-policy" element={<MedicalReviewPolicy />} />
-<Route path="/sitemap" element={<Sitemap />} />
-
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+
+          {/* ---------- BLOG / JOURNAL ----------
+              Order matters: specific paths first, then dynamic slug.
+              This prevents /blog/search, /blog/archive, etc.
+              from being swallowed by /blog/:slug.
+          */}
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/blog/search" element={<BlogSearch />} />
+          <Route path="/blog/archive" element={<BlogArchive />} />
+          <Route path="/blog/podcasts" element={<BlogPodcasts />} />
+          <Route path="/blog/videos" element={<BlogVideos />} />
+          <Route path="/blog/category/:slug" element={<BlogCategory />} />
+          <Route path="/blog/author/:id" element={<BlogAuthor />} />
+          <Route path="/blog/tag/:tag" element={<BlogTag />} />
+          {/* Dynamic slug last — /blog/:slug catches single-segment paths only */}
+          <Route path="/blog/:slug" element={<BlogPost />} />
+
+          {/* ---------- Trust policies ---------- */}
+          <Route path="/editorial-policy" element={<EditorialPolicy />} />
+          <Route path="/advertising-policy" element={<AdvertisingPolicy />} />
+          <Route path="/medical-review-policy" element={<MedicalReviewPolicy />} />
+          <Route path="/sitemap" element={<Sitemap />} />
+
+          {/* ---------- Legal ---------- */}
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/disclaimer" element={<Disclaimer />} />
           <Route path="/cookies" element={<CookiePolicy />} />
           <Route path="/pricing" element={<Pricing />} />
+
+          {/* ---------- Careers ---------- */}
           <Route path="/careers" element={<CareerPage />} />
           <Route path="/careers/what-we-do" element={<CareerWhatWeDo />} />
           <Route path="/careers/life-at-alveoly" element={<LiveAtAlveoly />} />
@@ -221,6 +258,8 @@ function App() {
           <Route path="/careers/jobs" element={<CareerJobs />} />
           <Route path="/careers/jobs/:slug" element={<JobDetails />} />
           <Route path="/careers/jobs/apply" element={<JobApplication />} />
+
+          {/* ---------- Programs by field ---------- */}
           <Route path="/medical" element={<MedicalPage />} />
           <Route path="/nursing" element={<NursingPage />} />
           <Route path="/accounting" element={<AccountingPage />} />
@@ -230,14 +269,16 @@ function App() {
           <Route path="/legal" element={<LegalPage />} />
           <Route path="/pharmacy" element={<PharmacyPage />} />
 
-          {/* Payment Success Routes */}
+          {/* ---------- Payment success ---------- */}
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/content-payment-success" element={<ContentPaymentSuccess />} />
           <Route path="/plan-payment-success" element={<PlanPaymentSuccess />} />
           <Route path="/subject-payment-success" element={<SubjectPaymentSuccess />} />
           <Route path="/join/:classId" element={<JoinLiveClass />} />
 
-          {/* ==================== STUDENT ROUTES ==================== */}
+          {/* ============================================================
+              STUDENT ROUTES
+          ============================================================ */}
           <Route
             path="/select-program"
             element={
@@ -277,7 +318,9 @@ function App() {
             <Route path="game-match/:matchId/results" element={<GameMatchResults />} />
           </Route>
 
-          {/* ==================== ADMIN ROUTES ==================== */}
+          {/* ============================================================
+              ADMIN ROUTES
+          ============================================================ */}
           <Route
             path="/admin"
             element={
@@ -286,36 +329,74 @@ function App() {
               </ProtectedRoute>
             }
           >
+            {/* ---------- Core ---------- */}
             <Route index element={<AdminDashboard />} />
             <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="performance" element={<PerformanceDashboard />} />
             <Route path="programs" element={<AdminPrograms />} />
             <Route path="courses" element={<AdminCourses />} />
             <Route path="subjects" element={<AdminSubjects />} />
             <Route path="topics" element={<AdminTopics />} />
             <Route path="questions" element={<AdminQuestions />} />
+            <Route path="question-approval" element={<AdminQuestionApproval />} />
             <Route path="users" element={<AdminUsers />} />
-            <Route path="plans" element={<AdminPlans />} />
             <Route path="payments" element={<AdminPayments />} />
-            <Route path="performance" element={<PerformanceDashboard />} />
-            <Route path="content" element={<AdminContent />} />
-            <Route path="results" element={<AdminExamResults />} />
-            <Route path="testimonials" element={<AdminTestimonials />} />
-            <Route path="in-box" element={<AdminInbox />} />
-            <Route path="content-payment" element={<AdminContentPayments />} />
+
+            {/* ---------- AI ---------- */}
+            <Route path="ai" element={<AIAdmin />} />
+            <Route path="ai-plans" element={<AIPlansAdmin />} />
+            <Route path="ai-generator" element={<AIGenerator />} />
+
+            {/* ---------- Blog / Journal (editorial admin) ---------- */}
+            <Route path="blog/posts" element={<AdminBlogPosts />} />
+            <Route path="blog/create" element={<AdminBlogPostEditor />} />
+            <Route path="blog/edit/:id" element={<AdminBlogPostEditor />} />
+            <Route path="blog/categories" element={<AdminBlogCategories />} />
+            <Route path="blog/tags" element={<AdminBlogTags />} />
+            <Route path="blog/authors" element={<AdminBlogAuthors />} />
+            <Route path="blog/comments" element={<AdminBlogComments />} />
+            <Route path="blog/podcasts" element={<AdminBlogPodcasts />} />
+            <Route path="blog/videos" element={<AdminBlogVideos />} />
+            <Route path="blog/media" element={<AdminBlogMedia />} />
+            <Route path="blog/testimonials" element={<AdminBlogTestimonials />} />
+
+            {/* ---------- Blog trust policies (editors) ----------
+                These three stubs will be replaced by dedicated
+                editor pages next. Kept here so the sidebar links resolve. */}
+            <Route
+              path="blog/editorial-policy"
+              element={<EditorialPolicy />}
+            />
+            <Route
+              path="blog/medical-review-policy"
+              element={<MedicalReviewPolicy />}
+            />
+            <Route
+              path="blog/advertising-policy"
+              element={<AdvertisingPolicy />}
+            />
+
+            {/* ---------- Content ---------- */}
             <Route path="lecturers" element={<AdminLecturers />} />
             <Route path="lecturers/:id" element={<AdminLecturerDetail />} />
-            <Route path="question-approval" element={<AdminQuestionApproval />} />
+            <Route path="content-payment" element={<AdminContentPayments />} />
+            <Route path="plans" element={<AdminPlans />} />
+            <Route path="content" element={<AdminContent />} />
             <Route path="live-classes" element={<AdminLiveClasses />} />
             <Route path="live-classes/create" element={<AdminCreateLiveClass />} />
             <Route path="live-classes/:id/edit" element={<AdminCreateLiveClass />} />
             <Route path="live-class/:classId" element={<LiveClassRoom />} />
-            <Route path="ai" element={<AIAdmin />} />
-            <Route path="ai-plans" element={<AIPlansAdmin />} />
-            <Route path="ai-generator" element={<AIGenerator />} />
+
+            {/* ---------- Engagement ---------- */}
+            <Route path="results" element={<AdminExamResults />} />
+            <Route path="testimonials" element={<AdminTestimonials />} />
+            <Route path="in-box" element={<AdminInbox />} />
             <Route path="notifications" element={<AdminNotifications />} />
           </Route>
 
-          {/* ==================== LECTURER ROUTES ==================== */}
+          {/* ============================================================
+              LECTURER ROUTES
+          ============================================================ */}
           <Route
             path="/lecturer"
             element={
@@ -336,8 +417,14 @@ function App() {
             <Route path="results" element={<LecturerResults />} />
             <Route path="students" element={<LecturerStudents />} />
             <Route path="progress" element={<LecturerProgressSelect />} />
-            <Route path="students/:studentId/progress" element={<LecturerStudentProgress />} />
-            <Route path="progress/:studentId" element={<LecturerStudentProgress />} />
+            <Route
+              path="students/:studentId/progress"
+              element={<LecturerStudentProgress />}
+            />
+            <Route
+              path="progress/:studentId"
+              element={<LecturerStudentProgress />}
+            />
             <Route path="profile" element={<LecturerProfile />} />
             <Route path="settings" element={<LecturerSettings />} />
             <Route path="help" element={<LecturerHelp />} />
@@ -346,11 +433,12 @@ function App() {
             <Route path="nursing-games" element={<NursingGames />} />
           </Route>
 
-          {/* ==================== 404 CATCH-ALL ROUTE ==================== */}
+          {/* ============================================================
+              404 CATCH-ALL
+          ============================================================ */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
 
-        {/* Cookie Banner - Appears on all pages */}
         <CookieBanner />
       </div>
     </>
@@ -364,7 +452,9 @@ const NotFoundPage = () => {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center px-6">
       <div className="text-center max-w-2xl">
         <div className="text-9xl font-bold text-gray-200 mb-4">404</div>
-        <h1 className="text-4xl font-bold text-gray-800 mb-4">Page Not Found</h1>
+        <h1 className="text-4xl font-bold text-gray-800 mb-4">
+          Page Not Found
+        </h1>
         <p className="text-lg text-gray-600 mb-8">
           Oops! The page you're looking for doesn't exist or has been moved.
         </p>
