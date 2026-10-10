@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogTags.jsx — EDITORIAL ADMIN
-// Tag management for The Alveoly Journal.
+// src/pages/admin/blog/AdminBlogTags.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -8,11 +7,7 @@ import {
   TrendingUp, Copy,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend is ready
-import {
-  posts as mockPosts,
-  tags as mockTags,
-} from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
@@ -27,10 +22,19 @@ const slugify = (s = "") =>
 
 const emptyTag = () => ({
   id: "",
+  _id: "",
   slug: "",
   name: "",
   description: "",
   featured: false,
+});
+
+/* Normalize server tag → local shape */
+const normalizeTag = (t) => ({
+  ...t,
+  id: t._id || t.id,
+  featured: t.featured === true,
+  postCount: typeof t.postCount === "number" ? t.postCount : 0,
 });
 
 /* ============================================================
@@ -79,7 +83,6 @@ const TextArea = ({ value, onChange, placeholder, rows = 3 }) => (
   />
 );
 
-/* Small preview of the tag as it renders in the journal */
 const TagPreview = ({ tag, postCount }) => (
   <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
     <p className="text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-3">
@@ -150,7 +153,6 @@ const TagDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs }) =>
     if (!validate()) return;
     onSave({
       ...form,
-      id: form.id || slugify(form.name),
       slug: form.slug || slugify(form.name),
     });
   };
@@ -173,7 +175,6 @@ const TagDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs }) =>
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
             className="fixed right-0 top-0 bottom-0 w-full max-w-lg bg-white dark:bg-stone-950 z-50 flex flex-col border-l border-stone-200 dark:border-stone-800"
           >
-            {/* Header */}
             <div className="flex-shrink-0 px-6 py-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400 font-semibold mb-1">
@@ -191,9 +192,8 @@ const TagDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs }) =>
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              <TagPreview tag={form} />
+              <TagPreview tag={form} postCount={initial?.postCount} />
 
               <Field label="Name" required error={errors.name}>
                 <TextInput
@@ -256,7 +256,6 @@ const TagDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs }) =>
               </label>
             </div>
 
-            {/* Footer */}
             <div className="flex-shrink-0 px-6 py-4 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-3">
               <button
                 onClick={onClose}
@@ -291,7 +290,7 @@ const TagDrawer = ({ open, onClose, initial, onSave, saving, existingSlugs }) =>
 };
 
 /* ============================================================
-   MERGE MODAL — combine two tags
+   MERGE MODAL
 ============================================================ */
 
 const MergeModal = ({ open, source, candidates, onCancel, onConfirm, merging }) => {
@@ -475,12 +474,11 @@ const ConfirmDelete = ({ open, tag, postCount, onCancel, onConfirm, deleting }) 
 );
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const AdminBlogTags = () => {
   const [tags, setTags] = useState([]);
-  const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("usage");
@@ -499,61 +497,39 @@ const AdminBlogTags = () => {
   const [inlineEditId, setInlineEditId] = useState(null);
   const [inlineValue, setInlineValue] = useState("");
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await blogAPI.getTags();
+      setTags((res.data || []).map(normalizeTag));
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load tags");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Replace with blogAPI.getTags() + blogAPI.getPosts() when ready
-    setTags(
-      mockTags.map((name) => ({
-        id: slugify(name),
-        slug: slugify(name),
-        name,
-        description: "",
-        featured: false,
-        active: true,
-      }))
-    );
-    setPosts(mockPosts);
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
-  const usageByTag = useMemo(() => {
-    const map = new Map();
-    posts.forEach((p) => {
-      (p.tags || []).forEach((t) => {
-        const key = t.toLowerCase();
-        map.set(key, (map.get(key) || 0) + 1);
-      });
-    });
-    return map;
-  }, [posts]);
-
-  const tagsWithCounts = useMemo(
-    () =>
-      tags.map((t) => ({
-        ...t,
-        postCount: usageByTag.get(t.name.toLowerCase()) || 0,
-      })),
-    [tags, usageByTag]
-  );
-
   const existingSlugs = useMemo(() => tags.map((t) => t.slug), [tags]);
 
-  const totalUsage = useMemo(() => {
-    let n = 0;
-    tagsWithCounts.forEach((t) => {
-      n += t.postCount;
-    });
-    return n;
-  }, [tagsWithCounts]);
+  const totalUsage = useMemo(
+    () => tags.reduce((n, t) => n + (t.postCount || 0), 0),
+    [tags]
+  );
 
   const unusedCount = useMemo(
-    () => tagsWithCounts.filter((t) => t.postCount === 0).length,
-    [tagsWithCounts]
+    () => tags.filter((t) => (t.postCount || 0) === 0).length,
+    [tags]
   );
 
   const filtered = useMemo(() => {
-    let list = [...tagsWithCounts];
+    let list = [...tags];
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -563,19 +539,19 @@ const AdminBlogTags = () => {
           (t.description || "").toLowerCase().includes(q)
       );
     }
-    if (statusFilter === "used") list = list.filter((t) => t.postCount > 0);
-    if (statusFilter === "unused") list = list.filter((t) => t.postCount === 0);
+    if (statusFilter === "used") list = list.filter((t) => (t.postCount || 0) > 0);
+    if (statusFilter === "unused") list = list.filter((t) => (t.postCount || 0) === 0);
     if (statusFilter === "featured") list = list.filter((t) => t.featured);
 
     list.sort((a, b) => {
-      if (sortBy === "usage") return b.postCount - a.postCount;
+      if (sortBy === "usage") return (b.postCount || 0) - (a.postCount || 0);
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "newest")
-        return (b.createdAt || 0) - (a.createdAt || 0);
+        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       return 0;
     });
     return list;
-  }, [tagsWithCounts, search, sortBy, statusFilter]);
+  }, [tags, search, sortBy, statusFilter]);
 
   /* ---------- Handlers ---------- */
   const openCreate = () => {
@@ -590,48 +566,84 @@ const AdminBlogTags = () => {
 
   const handleSave = async (payload) => {
     setSaving(true);
-    // Replace with blogAPI.createTag / updateTag
-    await new Promise((r) => setTimeout(r, 400));
+    try {
+      const body = {
+        name: payload.name.trim(),
+        slug: payload.slug || slugify(payload.name),
+        description: payload.description || "",
+        featured: payload.featured === true,
+      };
 
-    setTags((prev) => {
-      const exists = prev.find((t) => t.id === payload.id);
-      if (exists) return prev.map((t) => (t.id === payload.id ? payload : t));
-      return [payload, ...prev];
-    });
-    toast.success(editing?.id ? "Tag updated" : "Tag created");
-    setSaving(false);
-    setDrawerOpen(false);
+      if (editing?.id) {
+        await blogAPI.updateTag(editing.id, body);
+        toast.success("Tag updated");
+      } else {
+        await blogAPI.createTag(body);
+        toast.success("Tag created");
+      }
+
+      await fetchData();
+      setDrawerOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to save tag");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setTags((prev) => prev.filter((t) => t.id !== deleteTarget.id));
-    toast.success("Tag deleted");
-    setDeleting(false);
-    setDeleteTarget(null);
+    try {
+      await blogAPI.deleteTag(deleteTarget.id);
+      setTags((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+      toast.success("Tag deleted");
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete tag");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleMerge = async (targetId) => {
+    if (!mergeSource) return;
     const target = tags.find((t) => t.id === targetId);
-    if (!target || !mergeSource) return;
+    if (!target) return;
+
     setMerging(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setTags((prev) => prev.filter((t) => t.id !== mergeSource.id));
-    toast.success(`Merged #${mergeSource.name} into #${target.name}`);
-    setMerging(false);
-    setMergeSource(null);
+    try {
+      await blogAPI.mergeTags({
+        sourceId: mergeSource.id,
+        targetId: target.id,
+      });
+      toast.success(`Merged #${mergeSource.name} into #${target.name}`);
+      setMergeSource(null);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to merge tags");
+    } finally {
+      setMerging(false);
+    }
   };
 
-  const toggleFeatured = (tag) => {
+  const toggleFeatured = async (tag) => {
+    const next = !tag.featured;
     setTags((prev) =>
-      prev.map((t) =>
-        t.id === tag.id ? { ...t, featured: !t.featured } : t
-      )
+      prev.map((t) => (t.id === tag.id ? { ...t, featured: next } : t))
     );
-    toast.success(
-      `#${tag.name} ${tag.featured ? "unfeatured" : "featured"}`
-    );
+    try {
+      await blogAPI.updateTag(tag.id, { featured: next });
+      toast.success(`#${tag.name} ${next ? "featured" : "unfeatured"}`);
+    } catch (err) {
+      setTags((prev) =>
+        prev.map((t) =>
+          t.id === tag.id ? { ...t, featured: tag.featured } : t
+        )
+      );
+      toast.error("Failed to update tag");
+    }
   };
 
   const startInlineEdit = (tag) => {
@@ -639,7 +651,7 @@ const AdminBlogTags = () => {
     setInlineValue(tag.name);
   };
 
-  const commitInlineEdit = (tag) => {
+  const commitInlineEdit = async (tag) => {
     const next = inlineValue.trim();
     if (!next || next === tag.name) {
       setInlineEditId(null);
@@ -650,13 +662,20 @@ const AdminBlogTags = () => {
       toast.error("A tag with that name already exists");
       return;
     }
+    setInlineEditId(null);
+    // optimistic
     setTags((prev) =>
       prev.map((t) =>
         t.id === tag.id ? { ...t, name: next, slug: nextSlug } : t
       )
     );
-    setInlineEditId(null);
-    toast.success("Tag renamed");
+    try {
+      await blogAPI.updateTag(tag.id, { name: next, slug: nextSlug });
+      toast.success("Tag renamed");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Rename failed");
+      await fetchData();
+    }
   };
 
   const copySlug = (tag) => {
@@ -667,7 +686,7 @@ const AdminBlogTags = () => {
   /* ---------- Render ---------- */
   return (
     <div className="space-y-6">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400 font-semibold mb-2">
@@ -698,13 +717,13 @@ const AdminBlogTags = () => {
         </button>
       </div>
 
-      {/* ---------- STATS ---------- */}
+      {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total tags", value: tags.length },
           {
             label: "In use",
-            value: tagsWithCounts.filter((t) => t.postCount > 0).length,
+            value: tags.filter((t) => (t.postCount || 0) > 0).length,
           },
           { label: "Unused", value: unusedCount },
           { label: "Total usages", value: totalUsage },
@@ -723,7 +742,7 @@ const AdminBlogTags = () => {
         ))}
       </div>
 
-      {/* ---------- TOOLBAR ---------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -759,7 +778,7 @@ const AdminBlogTags = () => {
         </div>
       </div>
 
-      {/* ---------- TAG LIST (dense rows) ---------- */}
+      {/* LIST */}
       {loading ? (
         <div className="py-20 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
@@ -786,7 +805,6 @@ const AdminBlogTags = () => {
         </div>
       ) : (
         <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 overflow-hidden">
-          {/* Column headers */}
           <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3 bg-stone-50 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-800 text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold">
             <div className="col-span-5">Tag</div>
             <div className="col-span-3">Slug</div>
@@ -804,7 +822,6 @@ const AdminBlogTags = () => {
                 i > 0 ? "border-t border-stone-100 dark:border-stone-900" : ""
               }`}
             >
-              {/* Tag name */}
               <div className="md:col-span-5 flex items-center gap-3 min-w-0">
                 <span className="w-8 h-8 rounded-lg bg-stone-100 dark:bg-stone-900 flex items-center justify-center flex-shrink-0">
                   <Hash className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
@@ -847,7 +864,6 @@ const AdminBlogTags = () => {
                 )}
               </div>
 
-              {/* Slug */}
               <div className="md:col-span-3 min-w-0">
                 <button
                   onClick={() => copySlug(t)}
@@ -859,21 +875,19 @@ const AdminBlogTags = () => {
                 </button>
               </div>
 
-              {/* Usage */}
               <div className="md:col-span-2 md:text-right">
                 <span
                   className={`inline-flex items-center gap-1.5 text-xs ${
-                    t.postCount > 0
+                    (t.postCount || 0) > 0
                       ? "text-stone-700 dark:text-stone-300"
                       : "text-stone-400 dark:text-stone-600"
                   }`}
                 >
-                  <strong className="font-semibold">{t.postCount}</strong>
-                  <span>{t.postCount === 1 ? "story" : "stories"}</span>
+                  <strong className="font-semibold">{t.postCount || 0}</strong>
+                  <span>{(t.postCount || 0) === 1 ? "story" : "stories"}</span>
                 </span>
               </div>
 
-              {/* Actions */}
               <div className="md:col-span-2 flex items-center md:justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
                 <button
                   onClick={() => toggleFeatured(t)}
@@ -894,7 +908,7 @@ const AdminBlogTags = () => {
                 <button
                   onClick={() => setMergeSource(t)}
                   title="Merge into another tag"
-                  disabled={t.postCount === 0}
+                  disabled={(t.postCount || 0) === 0}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-stone-500 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   <Merge className="w-3.5 h-3.5" />
@@ -919,14 +933,12 @@ const AdminBlogTags = () => {
         </div>
       )}
 
-      {/* ---------- FOOTER HINT ---------- */}
       {!loading && filtered.length > 0 && (
         <p className="text-xs text-stone-500 dark:text-stone-500 text-center pt-2">
           Click a tag name to rename it inline. Hover a row for more actions.
         </p>
       )}
 
-      {/* ---------- DRAWER ---------- */}
       <TagDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -936,7 +948,6 @@ const AdminBlogTags = () => {
         existingSlugs={existingSlugs}
       />
 
-      {/* ---------- MERGE ---------- */}
       <MergeModal
         open={!!mergeSource}
         source={mergeSource}
@@ -946,7 +957,6 @@ const AdminBlogTags = () => {
         merging={merging}
       />
 
-      {/* ---------- DELETE ---------- */}
       <ConfirmDelete
         open={!!deleteTarget}
         tag={deleteTarget}

@@ -1,5 +1,4 @@
-// src/pages/blog/BlogTag.jsx — THE ALVEOLY JOURNAL TAG
-// Standalone editorial tag page. Mock data. No component imports.
+// src/pages/blog/BlogTag.jsx — THE ALVEOLY JOURNAL TAG (LIVE PUBLIC API)
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8,11 +7,7 @@ import {
   FaMicrophone, FaVideo, FaStream, FaTag, FaTwitter, FaLinkedin,
   FaInstagram, FaYoutube, FaRss, FaBookOpen, FaCheckCircle,
 } from "react-icons/fa";
-import {
-  posts as allPosts,
-  authors,
-  categories,
-} from "../../data/blogData";
+import { publicBlogAPI as blogAPI } from "../../api/blogApi";
 
 /* ============================================================
    UTILITIES
@@ -27,7 +22,7 @@ const formatShortDate = (d) =>
       })
     : "";
 
-const initials = (name) =>
+const initials = (name = "") =>
   name
     .split(" ")
     .filter(Boolean)
@@ -36,27 +31,35 @@ const initials = (name) =>
     .join("")
     .toUpperCase();
 
-const slugify = (s) =>
+const slugify = (s = "") =>
   String(s)
     .toLowerCase()
     .trim()
     .replace(/[^\w\s-]/g, "")
     .replace(/\s+/g, "-");
 
-/* Try to find the canonical casing for a tag slug from the data. */
-const findCanonicalTag = (slug) => {
-  if (!slug) return "";
-  const normalized = slug.replace(/-/g, " ").toLowerCase();
-  const set = new Set();
-  allPosts.forEach((p) => (p.tags || []).forEach((t) => set.add(t)));
-  const match = [...set].find(
-    (t) => t.toLowerCase() === normalized || slugify(t) === slug
-  );
-  if (match) return match;
-  // fallback: title-case the slug
-  return slug
+/* Turn a slug back into readable, title-cased text.
+   Used only as a fallback when the tag has no canonical record. */
+const prettifyTagSlug = (slug = "") =>
+  slug
     .replace(/-/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
+
+/* Normalize a post object coming from the API.
+   The public blog route populates `authorId` and `categoryId` into
+   full objects, so we pull those out into convenience fields. */
+const shapePost = (p) => {
+  const author = p.authorId || p.author || null;
+  const category = p.categoryId || p.category || null;
+  return {
+    ...p,
+    id: p._id || p.id,
+    author,
+    category,
+    categoryName: category?.name || null,
+    categorySlug: category?.slug || null,
+    authorName: author?.name || "Alveoly Desk",
+  };
 };
 
 /* ============================================================
@@ -65,8 +68,7 @@ const findCanonicalTag = (slug) => {
 
 const Avatar = ({ author, size = "sm" }) => {
   const [broken, setBroken] = useState(false);
-  const cls =
-    size === "sm" ? "w-6 h-6 text-[10px]" : "w-9 h-9 text-xs";
+  const cls = size === "sm" ? "w-6 h-6 text-[10px]" : "w-9 h-9 text-xs";
   if (!author) return null;
   if (author.avatar && !broken) {
     return (
@@ -302,50 +304,112 @@ const JournalFooter = () => {
 };
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE PUBLIC API
 ============================================================ */
 
 const BlogTag = () => {
   const { tag } = useParams();
   const navigate = useNavigate();
+
+  const [posts, setPosts] = useState([]);
+  const [allPostsForTags, setAllPostsForTags] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState("newest");
-  const [notFound, setNotFound] = useState(false);
 
-  /* Canonical casing of the tag, e.g. "heart disease" → "Heart Disease" */
-  const displayTag = useMemo(() => findCanonicalTag(tag), [tag]);
+  /* Human-readable tag string, e.g. "heart-disease" → "Heart Disease" */
+  const displayTag = useMemo(() => prettifyTagSlug(tag || ""), [tag]);
+  /* Normalized for matching, e.g. "heart disease" */
+  const normalizedTag = useMemo(
+    () => displayTag.replace(/-/g, " ").toLowerCase(),
+    [displayTag]
+  );
 
+  /* ---------- Fetch posts for this tag + all published posts for related tags ---------- */
   useEffect(() => {
-    // If the tag has no posts at all, we can still show a "nothing here" state
-    setNotFound(false);
-    window.scrollTo({ top: 0, behavior: "instant" });
-  }, [tag]);
+    let cancelled = false;
 
-  /* ---------- Posts that carry this tag ---------- */
+    const load = async () => {
+      if (!tag) return;
+      setLoading(true);
+      try {
+        // 1. Posts carrying this exact tag — the backend route is
+        //    GET /blog/tags/:tag and it expects the human-readable
+        //    form with dashes replaced by spaces.
+        const taggedRes = await blogAPI.searchPosts(
+          tag.replace(/-/g, " "),
+          { limit: 100, publishedOnly: true }
+        );
+
+        // The public `search` endpoint matches on title/excerpt/content/tags,
+        // so we filter the results client-side for an exact tag match
+        // (case-insensitive). This gives us the same behavior as the
+        // old mock-data version.
+        const all = (taggedRes.data?.posts || []).map(shapePost);
+        const exact = all.filter((p) =>
+          (p.tags || []).some(
+            (t) => String(t).toLowerCase() === normalizedTag
+          )
+        );
+
+        // 2. Fetch a broader set of published posts so we can compute
+        //    related tags, "other topics", and sections in this topic.
+        //    We ask for a generous limit to avoid missing tag co-occurrences.
+        const broadRes = await blogAPI.getPosts({
+          limit: 500,
+          publishedOnly: true,
+        });
+        const broad = (broadRes.data?.posts || []).map(shapePost);
+
+        if (cancelled) return;
+        setPosts(exact);
+        setAllPostsForTags(broad);
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setPosts([]);
+          setAllPostsForTags([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    window.scrollTo({ top: 0, behavior: "instant" });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tag, normalizedTag]);
+
+  /* ---------- Sort the exact-tag posts ---------- */
   const tagPosts = useMemo(() => {
-    if (!displayTag) return [];
-    const normalized = displayTag.toLowerCase();
-    let list = allPosts.filter((p) =>
-      (p.tags || []).some((t) => t.toLowerCase() === normalized)
-    );
+    const list = [...posts];
     if (sortBy === "newest")
       list.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-    else if (sortBy === "popular") list.sort((a, b) => b.views - a.views);
-    else if (sortBy === "liked") list.sort((a, b) => b.likes - a.likes);
+    else if (sortBy === "popular") list.sort((a, b) => (b.views || 0) - (a.views || 0));
+    else if (sortBy === "liked") list.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     return list;
-  }, [displayTag, sortBy]);
+  }, [posts, sortBy]);
 
   /* ---------- Stats ---------- */
   const stats = useMemo(() => {
     if (!tagPosts.length) {
       return { posts: 0, authors: 0, sections: 0, reads: 0, firstYear: null };
     }
-    const uniqueAuthors = new Set(tagPosts.map((p) => p.authorId)).size;
-    const uniqueSections = new Set(tagPosts.map((p) => p.categoryId)).size;
+    const uniqueAuthors = new Set(
+      tagPosts.map((p) => p.author?._id || p.author?.id || p.authorId).filter(Boolean)
+    ).size;
+    const uniqueSections = new Set(
+      tagPosts.map((p) => p.category?._id || p.categoryId).filter(Boolean)
+    ).size;
     const reads = tagPosts.reduce((s, p) => s + (p.views || 0), 0);
     const sortedAsc = [...tagPosts].sort(
       (a, b) => new Date(a.publishedAt) - new Date(b.publishedAt)
     );
-    const firstYear = new Date(sortedAsc[0].publishedAt).getFullYear();
+    const firstYear = sortedAsc[0]?.publishedAt
+      ? new Date(sortedAsc[0].publishedAt).getFullYear()
+      : null;
     return {
       posts: tagPosts.length,
       authors: uniqueAuthors,
@@ -355,52 +419,58 @@ const BlogTag = () => {
     };
   }, [tagPosts]);
 
-  /* ---------- Related tags (co-occurring with this tag) ---------- */
+  /* ---------- Related tags (co-occurring) ---------- */
   const relatedTags = useMemo(() => {
-    if (!displayTag) return [];
-    const normalized = displayTag.toLowerCase();
+    if (!normalizedTag) return [];
     const counts = new Map();
+
+    // Weight tags that co-occur on the exact same posts higher
     tagPosts.forEach((p) =>
       (p.tags || []).forEach((t) => {
-        if (t.toLowerCase() === normalized) return;
+        if (String(t).toLowerCase() === normalizedTag) return;
+        counts.set(t, (counts.get(t) || 0) + 2);
+      })
+    );
+
+    // Global frequency across published posts
+    allPostsForTags.forEach((p) =>
+      (p.tags || []).forEach((t) => {
+        if (String(t).toLowerCase() === normalizedTag) return;
         counts.set(t, (counts.get(t) || 0) + 1);
       })
     );
-    // Also pull in trending tags across the journal as fallback
-    const globalCounts = new Map();
-    allPosts.forEach((p) =>
-      (p.tags || []).forEach((t) => {
-        if (t.toLowerCase() === normalized) return;
-        globalCounts.set(t, (globalCounts.get(t) || 0) + 1);
-      })
-    );
-    const merged = new Map([...globalCounts, ...counts]);
-    [...counts.entries()].forEach(([k, v]) => {
-      merged.set(k, (merged.get(k) || 0) + v * 2);
-    });
-    return [...merged.entries()]
+
+    return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 12)
       .map(([name, count]) => ({ name, count }));
-  }, [displayTag, tagPosts]);
+  }, [normalizedTag, tagPosts, allPostsForTags]);
 
   /* ---------- Sections represented in this tag ---------- */
   const involvedCategories = useMemo(() => {
     if (!tagPosts.length) return [];
-    const ids = [...new Set(tagPosts.map((p) => p.categoryId))];
-    return ids
-      .map((cid) => categories.find((c) => c.id === cid))
-      .filter(Boolean);
+    const map = new Map();
+    tagPosts.forEach((p) => {
+      const cat = p.category;
+      if (cat && cat._id) {
+        map.set(cat._id, {
+          id: cat._id,
+          name: cat.name,
+          slug: cat.slug,
+          count: (map.get(cat._id)?.count || 0) + 1,
+        });
+      }
+    });
+    return [...map.values()].sort((a, b) => b.count - a.count);
   }, [tagPosts]);
 
   /* ---------- Other tags to explore ---------- */
   const otherTags = useMemo(() => {
-    if (!displayTag) return [];
-    const normalized = displayTag.toLowerCase();
+    if (!normalizedTag) return [];
     const counts = new Map();
-    allPosts.forEach((p) =>
+    allPostsForTags.forEach((p) =>
       (p.tags || []).forEach((t) => {
-        if (t.toLowerCase() === normalized) return;
+        if (String(t).toLowerCase() === normalizedTag) return;
         counts.set(t, (counts.get(t) || 0) + 1);
       })
     );
@@ -408,28 +478,38 @@ const BlogTag = () => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 16)
       .map(([name, count]) => ({ name, count }));
-  }, [displayTag]);
+  }, [normalizedTag, allPostsForTags]);
 
-  /* ---------- Similar tags (by string overlap) ---------- */
+  /* ---------- Similar tags (string overlap) ---------- */
   const similarTags = useMemo(() => {
-    if (!displayTag) return [];
-    const normalized = displayTag.toLowerCase();
+    if (!normalizedTag) return [];
     const set = new Set();
-    allPosts.forEach((p) => (p.tags || []).forEach((t) => set.add(t)));
+    allPostsForTags.forEach((p) =>
+      (p.tags || []).forEach((t) => set.add(t))
+    );
     return [...set]
-      .filter((t) => t.toLowerCase() !== normalized)
+      .filter((t) => String(t).toLowerCase() !== normalizedTag)
       .filter((t) => {
-        const words = normalized.split(/\s+/);
-        const tWords = t.toLowerCase().split(/\s+/);
+        const words = normalizedTag.split(/\s+/);
+        const tWords = String(t).toLowerCase().split(/\s+/);
         return words.some((w) => w.length > 3 && tWords.includes(w));
       })
       .slice(0, 5);
-  }, [displayTag]);
+  }, [normalizedTag, allPostsForTags]);
 
   /* ---------- No tag in URL ---------- */
   if (!tag) {
     navigate("/blog");
     return null;
+  }
+
+  /* ---------- Loading ---------- */
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 dark:border-stone-700 dark:border-t-stone-100 rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -510,7 +590,7 @@ const BlogTag = () => {
             )}
           </div>
 
-          {/* Similar tags — refine the topic */}
+          {/* Similar tags */}
           {similarTags.length > 0 && (
             <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-stone-500 dark:text-stone-400">
               <span className="text-xs uppercase tracking-wider">
@@ -592,15 +672,8 @@ const BlogTag = () => {
               </div>
             ) : (
               <>
-                {/* Lead story */}
                 {(() => {
                   const [lead, ...rest] = tagPosts;
-                  const leadAuthor = authors.find(
-                    (a) => a.id === lead.authorId
-                  );
-                  const leadCat = categories.find(
-                    (c) => c.id === lead.categoryId
-                  );
                   return (
                     <>
                       <motion.article
@@ -620,19 +693,17 @@ const BlogTag = () => {
                             </div>
                           )}
                           <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-stone-500 mb-3">
-                            {leadCat && (
+                            {lead.categoryName && (
                               <>
                                 <span className="uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold">
-                                  {leadCat.name}
+                                  {lead.categoryName}
                                 </span>
                                 <span className="text-stone-300 dark:text-stone-700">
                                   ·
                                 </span>
                               </>
                             )}
-                            <time>
-                              {formatShortDate(lead.publishedAt)}
-                            </time>
+                            <time>{formatShortDate(lead.publishedAt)}</time>
                             <span className="text-stone-300 dark:text-stone-700">
                               ·
                             </span>
@@ -648,14 +719,14 @@ const BlogTag = () => {
                             {lead.excerpt}
                           </p>
                           <div className="flex items-center gap-3">
-                            <Avatar author={leadAuthor} size="sm" />
+                            <Avatar author={lead.author} size="sm" />
                             <div className="text-xs">
                               <p className="font-medium text-stone-800 dark:text-stone-200">
-                                {leadAuthor?.name}
+                                {lead.authorName}
                               </p>
                               <p className="text-stone-500 flex items-center gap-1.5">
                                 <FaEye className="text-[9px]" />
-                                {lead.views.toLocaleString()} reads
+                                {(lead.views || 0).toLocaleString()} reads
                               </p>
                             </div>
                           </div>
@@ -673,77 +744,66 @@ const BlogTag = () => {
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-12">
-                            {rest.map((post, i) => {
-                              const a = authors.find(
-                                (x) => x.id === post.authorId
-                              );
-                              const c = categories.find(
-                                (x) => x.id === post.categoryId
-                              );
-                              return (
-                                <motion.article
-                                  key={post.id}
-                                  initial={{ opacity: 0, y: 12 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{
-                                    duration: 0.35,
-                                    delay: Math.min(i * 0.05, 0.35),
-                                  }}
-                                  className="group"
-                                >
-                                  <Link
-                                    to={`/blog/${post.slug}`}
-                                    className="block"
-                                  >
-                                    {post.image ? (
-                                      <img
-                                        src={post.image}
-                                        alt={post.title}
-                                        className="w-full aspect-[16/10] object-cover rounded-md group-hover:opacity-95 transition"
-                                      />
-                                    ) : (
-                                      <div className="w-full aspect-[16/10] rounded-md bg-stone-100 dark:bg-stone-900" />
-                                    )}
-                                    <div className="pt-5">
-                                      <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mb-2">
-                                        {c && (
-                                          <>
-                                            <span className="text-rose-600 dark:text-rose-400 font-semibold">
-                                              {c.name}
-                                            </span>
-                                            <span className="text-stone-300 dark:text-stone-700">
-                                              ·
-                                            </span>
-                                          </>
-                                        )}
-                                        <time>
-                                          {formatShortDate(post.publishedAt)}
-                                        </time>
-                                      </div>
-                                      <h3 className="font-serif text-xl font-bold leading-snug text-stone-900 dark:text-stone-50 mb-3 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2">
-                                        {post.title}
-                                      </h3>
-                                      <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-2 mb-4">
-                                        {post.excerpt}
-                                      </p>
-                                      <div className="flex items-center gap-3 text-xs text-stone-500">
-                                        <span className="flex items-center gap-1.5">
-                                          <FaClock className="text-[9px]" />
-                                          {post.readingTime} min
-                                        </span>
-                                        <span className="text-stone-300 dark:text-stone-700">
-                                          ·
-                                        </span>
-                                        <span className="flex items-center gap-1.5">
-                                          <FaEye className="text-[9px]" />
-                                          {post.views.toLocaleString()}
-                                        </span>
-                                      </div>
+                            {rest.map((post, i) => (
+                              <motion.article
+                                key={post.id}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{
+                                  duration: 0.35,
+                                  delay: Math.min(i * 0.05, 0.35),
+                                }}
+                                className="group"
+                              >
+                                <Link to={`/blog/${post.slug}`} className="block">
+                                  {post.image ? (
+                                    <img
+                                      src={post.image}
+                                      alt={post.title}
+                                      className="w-full aspect-[16/10] object-cover rounded-md group-hover:opacity-95 transition"
+                                    />
+                                  ) : (
+                                    <div className="w-full aspect-[16/10] rounded-md bg-stone-100 dark:bg-stone-900" />
+                                  )}
+                                  <div className="pt-5">
+                                    <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mb-2">
+                                      {post.categoryName && (
+                                        <>
+                                          <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                                            {post.categoryName}
+                                          </span>
+                                          <span className="text-stone-300 dark:text-stone-700">
+                                            ·
+                                          </span>
+                                        </>
+                                      )}
+                                      <time>
+                                        {formatShortDate(post.publishedAt)}
+                                      </time>
                                     </div>
-                                  </Link>
-                                </motion.article>
-                              );
-                            })}
+                                    <h3 className="font-serif text-xl font-bold leading-snug text-stone-900 dark:text-stone-50 mb-3 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2">
+                                      {post.title}
+                                    </h3>
+                                    <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-2 mb-4">
+                                      {post.excerpt}
+                                    </p>
+                                    <div className="flex items-center gap-3 text-xs text-stone-500">
+                                      <span className="flex items-center gap-1.5">
+                                        <FaClock className="text-[9px]" />
+                                        {post.readingTime} min
+                                      </span>
+                                      <span className="text-stone-300 dark:text-stone-700">
+                                        ·
+                                      </span>
+                                      <span className="flex items-center gap-1.5">
+                                        <FaEye className="text-[9px]" />
+                                        {(post.views || 0).toLocaleString()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </Link>
+                              </motion.article>
+                            ))}
                           </div>
                         </>
                       )}
@@ -778,24 +838,19 @@ const BlogTag = () => {
                     Sections in this topic
                   </p>
                   <ul className="space-y-1.5">
-                    {involvedCategories.map((c) => {
-                      const count = tagPosts.filter(
-                        (p) => p.categoryId === c.id
-                      ).length;
-                      return (
-                        <li key={c.id}>
-                          <Link
-                            to={`/blog/category/${c.slug || slugify(c.name)}`}
-                            className="flex items-center justify-between px-3 py-2 rounded-md text-sm text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-900 hover:text-stone-900 dark:hover:text-stone-100 transition"
-                          >
-                            <span>{c.name}</span>
-                            <span className="text-xs text-stone-400 dark:text-stone-600">
-                              {count}
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
+                    {involvedCategories.map((c) => (
+                      <li key={c.id}>
+                        <Link
+                          to={`/blog/category/${c.slug}`}
+                          className="flex items-center justify-between px-3 py-2 rounded-md text-sm text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-900 hover:text-stone-900 dark:hover:text-stone-100 transition"
+                        >
+                          <span>{c.name}</span>
+                          <span className="text-xs text-stone-400 dark:text-stone-600">
+                            {c.count}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               )}

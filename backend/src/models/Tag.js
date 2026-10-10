@@ -1,4 +1,4 @@
-// server/models/Tag.js
+// backend/src/models/Tag.js
 import mongoose from "mongoose";
 
 const tagSchema = new mongoose.Schema(
@@ -11,7 +11,8 @@ const tagSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-tagSchema.pre("save", function (next) {
+// ✅ Async-style hook — no `next` parameter.
+tagSchema.pre("save", function () {
   if (this.isModified("name") && !this.slug) {
     this.slug = this.name
       .toLowerCase()
@@ -19,7 +20,6 @@ tagSchema.pre("save", function (next) {
       .replace(/[^\w\s-]/g, "")
       .replace(/\s+/g, "-");
   }
-  next();
 });
 
 export default mongoose.model("Tag", tagSchema);
