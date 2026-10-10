@@ -1,7 +1,6 @@
-// src/pages/blog/BlogPost.jsx — THE ALVEOLY JOURNAL ARTICLE
-// Standalone editorial article page. Mock data. No component imports.
+// src/pages/blog/BlogPost.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FaClock, FaEye, FaHeart, FaRegHeart, FaCheckCircle, FaUserMd,
@@ -9,13 +8,9 @@ import {
   FaRegBookmark, FaPrint, FaLink, FaTwitter, FaLinkedin, FaFacebook,
   FaWhatsapp, FaEnvelope, FaHome, FaSearch, FaChevronDown, FaChevronUp,
   FaListUl, FaTimes, FaMicrophone, FaVideo, FaStream, FaInstagram,
-  FaYoutube, FaRss, FaArrowUp, FaQuoteLeft, FaBookOpen, FaGraduationCap,
+  FaYoutube, FaRss, FaArrowUp, FaBookOpen, FaGraduationCap,
 } from "react-icons/fa";
-import {
-  posts as allPosts,
-  authors,
-  categories,
-} from "../../data/blogData";
+import { publicBlogAPI as blogAPI } from "../../api/blogApi";
 
 /* ============================================================
    UTILITIES
@@ -39,30 +34,20 @@ const formatShortDate = (d) =>
       })
     : "";
 
-const initials = (name) =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+const initials = (name = "") =>
+  name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 
 const slugify = (s) =>
-  String(s)
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-");
+  String(s).toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
 
-/* Injects stable IDs into H2/H3 tags and returns the rewritten HTML */
 const injectHeadingIds = (html) => {
   if (!html) return html;
   return html.replace(
     /<h([23])([^>]*)>(.*?)<\/h\1>/g,
     (match, level, attrs, inner) => {
       const raw = inner.replace(/<[^>]+>/g, "");
-      const id = slugify(raw) || `section-${Math.random().toString(36).slice(2, 8)}`;
+      const id =
+        slugify(raw) || `section-${Math.random().toString(36).slice(2, 8)}`;
       if (/id=/.test(attrs)) return match;
       return `<h${level}${attrs} id="${id}">${inner}</h${level}>`;
     }
@@ -111,7 +96,7 @@ const SectionLabel = ({ icon: Icon, children }) => (
 );
 
 /* ============================================================
-   JOURNAL SHELL
+   NAV + FOOTER
 ============================================================ */
 
 const JournalNav = () => {
@@ -159,7 +144,6 @@ const JournalNav = () => {
             <Link
               to="/blog/search"
               className="ml-2 inline-flex items-center justify-center w-9 h-9 rounded-full border border-stone-200 dark:border-stone-800 text-stone-500 dark:text-stone-400 hover:border-stone-900 dark:hover:border-stone-100 hover:text-stone-900 dark:hover:text-stone-100 transition"
-              title="Search"
             >
               <FaSearch className="text-xs" />
             </Link>
@@ -171,9 +155,7 @@ const JournalNav = () => {
           >
             Menu
             <FaChevronDown
-              className={`text-[10px] transition-transform ${
-                mobileOpen ? "rotate-180" : ""
-              }`}
+              className={`text-[10px] transition-transform ${mobileOpen ? "rotate-180" : ""}`}
             />
           </button>
         </div>
@@ -233,10 +215,7 @@ const JournalFooter = () => {
       <div className="max-w-6xl mx-auto px-5 py-14">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
           <div className="md:col-span-2">
-            <Link
-              to="/blog"
-              className="font-serif text-xl font-bold text-stone-900 dark:text-stone-50"
-            >
+            <Link to="/blog" className="font-serif text-xl font-bold text-stone-900 dark:text-stone-50">
               The Alveoly Journal
             </Link>
             <p className="text-sm text-stone-600 dark:text-stone-400 mt-4 max-w-sm leading-relaxed">
@@ -251,7 +230,6 @@ const JournalFooter = () => {
                   href={s.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  title={s.label}
                   className="text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition"
                 >
                   <s.icon />
@@ -308,8 +286,7 @@ const JournalFooter = () => {
         <div className="mt-12 pt-6 border-t border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-3 text-xs text-stone-500 dark:text-stone-500">
           <p>© {new Date().getFullYear()} Alveoly. All rights reserved.</p>
           <p className="italic">
-            The content is educational only and not a substitute for medical
-            advice.
+            The content is educational only and not a substitute for medical advice.
           </p>
         </div>
       </div>
@@ -318,7 +295,7 @@ const JournalFooter = () => {
 };
 
 /* ============================================================
-   READING PROGRESS BAR
+   READING PROGRESS
 ============================================================ */
 
 const ReadingProgress = () => {
@@ -413,29 +390,24 @@ const TableOfContents = ({ headings }) => {
 };
 
 /* ============================================================
-   SHARE BUTTONS
+   SHARE BAR
 ============================================================ */
 
 const ShareBar = ({ post }) => {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const url =
-    typeof window !== "undefined" ? window.location.href : "";
+  const url = typeof window !== "undefined" ? window.location.href : "";
   const encoded = encodeURIComponent(url);
   const encodedTitle = encodeURIComponent(post.title);
 
   const nativeShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: post.title,
-          text: post.excerpt,
-          url,
-        });
+        await navigator.share({ title: post.title, text: post.excerpt, url });
         return;
-      } catch (err) {
-        /* user cancelled — fall through to dropdown */
+      } catch {
+        /* user cancelled */
       }
     }
     setOpen((o) => !o);
@@ -521,52 +493,39 @@ const ShareBar = ({ post }) => {
 };
 
 /* ============================================================
-   COMMENT SECTION (mock, local)
+   COMMENT SECTION — hits /api/blog/posts/:id/comments
 ============================================================ */
 
-const CommentSection = () => {
-  const [comments, setComments] = useState([
-    {
-      id: 1,
-      name: "Ngozi A.",
-      role: "RN, Lagos",
-      avatar: null,
-      body:
-        "I read this twice. The section on lifestyle changes being as effective as medication for some people finally made me book the appointment I'd been putting off. Thank you for writing it plainly.",
-      date: "2024-11-19T10:12:00Z",
-      likes: 14,
-    },
-    {
-      id: 2,
-      name: "Dr. Samuel K.",
-      role: "Family physician",
-      avatar: null,
-      body:
-        "I recommend articles like this to my patients constantly. The DASH diet explanation is the clearest I've seen in a mainstream piece — no hand-waving, no overselling.",
-      date: "2024-11-19T14:35:00Z",
-      likes: 27,
-    },
-  ]);
+const CommentSection = ({ postId, initialComments }) => {
+  const [comments, setComments] = useState(initialComments || []);
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = (e) => {
+  useEffect(() => {
+    setComments(initialComments || []);
+  }, [initialComments]);
+
+  const submit = async (e) => {
     e.preventDefault();
     if (!body.trim()) return;
-    setComments((c) => [
-      {
-        id: Date.now(),
-        name: name.trim() || "Anonymous reader",
-        role: "",
-        avatar: null,
-        body: body.trim(),
-        date: new Date().toISOString(),
-        likes: 0,
-      },
-      ...c,
-    ]);
-    setName("");
-    setBody("");
+    setSubmitting(true);
+    try {
+      const res = await blogAPI.addComment(postId, {
+        content: body.trim(),
+        authorName: name.trim() || "Anonymous reader",
+        authorEmail: "",
+      });
+      if (res.success) {
+        setComments((c) => [res.data, ...c]);
+        setName("");
+        setBody("");
+      }
+    } catch {
+      /* silently ignored */
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const formatRelative = (d) => {
@@ -606,10 +565,10 @@ const CommentSection = () => {
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={!body.trim()}
+            disabled={submitting || !body.trim()}
             className="px-5 py-2.5 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-full text-sm font-medium hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Post response
+            {submitting ? "Posting…" : "Post response"}
           </button>
         </div>
       </form>
@@ -617,36 +576,34 @@ const CommentSection = () => {
       <div className="space-y-8">
         {comments.map((c) => (
           <div
-            key={c.id}
+            key={c._id || c.id}
             className="flex gap-4 pb-8 border-b border-stone-100 dark:border-stone-900 last:border-0 last:pb-0"
           >
             <div className="w-10 h-10 rounded-full bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 flex items-center justify-center font-medium text-sm flex-shrink-0">
-              {initials(c.name)}
+              {initials(c.authorName || c.name || "U")}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2 flex-wrap">
                 <p className="font-medium text-stone-900 dark:text-stone-100 text-sm">
-                  {c.name}
+                  {c.authorName || c.name}
                 </p>
-                {c.role && (
+                {c.authorRole && (
                   <>
-                    <span className="text-stone-300 dark:text-stone-700">
-                      ·
-                    </span>
-                    <p className="text-xs text-stone-500">{c.role}</p>
+                    <span className="text-stone-300 dark:text-stone-700">·</span>
+                    <p className="text-xs text-stone-500">{c.authorRole}</p>
                   </>
                 )}
                 <span className="text-stone-300 dark:text-stone-700">·</span>
                 <p className="text-xs text-stone-500">
-                  {formatRelative(c.date)}
+                  {formatRelative(c.createdAt || c.date)}
                 </p>
               </div>
               <p className="text-stone-700 dark:text-stone-300 leading-relaxed mt-2">
-                {c.body}
+                {c.body || c.content}
               </p>
               <div className="flex items-center gap-4 mt-3 text-xs text-stone-500">
                 <button className="hover:text-rose-600 transition">
-                  ♥ {c.likes}
+                  ♥ {c.likes || 0}
                 </button>
                 <button className="hover:text-stone-900 dark:hover:text-stone-100 transition">
                   Reply
@@ -666,42 +623,65 @@ const CommentSection = () => {
 
 const BlogPost = () => {
   const { slug } = useParams();
-  const navigate = useNavigate();
   const contentRef = useRef(null);
 
   const [post, setPost] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showMobileTOC, setShowMobileTOC] = useState(false);
+  const [relatedPosts, setRelatedPosts] = useState([]);
+  const [comments, setComments] = useState([]);
 
-  /* ---------- Load post from mock data ---------- */
+  /* ---------- Load ---------- */
   useEffect(() => {
-    const found = allPosts.find((p) => p.slug === slug);
-    if (found) {
-      setPost(found);
-      setNotFound(false);
-    } else {
-      setPost(null);
-      setNotFound(true);
-    }
+    const load = async () => {
+      try {
+        setLoading(true);
+        const res = await blogAPI.getPostBySlug(slug);
+
+        if (res.success && res.data) {
+          const p = res.data;
+          setPost({
+            ...p,
+            id: p._id,
+            author: p.author || p.authorId,
+            reviewer: p.reviewer || p.reviewedBy,
+            category: p.categoryId?.name || p.category || "",
+            categorySlug: p.categoryId?.slug || "",
+          });
+          setRelatedPosts(p.related || []);
+          setComments(p.comments || []);
+          setNotFound(false);
+
+          blogAPI.incrementViews(p._id).catch(() => {});
+        } else {
+          setNotFound(true);
+        }
+      } catch (err) {
+        console.error(err);
+        setNotFound(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [slug]);
 
   /* ---------- Derived ---------- */
-  const author = useMemo(
-    () => authors.find((a) => a.id === post?.authorId),
-    [post]
-  );
-  const reviewer = useMemo(
-    () =>
-      post?.reviewedBy
-        ? authors.find((a) => a.id === post.reviewedBy)
-        : null,
-    [post]
-  );
+  const author = post?.author;
+  const reviewer = post?.reviewer;
   const category = useMemo(
-    () => categories.find((c) => c.id === post?.categoryId),
+    () =>
+      post?.category
+        ? {
+            name: post.category,
+            slug: post.categorySlug || slugify(post.category),
+          }
+        : null,
     [post]
   );
 
@@ -721,30 +701,43 @@ const BlogPost = () => {
     }));
   }, [htmlWithIds, post]);
 
-  const relatedPosts = useMemo(() => {
-    if (!post) return [];
-    return allPosts
-      .filter((p) => p.id !== post.id && p.categoryId === post.categoryId)
-      .slice(0, 3);
-  }, [post]);
-
   /* ---------- Handlers ---------- */
+  const handleLike = async () => {
+    if (!post) return;
+    try {
+      const res = await blogAPI.toggleLike(post.id);
+      if (res.success) {
+        setLiked(res.liked);
+        setPost((prev) => ({ ...prev, likes: res.likes }));
+      }
+    } catch {
+      /* user not logged in */
+    }
+  };
+
   const onShare = async () => {
     if (!post) return;
     const url = window.location.href;
     if (navigator.share) {
       try {
         await navigator.share({ title: post.title, text: post.excerpt, url });
-      } catch {
-        /* ignored */
-      }
+      } catch {}
     } else {
       navigator.clipboard.writeText(url);
     }
   };
 
+  /* ---------- Loading ---------- */
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 dark:border-stone-700 dark:border-t-stone-100 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   /* ---------- Not found ---------- */
-  if (notFound) {
+  if (notFound || !post) {
     return (
       <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
         <JournalNav />
@@ -756,8 +749,7 @@ const BlogPost = () => {
             That article isn't here anymore
           </h1>
           <p className="text-lg text-stone-600 dark:text-stone-400 max-w-md mx-auto mb-8">
-            It may have been moved, retitled, or retracted. Browse the journal
-            instead.
+            It may have been moved, retitled, or retracted. Browse the journal instead.
           </p>
           <Link
             to="/blog"
@@ -772,20 +764,13 @@ const BlogPost = () => {
     );
   }
 
-  if (!post) {
-    return (
-      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 dark:border-stone-700 dark:border-t-stone-100 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
+  /* ---------- Render ---------- */
   return (
     <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
       <ReadingProgress />
       <JournalNav />
 
-      {/* ---------- STICKY ACTION BAR ---------- */}
+      {/* STICKY ACTION BAR */}
       <div className="sticky top-16 z-30 bg-white/85 dark:bg-stone-950/85 backdrop-blur-md border-b border-stone-200/70 dark:border-stone-800/70">
         <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -798,11 +783,9 @@ const BlogPost = () => {
             </Link>
             {category && (
               <>
-                <span className="hidden sm:inline text-stone-300 dark:text-stone-700">
-                  ·
-                </span>
+                <span className="hidden sm:inline text-stone-300 dark:text-stone-700">·</span>
                 <Link
-                  to={`/blog/category/${category.slug || slugify(category.name)}`}
+                  to={`/blog/category/${category.slug}`}
                   className="hidden sm:inline text-xs uppercase tracking-wider font-semibold text-rose-600 dark:text-rose-400 hover:underline"
                 >
                   {category.name}
@@ -812,15 +795,14 @@ const BlogPost = () => {
           </div>
           <div className="flex items-center gap-3 text-stone-500 dark:text-stone-400">
             <button
-              onClick={() => setLiked((l) => !l)}
+              onClick={handleLike}
               className={`inline-flex items-center gap-1.5 text-sm transition ${
                 liked ? "text-rose-600" : "hover:text-rose-600"
               }`}
-              title="Like"
             >
               {liked ? <FaHeart /> : <FaRegHeart />}
               <span className="hidden sm:inline">
-                {(post.likes + (liked ? 1 : 0)).toLocaleString()}
+                {(post.likes || 0).toLocaleString()}
               </span>
             </button>
             <button
@@ -828,14 +810,12 @@ const BlogPost = () => {
               className={`inline-flex items-center gap-1.5 text-sm transition ${
                 saved ? "text-amber-600" : "hover:text-amber-600"
               }`}
-              title="Save"
             >
               {saved ? <FaBookmark /> : <FaRegBookmark />}
             </button>
             <button
               onClick={onShare}
               className="inline-flex items-center gap-1.5 text-sm hover:text-stone-900 dark:hover:text-stone-100 transition"
-              title="Share"
             >
               <FaShareAlt className="text-xs" />
               <span className="hidden sm:inline">Share</span>
@@ -844,13 +824,13 @@ const BlogPost = () => {
         </div>
       </div>
 
-      {/* ---------- ARTICLE HEADER ---------- */}
+      {/* HEADER */}
       <header className="max-w-3xl mx-auto px-5 pt-12 md:pt-20 pb-6">
         <div className="flex items-center gap-3 text-sm text-stone-500 dark:text-stone-400 mb-6">
           {category && (
             <>
               <Link
-                to={`/blog/category/${category.slug || slugify(category.name)}`}
+                to={`/blog/category/${category.slug}`}
                 className="uppercase tracking-wider text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline"
               >
                 {category.name}
@@ -879,7 +859,7 @@ const BlogPost = () => {
             <Avatar author={author} size="md" />
             <div className="text-sm">
               <Link
-                to={`/blog/author/${author?.id}`}
+                to={`/blog/author/${author?._id || author?.id}`}
                 className="font-medium text-stone-900 dark:text-stone-100 hover:text-rose-600 dark:hover:text-rose-400 transition"
               >
                 {author?.name}
@@ -891,7 +871,7 @@ const BlogPost = () => {
                 {post.readingTime} min
                 <span className="text-stone-300 dark:text-stone-700">·</span>
                 <FaEye className="text-[9px]" />
-                {post.views.toLocaleString()}
+                {(post.views || 0).toLocaleString()}
               </p>
             </div>
           </div>
@@ -905,7 +885,7 @@ const BlogPost = () => {
         </div>
       </header>
 
-      {/* ---------- FEATURED IMAGE ---------- */}
+      {/* FEATURED IMAGE */}
       {post.image && (
         <div className="max-w-5xl mx-auto px-5 mb-12">
           <motion.img
@@ -917,14 +897,13 @@ const BlogPost = () => {
             className="w-full h-auto rounded-lg"
           />
           <p className="text-xs text-stone-500 dark:text-stone-500 mt-3 text-center italic">
-            {post.title} · Photo via Unsplash
+            {post.title}
           </p>
         </div>
       )}
 
-      {/* ---------- BODY ---------- */}
+      {/* BODY */}
       <div className="max-w-3xl mx-auto px-5 pb-12">
-        {/* Mobile TOC toggle */}
         {headings.length > 0 && (
           <button
             onClick={() => setShowMobileTOC((o) => !o)}
@@ -951,12 +930,10 @@ const BlogPost = () => {
           )}
         </AnimatePresence>
 
-        {/* Desktop TOC */}
         <div className="hidden lg:block">
           <TableOfContents headings={headings} />
         </div>
 
-        {/* Medical review callout */}
         {post.medicallyReviewed && reviewer && (
           <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 rounded-2xl p-5 my-8 flex items-start gap-4">
             <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/60 flex items-center justify-center flex-shrink-0">
@@ -966,28 +943,27 @@ const BlogPost = () => {
               <p className="font-medium text-emerald-900 dark:text-emerald-200 text-sm mb-1">
                 Medically reviewed by{" "}
                 <Link
-                  to={`/blog/author/${reviewer.id}`}
+                  to={`/blog/author/${reviewer._id || reviewer.id}`}
                   className="underline underline-offset-4 hover:text-emerald-700"
                 >
                   {reviewer.name}
                 </Link>
-                , {reviewer.credentials}
+                {reviewer.credentials ? `, ${reviewer.credentials}` : ""}
               </p>
               <p className="text-emerald-800/80 dark:text-emerald-300/80 text-xs">
-                Last reviewed on {formatLongDate(post.updatedAt || post.publishedAt)}
+                Last reviewed on{" "}
+                {formatLongDate(post.updatedAt || post.publishedAt)}
               </p>
             </div>
           </div>
         )}
 
-        {/* Article body */}
         <div
           ref={contentRef}
           className="prose-editorial text-[17px] sm:text-[19px]"
           dangerouslySetInnerHTML={{ __html: htmlWithIds }}
         />
 
-        {/* Tags */}
         {post.tags?.length > 0 && (
           <div className="mt-12 flex flex-wrap items-center gap-2">
             <span className="text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mr-1 flex items-center gap-1.5">
@@ -1006,7 +982,6 @@ const BlogPost = () => {
           </div>
         )}
 
-        {/* Share bar */}
         <div className="mt-10 pt-8 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between flex-wrap gap-4">
           <p className="text-sm text-stone-500 dark:text-stone-400 italic">
             If this helped you, it will probably help someone else.
@@ -1014,7 +989,6 @@ const BlogPost = () => {
           <ShareBar post={post} />
         </div>
 
-        {/* Divider */}
         <div className="my-14 flex items-center justify-center gap-4">
           <span className="w-12 h-px bg-stone-300 dark:bg-stone-700" />
           <span className="text-stone-400 dark:text-stone-600 text-xs tracking-widest">
@@ -1023,7 +997,6 @@ const BlogPost = () => {
           <span className="w-12 h-px bg-stone-300 dark:bg-stone-700" />
         </div>
 
-        {/* Author card */}
         {author && (
           <div className="p-6 md:p-8 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
             <div className="flex items-start gap-5">
@@ -1033,17 +1006,20 @@ const BlogPost = () => {
                   Written by
                 </p>
                 <Link
-                  to={`/blog/author/${author.id}`}
+                  to={`/blog/author/${author._id || author.id}`}
                   className="font-serif text-lg font-bold text-stone-900 dark:text-stone-100 hover:text-rose-700 dark:hover:text-rose-400 transition"
                 >
                   {author.name}
                 </Link>
                 <p className="text-sm text-stone-600 dark:text-stone-400 mt-0.5">
-                  {author.role} · {author.credentials}
+                  {author.role}
+                  {author.credentials ? ` · ${author.credentials}` : ""}
                 </p>
-                <p className="text-sm text-stone-600 dark:text-stone-400 mt-3 leading-relaxed">
-                  {author.bio}
-                </p>
+                {author.bio && (
+                  <p className="text-sm text-stone-600 dark:text-stone-400 mt-3 leading-relaxed">
+                    {author.bio}
+                  </p>
+                )}
 
                 {author.specialties?.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-4">
@@ -1098,7 +1074,7 @@ const BlogPost = () => {
                     </a>
                   )}
                   <Link
-                    to={`/blog/author/${author.id}`}
+                    to={`/blog/author/${author._id || author.id}`}
                     className="ml-1 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-rose-600 dark:hover:text-rose-400 transition underline underline-offset-4"
                   >
                     All articles →
@@ -1109,41 +1085,6 @@ const BlogPost = () => {
           </div>
         )}
 
-        {/* Newsletter */}
-        <div className="mt-10 p-6 rounded-2xl bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900">
-          <SectionLabel icon={FaBookOpen}>
-            <span className="text-rose-400 dark:text-rose-600">
-              The Alveoly Letter
-            </span>
-          </SectionLabel>
-          <p className="font-serif text-xl font-bold mb-2">
-            Get stories worth reading.
-          </p>
-          <p className="text-sm opacity-80 mb-4 max-w-md">
-            A weekly letter on healthcare and clinical practice — no noise, no
-            miracle cures. Original reporting, clinical insight, thoughtful
-            essays.
-          </p>
-          <form
-            onSubmit={(e) => e.preventDefault()}
-            className="flex flex-col sm:flex-row gap-2 max-w-md"
-          >
-            <input
-              type="email"
-              required
-              placeholder="you@example.com"
-              className="flex-1 px-4 py-3 rounded-full bg-white/10 dark:bg-stone-900/10 border border-white/20 dark:border-stone-900/20 text-sm placeholder-white/60 dark:placeholder-stone-900/60 focus:outline-none focus:border-white/60 dark:focus:border-stone-900/60 transition"
-            />
-            <button
-              type="submit"
-              className="px-5 py-3 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 rounded-full text-sm font-medium hover:opacity-90 transition"
-            >
-              Subscribe
-            </button>
-          </form>
-        </div>
-
-        {/* Related posts */}
         {relatedPosts.length > 0 && (
           <div className="mt-16 pt-10 border-t border-stone-200 dark:border-stone-800">
             <SectionLabel>Keep reading</SectionLabel>
@@ -1151,38 +1092,33 @@ const BlogPost = () => {
               More in {category?.name}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              {relatedPosts.map((r) => {
-                const ra = authors.find((a) => a.id === r.authorId);
-                const rc = categories.find((c) => c.id === r.categoryId);
-                return (
-                  <Link key={r.id} to={`/blog/${r.slug}`} className="group">
-                    {r.image && (
-                      <img
-                        src={r.image}
-                        alt={r.title}
-                        className="w-full aspect-[16/10] object-cover rounded-md mb-3 group-hover:opacity-95 transition"
-                      />
-                    )}
-                    <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
-                      {rc?.name}
-                    </p>
-                    <h4 className="font-serif text-base font-bold leading-snug text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2 mb-2">
-                      {r.title}
-                    </h4>
-                    <p className="text-xs text-stone-500">
-                      {ra?.name} · {r.readingTime} min
-                    </p>
-                  </Link>
-                );
-              })}
+              {relatedPosts.map((r) => (
+                <Link
+                  key={r._id || r.id}
+                  to={`/blog/post/${r.slug || r._id}`}
+                  className="group"
+                >
+                  {r.image && (
+                    <img
+                      src={r.image}
+                      alt={r.title}
+                      className="w-full aspect-[16/10] object-cover rounded-md mb-3 group-hover:opacity-95 transition"
+                    />
+                  )}
+                  <h4 className="font-serif text-base font-bold leading-snug text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2 mb-2">
+                    {r.title}
+                  </h4>
+                  <p className="text-xs text-stone-500">
+                    {r.readingTime || 5} min read
+                  </p>
+                </Link>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Comments */}
-        <CommentSection />
+        <CommentSection postId={post.id} initialComments={comments} />
 
-        {/* Back to top */}
         <div className="mt-16 flex justify-center">
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -1193,59 +1129,6 @@ const BlogPost = () => {
           </button>
         </div>
       </div>
-
-      {/* ---------- ALSO ON THE JOURNAL ---------- */}
-      <section className="border-t border-stone-200 dark:border-stone-800">
-        <div className="max-w-6xl mx-auto px-5 py-14">
-          <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-6">
-            Also on the journal
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <Link
-              to="/blog/podcasts"
-              className="group flex items-start gap-4 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 hover:border-stone-900 dark:hover:border-stone-100 transition"
-            >
-              <FaMicrophone className="text-stone-400 group-hover:text-rose-600 transition text-lg mt-1" />
-              <div>
-                <h3 className="font-serif text-base font-bold text-stone-900 dark:text-stone-100 mb-1">
-                  Podcasts
-                </h3>
-                <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
-                  Conversations with the clinicians behind the writing.
-                </p>
-              </div>
-            </Link>
-            <Link
-              to="/blog/videos"
-              className="group flex items-start gap-4 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 hover:border-stone-900 dark:hover:border-stone-100 transition"
-            >
-              <FaVideo className="text-stone-400 group-hover:text-rose-600 transition text-lg mt-1" />
-              <div>
-                <h3 className="font-serif text-base font-bold text-stone-900 dark:text-stone-100 mb-1">
-                  Videos
-                </h3>
-                <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
-                  Short, practical explainers from our medical desk.
-                </p>
-              </div>
-            </Link>
-            <Link
-              to="/sitemap"
-              className="group flex items-start gap-4 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 hover:border-stone-900 dark:hover:border-stone-100 transition"
-            >
-              <FaStream className="text-stone-400 group-hover:text-rose-600 transition text-lg mt-1" />
-              <div>
-                <h3 className="font-serif text-base font-bold text-stone-900 dark:text-stone-100 mb-1">
-                  Sitemap
-                </h3>
-                <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
-                  A structured index of everything the journal publishes.
-                </p>
-              </div>
-            </Link>
-          </div>
-        </div>
-      </section>
 
       <JournalFooter />
     </div>

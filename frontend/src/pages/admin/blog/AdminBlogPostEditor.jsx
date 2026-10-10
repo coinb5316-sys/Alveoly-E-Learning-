@@ -1,6 +1,4 @@
-// src/pages/admin/blog/AdminBlogPostEditor.jsx — EDITORIAL ADMIN
-// Create / edit a story for The Alveoly Journal.
-// Used by both /admin/blog/create and /admin/blog/edit/:id
+// src/pages/admin/blog/AdminBlogPostEditor.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,24 +11,14 @@ import {
   FileText, Calendar, Clock, Hash, ExternalLink, RotateCw,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend ready
-import {
-  posts as mockPosts,
-  authors as mockAuthors,
-  categories as mockCategories,
-  tags as mockTags,
-} from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
 ============================================================ */
 
 const slugify = (s = "") =>
-  String(s)
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-");
+  String(s).toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
 
 const calculateReadingTime = (html = "") => {
   const text = html.replace(/<[^>]*>/g, " ");
@@ -39,13 +27,7 @@ const calculateReadingTime = (html = "") => {
 };
 
 const initials = (name = "") =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+  name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 
 const emptyPost = () => ({
   id: "",
@@ -55,7 +37,9 @@ const emptyPost = () => ({
   excerpt: "",
   content: "",
   image: "",
+  imageFile: null,
   gallery: [],
+  galleryFiles: [],
   categoryId: "",
   tags: [],
   authorId: "",
@@ -88,9 +72,7 @@ const Field = ({ label, hint, required, error, children }) => (
     </label>
     {children}
     {hint && !error && (
-      <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5">
-        {hint}
-      </p>
+      <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5">{hint}</p>
     )}
     {error && (
       <p className="text-xs text-rose-600 dark:text-rose-400 mt-1.5 flex items-center gap-1.5">
@@ -167,8 +149,7 @@ const TagPicker = ({ selected, onChange, allTags }) => {
     ? allTags
         .filter(
           (t) =>
-            t.toLowerCase().includes(draft.toLowerCase()) &&
-            !selected.includes(t)
+            t.toLowerCase().includes(draft.toLowerCase()) && !selected.includes(t)
         )
         .slice(0, 6)
     : allTags.filter((t) => !selected.includes(t)).slice(0, 8);
@@ -233,7 +214,7 @@ const TagPicker = ({ selected, onChange, allTags }) => {
 };
 
 /* ============================================================
-   LIST INPUT — for references, objectives, statistics
+   LIST INPUT
 ============================================================ */
 
 const ListInput = ({ values, onChange, placeholder, addLabel = "Add" }) => {
@@ -297,7 +278,7 @@ const ListInput = ({ values, onChange, placeholder, addLabel = "Add" }) => {
 };
 
 /* ============================================================
-   STATISTICS INPUT — { value, label }
+   STATISTICS INPUT
 ============================================================ */
 
 const StatisticsInput = ({ values, onChange }) => {
@@ -376,8 +357,7 @@ const ContentEditor = ({ value, onChange }) => {
     const end = ta.selectionEnd;
     const selected = value.substring(start, end);
     const next = before + selected + after;
-    const newValue =
-      value.substring(0, start) + next + value.substring(end);
+    const newValue = value.substring(0, start) + next + value.substring(end);
     onChange(newValue);
     setTimeout(() => {
       ta.focus();
@@ -395,11 +375,7 @@ const ContentEditor = ({ value, onChange }) => {
     { icon: Heading2, action: () => insert("<h2>", "</h2>"), label: "Heading 2" },
     { icon: List, action: () => insert("<ul>\n  <li>", "</li>\n</ul>"), label: "List" },
     { divider: true },
-    {
-      icon: Quote,
-      action: () => insert("<blockquote>\n  ", "\n</blockquote>"),
-      label: "Quote",
-    },
+    { icon: Quote, action: () => insert("<blockquote>\n  ", "\n</blockquote>"), label: "Quote" },
     {
       icon: LinkIcon,
       action: () => {
@@ -442,12 +418,7 @@ const ContentEditor = ({ value, onChange }) => {
       <div className="flex flex-wrap items-center gap-1 px-2 py-2 bg-stone-50 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-800">
         {toolbar.map((b, i) => {
           if (b.divider)
-            return (
-              <div
-                key={i}
-                className="w-px h-5 bg-stone-200 dark:bg-stone-800 mx-1"
-              />
-            );
+            return <div key={i} className="w-px h-5 bg-stone-200 dark:bg-stone-800 mx-1" />;
           const Icon = b.icon;
           return (
             <button
@@ -548,11 +519,7 @@ const RelatedPostsPicker = ({ posts, value, onChange, currentId }) => {
   const [search, setSearch] = useState("");
   const candidates = posts
     .filter((p) => p.id !== currentId && !value.includes(p.id))
-    .filter((p) =>
-      search.trim()
-        ? p.title.toLowerCase().includes(search.toLowerCase())
-        : true
-    )
+    .filter((p) => (search.trim() ? p.title.toLowerCase().includes(search.toLowerCase()) : true))
     .slice(0, 8);
 
   const add = (id) => {
@@ -583,19 +550,11 @@ const RelatedPostsPicker = ({ posts, value, onChange, currentId }) => {
               className="w-full text-left px-3.5 py-2.5 hover:bg-stone-50 dark:hover:bg-stone-900/50 transition flex items-center gap-3"
             >
               {p.image && (
-                <img
-                  src={p.image}
-                  alt=""
-                  className="w-10 h-10 rounded object-cover flex-shrink-0"
-                />
+                <img src={p.image} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
               )}
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-stone-900 dark:text-stone-100 truncate">
-                  {p.title}
-                </p>
-                <p className="text-xs text-stone-500">
-                  {p.readingTime || 5} min
-                </p>
+                <p className="text-sm text-stone-900 dark:text-stone-100 truncate">{p.title}</p>
+                <p className="text-xs text-stone-500">{p.readingTime || 5} min</p>
               </div>
             </button>
           ))}
@@ -647,41 +606,67 @@ const AdminBlogPostEditor = () => {
 
   const [form, setForm] = useState(emptyPost());
   const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(isEditing);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [autoSlug, setAutoSlug] = useState(!isEditing);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load everything from API ---------- */
   useEffect(() => {
-    setAuthors(mockAuthors);
-    setCategories(mockCategories);
-    setTagList(mockTags);
-    setPosts(mockPosts);
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [authorsRes, categoriesRes, tagsRes, postsRes] = await Promise.all([
+          blogAPI.getAuthorsForSelect(),
+          blogAPI.getCategories(),
+          blogAPI.getTags(),
+          blogAPI.getAdminPosts({ limit: 200 }),
+        ]);
 
-    if (isEditing) {
-      const p = mockPosts.find((x) => x.id === id || x.slug === id);
-      if (p) {
-        setForm({
-          ...emptyPost(),
-          ...p,
-          gallery: p.gallery || [],
-          references: p.references || [],
-          learningObjectives: p.learningObjectives || [],
-          statistics: p.statistics || [],
-          relatedPosts: (p.relatedPosts || []).map((r) =>
-            typeof r === "string" ? r : r.id
-          ),
-          metaDescription: p.metaDescription || "",
-          metaKeywords: p.metaKeywords || "",
-          reviewedBy: p.reviewedBy || "",
-        });
-        setAutoSlug(false);
-      } else {
-        toast.error("Story not found");
-        navigate("/admin/blog/posts");
+        setAuthors((authorsRes.data || []).map((a) => ({ ...a, id: a._id })));
+        setCategories((categoriesRes.data || []).map((c) => ({ ...c, id: c._id })));
+        setTagList((tagsRes.data || []).map((t) => t.name));
+        setPosts((postsRes.data?.posts || []).map((p) => ({ ...p, id: p._id })));
+
+        if (isEditing) {
+          const postRes = await blogAPI.getPostById(id);
+          if (postRes.success && postRes.data) {
+            const p = postRes.data;
+            setForm({
+              ...emptyPost(),
+              ...p,
+              id: p._id,
+              categoryId: p.categoryId?._id || p.categoryId || "",
+              authorId: p.authorId?._id || p.authorId || "",
+              reviewedBy: p.reviewedBy?._id || p.reviewedBy || "",
+              image: p.image || "",
+              imageFile: null,
+              gallery: p.gallery || [],
+              galleryFiles: [],
+              references: p.references || [],
+              learningObjectives: p.learningObjectives || [],
+              statistics: p.statistics || [],
+              relatedPosts: (p.relatedPosts || []).map((r) =>
+                typeof r === "string" ? r : r._id || r.id
+              ),
+              metaDescription: p.metaDescription || "",
+              metaKeywords: p.metaKeywords || "",
+              publishedAt: p.publishedAt || new Date().toISOString(),
+            });
+            setAutoSlug(false);
+          } else {
+            toast.error("Story not found");
+            navigate("/admin/blog/posts");
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load editor");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }
+    };
+
+    load();
   }, [id, isEditing, navigate]);
 
   /* ---------- Update helper ---------- */
@@ -693,6 +678,40 @@ const AdminBlogPostEditor = () => {
       return next;
     });
     if (errors[path]) setErrors((prev) => ({ ...prev, [path]: "" }));
+  };
+
+  /* ---------- Cover upload ---------- */
+  const handleCoverUpload = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setForm((prev) => ({ ...prev, image: reader.result, imageFile: file }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  /* ---------- Gallery upload ---------- */
+  const handleGalleryUpload = (files) => {
+    const list = Array.from(files);
+    list.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setForm((prev) => ({
+          ...prev,
+          gallery: [...prev.gallery, reader.result],
+          galleryFiles: [...prev.galleryFiles, file],
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeGalleryImage = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      gallery: prev.gallery.filter((_, i) => i !== index),
+      galleryFiles: prev.galleryFiles.filter((_, i) => i !== index),
+    }));
   };
 
   /* ---------- Validation ---------- */
@@ -715,26 +734,64 @@ const AdminBlogPostEditor = () => {
 
   /* ---------- Save ---------- */
   const save = async (status) => {
-    const payload = { ...form, status: status || form.status };
+    const nextStatus = status || form.status;
     if (!validate()) return;
 
     setSaving(true);
     try {
-      // Replace with blogAPI.createPost / updatePost
-      await new Promise((r) => setTimeout(r, 400));
+      const fd = new FormData();
+      fd.append("title", form.title);
+      fd.append("slug", form.slug);
+      fd.append("subtitle", form.subtitle || "");
+      fd.append("excerpt", form.excerpt || "");
+      fd.append("content", form.content);
+      fd.append("categoryId", form.categoryId);
+      fd.append("authorId", form.authorId);
+      if (form.reviewedBy) fd.append("reviewedBy", form.reviewedBy);
 
+      fd.append("status", nextStatus);
+      fd.append("featured", form.featured ? "true" : "false");
+      fd.append("editorsPick", form.editorsPick ? "true" : "false");
+      fd.append("medicallyReviewed", form.medicallyReviewed ? "true" : "false");
+      fd.append("publishedAt", form.publishedAt);
+      fd.append("readingTime", String(form.readingTime));
+
+      fd.append("videoUrl", form.videoUrl || "");
+      fd.append("audioUrl", form.audioUrl || "");
+      fd.append("metaDescription", form.metaDescription || "");
+      fd.append("metaKeywords", form.metaKeywords || "");
+
+      fd.append("tags", JSON.stringify(form.tags || []));
+      fd.append("references", JSON.stringify(form.references || []));
+      fd.append("learningObjectives", JSON.stringify(form.learningObjectives || []));
+      fd.append("statistics", JSON.stringify(form.statistics || []));
+      fd.append("relatedPosts", JSON.stringify(form.relatedPosts || []));
+
+      if (form.imageFile instanceof File) {
+        fd.append("featuredImage", form.imageFile);
+      }
+
+      const galleryUrls = form.gallery.filter(
+        (g) => typeof g === "string" && g.startsWith("http")
+      );
+      if (galleryUrls.length > 0) {
+        fd.append("galleryImages", JSON.stringify(galleryUrls));
+      }
+      form.galleryFiles.forEach((file) => fd.append("galleryImages", file));
+
+      let res;
       if (isEditing) {
+        res = await blogAPI.updatePost(form.id, fd);
         toast.success("Story updated");
       } else {
-        toast.success(
-          payload.status === "published"
-            ? "Story published"
-            : "Draft saved"
-        );
+        res = await blogAPI.createPost(fd);
+        toast.success(nextStatus === "published" ? "Story published" : "Draft saved");
       }
-      navigate("/admin/blog/posts");
+
+      if (res.success) navigate("/admin/blog/posts");
     } catch (err) {
-      toast.error("Save failed");
+      console.error(err);
+      toast.error(err.response?.data?.message || "Save failed");
     } finally {
       setSaving(false);
     }
@@ -744,10 +801,6 @@ const AdminBlogPostEditor = () => {
   const currentCategory = useMemo(
     () => categories.find((c) => c.id === form.categoryId),
     [categories, form.categoryId]
-  );
-  const currentAuthor = useMemo(
-    () => authors.find((a) => a.id === form.authorId),
-    [authors, form.authorId]
   );
   const currentReviewer = useMemo(
     () => authors.find((a) => a.id === form.reviewedBy),
@@ -762,9 +815,10 @@ const AdminBlogPostEditor = () => {
     );
   }
 
+  /* ---------- Render ---------- */
   return (
     <div className="space-y-6 pb-24">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <Link
@@ -812,11 +866,11 @@ const AdminBlogPostEditor = () => {
         </div>
       </div>
 
-      {/* ---------- GRID ---------- */}
+      {/* GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* MAIN COLUMN */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Title + subtitle + excerpt */}
+          {/* Title / Subtitle / Excerpt */}
           <div className="p-6 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 space-y-5">
             <Field label="Title" required error={errors.title}>
               <TextInput
@@ -826,7 +880,7 @@ const AdminBlogPostEditor = () => {
               />
             </Field>
 
-            <Field label="Slug" error={errors.slug} hint={`/blog/${form.slug || "…"}`}>
+            <Field label="Slug" error={errors.slug} hint={`/blog/post/${form.slug || "…"}`}>
               <div className="flex items-center gap-2">
                 <TextInput
                   value={form.slug}
@@ -847,10 +901,7 @@ const AdminBlogPostEditor = () => {
               </div>
             </Field>
 
-            <Field
-              label="Subtitle"
-              hint="Appears under the headline on the post page."
-            >
+            <Field label="Subtitle" hint="Appears under the headline on the post page.">
               <TextInput
                 value={form.subtitle}
                 onChange={(e) => update("subtitle", e.target.value)}
@@ -858,10 +909,7 @@ const AdminBlogPostEditor = () => {
               />
             </Field>
 
-            <Field
-              label="Excerpt"
-              hint="Shown on cards and in search results."
-            >
+            <Field label="Excerpt" hint="Shown on cards and in search results.">
               <TextArea
                 value={form.excerpt}
                 onChange={(e) => update("excerpt", e.target.value)}
@@ -879,10 +927,7 @@ const AdminBlogPostEditor = () => {
               error={errors.content}
               hint="HTML is supported. Use the toolbar for headings, quotes, and lists."
             >
-              <ContentEditor
-                value={form.content}
-                onChange={(v) => update("content", v)}
-              />
+              <ContentEditor value={form.content} onChange={(v) => update("content", v)} />
             </Field>
           </div>
 
@@ -894,46 +939,83 @@ const AdminBlogPostEditor = () => {
             </p>
 
             <Field
-              label="Cover image URL"
-              hint="Used as the hero on the post page and the thumbnail on cards."
+              label="Cover image"
+              hint="Upload a file or paste a URL. Used as the hero on the post page and the thumbnail on cards."
             >
-              <TextInput
-                value={form.image}
-                onChange={(e) => update("image", e.target.value)}
-                placeholder="https://…"
-              />
+              <div className="flex gap-2">
+                <TextInput
+                  value={
+                    typeof form.image === "string" && !form.image.startsWith("data:")
+                      ? form.image
+                      : ""
+                  }
+                  onChange={(e) => update("image", e.target.value)}
+                  placeholder="https://…"
+                />
+                <label className="px-3 py-2.5 rounded-lg border border-stone-200 dark:border-stone-800 text-sm text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-900 cursor-pointer transition flex-shrink-0 flex items-center justify-center">
+                  <ImageIcon className="w-4 h-4" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleCoverUpload(e.target.files?.[0])}
+                  />
+                </label>
+              </div>
               {form.image && (
                 <div className="mt-3 rounded-lg overflow-hidden aspect-[16/9] max-w-md">
-                  <img
-                    src={form.image}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={form.image} alt="" className="w-full h-full object-cover" />
                 </div>
               )}
             </Field>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Field
-                label="Video URL"
-                hint="YouTube embed URL. Optional."
-              >
+              <Field label="Video URL" hint="YouTube embed URL. Optional.">
                 <TextInput
                   value={form.videoUrl}
                   onChange={(e) => update("videoUrl", e.target.value)}
                   placeholder="https://www.youtube.com/embed/…"
                 />
               </Field>
-              <Field
-                label="Audio URL"
-                hint="Podcast or narration MP3. Optional."
-              >
+              <Field label="Audio URL" hint="Podcast or narration MP3. Optional.">
                 <TextInput
                   value={form.audioUrl}
                   onChange={(e) => update("audioUrl", e.target.value)}
                   placeholder="https://…mp3"
                 />
               </Field>
+            </div>
+          </div>
+
+          {/* Gallery */}
+          <div className="p-6 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
+            <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-4 flex items-center gap-2">
+              <ImageIcon className="w-3 h-3" />
+              Gallery
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {form.gallery.map((src, index) => (
+                <div key={index} className="relative group aspect-square rounded-lg overflow-hidden">
+                  <img src={src} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeGalleryImage(index)}
+                    className="absolute top-2 right-2 p-1 bg-rose-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              <label className="aspect-square rounded-lg border-2 border-dashed border-stone-200 dark:border-stone-800 flex items-center justify-center cursor-pointer hover:border-stone-900 dark:hover:border-stone-100 transition">
+                <Plus className="w-6 h-6 text-stone-400" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleGalleryUpload(e.target.files)}
+                />
+              </label>
             </div>
           </div>
 
@@ -981,10 +1063,7 @@ const AdminBlogPostEditor = () => {
               <FileText className="w-3 h-3" />
               SEO
             </p>
-            <Field
-              label="Meta description"
-              hint={`${form.metaDescription.length}/160 characters`}
-            >
+            <Field label="Meta description" hint={`${form.metaDescription.length}/160 characters`}>
               <TextArea
                 value={form.metaDescription}
                 onChange={(e) => update("metaDescription", e.target.value)}
@@ -992,10 +1071,7 @@ const AdminBlogPostEditor = () => {
                 placeholder="Used by search engines. Keep under 160 characters."
               />
             </Field>
-            <Field
-              label="Meta keywords"
-              hint="Comma separated. Optional."
-            >
+            <Field label="Meta keywords" hint="Comma separated. Optional.">
               <TextInput
                 value={form.metaKeywords}
                 onChange={(e) => update("metaKeywords", e.target.value)}
@@ -1007,7 +1083,7 @@ const AdminBlogPostEditor = () => {
 
         {/* SIDEBAR */}
         <div className="lg:col-span-4 space-y-6">
-          {/* Publish controls */}
+          {/* Publishing controls */}
           <div className="p-6 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 space-y-4">
             <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold">
               Publishing
@@ -1039,28 +1115,13 @@ const AdminBlogPostEditor = () => {
 
             <div className="pt-2 space-y-2.5">
               {[
-                {
-                  key: "featured",
-                  label: "Featured story",
-                  icon: Star,
-                },
-                {
-                  key: "editorsPick",
-                  label: "Editor's pick",
-                  icon: Sparkles,
-                },
-                {
-                  key: "medicallyReviewed",
-                  label: "Medically reviewed",
-                  icon: Shield,
-                },
+                { key: "featured", label: "Featured story", icon: Star },
+                { key: "editorsPick", label: "Editor's pick", icon: Sparkles },
+                { key: "medicallyReviewed", label: "Medically reviewed", icon: Shield },
               ].map((row) => {
                 const Icon = row.icon;
                 return (
-                  <label
-                    key={row.key}
-                    className="flex items-center gap-3 cursor-pointer"
-                  >
+                  <label key={row.key} className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={form[row.key]}
@@ -1139,10 +1200,7 @@ const AdminBlogPostEditor = () => {
 
           {/* Tags */}
           <div className="p-6 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
-            <Field
-              label="Tags"
-              hint="Topics that link to /blog/tag/<slug> pages."
-            >
+            <Field label="Tags" hint="Topics that link to /blog/tag/<slug> pages.">
               <TagPicker
                 selected={form.tags}
                 onChange={(v) => update("tags", v)}
@@ -1169,7 +1227,7 @@ const AdminBlogPostEditor = () => {
           {/* Preview link */}
           {form.slug && (
             <a
-              href={`/blog/${form.slug}`}
+              href={`/blog/post/${form.slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-between p-4 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 hover:bg-stone-50 dark:hover:bg-stone-900 transition group"
@@ -1179,7 +1237,7 @@ const AdminBlogPostEditor = () => {
                   Preview
                 </p>
                 <p className="text-xs font-mono text-stone-700 dark:text-stone-300 truncate max-w-[220px]">
-                  /blog/{form.slug}
+                  /blog/post/{form.slug}
                 </p>
               </div>
               <ExternalLink className="w-4 h-4 text-stone-400 group-hover:text-stone-900 dark:group-hover:text-stone-100 transition" />

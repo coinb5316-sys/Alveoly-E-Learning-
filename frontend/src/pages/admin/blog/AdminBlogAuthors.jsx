@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogAuthors.jsx — EDITORIAL ADMIN
-// Author management for The Alveoly Journal. Matches public editorial design.
+// src/pages/admin/blog/AdminBlogAuthors.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,30 +13,17 @@ import {
   FaYoutube as Youtube,
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
-// If you have a blogAPI module, uncomment and use it. Otherwise this
-// page works against mock data from ../../../data/blogData
-// import blogAPI from "../../../api/blogApi";
-import { authors as mockAuthors, posts as mockPosts } from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
 ============================================================ */
 
 const initials = (name = "") =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase();
+  name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 
 const slugify = (s = "") =>
-  String(s)
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-");
+  String(s).toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
 
 const emptyAuthor = () => ({
   id: "",
@@ -48,19 +34,12 @@ const emptyAuthor = () => ({
   bio: "",
   email: "",
   specialties: [],
-  social: {
-    twitter: "",
-    linkedin: "",
-    instagram: "",
-    youtube: "",
-    website: "",
-    email: "",
-  },
+  social: { twitter: "", linkedin: "", instagram: "", youtube: "", website: "", email: "" },
   active: true,
 });
 
 /* ============================================================
-   SMALL PRIMITIVES
+   PRIMITIVES
 ============================================================ */
 
 const Avatar = ({ author, size = "md" }) => {
@@ -98,9 +77,7 @@ const Field = ({ label, hint, required, error, children }) => (
     </label>
     {children}
     {hint && !error && (
-      <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5">
-        {hint}
-      </p>
+      <p className="text-xs text-stone-400 dark:text-stone-500 mt-1.5">{hint}</p>
     )}
     {error && (
       <p className="text-xs text-rose-600 dark:text-rose-400 mt-1.5 flex items-center gap-1.5">
@@ -139,29 +116,17 @@ const TextArea = ({ value, onChange, placeholder, rows = 3 }) => (
 const SpecialtyInput = ({ values, onChange }) => {
   const [draft, setDraft] = useState("");
   const suggestions = [
-    "Cardiology",
-    "Nutrition",
-    "Psychiatry",
-    "Pediatrics",
-    "Public Health",
-    "Epidemiology",
-    "Diabetes",
-    "Hypertension",
-    "Mental Health",
-    "Vaccination",
-    "Women's Health",
-    "Men's Health",
-    "Preventive Medicine",
+    "Cardiology", "Nutrition", "Psychiatry", "Pediatrics", "Public Health",
+    "Epidemiology", "Diabetes", "Hypertension", "Mental Health", "Vaccination",
+    "Women's Health", "Men's Health", "Preventive Medicine",
   ];
 
   const add = (val) => {
     const v = val.trim();
-    if (!v) return;
-    if (values.includes(v)) return;
+    if (!v || values.includes(v)) return;
     onChange([...values, v]);
     setDraft("");
   };
-
   const remove = (val) => onChange(values.filter((x) => x !== val));
 
   const filtered = draft
@@ -226,7 +191,7 @@ const SpecialtyInput = ({ values, onChange }) => {
 };
 
 /* ============================================================
-   AUTHOR DRAWER (create / edit)
+   AUTHOR DRAWER
 ============================================================ */
 
 const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
@@ -240,10 +205,7 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
           ? {
               ...emptyAuthor(),
               ...initial,
-              social: {
-                ...emptyAuthor().social,
-                ...(initial.social || {}),
-              },
+              social: { ...emptyAuthor().social, ...(initial.social || {}) },
             }
           : emptyAuthor()
       );
@@ -272,10 +234,7 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
 
   const submit = () => {
     if (!validate()) return;
-    onSave({
-      ...form,
-      id: form.id || slugify(form.name),
-    });
+    onSave(form);
   };
 
   return (
@@ -296,16 +255,13 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
             className="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-white dark:bg-stone-950 z-50 flex flex-col border-l border-stone-200 dark:border-stone-800"
           >
-            {/* Header */}
             <div className="flex-shrink-0 px-6 py-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400 font-semibold mb-1">
                   {initial?.id ? "Edit author" : "New author"}
                 </p>
                 <h2 className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-50">
-                  {initial?.id
-                    ? form.name || "Edit author"
-                    : "Add a contributor"}
+                  {initial?.id ? form.name || "Edit author" : "Add a contributor"}
                 </h2>
               </div>
               <button
@@ -316,16 +272,11 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              {/* Avatar preview */}
               <div className="flex items-center gap-4">
                 <Avatar author={form} size="lg" />
                 <div className="flex-1">
-                  <Field
-                    label="Avatar URL"
-                    hint="Paste an image URL. Leave empty to use initials."
-                  >
+                  <Field label="Avatar URL" hint="Paste an image URL. Leave empty to use initials.">
                     <TextInput
                       value={form.avatar}
                       onChange={(e) => update("avatar", e.target.value)}
@@ -344,10 +295,7 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
               </Field>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field
-                  label="Role"
-                  hint="Short title, e.g. Chief Medical Editor"
-                >
+                <Field label="Role" hint="Short title, e.g. Chief Medical Editor">
                   <TextInput
                     value={form.role}
                     onChange={(e) => update("role", e.target.value)}
@@ -376,10 +324,7 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
                 />
               </Field>
 
-              <Field
-                label="Bio"
-                hint="2–4 sentences. This appears on author pages."
-              >
+              <Field label="Bio" hint="2–4 sentences. This appears on author pages.">
                 <TextArea
                   value={form.bio}
                   onChange={(e) => update("bio", e.target.value)}
@@ -388,10 +333,7 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
                 />
               </Field>
 
-              <Field
-                label="Areas of expertise"
-                hint="Press Enter after each one."
-              >
+              <Field label="Areas of expertise" hint="Press Enter after each one.">
                 <SpecialtyInput
                   values={form.specialties}
                   onChange={(v) => update("specialties", v)}
@@ -418,9 +360,7 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
                       <div className="flex-1">
                         <TextInput
                           value={form.social[key]}
-                          onChange={(e) =>
-                            update(`social.${key}`, e.target.value)
-                          }
+                          onChange={(e) => update(`social.${key}`, e.target.value)}
                           placeholder={
                             key === "email"
                               ? "name@example.com"
@@ -446,7 +386,6 @@ const AuthorDrawer = ({ open, onClose, initial, onSave, saving }) => {
               </label>
             </div>
 
-            {/* Footer */}
             <div className="flex-shrink-0 px-6 py-4 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-3">
               <button
                 onClick={onClose}
@@ -508,8 +447,8 @@ const ConfirmDelete = ({ open, author, onCancel, onConfirm, deleting }) => (
             Delete {author?.name}?
           </h3>
           <p className="text-sm text-stone-600 dark:text-stone-400 mb-6 leading-relaxed">
-            This cannot be undone. Posts already attributed to this author
-            will keep their byline text but the author page will stop working.
+            This cannot be undone. Posts already attributed to this author will
+            keep their byline text but the author page will stop working.
           </p>
           <div className="flex items-center justify-end gap-3">
             <button
@@ -562,43 +501,49 @@ const AdminBlogAuthors = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [authorsRes, postsRes] = await Promise.all([
+        blogAPI.getAuthors(),
+        blogAPI.getAdminPosts({ limit: 500, publishedOnly: false }),
+      ]);
+      setAuthors(
+        (authorsRes.data || []).map((a) => ({
+          ...a,
+          id: a._id,
+          active: a.active !== false,
+          social: {
+            twitter: "",
+            linkedin: "",
+            instagram: "",
+            youtube: "",
+            website: "",
+            email: "",
+            ...(a.social || {}),
+          },
+        }))
+      );
+      setPosts(postsRes.data?.posts || []);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load authors");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // If you have a blogAPI, replace this with:
-    // const [a, p] = await Promise.all([blogAPI.getAuthors(), blogAPI.getPosts()]);
-    setAuthors(
-      mockAuthors.map((a) => ({
-        ...a,
-        email: a.email || "",
-        active: a.active !== false,
-        social: {
-          twitter: "",
-          linkedin: "",
-          instagram: "",
-          youtube: "",
-          website: "",
-          email: "",
-          ...(a.social || {}),
-        },
-      }))
-    );
-    setPosts(mockPosts);
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
   const postsByAuthor = useMemo(() => {
     const map = new Map();
     posts.forEach((p) => {
-      map.set(p.authorId, (map.get(p.authorId) || 0) + 1);
-    });
-    return map;
-  }, [posts]);
-
-  const likesByAuthor = useMemo(() => {
-    const map = new Map();
-    posts.forEach((p) => {
-      map.set(p.authorId, (map.get(p.authorId) || 0) + (p.likes || 0));
+      const key = p.authorId?._id || p.authorId;
+      map.set(key, (map.get(key) || 0) + 1);
     });
     return map;
   }, [posts]);
@@ -606,7 +551,8 @@ const AdminBlogAuthors = () => {
   const viewsByAuthor = useMemo(() => {
     const map = new Map();
     posts.forEach((p) => {
-      map.set(p.authorId, (map.get(p.authorId) || 0) + (p.views || 0));
+      const key = p.authorId?._id || p.authorId;
+      map.set(key, (map.get(key) || 0) + (p.views || 0));
     });
     return map;
   }, [posts]);
@@ -615,7 +561,8 @@ const AdminBlogAuthors = () => {
     const map = new Map();
     posts.forEach((p) => {
       if (p.reviewedBy) {
-        map.set(p.reviewedBy, (map.get(p.reviewedBy) || 0) + 1);
+        const key = p.reviewedBy?._id || p.reviewedBy;
+        map.set(key, (map.get(key) || 0) + 1);
       }
     });
     return map;
@@ -660,46 +607,83 @@ const AdminBlogAuthors = () => {
 
   const handleSave = async (payload) => {
     setSaving(true);
-    // If you have a real API:
-    // try {
-    //   if (editing?.id) await blogAPI.updateAuthor(editing.id, payload);
-    //   else await blogAPI.createAuthor(payload);
-    // } catch (err) { toast.error("Save failed"); setSaving(false); return; }
+    try {
+      // Build FormData for potential avatar upload
+      const formData = new FormData();
+      formData.append("name", payload.name.trim());
+      formData.append("role", payload.role || "");
+      formData.append("credentials", payload.credentials || "");
+      formData.append("bio", payload.bio || "");
+      formData.append("email", payload.email || "");
+      formData.append("active", payload.active ? "true" : "false");
+      formData.append("specialties", JSON.stringify(payload.specialties || []));
+      formData.append("social", JSON.stringify(payload.social || {}));
 
-    await new Promise((r) => setTimeout(r, 400));
+      // If avatar is a File, append it; if it's a string URL, append the URL
+      if (payload.avatar instanceof File) {
+        formData.append("avatar", payload.avatar);
+      } else if (typeof payload.avatar === "string") {
+        formData.append("avatar", payload.avatar);
+      }
 
-    setAuthors((prev) => {
-      const exists = prev.find((a) => a.id === payload.id);
-      if (exists) return prev.map((a) => (a.id === payload.id ? payload : a));
-      return [payload, ...prev];
-    });
-    toast.success(editing?.id ? "Author updated" : "Author created");
-    setSaving(false);
-    setDrawerOpen(false);
+      if (editing?.id) {
+        await blogAPI.updateAuthor(editing.id, formData);
+        toast.success("Author updated");
+      } else {
+        await blogAPI.createAuthor(formData);
+        toast.success("Author created");
+      }
+
+      await fetchData();
+      setDrawerOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to save author");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setAuthors((prev) => prev.filter((a) => a.id !== deleteTarget.id));
-    toast.success("Author deleted");
-    setDeleting(false);
-    setDeleteTarget(null);
+    try {
+      await blogAPI.deleteAuthor(deleteTarget.id);
+      setAuthors((prev) => prev.filter((a) => a.id !== deleteTarget.id));
+      toast.success("Author deleted");
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to delete author");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const toggleActive = (author) => {
+  const toggleActive = async (author) => {
+    const next = !author.active;
+    // Optimistic
     setAuthors((prev) =>
-      prev.map((a) => (a.id === author.id ? { ...a, active: !a.active } : a))
+      prev.map((a) => (a.id === author.id ? { ...a, active: next } : a))
     );
-    toast.success(
-      `${author.name} ${author.active ? "deactivated" : "activated"}`
-    );
+    try {
+      const formData = new FormData();
+      formData.append("active", next ? "true" : "false");
+      await blogAPI.updateAuthor(author.id, formData);
+      toast.success(`${author.name} ${next ? "activated" : "deactivated"}`);
+    } catch (err) {
+      // Revert on failure
+      setAuthors((prev) =>
+        prev.map((a) =>
+          a.id === author.id ? { ...a, active: author.active } : a
+        )
+      );
+      toast.error("Failed to update author");
+    }
   };
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (unchanged from your design) ---------- */
   return (
     <div className="space-y-6">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400 font-semibold mb-2">
@@ -723,22 +707,17 @@ const AdminBlogAuthors = () => {
         </button>
       </div>
 
-      {/* ---------- STATS ROW ---------- */}
+      {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Contributors", value: authors.length },
-          {
-            label: "Active",
-            value: authors.filter((a) => a.active).length,
-          },
-          {
-            label: "On review board",
-            value: [...reviewCountByAuthor.keys()].length,
-          },
+          { label: "Active", value: authors.filter((a) => a.active).length },
+          { label: "On review board", value: [...reviewCountByAuthor.keys()].length },
           {
             label: "Stories attributed",
-            value: posts.filter((p) => authors.some((a) => a.id === p.authorId))
-              .length,
+            value: posts.filter((p) =>
+              authors.some((a) => a.id === (p.authorId?._id || p.authorId))
+            ).length,
           },
         ].map((s) => (
           <div
@@ -755,7 +734,7 @@ const AdminBlogAuthors = () => {
         ))}
       </div>
 
-      {/* ---------- TOOLBAR ---------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-col md:flex-row md:items-center gap-3 p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -790,7 +769,7 @@ const AdminBlogAuthors = () => {
         </div>
       </div>
 
-      {/* ---------- LIST ---------- */}
+      {/* LIST */}
       {loading ? (
         <div className="py-20 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
@@ -828,9 +807,7 @@ const AdminBlogAuthors = () => {
                 animate={{ opacity: 1 }}
                 transition={{ delay: Math.min(i * 0.02, 0.3) }}
                 className={`flex items-start md:items-center gap-4 px-5 py-5 ${
-                  i > 0
-                    ? "border-t border-stone-100 dark:border-stone-900"
-                    : ""
+                  i > 0 ? "border-t border-stone-100 dark:border-stone-900" : ""
                 } hover:bg-stone-50/50 dark:hover:bg-stone-900/30 transition group`}
               >
                 <Avatar author={a} size="lg" />
@@ -867,9 +844,7 @@ const AdminBlogAuthors = () => {
                     </span>
                     {views > 0 && (
                       <>
-                        <span className="text-stone-300 dark:text-stone-700">
-                          ·
-                        </span>
+                        <span className="text-stone-300 dark:text-stone-700">·</span>
                         <span>
                           <strong className="font-semibold text-stone-700 dark:text-stone-300">
                             {views.toLocaleString()}
@@ -880,9 +855,7 @@ const AdminBlogAuthors = () => {
                     )}
                     {reviews > 0 && (
                       <>
-                        <span className="text-stone-300 dark:text-stone-700">
-                          ·
-                        </span>
+                        <span className="text-stone-300 dark:text-stone-700">·</span>
                         <span>
                           <strong className="font-semibold text-stone-700 dark:text-stone-300">
                             {reviews}
@@ -893,9 +866,7 @@ const AdminBlogAuthors = () => {
                     )}
                     {a.specialties?.length > 0 && (
                       <>
-                        <span className="text-stone-300 dark:text-stone-700">
-                          ·
-                        </span>
+                        <span className="text-stone-300 dark:text-stone-700">·</span>
                         <span className="truncate max-w-[280px]">
                           {a.specialties.slice(0, 3).join(" · ")}
                         </span>
@@ -910,11 +881,7 @@ const AdminBlogAuthors = () => {
                     title={a.active ? "Deactivate" : "Activate"}
                     className="w-9 h-9 rounded-full flex items-center justify-center text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-900 transition"
                   >
-                    {a.active ? (
-                      <Check className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
+                    {a.active ? <Check className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                   <button
                     onClick={() => openEdit(a)}
@@ -937,7 +904,7 @@ const AdminBlogAuthors = () => {
         </div>
       )}
 
-      {/* ---------- DRAWERS ---------- */}
+      {/* DRAWERS */}
       <AuthorDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
