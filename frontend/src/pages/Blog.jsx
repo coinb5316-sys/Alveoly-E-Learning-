@@ -1,19 +1,11 @@
-// src/pages/Blog.jsx
+// src/pages/Blog.jsx - EDITORIAL REDESIGN
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  FaSearch,
-  FaClock,
-  FaEye,
-  FaHeart,
-  FaCheckCircle,
-  FaThLarge,
-  FaList,
-  FaArrowRight,
-  FaPodcast,
-  FaPlay,
-  FaChevronDown,
+  FaSearch, FaClock, FaEye, FaArrowLeft, FaArrowRight,
+  FaThLarge, FaList, FaChevronDown, FaPodcast, FaPlay,
+  FaTimes,
 } from "react-icons/fa";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -23,6 +15,32 @@ import PodcastEmbed from "../components/blog/PodcastEmbed";
 import VideoEmbed from "../components/blog/VideoEmbed";
 import { posts, categories, authors, podcasts, videos } from "../data/blogData";
 
+// ==================== HELPERS ====================
+
+const Skeleton = () => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-12">
+    {[...Array(6)].map((_, i) => (
+      <div key={i} className="animate-pulse space-y-4">
+        <div className="bg-stone-200 dark:bg-stone-800 rounded-lg aspect-[16/10]" />
+        <div className="h-3 bg-stone-200 dark:bg-stone-800 rounded w-1/4" />
+        <div className="h-5 bg-stone-200 dark:bg-stone-800 rounded w-3/4" />
+        <div className="h-3 bg-stone-200 dark:bg-stone-800 rounded w-full" />
+      </div>
+    ))}
+  </div>
+);
+
+const formatDate = (d) =>
+  d
+    ? new Date(d).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "";
+
+// ==================== MAIN ====================
+
 const Blog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeCategory, setActiveCategory] = useState("all");
@@ -31,13 +49,15 @@ const Blog = () => {
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [visibleCount, setVisibleCount] = useState(6);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const cat = searchParams.get("category");
     setActiveCategory(cat || "all");
     const q = searchParams.get("q");
     if (q !== null) setSearchQuery(q);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Scroll to top when filters change
+    window.scrollTo({ top: 0, behavior: "instant" });
   }, [searchParams]);
 
   // ---------- Derived data ----------
@@ -68,38 +88,48 @@ const Blog = () => {
     return list;
   }, [activeCategory, searchQuery, sortBy]);
 
-  // Featured: 1 lead + 2 secondary
+  // Featured: 1 lead + up to 2 secondary
   const leadPost = useMemo(
     () => posts.find((p) => p.featured && p.editorsPick) || posts[0],
     []
   );
   const secondaryFeatured = useMemo(
-    () =>
-      posts
-        .filter((p) => p.featured && p.id !== leadPost.id)
-        .slice(0, 2),
+    () => posts.filter((p) => p.featured && p.id !== leadPost.id).slice(0, 2),
     [leadPost]
   );
 
   const isBrowsingEverything = activeCategory === "all" && !searchQuery.trim();
+  const heroAuthor = authors.find((a) => a.id === leadPost?.authorId);
 
-  const heroAuthor = authors.find((a) => a.id === leadPost.authorId);
-
-  // ---------- Helpers ----------
+  // ---------- Handlers ----------
   const handleCategoryClick = (catId) => {
     setActiveCategory(catId);
-    if (catId === "all") {
-      setSearchParams(searchQuery ? { q: searchQuery } : {});
-    } else {
-      setSearchParams({ category: catId });
-    }
+    setSearchQuery("");
+    setVisibleCount(6);
+    if (catId === "all") setSearchParams({});
+    else setSearchParams({ category: catId });
   };
 
-  const handleSearch = () => {
+  const submitSearch = (e) => {
+    if (e) e.preventDefault();
     const next = {};
     if (searchQuery.trim()) next.q = searchQuery.trim();
     if (activeCategory !== "all") next.category = activeCategory;
     setSearchParams(next);
+    setVisibleCount(6);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchParams(activeCategory !== "all" ? { category: activeCategory } : {});
+    setVisibleCount(6);
+  };
+
+  const resetAll = () => {
+    setSearchQuery("");
+    setActiveCategory("all");
+    setSearchParams({});
+    setVisibleCount(6);
   };
 
   const visibleCategories = showAllCategories
@@ -107,201 +137,173 @@ const Blog = () => {
     : categories.slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-[#fafaf7]">
+    <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
       <Navbar />
 
       {/* ============================================================
-          HERO — Editorial masthead
+          MASTHEAD
       ============================================================ */}
-      <section className="relative pt-28 md:pt-32 pb-20 md:pb-24 overflow-hidden bg-[#0a1f1f]">
-        {/* Background image, subtle */}
-        <div className="absolute inset-0">
-          <img
-            src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1f?w=1800&h=1000&fit=crop"
-            alt=""
-            className="w-full h-full object-cover opacity-[0.22]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0a1f1f]/60 via-[#0a1f1f]/80 to-[#0a1f1f]" />
+      <header className="border-b border-stone-200 dark:border-stone-800">
+        <div className="max-w-5xl mx-auto px-5 pt-28 md:pt-32 pb-10 md:pb-14">
+          <p className="text-xs uppercase tracking-[0.3em] text-stone-500 dark:text-stone-400 mb-4 text-center">
+            The Alveoly Journal
+          </p>
+
+          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-stone-900 dark:text-stone-50 leading-[1.08] mb-5 text-center max-w-3xl mx-auto">
+            Health, explained by the people who practice it.
+          </h1>
+
+          <p className="text-lg md:text-xl text-stone-600 dark:text-stone-400 max-w-2xl mx-auto leading-relaxed mb-8 text-center">
+            Clinician-written essays on heart health, nutrition, mental wellness,
+            and public health — evidence in plain language, no clickbait.
+          </p>
+
+          {/* Search */}
+          <form onSubmit={submitSearch} className="relative max-w-xl mx-auto">
+            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 text-sm" />
+            <input
+              type="text"
+              placeholder="Search hypertension, anxiety, sleep…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-11 pr-24 py-3.5 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-full text-stone-800 dark:text-stone-200 placeholder-stone-400 focus:outline-none focus:border-stone-900 dark:focus:border-stone-100 transition text-[15px]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-[86px] top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition p-1"
+                aria-label="Clear search"
+              >
+                <FaTimes className="text-sm" />
+              </button>
+            )}
+            <button
+              type="submit"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 px-5 py-2 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-full text-sm font-medium hover:opacity-90 transition"
+            >
+              Search
+            </button>
+          </form>
+
+          {/* Trending terms */}
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-stone-500 dark:text-stone-400">
+            <span className="text-xs uppercase tracking-wider">Trending</span>
+            {["Hypertension", "Gut Health", "Anxiety", "Sleep"].map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  setSearchQuery(t);
+                  setSearchParams({ q: t });
+                }}
+                className="hover:text-rose-600 dark:hover:text-rose-400 transition underline underline-offset-4 decoration-stone-300 dark:decoration-stone-700 hover:decoration-current"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
-
-        <div className="relative max-w-6xl mx-auto px-5 sm:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="text-center"
-          >
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/10 backdrop-blur-sm mb-6">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#00c2bf] animate-pulse" />
-              <span className="text-xs font-medium tracking-wide text-white/80">
-                Updated weekly · Medically reviewed
-              </span>
-            </div>
-
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-semibold text-white tracking-tight leading-[1.05] mb-5">
-              Health, explained
-              <br />
-              <span className="text-[#00c2bf]">by the people who practice it.</span>
-            </h1>
-
-            <p className="text-base sm:text-lg text-white/70 max-w-2xl mx-auto leading-relaxed mb-10">
-              Clinician-written articles on heart health, nutrition, mental
-              wellness, and public health — no clickbait, no miracle cures.
-              Just evidence, in plain language.
-            </p>
-
-            {/* Search */}
-            <div className="max-w-xl mx-auto">
-              <div className="relative group">
-                <FaSearch className="absolute left-5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#00c2bf] transition-colors" />
-                <input
-                  type="text"
-                  placeholder="Search hypertension, anxiety, sleep..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  className="w-full pl-13 pr-28 py-4 rounded-full bg-white/[0.08] border border-white/15 backdrop-blur-md text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-[#00c2bf]/60 focus:border-transparent text-sm sm:text-base transition-all"
-                  style={{ paddingLeft: "3.25rem" }}
-                />
-                <button
-                  onClick={handleSearch}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-[#00c2bf] hover:bg-[#00a3a1] text-[#062222] px-5 py-2.5 rounded-full font-semibold text-sm transition-colors"
-                >
-                  Search
-                </button>
-              </div>
-
-              <div className="flex items-center justify-center gap-2 flex-wrap mt-4 text-xs text-white/50">
-                <span>Trending:</span>
-                {["Hypertension", "Gut Health", "Anxiety", "Sleep"].map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => {
-                      setSearchQuery(t);
-                      setSearchParams({ q: t });
-                    }}
-                    className="hover:text-[#00c2bf] transition-colors"
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Soft bottom fade to page bg */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-b from-transparent to-[#fafaf7]" />
-      </section>
+      </header>
 
       {/* ============================================================
-          FEATURED — Editorial lead story + two secondary
+          FEATURED STORIES (default view)
       ============================================================ */}
-      {isBrowsingEverything && (
-        <section className="max-w-6xl mx-auto px-5 sm:px-8 -mt-12 md:-mt-16 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      {isBrowsingEverything && leadPost && (
+        <section className="max-w-6xl mx-auto px-5 pt-12 md:pt-16">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-10">
             {/* LEAD */}
             <motion.article
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
+              transition={{ duration: 0.45 }}
               className="lg:col-span-3 group"
             >
               <Link to={`/blog/${leadPost.slug}`} className="block">
-                <div className="relative overflow-hidden rounded-3xl bg-white shadow-sm hover:shadow-xl transition-all duration-500">
-                  <div className="relative h-64 sm:h-80 md:h-96 overflow-hidden">
-                    <img
-                      src={leadPost.image}
-                      alt={leadPost.title}
-                      className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                <div className="overflow-hidden rounded-lg">
+                  <img
+                    src={leadPost.image}
+                    alt={leadPost.title}
+                    className="w-full aspect-[16/10] object-cover group-hover:opacity-95 transition"
+                  />
+                </div>
 
-                    <div className="absolute top-5 left-5 flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-sm text-gray-900 text-[11px] font-semibold rounded-full">
-                        <FaCheckCircle className="text-emerald-500 text-[10px]" />
-                        Medically Reviewed
-                      </span>
-                      <span className="inline-flex px-3 py-1.5 bg-[#00c2bf] text-[#062222] text-[11px] font-semibold rounded-full">
-                        Editor's Pick
-                      </span>
-                    </div>
+                <div className="pt-6">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-stone-500 dark:text-stone-500 mb-3">
+                    <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                      {categories.find((c) => c.id === leadPost.categoryId)?.name}
+                    </span>
+                    <span className="text-stone-300 dark:text-stone-700">·</span>
+                    <time>{formatDate(leadPost.publishedAt)}</time>
+                  </div>
 
-                    <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-8">
-                      <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold text-white leading-tight mb-3 group-hover:text-[#00c2bf] transition-colors duration-300 line-clamp-3">
-                        {leadPost.title}
-                      </h2>
-                      <p className="text-white/80 text-sm leading-relaxed line-clamp-2 mb-5 hidden sm:block">
-                        {leadPost.excerpt}
+                  <h2 className="font-serif text-2xl md:text-3xl lg:text-4xl font-bold leading-tight text-stone-900 dark:text-stone-50 mb-3 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition">
+                    {leadPost.title}
+                  </h2>
+
+                  <p className="text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-3 mb-5">
+                    {leadPost.excerpt}
+                  </p>
+
+                  <div className="flex items-center gap-3">
+                    {heroAuthor?.avatar && (
+                      <img
+                        src={heroAuthor.avatar}
+                        alt={heroAuthor.name}
+                        className="w-9 h-9 rounded-full object-cover"
+                      />
+                    )}
+                    <div className="text-sm">
+                      <p className="font-medium text-stone-900 dark:text-stone-100">
+                        {heroAuthor?.name}
                       </p>
-                      <div className="flex items-center gap-3 text-white/90">
-                        <img
-                          src={heroAuthor?.avatar}
-                          alt={heroAuthor?.name}
-                          className="w-9 h-9 rounded-full object-cover ring-2 ring-white/30"
-                        />
-                        <div className="text-xs sm:text-sm">
-                          <p className="font-semibold leading-tight">
-                            {heroAuthor?.name}
-                          </p>
-                          <p className="text-white/60 text-[11px] flex items-center gap-1.5 mt-0.5">
-                            <FaClock className="text-[9px]" />
-                            {leadPost.readingTime} min read
-                            <span className="text-white/30">·</span>
-                            <FaEye className="text-[9px]" />
-                            {leadPost.views?.toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
+                      <p className="text-xs text-stone-500 flex items-center gap-1.5 mt-0.5">
+                        <FaClock className="text-[9px]" />
+                        {leadPost.readingTime} min
+                        <span className="text-stone-300 dark:text-stone-700">·</span>
+                        <FaEye className="text-[9px]" />
+                        {leadPost.views?.toLocaleString()}
+                      </p>
                     </div>
                   </div>
                 </div>
               </Link>
             </motion.article>
 
-            {/* SECONDARY (stacked) */}
-            <div className="lg:col-span-2 flex flex-col gap-6">
+            {/* SECONDARY — stacked list */}
+            <div className="lg:col-span-2 flex flex-col gap-8 lg:border-l lg:border-stone-200 lg:dark:border-stone-800 lg:pl-8">
               {secondaryFeatured.map((post, i) => {
                 const a = authors.find((x) => x.id === post.authorId);
+                const cat = categories.find((c) => c.id === post.categoryId);
                 return (
                   <motion.article
                     key={post.id}
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.15 + i * 0.08 }}
-                    className="group flex-1"
+                    transition={{ duration: 0.45, delay: 0.08 + i * 0.06 }}
+                    className="group"
                   >
-                    <Link to={`/blog/${post.slug}`} className="block h-full">
-                      <div className="bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 h-full flex flex-col sm:flex-row lg:flex-col">
-                        <div className="relative sm:w-40 lg:w-full h-40 sm:h-auto lg:h-44 overflow-hidden flex-shrink-0">
+                    <Link to={`/blog/${post.slug}`} className="block">
+                      <div className="flex gap-4 items-start">
+                        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden flex-shrink-0">
                           <img
                             src={post.image}
                             alt={post.title}
-                            className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-700"
+                            className="w-full h-full object-cover group-hover:opacity-95 transition"
                           />
                         </div>
-                        <div className="p-5 flex-1 flex flex-col">
-                          <span className="text-[11px] font-semibold text-[#00a3a1] tracking-wide uppercase mb-2">
-                            {categories.find((c) => c.id === post.categoryId)?.name}
-                          </span>
-                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 leading-snug mb-3 group-hover:text-[#00a3a1] transition-colors line-clamp-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
+                            {cat?.name}
+                          </p>
+                          <h3 className="font-serif text-base sm:text-lg font-bold leading-snug text-stone-900 dark:text-stone-50 mb-2 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2">
                             {post.title}
                           </h3>
-                          <div className="mt-auto flex items-center gap-2 text-xs text-gray-500">
-                            <img
-                              src={a?.avatar}
-                              alt={a?.name}
-                              className="w-6 h-6 rounded-full object-cover"
-                            />
-                            <span className="font-medium text-gray-700">
-                              {a?.name}
-                            </span>
-                            <span className="text-gray-300">·</span>
-                            <span className="flex items-center gap-1">
-                              <FaClock className="text-[9px]" />
-                              {post.readingTime} min
-                            </span>
-                          </div>
+                          <p className="text-xs text-stone-500 flex items-center gap-1.5">
+                            {a?.name}
+                            <span className="text-stone-300 dark:text-stone-700">·</span>
+                            <FaClock className="text-[9px]" />
+                            {post.readingTime} min
+                          </p>
                         </div>
                       </div>
                     </Link>
@@ -314,39 +316,37 @@ const Blog = () => {
       )}
 
       {/* ============================================================
-          CATEGORY FILTER — Horizontal chips
+          DIVIDER — "Latest" / "All stories"
       ============================================================ */}
-      <section className="max-w-6xl mx-auto px-5 sm:px-8 pt-14 md:pt-20">
-        <div className="flex items-end justify-between gap-4 mb-6">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-[#00a3a1] uppercase mb-2">
-              Browse
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">
-              Explore by topic
-            </h2>
-          </div>
+      <div className="max-w-6xl mx-auto px-5 pt-14 md:pt-20">
+        <div className="flex items-center gap-4 mb-8">
+          <span className="flex-1 h-px bg-stone-200 dark:bg-stone-800" />
+          <span className="text-xs uppercase tracking-widest text-stone-400">
+            {isBrowsingEverything ? "Latest" : "Filtered"}
+          </span>
+          <span className="flex-1 h-px bg-stone-200 dark:bg-stone-800" />
         </div>
 
+        {/* Categories */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
           <button
             onClick={() => handleCategoryClick("all")}
-            className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+            className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition ${
               activeCategory === "all"
-                ? "bg-gray-900 text-white shadow-sm"
-                : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+                ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+                : "bg-transparent text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
             }`}
           >
-            All articles
+            All stories
           </button>
           {visibleCategories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => handleCategoryClick(cat.id)}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition ${
                 activeCategory === cat.id
-                  ? "bg-gray-900 text-white shadow-sm"
-                  : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-200"
+                  ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+                  : "bg-transparent text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
               }`}
             >
               {cat.name}
@@ -355,7 +355,7 @@ const Blog = () => {
           {categories.length > 5 && (
             <button
               onClick={() => setShowAllCategories((s) => !s)}
-              className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium text-[#00a3a1] hover:bg-[#00a3a1]/5 transition-colors"
+              className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-stone-50 dark:hover:bg-stone-900 transition"
             >
               {showAllCategories ? "Show less" : `+${categories.length - 5} more`}
               <FaChevronDown
@@ -366,93 +366,96 @@ const Blog = () => {
             </button>
           )}
         </div>
-      </section>
+      </div>
 
       {/* ============================================================
           MAIN GRID + SIDEBAR
       ============================================================ */}
-      <section className="max-w-6xl mx-auto px-5 sm:px-8 py-10 md:py-14">
+      <section className="max-w-6xl mx-auto px-5 py-10 md:py-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12">
           {/* ---------- ARTICLES ---------- */}
-          <div className="lg:col-span-8">
+          <div className="lg:col-span-8 min-w-0">
             {/* Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-8 pb-5 border-b border-gray-200/70">
-              <p className="text-sm text-gray-600">
-                <strong className="text-gray-900">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-8 pb-5 border-b border-stone-200 dark:border-stone-800">
+              <p className="text-sm text-stone-600 dark:text-stone-400">
+                <strong className="text-stone-900 dark:text-stone-100 font-semibold">
                   {filteredPosts.length}
                 </strong>{" "}
-                {filteredPosts.length === 1 ? "article" : "articles"}
+                {filteredPosts.length === 1 ? "story" : "stories"}
                 {activeCategory !== "all" && (
                   <>
                     {" "}
                     in{" "}
-                    <strong className="text-gray-900">
+                    <strong className="text-stone-900 dark:text-stone-100 font-semibold">
                       {categories.find((c) => c.id === activeCategory)?.name}
+                    </strong>
+                  </>
+                )}
+                {searchQuery && (
+                  <>
+                    {" "}
+                    matching{" "}
+                    <strong className="text-stone-900 dark:text-stone-100 font-semibold">
+                      "{searchQuery}"
                     </strong>
                   </>
                 )}
               </p>
 
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#00a3a1]/40 focus:border-[#00a3a1] cursor-pointer"
-                  >
-                    <option value="newest">Newest first</option>
-                    <option value="popular">Most read</option>
-                    <option value="liked">Most liked</option>
-                  </select>
-                  <FaChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 pointer-events-none" />
-                </div>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="text-sm bg-transparent border-none text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 focus:outline-none cursor-pointer"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="popular">Most read</option>
+                  <option value="liked">Most liked</option>
+                </select>
 
-                <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => setViewMode("grid")}
-                    className={`p-2 rounded-md transition-colors ${
+                    className={`p-1.5 rounded-md transition ${
                       viewMode === "grid"
-                        ? "bg-white shadow-sm text-[#00a3a1]"
-                        : "text-gray-500 hover:text-gray-700"
+                        ? "text-stone-900 dark:text-stone-100"
+                        : "text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
                     }`}
                     aria-label="Grid view"
                   >
-                    <FaThLarge className="text-sm" />
+                    <FaThLarge className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => setViewMode("list")}
-                    className={`p-2 rounded-md transition-colors ${
+                    className={`p-1.5 rounded-md transition ${
                       viewMode === "list"
-                        ? "bg-white shadow-sm text-[#00a3a1]"
-                        : "text-gray-500 hover:text-gray-700"
+                        ? "text-stone-900 dark:text-stone-100"
+                        : "text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
                     }`}
                     aria-label="List view"
                   >
-                    <FaList className="text-sm" />
+                    <FaList className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
             </div>
 
             {/* Grid / List */}
-            {filteredPosts.length === 0 ? (
-              <div className="bg-white rounded-3xl p-12 sm:p-16 text-center shadow-sm border border-gray-100">
-                <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-5">
-                  <FaSearch className="text-2xl text-gray-300" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            {loading ? (
+              <Skeleton />
+            ) : filteredPosts.length === 0 ? (
+              <div className="py-20 text-center max-w-md mx-auto">
+                <p className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100 mb-3">
                   Nothing matched that search
-                </h3>
-                <p className="text-gray-500 text-sm max-w-sm mx-auto mb-6">
+                </p>
+                <p className="text-stone-500 dark:text-stone-400 mb-6">
                   Try a different keyword or explore a topic from the list above.
                 </p>
                 <button
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSearchParams({});
-                  }}
-                  className="inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white px-6 py-3 rounded-full text-sm font-semibold transition-colors"
+                  onClick={resetAll}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-full text-sm font-medium hover:opacity-90 transition"
                 >
+                  <FaArrowLeft className="text-xs" />
                   Reset filters
                 </button>
               </div>
@@ -461,8 +464,8 @@ const Blog = () => {
                 <div
                   className={
                     viewMode === "grid"
-                      ? "grid grid-cols-1 sm:grid-cols-2 gap-6"
-                      : "space-y-5"
+                      ? "grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-12"
+                      : "space-y-10"
                   }
                 >
                   {filteredPosts.slice(0, visibleCount).map((post, i) => (
@@ -485,12 +488,12 @@ const Blog = () => {
               </AnimatePresence>
             )}
 
-            {/* Load More */}
+            {/* Load more */}
             {visibleCount < filteredPosts.length && (
-              <div className="text-center mt-12">
+              <div className="text-center mt-14">
                 <button
                   onClick={() => setVisibleCount((c) => c + 6)}
-                  className="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 px-7 py-3.5 rounded-full font-semibold text-sm transition-colors shadow-sm"
+                  className="inline-flex items-center gap-2 px-6 py-3 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 rounded-full text-sm font-medium hover:bg-stone-50 dark:hover:bg-stone-900 transition"
                 >
                   Load {Math.min(6, filteredPosts.length - visibleCount)} more
                   <FaArrowRight className="text-xs" />
@@ -500,16 +503,12 @@ const Blog = () => {
 
             {/* ---------- PODCAST BLOCK ---------- */}
             {isBrowsingEverything && podcasts[0] && (
-              <div className="mt-20">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="w-8 h-8 rounded-full bg-[#00a3a1]/10 flex items-center justify-center">
-                    <FaPodcast className="text-[#00a3a1] text-xs" />
-                  </span>
-                  <p className="text-xs font-semibold tracking-widest text-[#00a3a1] uppercase">
-                    Listen
-                  </p>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight mb-6">
+              <div className="mt-20 pt-12 border-t border-stone-200 dark:border-stone-800">
+                <p className="text-xs font-semibold tracking-widest text-rose-600 dark:text-rose-400 uppercase mb-3 flex items-center gap-2">
+                  <FaPodcast className="text-xs" />
+                  Listen
+                </p>
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-50 tracking-tight mb-6">
                   This week on the podcast
                 </h2>
                 <PodcastEmbed podcast={podcasts[0]} />
@@ -518,16 +517,12 @@ const Blog = () => {
 
             {/* ---------- VIDEO BLOCK ---------- */}
             {isBrowsingEverything && videos[0] && (
-              <div className="mt-20">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="w-8 h-8 rounded-full bg-[#00a3a1]/10 flex items-center justify-center">
-                    <FaPlay className="text-[#00a3a1] text-[10px]" />
-                  </span>
-                  <p className="text-xs font-semibold tracking-widest text-[#00a3a1] uppercase">
-                    Watch
-                  </p>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight mb-6">
+              <div className="mt-20 pt-12 border-t border-stone-200 dark:border-stone-800">
+                <p className="text-xs font-semibold tracking-widest text-rose-600 dark:text-rose-400 uppercase mb-3 flex items-center gap-2">
+                  <FaPlay className="text-[10px]" />
+                  Watch
+                </p>
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-stone-900 dark:text-stone-50 tracking-tight mb-6">
                   From the video library
                 </h2>
                 <VideoEmbed video={videos[0]} />
@@ -536,11 +531,51 @@ const Blog = () => {
           </div>
 
           {/* ---------- SIDEBAR ---------- */}
-          <aside className="lg:col-span-4">
+          <aside className="lg:col-span-4 min-w-0">
             <div className="lg:sticky lg:top-24">
               <BlogSidebar />
             </div>
           </aside>
+        </div>
+      </section>
+
+      {/* ============================================================
+          NEWSLETTER
+      ============================================================ */}
+      <section className="border-t border-stone-200 dark:border-stone-800">
+        <div className="max-w-3xl mx-auto px-5 py-16 md:py-20 text-center">
+          <p className="text-xs uppercase tracking-[0.3em] text-stone-500 dark:text-stone-400 mb-4">
+            The Alveoly Letter
+          </p>
+          <h2 className="font-serif text-3xl md:text-4xl font-bold text-stone-900 dark:text-stone-50 mb-4 leading-tight">
+            A weekly letter on health and clinical practice.
+          </h2>
+          <p className="text-lg text-stone-600 dark:text-stone-400 mb-8 leading-relaxed">
+            Original reporting, clinical insight, and thoughtful essays — no noise, no miracle cures.
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              // wire up to your newsletter endpoint later
+            }}
+            className="max-w-md mx-auto flex flex-col sm:flex-row gap-2"
+          >
+            <input
+              type="email"
+              required
+              placeholder="your@email.com"
+              className="flex-1 px-4 py-3 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-full text-sm text-stone-800 dark:text-stone-200 placeholder-stone-400 focus:outline-none focus:border-stone-900 dark:focus:border-stone-100 transition"
+            />
+            <button
+              type="submit"
+              className="px-6 py-3 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-full text-sm font-medium hover:opacity-90 transition"
+            >
+              Subscribe
+            </button>
+          </form>
+          <p className="text-xs text-stone-400 mt-4">
+            Unsubscribe anytime. We never share your email.
+          </p>
         </div>
       </section>
 
