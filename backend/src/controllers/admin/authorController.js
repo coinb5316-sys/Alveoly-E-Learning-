@@ -2,10 +2,10 @@
 import Author from "../../models/Author.js";
 import { uploadToCloudinary } from "../../../config/cloudinary.js";
 
-/* Helpers ---------------------------------------------------- */
+/* ---------- Helpers ---------- */
 const parseJSON = (val, fallback) => {
   if (val === undefined || val === null || val === "") return fallback;
-  if (typeof val !== "string") return val;          // already object/array
+  if (typeof val !== "string") return val;
   try { return JSON.parse(val); } catch { return fallback; }
 };
 
@@ -18,14 +18,12 @@ const parseBool = (val, fallback = true) => {
 const toArray = (val) => {
   if (Array.isArray(val)) return val;
   if (!val) return [];
-  // Handle '["a","b"]' AND "a,b"
   if (typeof val === "string" && val.trim().startsWith("[")) {
     try { return JSON.parse(val); } catch { /* fall through */ }
   }
   return String(val).split(",").map((s) => s.trim()).filter(Boolean);
 };
 
-/* Build a clean payload from req.body ------------------------ */
 const buildAuthorPayload = (body) => ({
   name: typeof body.name === "string" ? body.name.trim() : body.name,
   role: body.role || "",
@@ -38,12 +36,45 @@ const buildAuthorPayload = (body) => ({
   social: parseJSON(body.social, {}),
 });
 
-/* GET /api/admin/blog/authors */
-export const getAuthors = async (req, res) => { /* unchanged */ };
+/* ---------- GET /api/admin/blog/authors ---------- */
+export const getAuthors = async (req, res) => {
+  try {
+    const authors = await Author.find().sort({ name: 1 }).lean();
+    res.json({ success: true, data: authors });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
 
-/* GET for-select / by id — unchanged */
+/* ---------- GET /api/admin/blog/authors/for-select ---------- */
+export const getAuthorsForSelect = async (req, res) => {
+  try {
+    const authors = await Author.find({ active: true })
+      .select("_id name email title role avatar credentials bio specialties social")
+      .sort({ name: 1 })
+      .lean();
+    res.json({ success: true, data: authors });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
 
-/* POST /api/admin/blog/authors */
+/* ---------- GET /api/admin/blog/authors/:id ---------- */
+export const getAuthorById = async (req, res) => {
+  try {
+    const author = await Author.findById(req.params.id).lean();
+    if (!author) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Author not found" });
+    }
+    res.json({ success: true, data: author });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/* ---------- POST /api/admin/blog/authors ---------- */
 export const createAuthor = async (req, res) => {
   try {
     const payload = buildAuthorPayload(req.body);
@@ -58,7 +89,7 @@ export const createAuthor = async (req, res) => {
     const author = await Author.create(payload);
     res.status(201).json({ success: true, data: author });
   } catch (err) {
-    console.error("createAuthor error:", err);   // ← log the real error
+    console.error("createAuthor error:", err);
     if (err.code === 11000) {
       return res
         .status(400)
@@ -71,7 +102,7 @@ export const createAuthor = async (req, res) => {
   }
 };
 
-/* PUT — same payload builder */
+/* ---------- PUT /api/admin/blog/authors/:id ---------- */
 export const updateAuthor = async (req, res) => {
   try {
     const payload = buildAuthorPayload(req.body);
@@ -82,13 +113,6 @@ export const updateAuthor = async (req, res) => {
       });
       payload.avatar = result.secure_url;
     }
-
-    // Don't wipe fields the client didn't send
-    Object.keys(payload).forEach((k) => {
-      if (payload[k] === "" && (k === "avatar" || k === "role" || k === "bio")) {
-        // allow clearing these, so leave them
-      }
-    });
 
     const author = await Author.findByIdAndUpdate(req.params.id, payload, {
       new: true,
@@ -107,9 +131,7 @@ export const updateAuthor = async (req, res) => {
   }
 };
 
-/* deleteAuthor — unchanged */
-
-// DELETE /api/admin/blog/authors/:id
+/* ---------- DELETE /api/admin/blog/authors/:id ---------- */
 export const deleteAuthor = async (req, res) => {
   try {
     const author = await Author.findByIdAndDelete(req.params.id);
