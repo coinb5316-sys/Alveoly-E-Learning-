@@ -1,7 +1,10 @@
-// server/routes/admin/blog.js
+// backend/src/routes/admin/blog.js
 import express from "express";
 import { adminAuth } from "../../middleware/adminAuth.js";
-import { upload, uploadGallery } from "../../middleware/upload.js";
+import {
+  adminUpload as upload,
+  adminUploadGallery as uploadGallery,
+} from "../../middleware/adminUpload.js";
 
 import * as authorCtrl from "../../controllers/admin/authorController.js";
 import * as categoryCtrl from "../../controllers/admin/categoryController.js";
