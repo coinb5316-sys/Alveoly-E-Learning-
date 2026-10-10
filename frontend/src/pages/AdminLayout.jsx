@@ -144,14 +144,7 @@ const AdminLayout = () => {
       { to: "/admin/plans", label: "Plans", icon: Zap, color: "text-red-500" },
       { to: "/admin/content", label: "Content Library", icon: FileText, color: "text-emerald-500" },
     ]},
-    { section: "Blog", items: [
-      { to: "/admin/blog/posts", label: "All Posts", icon: Newspaper, color: "text-blue-500" },
-      { to: "/admin/blog/create", label: "Create Post", icon: PenTool, color: "text-green-500" },
-      { to: "/admin/blog/categories", label: "Categories", icon: Tag, color: "text-purple-500" },
-      { to: "/admin/blog/authors", label: "Authors", icon: UserCircle, color: "text-cyan-500" },
-      { to: "/admin/blog/tags", label: "Tags", icon: Tag, color: "text-yellow-500" },
-      { to: "/admin/blog/comments", label: "Comments", icon: MessageSquare, color: "text-pink-500" },
-    ]},
+    
     { section: "Engagement", items: [
       { to: "/admin/results", label: "Student Results", icon: TrendingUp, color: "text-violet-500" },
       { to: "/admin/testimonials", label: "Testimonials", icon: Award, color: "text-amber-500" },

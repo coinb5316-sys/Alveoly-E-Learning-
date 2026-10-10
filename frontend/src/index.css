@@ -1,11 +1,8 @@
-/* index.css - Professional styling for Alveoly */
+/* index.css - Professional styling for Alveoly Admin Dashboard */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ============================================ */
-/* BASE THEME TOKENS                            */
-/* ============================================ */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -57,10 +54,8 @@
   * {
     @apply border-border;
   }
-
-  html,
-  body,
-  #root {
+  
+  html, body, #root {
     height: 100%;
     margin: 0;
     padding: 0;
@@ -80,9 +75,7 @@
   }
 }
 
-/* ============================================ */
-/* SCROLLBAR                                    */
-/* ============================================ */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -101,9 +94,7 @@
   background: hsl(var(--muted-foreground) / 0.3);
 }
 
-/* ============================================ */
-/* ANIMATIONS                                   */
-/* ============================================ */
+/* Animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -147,15 +138,27 @@
 }
 
 @keyframes pulse {
-  0%,
-  100% {
+  0%, 100% {
     opacity: 1;
   }
   50% {
     opacity: 0.5;
   }
 }
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
 
+.animate-scaleIn {
+  animation: scaleIn 0.2s ease-out;
+}
 .animate-fadeIn {
   animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -168,9 +171,7 @@
   animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ============================================ */
-/* SKELETON + GLASS                             */
-/* ============================================ */
+/* Loading skeleton */
 .skeleton {
   background: linear-gradient(
     90deg,
@@ -182,6 +183,7 @@
   animation: shimmer 1.5s infinite;
 }
 
+/* Glass effects */
 .glass {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(10px);
@@ -194,9 +196,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* ============================================ */
-/* UTILITIES                                    */
-/* ============================================ */
+/* Custom utilities */
 @layer utilities {
   .gradient-text {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -204,7 +204,7 @@
     background-clip: text;
     color: transparent;
   }
-
+  
   .gradient-bg {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   }
@@ -227,55 +227,13 @@
   }
 }
 
-/* ============================================ */
-/* SERIF FONT STACK — for editorial headings    */
-/* ============================================ */
-.font-serif {
-  font-family: 'Charter', 'Iowan Old Style', 'Source Serif Pro', Georgia,
-    'Times New Roman', serif;
-  font-feature-settings: 'kern' 1, 'liga' 1, 'onum' 1;
-}
-
-/* ============================================ */
-/* LINE CLAMP UTILITIES                         */
-/* ============================================ */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.line-clamp-3 {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.line-clamp-4 {
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* ============================================ */
-/* SMOOTH SCROLLING                             */
-/* ============================================ */
-html {
-  scroll-behavior: smooth;
-}
-
-/* ============================================ */
-/* ALVEOLY SPLASH SCREEN                        */
-/* ============================================ */
-/* Design intent: calm, premium, minimal.
+/* ================= ALVEOLY SPLASH SCREEN =================
+   Design intent: calm, premium, minimal.
    - One gradient backdrop, no floating orbs
    - Logo fades in with a soft breath, not a pop
    - Single thin progress line, no bouncing dots
    - Muted palette pulled from the brand purple/indigo
-   ============================================ */
+   ========================================================= */
 
 .alveoly-splash {
   position: fixed;
@@ -287,6 +245,7 @@ html {
   justify-content: center;
   overflow: hidden;
   background: #0b0b14;
+  /* A single soft radial wash — not four competing orbs */
   background-image:
     radial-gradient(
       ellipse 60% 50% at 50% 40%,
@@ -295,11 +254,11 @@ html {
     ),
     radial-gradient(
       ellipse 40% 40% at 80% 90%,
-      rgba(139, 92, 246, 0.1),
+      rgba(139, 92, 246, 0.10),
       transparent 70%
     );
   transition: opacity 700ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
+              transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .alveoly-splash.is-leaving {
@@ -319,7 +278,7 @@ html {
   mix-blend-mode: overlay;
 }
 
-/* LOGO */
+/* ============ LOGO ============ */
 .alveoly-splash__logo-wrap {
   position: relative;
   display: flex;
@@ -339,6 +298,7 @@ html {
   }
 }
 
+/* The gentle "breath" — barely perceptible, not a bounce */
 .alveoly-splash__logo-wrap.is-breathing {
   animation:
     alveolyLogoIn 900ms cubic-bezier(0.16, 1, 0.3, 1) 100ms forwards,
@@ -357,22 +317,19 @@ html {
 }
 
 @keyframes alveolyBreathe {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.018);
-  }
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.018); }
 }
 
 .alveoly-splash__logo {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  /* Soft glow uses ONE color, subtle — not multi-color */
   filter: drop-shadow(0 4px 24px rgba(139, 92, 246, 0.35));
 }
 
+/* Fallback monogram if image is missing */
 .alveoly-splash__monogram {
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 40px;
@@ -381,7 +338,7 @@ html {
   color: #c7c9ff;
 }
 
-/* WORDMARK */
+/* ============ WORDMARK ============ */
 .alveoly-splash__wordmark {
   margin-top: 28px;
   font-family: 'Inter', system-ui, sans-serif;
@@ -390,11 +347,10 @@ html {
   letter-spacing: 0.42em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.92);
-  padding-left: 0.42em;
+  padding-left: 0.42em; /* optically center the letterspacing */
   opacity: 0;
   transform: translateY(6px);
-  animation: alveolyWordmarkIn 800ms cubic-bezier(0.16, 1, 0.3, 1) 500ms
-    forwards;
+  animation: alveolyWordmarkIn 800ms cubic-bezier(0.16, 1, 0.3, 1) 500ms forwards;
 }
 
 @keyframes alveolyWordmarkIn {
@@ -404,7 +360,7 @@ html {
   }
 }
 
-/* PROGRESS */
+/* ============ PROGRESS ============ */
 .alveoly-splash__progress {
   position: relative;
   margin-top: 44px;
@@ -424,9 +380,7 @@ html {
 }
 
 @keyframes alveolyProgressIn {
-  to {
-    opacity: 1;
-  }
+  to { opacity: 1; }
 }
 
 .alveoly-splash__progress-fill {
@@ -442,7 +396,7 @@ html {
   box-shadow: 0 0 12px rgba(167, 139, 250, 0.5);
 }
 
-/* FOOTER */
+/* ============ FOOTER ============ */
 .alveoly-splash__footer {
   position: absolute;
   bottom: 28px;
@@ -457,7 +411,7 @@ html {
   animation: alveolyProgressIn 700ms ease-out 1100ms forwards;
 }
 
-/* ACCESSIBILITY */
+/* ============ ACCESSIBILITY ============ */
 @media (prefers-reduced-motion: reduce) {
   .alveoly-splash__logo-wrap,
   .alveoly-splash__logo-wrap.is-breathing,
@@ -467,589 +421,5 @@ html {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
-  }
-}
-
-/* ============================================================ */
-/* BLOG PROSE — LEGACY (kept for BlogPage / BlogCategory etc.)  */
-/* ============================================================ */
-.prose {
-  font-size: 1.125rem;
-  line-height: 1.8;
-  color: #374151;
-}
-
-.dark .prose {
-  color: #d1d5db;
-}
-
-.prose h1 {
-  font-size: 2.25rem;
-  font-weight: 800;
-  line-height: 1.2;
-  margin-top: 2.5rem;
-  margin-bottom: 1.25rem;
-  color: #111827;
-  letter-spacing: -0.025em;
-}
-
-.prose h2 {
-  font-size: 1.875rem;
-  font-weight: 700;
-  line-height: 1.3;
-  margin-top: 2.5rem;
-  margin-bottom: 1rem;
-  color: #111827;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-.dark .prose h2 {
-  color: #f9fafb;
-  border-bottom-color: #374151;
-}
-
-.prose h3 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.4;
-  margin-top: 2rem;
-  margin-bottom: 0.75rem;
-  color: #111827;
-}
-
-.dark .prose h3 {
-  color: #f9fafb;
-}
-
-.prose h4 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-top: 1.5rem;
-  margin-bottom: 0.5rem;
-  color: #111827;
-}
-
-.dark .prose h4 {
-  color: #f9fafb;
-}
-
-.prose p {
-  margin-bottom: 1.5rem;
-  line-height: 1.8;
-}
-
-.prose a {
-  color: #2563eb;
-  text-decoration: none;
-  border-bottom: 1px solid #93c5fd;
-  transition: all 0.2s ease;
-  font-weight: 500;
-}
-
-.prose a:hover {
-  color: #1d4ed8;
-  border-bottom-color: #1d4ed8;
-}
-
-.dark .prose a {
-  color: #60a5fa;
-  border-bottom-color: #1e40af;
-}
-
-.dark .prose a:hover {
-  color: #93c5fd;
-}
-
-.prose ul {
-  list-style-type: disc;
-  padding-left: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.prose ol {
-  list-style-type: decimal;
-  padding-left: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.prose li {
-  margin-bottom: 0.5rem;
-  line-height: 1.7;
-}
-
-.prose li::marker {
-  color: #2563eb;
-}
-
-.prose blockquote {
-  border-left: 4px solid #2563eb;
-  background: linear-gradient(to right, #eff6ff, transparent);
-  padding: 1.25rem 1.5rem;
-  margin: 2rem 0;
-  border-radius: 0 0.75rem 0.75rem 0;
-  font-style: italic;
-  font-size: 1.125rem;
-  color: #1e40af;
-}
-
-.dark .prose blockquote {
-  background: linear-gradient(to right, rgba(30, 58, 138, 0.2), transparent);
-  color: #93c5fd;
-  border-left-color: #3b82f6;
-}
-
-.prose blockquote p:last-child {
-  margin-bottom: 0;
-}
-
-.prose code {
-  background: #f3f4f6;
-  padding: 0.2rem 0.4rem;
-  border-radius: 0.375rem;
-  font-size: 0.875em;
-  font-family: 'Fira Code', 'Monaco', monospace;
-  color: #db2777;
-}
-
-.dark .prose code {
-  background: #1f2937;
-  color: #f472b6;
-}
-
-.prose pre {
-  background: #111827;
-  padding: 1.5rem;
-  border-radius: 1rem;
-  overflow-x: auto;
-  margin: 2rem 0;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-}
-
-.prose pre code {
-  background: transparent;
-  padding: 0;
-  color: #e5e7eb;
-  font-size: 0.875rem;
-  line-height: 1.7;
-}
-
-.prose img {
-  border-radius: 1rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-  margin: 2rem 0;
-  width: 100%;
-}
-
-.prose hr {
-  border: none;
-  height: 1px;
-  background: linear-gradient(to right, transparent, #d1d5db, transparent);
-  margin: 3rem 0;
-}
-
-.dark .prose hr {
-  background: linear-gradient(to right, transparent, #4b5563, transparent);
-}
-
-.prose table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 2rem 0;
-  border-radius: 0.75rem;
-  overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.prose th {
-  background: #f9fafb;
-  padding: 0.75rem 1rem;
-  text-align: left;
-  font-weight: 600;
-  color: #111827;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-.dark .prose th {
-  background: #1f2937;
-  color: #f9fafb;
-  border-bottom-color: #374151;
-}
-
-.prose td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.dark .prose td {
-  border-bottom-color: #374151;
-}
-
-.prose figure {
-  margin: 2rem 0;
-}
-
-.prose figcaption {
-  text-align: center;
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-top: 0.75rem;
-  font-style: italic;
-}
-
-.prose ::selection {
-  background: #bfdbfe;
-  color: #1e40af;
-}
-
-.dark .prose ::selection {
-  background: #1e3a8a;
-  color: #bfdbfe;
-}
-
-/* ============================================================ */
-/* EDITORIAL PROSE — human-crafted, magazine-style typography   */
-/* Used on the BlogPostPage for a warmer, editorial feel        */
-/* ============================================================ */
-
-.prose-editorial {
-  font-family: 'Charter', 'Iowan Old Style', 'Source Serif Pro', Georgia,
-    'Times New Roman', serif;
-  line-height: 1.75;
-  color: #292524;
-  font-feature-settings: 'kern' 1, 'liga' 1, 'onum' 1;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-.dark .prose-editorial {
-  color: #e7e5e4;
-}
-
-/* Drop cap on first paragraph */
-.prose-editorial > p:first-of-type::first-letter {
-  font-family: 'Charter', 'Iowan Old Style', Georgia, serif;
-  float: left;
-  font-size: 4.2em;
-  line-height: 0.85;
-  font-weight: 700;
-  margin: 0.08em 0.1em 0 0;
-  color: #1c1917;
-}
-
-.dark .prose-editorial > p:first-of-type::first-letter {
-  color: #fafaf9;
-}
-
-/* Paragraphs */
-.prose-editorial p {
-  margin: 0 0 1.6em;
-  hyphens: auto;
-}
-
-/* Headings — serif, tight */
-.prose-editorial h1,
-.prose-editorial h2,
-.prose-editorial h3,
-.prose-editorial h4 {
-  font-family: 'Charter', 'Iowan Old Style', Georgia, serif;
-  font-weight: 700;
-  color: #1c1917;
-  letter-spacing: -0.015em;
-  scroll-margin-top: 5rem;
-}
-
-.dark .prose-editorial h1,
-.dark .prose-editorial h2,
-.dark .prose-editorial h3,
-.dark .prose-editorial h4 {
-  color: #fafaf9;
-}
-
-.prose-editorial h2 {
-  font-size: 1.75em;
-  margin: 2.4em 0 0.8em;
-  line-height: 1.2;
-}
-
-.prose-editorial h3 {
-  font-size: 1.35em;
-  margin: 2em 0 0.6em;
-  line-height: 1.3;
-}
-
-.prose-editorial h4 {
-  margin: 1.6em 0 0.5em;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.85em;
-  color: #78716c;
-}
-
-.dark .prose-editorial h4 {
-  color: #a8a29e;
-}
-
-/* Links — subtle underline, colored on hover */
-.prose-editorial a {
-  color: #292524;
-  text-decoration: underline;
-  text-decoration-color: #d6d3d1;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  transition: all 0.15s ease;
-}
-
-.prose-editorial a:hover {
-  color: #be123c;
-  text-decoration-color: #be123c;
-}
-
-.dark .prose-editorial a {
-  color: #e7e5e4;
-  text-decoration-color: #44403c;
-}
-
-.dark .prose-editorial a:hover {
-  color: #fb7185;
-  text-decoration-color: #fb7185;
-}
-
-/* Emphasis */
-.prose-editorial strong {
-  font-weight: 700;
-  color: #1c1917;
-}
-
-.dark .prose-editorial strong {
-  color: #fafaf9;
-}
-
-.prose-editorial em {
-  font-style: italic;
-  color: #44403c;
-}
-
-/* Lists */
-.prose-editorial ul,
-.prose-editorial ol {
-  margin: 0 0 1.6em 0;
-  padding-left: 1.5em;
-}
-
-.prose-editorial li {
-  margin-bottom: 0.5em;
-  line-height: 1.7;
-}
-
-.prose-editorial li::marker {
-  color: #a8a29e;
-}
-
-.prose-editorial ul li::marker {
-  content: '—  ';
-  color: #a8a29e;
-}
-
-/* Blockquote — the signature human touch */
-.prose-editorial blockquote {
-  margin: 2em 0;
-  padding: 0 0 0 1.5em;
-  border-left: 3px solid #e7e5e4;
-  font-family: 'Charter', Georgia, serif;
-  font-style: italic;
-  font-size: 1.15em;
-  line-height: 1.6;
-  color: #44403c;
-}
-
-.dark .prose-editorial blockquote {
-  border-left-color: #44403c;
-  color: #d6d3d1;
-}
-
-.prose-editorial blockquote p:last-child {
-  margin-bottom: 0;
-}
-
-/* Pull quote — full-width */
-.prose-editorial blockquote.pull-quote {
-  border: none;
-  padding: 1.5em 0;
-  margin: 2.5em 0;
-  text-align: center;
-  font-size: 1.6em;
-  line-height: 1.35;
-  color: #1c1917;
-  font-weight: 500;
-}
-
-.dark .prose-editorial blockquote.pull-quote {
-  color: #fafaf9;
-}
-
-/* Code */
-.prose-editorial code {
-  font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
-  font-size: 0.88em;
-  background: #f5f5f4;
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
-  color: #9f1239;
-  font-feature-settings: normal;
-}
-
-.dark .prose-editorial code {
-  background: #292524;
-  color: #fda4af;
-}
-
-.prose-editorial pre {
-  background: #1c1917;
-  color: #e7e5e4;
-  padding: 1.25em 1.5em;
-  border-radius: 10px;
-  overflow-x: auto;
-  margin: 1.8em 0;
-  font-size: 0.9em;
-  line-height: 1.6;
-}
-
-.prose-editorial pre code {
-  background: transparent;
-  color: inherit;
-  padding: 0;
-  font-size: 1em;
-}
-
-/* Images */
-.prose-editorial img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 6px;
-  margin: 2em auto;
-  display: block;
-}
-
-.prose-editorial figure {
-  margin: 2em 0;
-}
-
-.prose-editorial figcaption {
-  text-align: center;
-  font-size: 0.875em;
-  color: #78716c;
-  margin-top: 0.75em;
-  font-style: italic;
-  line-height: 1.5;
-}
-
-/* Horizontal rule — three diamonds, editorial style */
-.prose-editorial hr {
-  border: none;
-  text-align: center;
-  margin: 2.5em 0;
-}
-
-.prose-editorial hr::before {
-  content: '◆ ◆ ◆';
-  color: #a8a29e;
-  letter-spacing: 0.8em;
-  font-size: 0.7em;
-}
-
-/* Tables */
-.prose-editorial table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 2em 0;
-  font-size: 0.95em;
-}
-
-.prose-editorial th {
-  text-align: left;
-  font-weight: 600;
-  padding: 0.75em 1em;
-  border-bottom: 2px solid #1c1917;
-  color: #1c1917;
-}
-
-.dark .prose-editorial th {
-  border-bottom-color: #fafaf9;
-  color: #fafaf9;
-}
-
-.prose-editorial td {
-  padding: 0.75em 1em;
-  border-bottom: 1px solid #e7e5e4;
-}
-
-.dark .prose-editorial td {
-  border-bottom-color: #292524;
-}
-
-/* Selection */
-.prose-editorial ::selection {
-  background: #fef3c7;
-  color: #78350f;
-}
-
-.dark .prose-editorial ::selection {
-  background: #78350f;
-  color: #fef3c7;
-}
-
-/* ============================================ */
-/* READING PROGRESS                             */
-/* ============================================ */
-@keyframes progressPulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-/* ============================================ */
-/* PRINT STYLES                                 */
-/* ============================================ */
-@media print {
-  .prose,
-  .prose-editorial {
-    font-size: 12pt;
-    line-height: 1.5;
-    color: #000;
-  }
-
-  .prose h1,
-  .prose-editorial h1 {
-    font-size: 24pt;
-  }
-
-  .prose h2,
-  .prose-editorial h2 {
-    font-size: 18pt;
-  }
-
-  .prose h3,
-  .prose-editorial h3 {
-    font-size: 14pt;
-  }
-
-  .prose-editorial a {
-    color: #000;
-    text-decoration: underline;
-  }
-
-  .prose-editorial h1,
-  .prose-editorial h2,
-  .prose-editorial h3 {
-    page-break-after: avoid;
-  }
-
-  .no-print {
-    display: none !important;
   }
 }

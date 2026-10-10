@@ -102,19 +102,6 @@ import HighSchoolPage from "./pages/HighSchoolPage";
 import GradSchoolPage from "./pages/GradSchoolPage";
 import LegalPage from "./pages/LegalPage";
 import PharmacyPage from "./pages/PharmacyPage";
-
-// Blog Imports
-import BlogPage from "./pages/BlogPage";
-import BlogPostPage from "./pages/BlogPostPage";
-import BlogCategory from "./pages/BlogCategory";
-import BlogAuthor from "./pages/BlogAuthor";
-import BlogSearch from "./pages/BlogSearch";
-import AdminCreateBlogPost from "./pages/admin/blog/AdminCreateBlogPost";
-import AdminBlogCategories from "./pages/admin/blog/AdminBlogCategories";
-import AdminBlogAuthors from "./pages/admin/blog/AdminBlogAuthors";
-import AdminBlogTags from "./pages/admin/blog/AdminBlogTags";
-import AdminBlogComments from "./pages/admin/blog/AdminBlogComments";
-import AdminBlogPosts from "./pages/admin/blog/AdminBlogPosts";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 
 // ⬇️ NEW: Splash Screen import
@@ -190,13 +177,6 @@ function App() {
           <Route path="/programs/:id" element={<ProgramDetail />} />
           <Route path="/admissions" element={<Admissions />} />
           <Route path="/contact_us" element={<Contact />} />
-
-          {/* ==================== BLOG ROUTES ==================== */}
-          <Route path="/blog" element={<BlogPage />} />
-          <Route path="/blog/post/:id" element={<BlogPostPage />} />
-          <Route path="/blog/category/:category" element={<BlogCategory />} />
-          <Route path="/blog/author/:authorId" element={<BlogAuthor />} />
-          <Route path="/blog/search" element={<BlogSearch />} />
 
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
@@ -303,13 +283,6 @@ function App() {
             <Route path="ai" element={<AIAdmin />} />
             <Route path="ai-plans" element={<AIPlansAdmin />} />
             <Route path="ai-generator" element={<AIGenerator />} />
-            <Route path="blog/posts" element={<AdminBlogPosts />} />
-            <Route path="blog/create" element={<AdminCreateBlogPost />} />
-            <Route path="blog/edit/:id" element={<AdminCreateBlogPost />} />
-            <Route path="blog/categories" element={<AdminBlogCategories />} />
-            <Route path="blog/authors" element={<AdminBlogAuthors />} />
-            <Route path="blog/tags" element={<AdminBlogTags />} />
-            <Route path="blog/comments" element={<AdminBlogComments />} />
             <Route path="notifications" element={<AdminNotifications />} />
           </Route>
 
