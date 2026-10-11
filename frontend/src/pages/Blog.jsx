@@ -373,7 +373,7 @@ const BlogIndex = () => {
       {isBrowsingEverything && featuredPost && (
         <section className="max-w-6xl mx-auto px-5 pt-12 md:pt-16">
           <Link
-            to={`/blog/post/${featuredPost.slug || featuredPost._id}`}
+            to={`/blog/${featuredPost.slug || featuredPost._id}`}
             className="group block"
           >
             <div className="overflow-hidden rounded-lg">
@@ -514,7 +514,7 @@ const BlogIndex = () => {
                   transition={{ duration: 0.35, delay: Math.min(i * 0.04, 0.4) }}
                   className="group"
                 >
-                  <Link to={`/blog/post/${post.slug || post.id}`}>
+                  <Link to={`/blog/${post.slug || post.id}`}>
                     {post.image ? (
                       <img
                         src={post.image}

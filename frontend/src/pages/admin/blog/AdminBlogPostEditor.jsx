@@ -718,180 +718,97 @@ const AdminBlogPostEditor = () => {
   };
 
   /* ---------- Validation ---------- */
-const validate = () => {
-  const e = {};
-  if (!form.title?.trim?.()) e.title = "Title is required";
-  if (!form.slug?.trim?.()) e.slug = "Slug is required";
-  if (!form.content?.trim?.()) e.content = "Content is required";
-  if (!form.categoryId) e.categoryId = "Category is required";
-  if (!form.authorId) e.authorId = "Author is required";
-  if (form.medicallyReviewed && !form.reviewedBy)
-    e.reviewedBy = "A reviewer must be selected if the story is medically reviewed";
+  const validate = () => {
+    const e = {};
+    if (!form.title.trim()) e.title = "Title is required";
+    if (!form.slug.trim()) e.slug = "Slug is required";
+    if (!form.content.trim()) e.content = "Content is required";
+    if (!form.categoryId) e.categoryId = "Category is required";
+    if (!form.authorId) e.authorId = "Author is required";
+    if (form.medicallyReviewed && !form.reviewedBy)
+      e.reviewedBy = "A reviewer must be selected if the story is medically reviewed";
+    setErrors(e);
+    if (Object.keys(e).length > 0) {
+      toast.error("Please fix the highlighted fields");
+      return false;
+    }
+    return true;
+  };
 
-  setErrors(e);
+  /* ---------- Save ---------- */
+  const save = async (status) => {
+    const nextStatus = status || form.status;
+    if (!validate()) return;
 
-  const failedFields = Object.keys(e);
-
-  if (failedFields.length > 0) {
-    // 1. Log exactly which fields failed, with their values
-    console.error("PUBLISH VALIDATION FAILED:", e);
-    console.error("Current form values for those fields:", {
-      title: form.title,
-      slug: form.slug,
-      content: form.content,
-      categoryId: form.categoryId,
-      authorId: form.authorId,
-      medicallyReviewed: form.medicallyReviewed,
-      reviewedBy: form.reviewedBy,
-    });
-
-    // 2. Show a SPECIFIC toast naming the field(s) that failed.
-    //    Falls back to a window.alert if react-hot-toast isn't mounted.
-    const message = `Missing: ${failedFields
-      .map((k) => e[k])
-      .join(" · ")}`;
-
+    setSaving(true);
     try {
-      toast.error(message, { duration: 6000 });
-    } catch (err) {
-      // eslint-disable-next-line no-alert
-      window.alert(message);
-    }
+      const fd = new FormData();
+      fd.append("title", form.title);
+      fd.append("slug", form.slug);
+      fd.append("subtitle", form.subtitle || "");
+      fd.append("excerpt", form.excerpt || "");
+      fd.append("content", form.content);
+      fd.append("categoryId", form.categoryId);
+      fd.append("authorId", form.authorId);
+      if (form.reviewedBy) fd.append("reviewedBy", form.reviewedBy);
 
-    // 3. ALWAYS alert the user, so you're never left wondering if something
-    //    happened. window.alert works even if <Toaster /> isn't mounted.
-    //    Remove this line once you've confirmed the toast renders.
-    // eslint-disable-next-line no-alert
-    window.alert(
-      `Cannot save:\n\n${failedFields.map((k) => `• ${e[k]}`).join("\n")}\n\n` +
-        `Fix these and try again.`
-    );
+      fd.append("status", nextStatus);
+      fd.append("featured", form.featured ? "true" : "false");
+      fd.append("editorsPick", form.editorsPick ? "true" : "false");
+      fd.append("medicallyReviewed", form.medicallyReviewed ? "true" : "false");
+      fd.append("publishedAt", form.publishedAt);
+      fd.append("readingTime", String(form.readingTime));
 
-    // 4. Focus/scroll to the first failing field if possible
-    const firstError = failedFields[0];
-    setTimeout(() => {
-      const el = document.querySelector(`[data-field="${firstError}"]`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 50);
+      fd.append("videoUrl", form.videoUrl || "");
+      fd.append("audioUrl", form.audioUrl || "");
+      fd.append("metaDescription", form.metaDescription || "");
+      fd.append("metaKeywords", form.metaKeywords || "");
 
-    return false;
-  }
+      fd.append("tags", JSON.stringify(form.tags || []));
+      fd.append("references", JSON.stringify(form.references || []));
+      fd.append("learningObjectives", JSON.stringify(form.learningObjectives || []));
+      fd.append("statistics", JSON.stringify(form.statistics || []));
+      fd.append("relatedPosts", JSON.stringify(form.relatedPosts || []));
 
-  return true;
-};
-
-/* ---------- Save ---------- */
-const save = async (status) => {
-  const nextStatus = status || form.status;
-
-  console.log("SAVE CLICKED. Status:", nextStatus, "isEditing:", isEditing);
-
-  if (!validate()) {
-    console.log("Save aborted: validation failed.");
-    return;
-  }
-
-  console.log("Validation passed. Building FormData…");
-
-  setSaving(true);
-  try {
-    const fd = new FormData();
-    fd.append("title", form.title);
-    fd.append("slug", form.slug);
-    fd.append("subtitle", form.subtitle || "");
-    fd.append("excerpt", form.excerpt || "");
-    fd.append("content", form.content);
-    fd.append("categoryId", form.categoryId);
-    fd.append("authorId", form.authorId);
-    if (form.reviewedBy) fd.append("reviewedBy", form.reviewedBy);
-
-    fd.append("status", nextStatus);
-    fd.append("featured", form.featured ? "true" : "false");
-    fd.append("editorsPick", form.editorsPick ? "true" : "false");
-    fd.append("medicallyReviewed", form.medicallyReviewed ? "true" : "false");
-    fd.append("publishedAt", form.publishedAt);
-    fd.append("readingTime", String(form.readingTime));
-
-    fd.append("videoUrl", form.videoUrl || "");
-    fd.append("audioUrl", form.audioUrl || "");
-    fd.append("metaDescription", form.metaDescription || "");
-    fd.append("metaKeywords", form.metaKeywords || "");
-
-    fd.append("tags", JSON.stringify(form.tags || []));
-    fd.append("references", JSON.stringify(form.references || []));
-    fd.append("learningObjectives", JSON.stringify(form.learningObjectives || []));
-    fd.append("statistics", JSON.stringify(form.statistics || []));
-    fd.append("relatedPosts", JSON.stringify(form.relatedPosts || []));
-
-    // Cover image: a freshly-picked File wins.
-    // Otherwise send the URL unless it's a data URL (local preview).
-    if (form.imageFile instanceof File) {
-      fd.append("featuredImage", form.imageFile);
-      console.log("Sending cover as file:", form.imageFile.name);
-    } else if (
-      typeof form.image === "string" &&
-      form.image.trim() &&
-      !form.image.startsWith("data:")
-    ) {
-      fd.append("image", form.image.trim());
-      console.log("Sending cover as URL:", form.image.trim());
-    } else {
-      console.log("No cover image set.");
-    }
-
-    // Gallery: existing URLs + new files
-    const galleryUrls = form.gallery.filter(
-      (g) => typeof g === "string" && g.startsWith("http")
-    );
-    if (galleryUrls.length > 0) {
-      fd.append("galleryImages", JSON.stringify(galleryUrls));
-    }
-    form.galleryFiles.forEach((file) => fd.append("galleryImages", file));
-
-    console.log("About to call API. isEditing:", isEditing, "form.id:", form.id);
-
-    let res;
-    if (isEditing) {
-      res = await blogAPI.updatePost(form.id, fd);
-      console.log("Update response:", res);
-      toast.success("Story updated");
-    } else {
-      res = await blogAPI.createPost(fd);
-      console.log("Create response:", res);
-      toast.success(
-        nextStatus === "published" ? "Story published" : "Draft saved"
-      );
-    }
-
-    if (res.success) {
-      console.log("Success. Navigating to /admin/blog/posts");
-      navigate("/admin/blog/posts");
-    } else {
-      console.warn("Response was success:false:", res);
-      try {
-        toast.error(res.message || "Save failed");
-      } catch {
-        // eslint-disable-next-line no-alert
-        window.alert(res.message || "Save failed");
+      // Cover image: a freshly-picked File wins.
+      // Otherwise send the URL unless it's a data URL (local preview).
+      if (form.imageFile instanceof File) {
+        fd.append("featuredImage", form.imageFile);
+      } else if (
+        typeof form.image === "string" &&
+        form.image.trim() &&
+        !form.image.startsWith("data:")
+      ) {
+        fd.append("image", form.image.trim());
       }
+
+      // Gallery: send every existing http URL, plus every new File.
+      const galleryUrls = form.gallery.filter(
+        (g) => typeof g === "string" && g.startsWith("http")
+      );
+      if (galleryUrls.length > 0) {
+        fd.append("galleryImages", JSON.stringify(galleryUrls));
+      }
+      form.galleryFiles.forEach((file) => fd.append("galleryImages", file));
+
+      let res;
+      if (isEditing) {
+        res = await blogAPI.updatePost(form.id, fd);
+        toast.success("Story updated");
+      } else {
+        res = await blogAPI.createPost(fd);
+        toast.success(nextStatus === "published" ? "Story published" : "Draft saved");
+      }
+
+      if (res.success) navigate("/admin/blog/posts");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Save failed");
+    } finally {
+      setSaving(false);
     }
-  } catch (err) {
-    console.error("SAVE ERROR:", err);
-    console.error("Error response:", err.response?.data);
-    const msg =
-      err.response?.data?.message ||
-      err.message ||
-      "Save failed — check the console";
-    try {
-      toast.error(msg);
-    } catch {
-      // eslint-disable-next-line no-alert
-      window.alert(msg);
-    }
-  } finally {
-    setSaving(false);
-  }
-};
+  };
+
   /* ---------- Derived ---------- */
   const currentCategory = useMemo(
     () => categories.find((c) => c.id === form.categoryId),
@@ -975,7 +892,7 @@ const save = async (status) => {
               />
             </Field>
 
-            <Field label="Slug" error={errors.slug} hint={`/blog/post/${form.slug || "…"}`}>
+            <Field label="Slug" error={errors.slug} hint={`/blog/${form.slug || "…"}`}>
               <div className="flex items-center gap-2">
                 <TextInput
                   value={form.slug}
@@ -1322,7 +1239,7 @@ const save = async (status) => {
           {/* Preview link */}
           {form.slug && (
             <a
-              href={`/blog/post/${form.slug}`}
+              href={`/blog/${form.slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-between p-4 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 hover:bg-stone-50 dark:hover:bg-stone-900 transition group"
@@ -1332,7 +1249,7 @@ const save = async (status) => {
                   Preview
                 </p>
                 <p className="text-xs font-mono text-stone-700 dark:text-stone-300 truncate max-w-[220px]">
-                  /blog/post/{form.slug}
+                  /blog/{form.slug}
                 </p>
               </div>
               <ExternalLink className="w-4 h-4 text-stone-400 group-hover:text-stone-900 dark:group-hover:text-stone-100 transition" />

@@ -493,7 +493,7 @@ const ShareBar = ({ post }) => {
 };
 
 /* ============================================================
-   COMMENT SECTION — hits /api/blog/posts/:id/comments
+   COMMENT SECTION
 ============================================================ */
 
 const CommentSection = ({ postId, initialComments }) => {
@@ -1095,7 +1095,7 @@ const BlogPost = () => {
               {relatedPosts.map((r) => (
                 <Link
                   key={r._id || r.id}
-                  to={`/blog/post/${r.slug || r._id}`}
+                  to={`/blog/${r.slug || r._id}`}
                   className="group"
                 >
                   {r.image && (
