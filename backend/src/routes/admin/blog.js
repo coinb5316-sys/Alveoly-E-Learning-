@@ -64,6 +64,7 @@ router.post("/tags/merge", adminAuth, tagCtrl.mergeTag);
 
 /* ---------- Posts ---------- */
 router.get("/posts", adminAuth, postCtrl.getPosts);
+router.get("/archive", adminAuth, postCtrl.getArchive);  
 router.get("/posts/featured", postCtrl.getFeaturedPost); // public
 router.get("/posts/:id", adminAuth, postCtrl.getPostById);
 
@@ -153,7 +154,8 @@ router.post(
   upload.array("files", 20),
   mediaCtrl.uploadMedia
 );
-
+// NEW — bulk delete by URL list
+router.delete("/media", adminAuth, mediaCtrl.deleteMedia);
 /* ---------- Policies ---------- */
 router.get("/policies/:key", adminAuth, policyCtrl.getPolicy);
 router.put("/policies/:key", adminAuth, policyCtrl.upsertPolicy);

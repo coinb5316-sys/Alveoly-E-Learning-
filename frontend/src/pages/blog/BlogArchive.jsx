@@ -1,6 +1,5 @@
-// src/pages/blog/BlogArchive.jsx — THE ALVEOLY JOURNAL ARCHIVE
-// Standalone editorial archive. Mock data. No Navbar/Footer components.
-import React, { useState, useMemo } from "react";
+// src/pages/blog/BlogArchive.jsx — THE ALVEOLY JOURNAL ARCHIVE (LIVE API)
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -9,28 +8,21 @@ import {
   FaArchive, FaStream, FaTag, FaTwitter, FaLinkedin,
   FaInstagram, FaYoutube, FaRss,
 } from "react-icons/fa";
-import {
-  posts as allPosts,
-  authors,
-  categories,
-} from "../../data/blogData";
+import { publicBlogAPI as blogAPI } from "../../api/blogApi";
 
 /* ============================================================
    UTILITIES
 ============================================================ */
 
-const slugify = (s) =>
-  String(s)
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-");
-
 const groupByMonth = (posts) => {
   const groups = {};
   posts.forEach((post) => {
+    if (!post.publishedAt) return;
     const date = new Date(post.publishedAt);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(post);
   });
@@ -47,8 +39,22 @@ const formatMonthHeading = (key) => {
   };
 };
 
+const normalizePost = (p) => ({
+  ...p,
+  id: p._id || p.id,
+  author: p.author || p.authorId,
+  category: p.category || p.categoryId,
+  categoryId: p.categoryId?._id || p.categoryId,
+  categoryName: p.categoryName || p.category?.name || null,
+  categorySlug: p.categorySlug || p.category?.slug || null,
+  publishedAt:
+    p.publishedAt instanceof Date
+      ? p.publishedAt.toISOString()
+      : p.publishedAt,
+});
+
 /* ============================================================
-   PRIMITIVES
+   PRIMITIVES (unchanged from your original)
 ============================================================ */
 
 const JournalNav = () => {
@@ -264,23 +270,59 @@ const JournalFooter = () => {
 };
 
 /* ============================================================
-   MAIN — Archive page
+   MAIN — WIRED TO LIVE PUBLIC API
 ============================================================ */
 
 const BlogArchive = () => {
-  const [expandedMonths, setExpandedMonths] = useState(() => {
-    // By default, expand the most recent month
-    const grouped = groupByMonth(allPosts);
-    return grouped.length > 0 ? new Set([grouped[0][0]]) : new Set();
-  });
+  const [posts, setPosts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedMonths, setExpandedMonths] = useState(new Set());
   const [yearFilter, setYearFilter] = useState("all");
 
-  const grouped = useMemo(() => groupByMonth(allPosts), []);
+  /* ---------- Load from API ---------- */
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [archiveRes, catsRes] = await Promise.all([
+          blogAPI.getArchive(),
+          blogAPI.getCategories(),
+        ]);
+        if (cancelled) return;
+
+        const normalized = (archiveRes.data || []).map(normalizePost);
+        setPosts(normalized);
+        setCategories(catsRes.data || []);
+
+        // Auto-expand the most recent month
+        const grouped = groupByMonth(normalized);
+        if (grouped.length > 0) {
+          setExpandedMonths(new Set([grouped[0][0]]));
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setPosts([]);
+          setCategories([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const grouped = useMemo(() => groupByMonth(posts), [posts]);
 
   const years = useMemo(() => {
-    const set = new Set(
-      grouped.map(([key]) => key.split("-")[0])
-    );
+    const set = new Set(grouped.map(([key]) => key.split("-")[0]));
     return [...set].sort((a, b) => b.localeCompare(a));
   }, [grouped]);
 
@@ -303,7 +345,6 @@ const BlogArchive = () => {
     });
   };
 
-  // Year index — quick jump
   const yearCounts = useMemo(() => {
     const map = new Map();
     grouped.forEach(([key, list]) => {
@@ -313,11 +354,31 @@ const BlogArchive = () => {
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [grouped]);
 
+  /* ---------- Category counts (derived from posts we already have) ---------- */
+  const categoryCounts = useMemo(() => {
+    const map = new Map();
+    posts.forEach((p) => {
+      const id = p.categoryId;
+      if (!id) return;
+      map.set(id, (map.get(id) || 0) + 1);
+    });
+    return map;
+  }, [posts]);
+
+  /* ---------- Loading screen ---------- */
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 dark:border-stone-700 dark:border-t-stone-100 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
       <JournalNav />
 
-      {/* ---------- MASTHEAD ---------- */}
+      {/* MASTHEAD */}
       <header className="border-b border-stone-200 dark:border-stone-800">
         <div className="max-w-5xl mx-auto px-5 pt-12 md:pt-16 pb-10">
           <Link
@@ -345,7 +406,7 @@ const BlogArchive = () => {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-stone-500 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-800">
             <span>
               <strong className="font-semibold text-stone-900 dark:text-stone-100">
-                {allPosts.length}
+                {posts.length}
               </strong>{" "}
               stories total
             </span>
@@ -367,10 +428,9 @@ const BlogArchive = () => {
         </div>
       </header>
 
-      {/* ---------- QUICK YEAR INDEX + LAYOUT ---------- */}
+      {/* QUICK YEAR INDEX + LAYOUT */}
       <div className="max-w-6xl mx-auto px-5 py-12 md:py-16">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12">
-          {/* ---------- YEAR INDEX (left rail) ---------- */}
           <aside className="lg:col-span-3">
             <div className="lg:sticky lg:top-24">
               <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-4">
@@ -394,7 +454,7 @@ const BlogArchive = () => {
                           : "text-stone-400 dark:text-stone-600"
                       }`}
                     >
-                      {allPosts.length}
+                      {posts.length}
                     </span>
                   </button>
                 </li>
@@ -445,7 +505,6 @@ const BlogArchive = () => {
             </div>
           </aside>
 
-          {/* ---------- MONTH GROUPS ---------- */}
           <div className="lg:col-span-9 min-w-0">
             <div className="flex items-center justify-between flex-wrap gap-3 mb-8">
               <p className="text-sm text-stone-600 dark:text-stone-400">
@@ -525,12 +584,6 @@ const BlogArchive = () => {
                         >
                           <ul className="mt-6 divide-y divide-stone-100 dark:divide-stone-900">
                             {monthPosts.map((post) => {
-                              const author = authors.find(
-                                (a) => a.id === post.authorId
-                              );
-                              const category = categories.find(
-                                (c) => c.id === post.categoryId
-                              );
                               const day = new Date(
                                 post.publishedAt
                               ).toLocaleDateString("en-US", {
@@ -549,9 +602,9 @@ const BlogArchive = () => {
                                     </div>
 
                                     <div className="flex-1 min-w-0">
-                                      {category && (
+                                      {post.categoryName && (
                                         <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
-                                          {category.name}
+                                          {post.categoryName}
                                         </p>
                                       )}
                                       <h3 className="font-serif text-lg md:text-xl font-bold leading-snug text-stone-900 dark:text-stone-50 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2 mb-2">
@@ -562,7 +615,7 @@ const BlogArchive = () => {
                                       </p>
                                       <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-stone-500 dark:text-stone-500">
                                         <span className="font-medium text-stone-700 dark:text-stone-300">
-                                          {author?.name}
+                                          {post.author?.name}
                                         </span>
                                         <span className="text-stone-300 dark:text-stone-700">
                                           ·
@@ -576,7 +629,7 @@ const BlogArchive = () => {
                                         </span>
                                         <span className="flex items-center gap-1.5">
                                           <FaEye className="text-[9px]" />
-                                          {post.views.toLocaleString()}
+                                          {(post.views || 0).toLocaleString()}
                                         </span>
                                       </div>
                                     </div>
@@ -624,7 +677,7 @@ const BlogArchive = () => {
         </div>
       </div>
 
-      {/* ---------- BROWSE BY TOPIC ---------- */}
+      {/* BROWSE BY TOPIC */}
       <section className="border-t border-stone-200 dark:border-stone-800">
         <div className="max-w-6xl mx-auto px-5 py-14">
           <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-3 flex items-center gap-2">
@@ -640,13 +693,11 @@ const BlogArchive = () => {
           </p>
           <div className="flex flex-wrap gap-2">
             {categories.map((c) => {
-              const count = allPosts.filter(
-                (p) => p.categoryId === c.id
-              ).length;
+              const count = categoryCounts.get(c._id || c.id) || 0;
               return (
                 <Link
-                  key={c.id}
-                  to={`/blog/category/${c.slug || slugify(c.name)}`}
+                  key={c._id || c.id}
+                  to={`/blog/category/${c.slug}`}
                   className="inline-flex items-baseline gap-1.5 px-3.5 py-2 rounded-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 text-sm font-medium hover:border-stone-900 dark:hover:border-stone-100 hover:text-stone-900 dark:hover:text-stone-100 transition"
                 >
                   <span>{c.name}</span>
@@ -658,7 +709,7 @@ const BlogArchive = () => {
         </div>
       </section>
 
-      {/* ---------- ALSO ON THE JOURNAL ---------- */}
+      {/* ALSO ON THE JOURNAL */}
       <section className="border-t border-stone-200 dark:border-stone-800">
         <div className="max-w-6xl mx-auto px-5 py-14">
           <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-6">

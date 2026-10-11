@@ -9,6 +9,7 @@ import Video from "../models/Video.js";
 import Comment from "../models/Comment.js";
 import Testimonial from "../models/Testimonial.js";
 import Policy from "../models/Policy.js";
+import * as subscriberCtrl from "../controllers/admin/subscriberController.js";
 import { optionalAuth, protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -229,6 +230,19 @@ router.get("/posts/category/:slug", async (req, res) => {
   }
 });
 
+/* ---------- Authors list (public) ---------- */
+router.get("/authors", async (req, res) => {
+  try {
+    const authors = await Author.find({ active: true })
+      .select("name slug avatar role credentials specialties social title")
+      .sort({ name: 1 })
+      .lean();
+    res.json({ success: true, data: authors });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 /* ---------- Author by id + their posts ---------- */
 router.get("/authors/:id", async (req, res) => {
   try {
@@ -306,22 +320,27 @@ router.get("/search", async (req, res) => {
       });
     }
 
+    // Cap page size to prevent abuse
+    const safeLimit = Math.min(Math.max(Number(limit) || 6, 1), 500);
+    const safePage  = Math.max(Number(page) || 1, 1);
+
     const filter = {
       status: "published",
       $or: [
-        { title: { $regex: q, $options: "i" } },
+        { title:   { $regex: q, $options: "i" } },
         { excerpt: { $regex: q, $options: "i" } },
         { content: { $regex: q, $options: "i" } },
-        { tags: { $regex: q, $options: "i" } },
+        { tags:    { $regex: q, $options: "i" } },
       ],
     };
 
     const [posts, total] = await Promise.all([
       Post.find(filter)
-        .populate("authorId", "name avatar role")
+        .populate("authorId", "name slug avatar role credentials title specialties")
+        .populate("categoryId", "name slug")
         .sort({ publishedAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(Number(limit))
+        .skip((safePage - 1) * safeLimit)
+        .limit(safeLimit)
         .lean(),
       Post.countDocuments(filter),
     ]);
@@ -329,8 +348,22 @@ router.get("/search", async (req, res) => {
     res.json({
       success: true,
       data: {
-        posts: posts.map((p) => ({ ...p, author: p.authorId })),
-        pagination: { total, totalPages: Math.ceil(total / limit) },
+        posts: posts.map((p) => ({
+          ...p,
+          id: p._id,
+          author: p.authorId,
+          authorId: p.authorId?._id || p.authorId,
+          category: p.categoryId,
+          categoryId: p.categoryId?._id || p.categoryId,
+          categoryName: p.categoryId?.name || null,
+          categorySlug: p.categoryId?.slug || null,
+        })),
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total,
+          totalPages: Math.ceil(total / safeLimit),
+        },
       },
     });
   } catch (err) {
@@ -339,10 +372,11 @@ router.get("/search", async (req, res) => {
 });
 
 /* ---------- Archive (all published, grouped client-side) ---------- */
+/* ---------- Archive (all published, grouped client-side) ---------- */
 router.get("/archive", async (req, res) => {
   try {
     const posts = await Post.find({ status: "published" })
-      .populate("authorId", "name avatar")
+      .populate("authorId", "name avatar role")
       .populate("categoryId", "name slug")
       .sort({ publishedAt: -1 })
       .lean();
@@ -351,8 +385,13 @@ router.get("/archive", async (req, res) => {
       success: true,
       data: posts.map((p) => ({
         ...p,
+        id: p._id,
         author: p.authorId,
-        category: p.categoryId?.name,
+        category: p.categoryId,
+        categoryId: p.categoryId?._id || p.categoryId,
+        categoryName: p.categoryId?.name || null,
+        categorySlug: p.categoryId?.slug || null,
+        authorId: p.authorId?._id || p.authorId,
       })),
     });
   } catch (err) {
@@ -481,5 +520,7 @@ router.get("/policies/:key", async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
+router.post("/subscribe", subscriberCtrl.subscribe);
 
 export default router;

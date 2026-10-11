@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { FaEnvelope, FaCheckCircle, FaSpinner } from "react-icons/fa";
 import toast from "react-hot-toast";
+import { publicBlogAPI as blogAPI } from "../../api/blogApi";
 
 const NewsletterSignup = () => {
   const [email, setEmail] = useState("");
@@ -15,12 +16,24 @@ const NewsletterSignup = () => {
       return;
     }
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const res = await blogAPI.subscribe({
+        email: email.trim().toLowerCase(),
+        source: "footer",
+      });
       setSubscribed(true);
-      toast.success("Subscribed! Check your inbox to confirm.");
-    }, 1200);
+      toast.success(
+        res?.message || "Subscribed! Check your inbox to confirm."
+      );
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err.response?.data?.message ||
+        "Something went wrong. Please try again.";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (subscribed) {
@@ -49,7 +62,10 @@ const NewsletterSignup = () => {
           Join 25,000+ readers getting evidence-based health articles,
           podcast episodes, and practical guides — straight to their inbox.
         </p>
-        <form onSubmit={handleSubmit} className="max-w-md mx-auto flex flex-col sm:flex-row gap-3">
+        <form
+          onSubmit={handleSubmit}
+          className="max-w-md mx-auto flex flex-col sm:flex-row gap-3"
+        >
           <input
             type="email"
             placeholder="Your email address"

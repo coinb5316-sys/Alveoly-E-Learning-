@@ -1,5 +1,4 @@
-// src/pages/blog/BlogSearch.jsx — THE ALVEOLY JOURNAL SEARCH
-// Standalone editorial search. Mock data. No component imports.
+// src/pages/blog/BlogSearch.jsx — THE ALVEOLY JOURNAL SEARCH (LIVE API)
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,11 +8,7 @@ import {
   FaLinkedin, FaInstagram, FaYoutube, FaRss, FaBookOpen,
   FaCheckCircle,
 } from "react-icons/fa";
-import {
-  posts as allPosts,
-  authors,
-  categories,
-} from "../../data/blogData";
+import { publicBlogAPI as blogAPI } from "../../api/blogApi";
 
 /* ============================================================
    UTILITIES
@@ -28,7 +23,7 @@ const formatShortDate = (d) =>
       })
     : "";
 
-const initials = (name) =>
+const initials = (name = "") =>
   name
     .split(" ")
     .filter(Boolean)
@@ -37,39 +32,37 @@ const initials = (name) =>
     .join("")
     .toUpperCase();
 
-const slugify = (s) =>
+const slugify = (s = "") =>
   String(s)
     .toLowerCase()
     .trim()
     .replace(/[^\w\s-]/g, "")
     .replace(/\s+/g, "-");
 
-/* Score a post against the query.
-   - Title match: 10
-   - Excerpt match: 4
-   - Tag match: 3
-   - Author match: 6
-   - Category match: 5
-   Then add a small boost for recency, views, and likes. */
+/* Score a post against the query. Same weights as before. */
 const scorePost = (post, query, authorName = "", categoryName = "") => {
   if (!query) return 0;
   const q = query.toLowerCase();
   let score = 0;
 
-  if (post.title.toLowerCase().includes(q)) {
+  const title = (post.title || "").toLowerCase();
+  const excerpt = (post.excerpt || "").toLowerCase();
+  const tags = post.tags || [];
+
+  if (title.includes(q)) {
     score += 10;
-    if (post.title.toLowerCase().startsWith(q)) score += 4;
+    if (title.startsWith(q)) score += 4;
   }
-  if (post.excerpt.toLowerCase().includes(q)) score += 4;
-  if (post.tags.some((t) => t.toLowerCase().includes(q))) score += 3;
+  if (excerpt.includes(q)) score += 4;
+  if (tags.some((t) => String(t).toLowerCase().includes(q))) score += 3;
   if (authorName.toLowerCase().includes(q)) score += 6;
   if (categoryName.toLowerCase().includes(q)) score += 5;
 
   if (score === 0) return 0;
 
-  // Recency + popularity nudges
-  const days =
-    (Date.now() - new Date(post.publishedAt).getTime()) / 86400000;
+  const days = post.publishedAt
+    ? (Date.now() - new Date(post.publishedAt).getTime()) / 86400000
+    : 9999;
   score += Math.max(0, 5 - days / 30);
   score += Math.min(4, (post.views || 0) / 5000);
   score += Math.min(2, (post.likes || 0) / 500);
@@ -80,7 +73,7 @@ const scorePost = (post, query, authorName = "", categoryName = "") => {
 const highlight = (text, query) => {
   if (!query || !text) return text;
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const parts = text.split(new RegExp(`(${escaped})`, "gi"));
+  const parts = String(text).split(new RegExp(`(${escaped})`, "gi"));
   return parts.map((part, i) =>
     part.toLowerCase() === query.toLowerCase() ? (
       <mark
@@ -95,14 +88,30 @@ const highlight = (text, query) => {
   );
 };
 
+/* Normalize a post coming from the API */
+const normalizePost = (p) => ({
+  ...p,
+  id: p._id || p.id,
+  author: p.author || p.authorId,
+  authorId: p.authorId?._id || p.authorId,
+  category: p.category || p.categoryId,
+  categoryId: p.categoryId?._id || p.categoryId,
+  categoryName: p.categoryName || p.category?.name || null,
+  categorySlug: p.categorySlug || p.category?.slug || null,
+  publishedAt:
+    p.publishedAt instanceof Date
+      ? p.publishedAt.toISOString()
+      : p.publishedAt,
+  tags: Array.isArray(p.tags) ? p.tags : [],
+});
+
 /* ============================================================
-   PRIMITIVES
+   PRIMITIVES (unchanged from your original)
 ============================================================ */
 
 const Avatar = ({ author, size = "sm" }) => {
   const [broken, setBroken] = useState(false);
-  const cls =
-    size === "sm" ? "w-6 h-6 text-[10px]" : "w-9 h-9 text-xs";
+  const cls = size === "sm" ? "w-6 h-6 text-[10px]" : "w-9 h-9 text-xs";
   if (!author) return null;
   if (author.avatar && !broken) {
     return (
@@ -328,7 +337,7 @@ const JournalFooter = () => {
 };
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE PUBLIC API
 ============================================================ */
 
 const SUGGESTED_TOPICS = [
@@ -349,6 +358,45 @@ const BlogSearch = () => {
   const [searchInput, setSearchInput] = useState(query);
   const inputRef = useRef(null);
 
+  /* ---------- Data from API ---------- */
+  const [posts, setPosts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [authors, setAuthors] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [postsRes, catsRes, authorsRes] = await Promise.all([
+          blogAPI.getPosts({ limit: 500, publishedOnly: true, sort: "newest" }),
+          blogAPI.getCategories(),
+          blogAPI.getAuthors(),
+        ]);
+        if (cancelled) return;
+        setPosts((postsRes.data?.posts || []).map(normalizePost));
+        setCategories(catsRes.data || []);
+        setAuthors(authorsRes.data || []);
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setPosts([]);
+          setCategories([]);
+          setAuthors([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // keep input synced with URL
   useEffect(() => {
     setSearchInput(query);
@@ -358,34 +406,34 @@ const BlogSearch = () => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [query]);
 
-  /* ---------- Ranked results ---------- */
+  /* ---------- Ranked results (client-side over the fetched pool) ---------- */
   const rankedResults = useMemo(() => {
     if (!query.trim()) return [];
-    const scored = allPosts
+    const scored = posts
       .map((post) => {
-        const author = authors.find((a) => a.id === post.authorId);
-        const category = categories.find((c) => c.id === post.categoryId);
+        const author = post.author;
+        const categoryName = post.categoryName || post.category?.name || "";
         const score = scorePost(
           post,
           query.trim(),
           author?.name || "",
-          category?.name || ""
+          categoryName
         );
         return { post, score };
       })
       .filter((r) => r.score > 0)
       .sort((a, b) => b.score - a.score);
     return scored.map((r) => r.post);
-  }, [query]);
+  }, [posts, query]);
 
   /* ---------- Suggested tags matching the query ---------- */
   const matchedTags = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
     const counts = new Map();
-    allPosts.forEach((p) =>
+    posts.forEach((p) =>
       (p.tags || []).forEach((t) => {
-        if (t.toLowerCase().includes(q)) {
+        if (String(t).toLowerCase().includes(q)) {
           counts.set(t, (counts.get(t) || 0) + 1);
         }
       })
@@ -394,7 +442,7 @@ const BlogSearch = () => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([name, count]) => ({ name, count }));
-  }, [query]);
+  }, [posts, query]);
 
   /* ---------- Matched categories + authors ---------- */
   const matchedCategories = useMemo(() => {
@@ -403,7 +451,7 @@ const BlogSearch = () => {
     return categories
       .filter((c) => c.name.toLowerCase().includes(q))
       .slice(0, 4);
-  }, [query]);
+  }, [categories, query]);
 
   const matchedAuthors = useMemo(() => {
     if (!query.trim()) return [];
@@ -415,7 +463,7 @@ const BlogSearch = () => {
           (a.specialties || []).some((s) => s.toLowerCase().includes(q))
       )
       .slice(0, 3);
-  }, [query]);
+  }, [authors, query]);
 
   const submit = (e) => {
     e.preventDefault();
@@ -438,11 +486,20 @@ const BlogSearch = () => {
   const total = rankedResults.length;
   const plural = total === 1 ? "result" : "results";
 
+  /* ---------- Loading screen (only on first paint, before data lands) ---------- */
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 dark:border-stone-700 dark:border-t-stone-100 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
       <JournalNav />
 
-      {/* ---------- MASTHEAD ---------- */}
+      {/* MASTHEAD */}
       <header className="border-b border-stone-200 dark:border-stone-800">
         <div className="max-w-5xl mx-auto px-5 pt-12 md:pt-16 pb-10">
           <Link
@@ -478,7 +535,6 @@ const BlogSearch = () => {
               : "Find essays, field reports, and clinical notes by title, topic, or contributor."}
           </p>
 
-          {/* Search form */}
           <form onSubmit={submit} className="relative max-w-2xl">
             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400 text-sm" />
             <input
@@ -508,7 +564,6 @@ const BlogSearch = () => {
             </button>
           </form>
 
-          {/* Suggested topics — always visible */}
           <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-stone-500 dark:text-stone-400">
             <span className="text-xs uppercase tracking-wider">
               {query ? "Related" : "Try"}
@@ -529,55 +584,54 @@ const BlogSearch = () => {
               ))}
           </div>
 
-          {/* Inline matches for categories & authors */}
-          {query && (matchedCategories.length > 0 || matchedAuthors.length > 0) && (
-            <div className="mt-8 pt-6 border-t border-stone-200 dark:border-stone-800 flex flex-wrap items-start gap-x-10 gap-y-4">
-              {matchedCategories.length > 0 && (
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-3">
-                    Sections
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {matchedCategories.map((c) => (
-                      <Link
-                        key={c.id}
-                        to={`/blog/category/${c.slug || slugify(c.name)}`}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-sm text-stone-700 dark:text-stone-300 hover:border-stone-900 dark:hover:border-stone-100 transition"
-                      >
-                        {c.name}
-                      </Link>
-                    ))}
+          {query &&
+            (matchedCategories.length > 0 || matchedAuthors.length > 0) && (
+              <div className="mt-8 pt-6 border-t border-stone-200 dark:border-stone-800 flex flex-wrap items-start gap-x-10 gap-y-4">
+                {matchedCategories.length > 0 && (
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-3">
+                      Sections
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {matchedCategories.map((c) => (
+                        <Link
+                          key={c._id || c.id}
+                          to={`/blog/category/${c.slug || slugify(c.name)}`}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-sm text-stone-700 dark:text-stone-300 hover:border-stone-900 dark:hover:border-stone-100 transition"
+                        >
+                          {c.name}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-              {matchedAuthors.length > 0 && (
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-3">
-                    Contributors
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {matchedAuthors.map((a) => (
-                      <Link
-                        key={a.id}
-                        to={`/blog/author/${a.id}`}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-sm text-stone-700 dark:text-stone-300 hover:border-stone-900 dark:hover:border-stone-100 transition"
-                      >
-                        <Avatar author={a} size="sm" />
-                        {a.name}
-                      </Link>
-                    ))}
+                )}
+                {matchedAuthors.length > 0 && (
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-3">
+                      Contributors
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {matchedAuthors.map((a) => (
+                        <Link
+                          key={a._id || a.id}
+                          to={`/blog/author/${a._id || a.id}`}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-sm text-stone-700 dark:text-stone-300 hover:border-stone-900 dark:hover:border-stone-100 transition"
+                        >
+                          <Avatar author={a} size="sm" />
+                          {a.name}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
         </div>
       </header>
 
-      {/* ---------- RESULTS / EMPTY ---------- */}
+      {/* RESULTS / EMPTY */}
       <section className="max-w-6xl mx-auto px-5 py-12 md:py-16">
         {!query ? (
-          /* ---------- No query: gentle prompt ---------- */
           <div className="max-w-3xl">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
               <Link
@@ -625,7 +679,6 @@ const BlogSearch = () => {
             </div>
           </div>
         ) : total === 0 ? (
-          /* ---------- Empty results ---------- */
           <div className="py-16 text-center max-w-lg mx-auto">
             <p className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100 mb-3">
               Nothing matches "{query}"
@@ -654,7 +707,6 @@ const BlogSearch = () => {
             </Link>
           </div>
         ) : (
-          /* ---------- Results list ---------- */
           <>
             <div className="flex items-center justify-between flex-wrap gap-3 mb-8 pb-5 border-b border-stone-200 dark:border-stone-800">
               <p className="text-sm text-stone-600 dark:text-stone-400">
@@ -673,10 +725,13 @@ const BlogSearch = () => {
 
             <div className="space-y-10">
               {rankedResults.map((post, i) => {
-                const author = authors.find((a) => a.id === post.authorId);
-                const category = categories.find(
-                  (c) => c.id === post.categoryId
-                );
+                const author = post.author;
+                const categoryName =
+                  post.categoryName || post.category?.name || "";
+                const categorySlug =
+                  post.categorySlug ||
+                  post.category?.slug ||
+                  (categoryName ? slugify(categoryName) : "");
                 return (
                   <motion.article
                     key={post.id}
@@ -688,14 +743,13 @@ const BlogSearch = () => {
                     }}
                     className="group grid grid-cols-1 sm:grid-cols-12 gap-6 pb-10 border-b border-stone-100 dark:border-stone-900 last:border-0 last:pb-0"
                   >
-                    {/* Text */}
                     <div className="sm:col-span-8 min-w-0">
-                      {category && (
+                      {categoryName && (
                         <Link
-                          to={`/blog/category/${category.slug || slugify(category.name)}`}
+                          to={`/blog/category/${categorySlug}`}
                           className="uppercase tracking-wider text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline"
                         >
-                          {category.name}
+                          {categoryName}
                         </Link>
                       )}
                       <Link to={`/blog/${post.slug}`} className="block mt-2">
@@ -707,7 +761,6 @@ const BlogSearch = () => {
                         </p>
                       </Link>
 
-                      {/* Tags inline — highlight matches */}
                       {post.tags?.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mb-4">
                           {post.tags.slice(0, 4).map((t) => (
@@ -743,12 +796,11 @@ const BlogSearch = () => {
                         </span>
                         <span className="flex items-center gap-1.5">
                           <FaEye className="text-[9px]" />
-                          {post.views.toLocaleString()}
+                          {(post.views || 0).toLocaleString()}
                         </span>
                       </div>
                     </div>
 
-                    {/* Thumbnail */}
                     <Link
                       to={`/blog/${post.slug}`}
                       className="sm:col-span-4 order-first sm:order-last"
@@ -767,7 +819,6 @@ const BlogSearch = () => {
               })}
             </div>
 
-            {/* Inline CTA */}
             <div className="mt-16 pt-10 border-t border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-4">
               <p className="text-sm text-stone-600 dark:text-stone-400">
                 Didn't find what you were looking for?
@@ -792,7 +843,7 @@ const BlogSearch = () => {
         )}
       </section>
 
-      {/* ---------- SUGGESTED READS ---------- */}
+      {/* SUGGESTED READS */}
       {!query && (
         <section className="border-t border-stone-200 dark:border-stone-800">
           <div className="max-w-6xl mx-auto px-5 py-14">
@@ -808,12 +859,12 @@ const BlogSearch = () => {
               journal.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10">
-              {allPosts
+              {posts
                 .filter((p) => p.editorsPick && p.medicallyReviewed)
                 .slice(0, 3)
                 .map((post) => {
-                  const a = authors.find((x) => x.id === post.authorId);
-                  const c = categories.find((x) => x.id === post.categoryId);
+                  const a = post.author;
+                  const cName = post.categoryName || post.category?.name || "";
                   return (
                     <Link
                       key={post.id}
@@ -827,9 +878,11 @@ const BlogSearch = () => {
                           className="w-full aspect-[16/10] object-cover rounded-md mb-4 group-hover:opacity-95 transition"
                         />
                       )}
-                      <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
-                        {c?.name}
-                      </p>
+                      {cName && (
+                        <p className="text-xs uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold mb-1.5">
+                          {cName}
+                        </p>
+                      )}
                       <h3 className="font-serif text-lg font-bold leading-snug text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition line-clamp-2 mb-2">
                         {post.title}
                       </h3>
@@ -849,7 +902,7 @@ const BlogSearch = () => {
         </section>
       )}
 
-      {/* ---------- ALSO ON THE JOURNAL ---------- */}
+      {/* ALSO ON THE JOURNAL */}
       <section className="border-t border-stone-200 dark:border-stone-800">
         <div className="max-w-6xl mx-auto px-5 py-14">
           <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold mb-6">

@@ -149,7 +149,8 @@ const TagPicker = ({ selected, onChange, allTags }) => {
     ? allTags
         .filter(
           (t) =>
-            t.toLowerCase().includes(draft.toLowerCase()) && !selected.includes(t)
+            t.toLowerCase().includes(draft.toLowerCase()) &&
+            !selected.includes(t)
         )
         .slice(0, 6)
     : allTags.filter((t) => !selected.includes(t)).slice(0, 8);
@@ -519,7 +520,9 @@ const RelatedPostsPicker = ({ posts, value, onChange, currentId }) => {
   const [search, setSearch] = useState("");
   const candidates = posts
     .filter((p) => p.id !== currentId && !value.includes(p.id))
-    .filter((p) => (search.trim() ? p.title.toLowerCase().includes(search.toLowerCase()) : true))
+    .filter((p) =>
+      search.trim() ? p.title.toLowerCase().includes(search.toLowerCase()) : true
+    )
     .slice(0, 8);
 
   const add = (id) => {
@@ -767,10 +770,19 @@ const AdminBlogPostEditor = () => {
       fd.append("statistics", JSON.stringify(form.statistics || []));
       fd.append("relatedPosts", JSON.stringify(form.relatedPosts || []));
 
+      // Cover image: a freshly-picked File wins. Otherwise send the URL
+      // (unless it's a data URL, which is just the local preview).
       if (form.imageFile instanceof File) {
         fd.append("featuredImage", form.imageFile);
+      } else if (
+        typeof form.image === "string" &&
+        form.image.trim() &&
+        !form.image.startsWith("data:")
+      ) {
+        fd.append("image", form.image.trim());
       }
 
+      // Gallery: send every existing http URL, plus every new File.
       const galleryUrls = form.gallery.filter(
         (g) => typeof g === "string" && g.startsWith("http")
       );

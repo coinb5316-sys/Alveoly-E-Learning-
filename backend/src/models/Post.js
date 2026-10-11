@@ -1,4 +1,4 @@
-// server/models/Post.js
+// backend/src/models/Post.js
 import mongoose from "mongoose";
 
 const statisticSchema = new mongoose.Schema(
@@ -68,7 +68,10 @@ const postSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-postSchema.pre("save", function (next) {
+// Async-style hook — no `next` parameter.
+// Mongoose 6/7/8 await the returned promise. Calling next() here would
+// throw "TypeError: next is not a function" on Mongoose 8.
+postSchema.pre("save", function () {
   if (this.isModified("title") && !this.slug) {
     this.slug = this.title
       .toLowerCase()
@@ -76,7 +79,6 @@ postSchema.pre("save", function (next) {
       .replace(/[^\w\s-]/g, "")
       .replace(/\s+/g, "-");
   }
-  next();
 });
 
 postSchema.index({ title: "text", excerpt: "text", content: "text" });

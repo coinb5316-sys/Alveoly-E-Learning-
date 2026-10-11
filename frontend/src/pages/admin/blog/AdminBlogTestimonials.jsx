@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogTestimonials.jsx — EDITORIAL ADMIN
-// Reader testimonials for The Alveoly Journal.
+// src/pages/admin/blog/AdminBlogTestimonials.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,11 +10,7 @@ import {
   ArrowUpDown, ChevronDown,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend ready
-import {
-  posts as mockPosts,
-  authors as mockAuthors,
-} from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
@@ -58,137 +53,34 @@ const formatShortDate = (d) =>
 
 const emptyTestimonial = () => ({
   id: "",
+  _id: "",
   author: "",
   role: "",
   avatar: "",
   email: "",
   body: "",
-  source: "", // post id, podcast id, or "direct"
+  source: "",
   sourceLabel: "",
-  status: "pending", // pending | approved | hidden
+  status: "pending",
   featured: false,
   pinned: false,
   tags: [],
   createdAt: new Date().toISOString(),
 });
 
-/* ============================================================
-   MOCK SEED — replace with API
-============================================================ */
-
-const buildMockTestimonials = (posts) => {
-  const seeds = [
-    {
-      author: "Ngozi Adeyemi",
-      role: "Registered Nurse, Lagos",
-      body: "I send this article to every patient I see who's just been diagnosed with hypertension. It explains the disease better than the pamphlets we hand out — and it doesn't scare them.",
-      status: "approved",
-      featured: true,
-      pinned: true,
-      tags: ["Heart Health", "Patient education"],
-      postIndex: 0,
-      hours: 26,
-    },
-    {
-      author: "Dr. Samuel Kalu",
-      role: "Family physician",
-      body: "The Alveoly Journal is the only health publication I recommend to my colleagues without a caveat. The medical review process shows in every paragraph.",
-      status: "approved",
-      featured: true,
-      pinned: false,
-      tags: ["Trust", "Clinical"],
-      postIndex: 2,
-      hours: 52,
-    },
-    {
-      author: "Fatima Bello",
-      role: "Public health student",
-      body: "I used the gut health article as the source for a class presentation. The references were so complete that my professor asked where I found it.",
-      status: "approved",
-      featured: false,
-      pinned: false,
-      tags: ["Nutrition", "Education"],
-      postIndex: 1,
-      hours: 96,
-    },
-    {
-      author: "Bola Akinyemi",
-      role: "Reader",
-      body: "The podcast episode on blood pressure was the first thing that made me actually understand what hypertension means. I finally booked the checkup I'd been putting off for two years.",
-      status: "approved",
-      featured: false,
-      pinned: false,
-      tags: ["Podcast", "Behaviour change"],
-      postIndex: 0,
-      hours: 148,
-    },
-    {
-      author: "Adaeze Nwosu",
-      role: "Pharmacist",
-      body: "As a pharmacist, I usually spot errors in health writing within the first paragraph. I haven't found one in this journal yet — and I've read most of it.",
-      status: "approved",
-      featured: true,
-      pinned: false,
-      tags: ["Trust", "Clinical"],
-      postIndex: 3,
-      hours: 200,
-    },
-    {
-      author: "Tunde O.",
-      role: "",
-      body: "Does anyone know if this article applies to people with type 1 diabetes as well? My son was just diagnosed and I want to get this right.",
-      status: "pending",
-      featured: false,
-      pinned: false,
-      tags: [],
-      postIndex: 4,
-      hours: 4,
-    },
-    {
-      author: "Chidi N.",
-      role: "",
-      body: "I bought the supplement mentioned in the article and it changed my life. Everyone should try it. Use the discount code I found online.",
-      status: "hidden",
-      featured: false,
-      pinned: false,
-      tags: ["Spam"],
-      postIndex: 1,
-      hours: 60,
-    },
-    {
-      author: "Grace Otieno",
-      role: "Community health worker",
-      body: "We print these articles and hand them out at the clinic. Patients read them and come back with better questions. That's the whole point.",
-      status: "approved",
-      featured: false,
-      pinned: false,
-      tags: ["Community health", "Public health"],
-      postIndex: 2,
-      hours: 260,
-    },
-  ];
-
-  return seeds.map((s, i) => {
-    const post = posts[s.postIndex % posts.length];
-    return {
-      id: `tst-${i + 1}`,
-      author: s.author,
-      role: s.role,
-      avatar: "",
-      email: "",
-      body: s.body,
-      source: post.id,
-      sourceLabel: post.title,
-      status: s.status,
-      featured: s.featured,
-      pinned: s.pinned,
-      tags: s.tags,
-      createdAt: new Date(
-        Date.now() - s.hours * 3600 * 1000
-      ).toISOString(),
-    };
-  });
-};
+/* Normalize server → local shape */
+const normalizeTestimonial = (t) => ({
+  ...t,
+  id: t._id || t.id,
+  source: t.source?._id || t.source || "",
+  sourceLabel: t.sourceLabel || t.source?.title || "",
+  featured: t.featured === true,
+  pinned: t.pinned === true,
+  tags: Array.isArray(t.tags) ? t.tags : [],
+  status: t.status || "pending",
+  createdAt:
+    t.createdAt instanceof Date ? t.createdAt.toISOString() : t.createdAt,
+});
 
 /* ============================================================
    PRIMITIVES
@@ -410,10 +302,7 @@ const TestimonialDrawer = ({ open, onClose, initial, onSave, saving, posts }) =>
 
   const submit = () => {
     if (!validate()) return;
-    onSave({
-      ...form,
-      id: form.id || `tst-${Date.now()}`,
-    });
+    onSave(form);
   };
 
   return (
@@ -434,7 +323,6 @@ const TestimonialDrawer = ({ open, onClose, initial, onSave, saving, posts }) =>
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
             className="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-white dark:bg-stone-950 z-50 flex flex-col border-l border-stone-200 dark:border-stone-800"
           >
-            {/* Header */}
             <div className="flex-shrink-0 px-6 py-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400 font-semibold mb-1">
@@ -452,9 +340,7 @@ const TestimonialDrawer = ({ open, onClose, initial, onSave, saving, posts }) =>
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              {/* Live preview */}
               <div className="p-5 rounded-2xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
                 <p className="text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-3">
                   Preview on the journal
@@ -502,10 +388,7 @@ const TestimonialDrawer = ({ open, onClose, initial, onSave, saving, posts }) =>
                 />
               </Field>
 
-              <Field
-                label="Avatar URL"
-                hint="Optional. Initials are used if empty."
-              >
+              <Field label="Avatar URL" hint="Optional. Initials are used if empty.">
                 <TextInput
                   value={form.avatar}
                   onChange={(e) => update("avatar", e.target.value)}
@@ -543,18 +426,23 @@ const TestimonialDrawer = ({ open, onClose, initial, onSave, saving, posts }) =>
                   value={form.source}
                   onChange={(e) => {
                     const id = e.target.value;
-                    const post = posts.find((p) => p.id === id);
+                    const post = posts.find((p) => (p._id || p.id) === id);
                     update("source", id);
                     update("sourceLabel", post ? post.title : "");
                   }}
                   className="w-full px-3.5 py-2.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-sm focus:outline-none focus:border-stone-900 dark:focus:border-stone-100 transition cursor-pointer"
                 >
                   <option value="">— None / general —</option>
-                  {posts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title.length > 60 ? p.title.slice(0, 60) + "…" : p.title}
-                    </option>
-                  ))}
+                  {posts.map((p) => {
+                    const pid = p._id || p.id;
+                    return (
+                      <option key={pid} value={pid}>
+                        {p.title.length > 60
+                          ? p.title.slice(0, 60) + "…"
+                          : p.title}
+                      </option>
+                    );
+                  })}
                 </select>
               </Field>
 
@@ -594,7 +482,6 @@ const TestimonialDrawer = ({ open, onClose, initial, onSave, saving, posts }) =>
               </div>
             </div>
 
-            {/* Footer */}
             <div className="flex-shrink-0 px-6 py-4 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-3">
               <button
                 onClick={onClose}
@@ -695,7 +582,7 @@ const ConfirmDelete = ({ open, testimonial, onCancel, onConfirm, deleting }) => 
 );
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const STATUS_TABS = [
@@ -723,11 +610,26 @@ const AdminBlogTestimonials = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [testRes, postsRes] = await Promise.all([
+        blogAPI.getAdminTestimonials({}),
+        blogAPI.getAdminPosts({ limit: 500, publishedOnly: false }),
+      ]);
+      setTestimonials((testRes.data || []).map(normalizeTestimonial));
+      setPosts(postsRes.data?.posts || []);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load testimonials");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setPosts(mockPosts);
-    setTestimonials(buildMockTestimonials(mockPosts));
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
@@ -738,7 +640,13 @@ const AdminBlogTestimonials = () => {
   }, [testimonials]);
 
   const statusCounts = useMemo(() => {
-    const base = { all: testimonials.length, pending: 0, approved: 0, hidden: 0, featured: 0 };
+    const base = {
+      all: testimonials.length,
+      pending: 0,
+      approved: 0,
+      hidden: 0,
+      featured: 0,
+    };
     testimonials.forEach((t) => {
       base[t.status] = (base[t.status] || 0) + 1;
       if (t.featured) base.featured += 1;
@@ -748,7 +656,7 @@ const AdminBlogTestimonials = () => {
 
   const postById = useMemo(() => {
     const m = new Map();
-    posts.forEach((p) => m.set(p.id, p));
+    posts.forEach((p) => m.set(p._id || p.id, p));
     return m;
   }, [posts]);
 
@@ -777,7 +685,6 @@ const AdminBlogTestimonials = () => {
     }
 
     list.sort((a, b) => {
-      // Pinned first, then by chosen sort
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       if (sortBy === "newest")
         return new Date(b.createdAt) - new Date(a.createdAt);
@@ -803,53 +710,99 @@ const AdminBlogTestimonials = () => {
 
   const handleSave = async (payload) => {
     setSaving(true);
-    // Replace with blogAPI.createTestimonial / updateTestimonial
-    await new Promise((r) => setTimeout(r, 400));
-    setTestimonials((prev) => {
-      const exists = prev.find((t) => t.id === payload.id);
-      if (exists) return prev.map((t) => (t.id === payload.id ? payload : t));
-      return [payload, ...prev];
-    });
-    toast.success(editing?.id ? "Testimonial updated" : "Testimonial added");
-    setSaving(false);
-    setDrawerOpen(false);
+    try {
+      const body = {
+        author: payload.author.trim(),
+        role: payload.role || "",
+        avatar: payload.avatar || "",
+        email: payload.email || "",
+        body: payload.body.trim(),
+        source: payload.source || null,
+        sourceLabel: payload.sourceLabel || "",
+        status: payload.status || "pending",
+        featured: payload.featured === true,
+        pinned: payload.pinned === true,
+        tags: payload.tags || [],
+      };
+
+      if (editing?.id) {
+        await blogAPI.updateTestimonial(editing.id, body);
+        toast.success("Testimonial updated");
+      } else {
+        await blogAPI.createTestimonial(body);
+        toast.success("Testimonial added");
+      }
+      await fetchData();
+      setDrawerOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to save testimonial");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setTestimonials((prev) =>
-      prev.filter((t) => t.id !== deleteTarget.id)
-    );
-    toast.success("Testimonial deleted");
-    setDeleting(false);
-    setDeleteTarget(null);
+    try {
+      await blogAPI.deleteTestimonial(deleteTarget.id);
+      setTestimonials((prev) => prev.filter((t) => t.id !== deleteTarget.id));
+      toast.success("Testimonial deleted");
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const setStatus = (t, status) => {
-    setTestimonials((prev) =>
-      prev.map((x) => (x.id === t.id ? { ...x, status } : x))
+  const setStatus = async (t, status) => {
+    const prev = testimonials;
+    setTestimonials((list) =>
+      list.map((x) => (x.id === t.id ? { ...x, status } : x))
     );
-    const labels = { approved: "Approved", hidden: "Hidden", pending: "Moved to pending" };
-    toast.success(labels[status] || "Updated");
+    try {
+      await blogAPI.updateTestimonial(t.id, { status });
+      const labels = {
+        approved: "Approved",
+        hidden: "Hidden",
+        pending: "Moved to pending",
+      };
+      toast.success(labels[status] || "Updated");
+    } catch (err) {
+      setTestimonials(prev);
+      toast.error(err.response?.data?.message || "Update failed");
+    }
   };
 
-  const toggleFeatured = (t) => {
-    setTestimonials((prev) =>
-      prev.map((x) =>
-        x.id === t.id ? { ...x, featured: !x.featured } : x
-      )
+  const toggleFeatured = async (t) => {
+    const next = !t.featured;
+    const prev = testimonials;
+    setTestimonials((list) =>
+      list.map((x) => (x.id === t.id ? { ...x, featured: next } : x))
     );
-    toast.success(t.featured ? "Unfeatured" : "Featured");
+    try {
+      await blogAPI.updateTestimonial(t.id, { featured: next });
+      toast.success(next ? "Featured" : "Unfeatured");
+    } catch (err) {
+      setTestimonials(prev);
+      toast.error(err.response?.data?.message || "Update failed");
+    }
   };
 
-  const togglePinned = (t) => {
-    setTestimonials((prev) =>
-      prev.map((x) =>
-        x.id === t.id ? { ...x, pinned: !x.pinned } : x
-      )
+  const togglePinned = async (t) => {
+    const next = !t.pinned;
+    const prev = testimonials;
+    setTestimonials((list) =>
+      list.map((x) => (x.id === t.id ? { ...x, pinned: next } : x))
     );
-    toast.success(t.pinned ? "Unpinned" : "Pinned to top");
+    try {
+      await blogAPI.updateTestimonial(t.id, { pinned: next });
+      toast.success(next ? "Pinned to top" : "Unpinned");
+    } catch (err) {
+      setTestimonials(prev);
+      toast.error(err.response?.data?.message || "Update failed");
+    }
   };
 
   const copyQuote = (t) => {
@@ -857,10 +810,10 @@ const AdminBlogTestimonials = () => {
     toast.success("Quote copied");
   };
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (same UI as before) ---------- */
   return (
     <div className="space-y-6 pb-24">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400 font-semibold mb-2">
@@ -884,13 +837,13 @@ const AdminBlogTestimonials = () => {
         </button>
       </div>
 
-      {/* ---------- STATS ---------- */}
+      {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total", value: stats(testimonials).total },
-          { label: "Approved", value: stats(testimonials).approved },
-          { label: "Pending", value: stats(testimonials).pending },
-          { label: "Featured", value: stats(testimonials).featured },
+          { label: "Total", value: statusCounts.all },
+          { label: "Approved", value: statusCounts.approved },
+          { label: "Pending", value: statusCounts.pending },
+          { label: "Featured", value: statusCounts.featured },
         ].map((s) => (
           <div
             key={s.label}
@@ -906,7 +859,7 @@ const AdminBlogTestimonials = () => {
         ))}
       </div>
 
-      {/* ---------- STATUS TABS ---------- */}
+      {/* STATUS TABS */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-1 px-1">
         {STATUS_TABS.map((t) => (
           <button
@@ -932,7 +885,7 @@ const AdminBlogTestimonials = () => {
         ))}
       </div>
 
-      {/* ---------- TOOLBAR ---------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -970,7 +923,7 @@ const AdminBlogTestimonials = () => {
         </div>
       </div>
 
-      {/* ---------- LIST ---------- */}
+      {/* LIST */}
       {loading ? (
         <div className="py-20 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
@@ -1009,7 +962,6 @@ const AdminBlogTestimonials = () => {
                 transition={{ delay: Math.min(i * 0.03, 0.3) }}
                 className="group rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-5 flex flex-col"
               >
-                {/* Header row */}
                 <div className="flex items-start justify-between gap-3 mb-4">
                   <div className="flex items-start gap-3 min-w-0">
                     <Avatar name={t.author} avatar={t.avatar} />
@@ -1046,7 +998,6 @@ const AdminBlogTestimonials = () => {
                   </div>
                 </div>
 
-                {/* Quote */}
                 <div className="flex items-start gap-3 mb-4">
                   <Quote className="w-4 h-4 text-stone-300 dark:text-stone-700 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed italic">
@@ -1054,7 +1005,6 @@ const AdminBlogTestimonials = () => {
                   </p>
                 </div>
 
-                {/* Tags + source */}
                 <div className="flex flex-wrap items-center gap-2 mb-4">
                   {t.tags?.map((tag) => (
                     <span
@@ -1066,16 +1016,19 @@ const AdminBlogTestimonials = () => {
                   ))}
                   {post && (
                     <Link
-                      to={`/admin/blog/edit/${post.id}`}
+                      to={`/admin/blog/edit/${post._id || post.id}`}
                       className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold hover:underline"
                     >
                       <MessageSquare className="w-2.5 h-2.5" />
-                      On "{post.title.length > 30 ? post.title.slice(0, 30) + "…" : post.title}"
+                      On "
+                      {post.title.length > 30
+                        ? post.title.slice(0, 30) + "…"
+                        : post.title}
+                      "
                     </Link>
                   )}
                 </div>
 
-                {/* Actions */}
                 <div className="mt-auto pt-4 border-t border-stone-100 dark:border-stone-900 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1">
                     {t.status !== "approved" && (
@@ -1158,7 +1111,6 @@ const AdminBlogTestimonials = () => {
         </div>
       )}
 
-      {/* ---------- FOOTER HINT ---------- */}
       {!loading && filtered.length > 0 && (
         <p className="text-xs text-stone-500 dark:text-stone-500 text-center">
           {filtered.length}{" "}
@@ -1168,7 +1120,6 @@ const AdminBlogTestimonials = () => {
         </p>
       )}
 
-      {/* ---------- DRAWER ---------- */}
       <TestimonialDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -1178,7 +1129,6 @@ const AdminBlogTestimonials = () => {
         posts={posts}
       />
 
-      {/* ---------- DELETE ---------- */}
       <ConfirmDelete
         open={!!deleteTarget}
         testimonial={deleteTarget}
@@ -1189,15 +1139,5 @@ const AdminBlogTestimonials = () => {
     </div>
   );
 };
-
-/* Small helper so we don't recompute counts inline */
-function stats(list) {
-  return {
-    total: list.length,
-    approved: list.filter((t) => t.status === "approved").length,
-    pending: list.filter((t) => t.status === "pending").length,
-    featured: list.filter((t) => t.featured).length,
-  };
-}
 
 export default AdminBlogTestimonials;

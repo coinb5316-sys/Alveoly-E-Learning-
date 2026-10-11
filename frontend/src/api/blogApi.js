@@ -29,6 +29,10 @@ const adminBlogAPI = {
   updateCategory: (id, data) => api.put(`/admin/blog/categories/${id}`, data).then((r) => r.data),
   deleteCategory: (id) => api.delete(`/admin/blog/categories/${id}`).then((r) => r.data),
 
+  // Archive (all posts, all statuses, full populate)
+  getArchive: () => api.get("/admin/blog/archive").then((r) => r.data),
+
+
   // Tags
   getTags: () => api.get("/admin/blog/tags").then((r) => r.data),
   createTag: (data) => api.post("/admin/blog/tags", data).then((r) => r.data),
@@ -104,6 +108,8 @@ const adminBlogAPI = {
     api.post("/admin/blog/media", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     }).then((r) => r.data),
+    deleteMedia: (urls) =>
+  api.delete("/admin/blog/media", { data: { urls } }).then((r) => r.data),
 
   // Policies
   getAdminPolicy: (key) =>
@@ -119,6 +125,7 @@ const publicBlogAPI = {
   getPostById: (id) => api.get(`/blog/posts/${id}`).then((r) => r.data),
   getPostsByCategory: (slug, params) =>
     api.get(`/blog/posts/category/${slug}`, { params }).then((r) => r.data),
+   getAuthors: () => api.get("/blog/authors").then((r) => r.data),
   getPostsByAuthor: (id, params) =>
     api.get(`/blog/authors/${id}`, { params }).then((r) => r.data),
   searchPosts: (q, params) =>

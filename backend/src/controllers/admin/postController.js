@@ -1,4 +1,5 @@
-// server/controllers/admin/postController.js
+// backend/src/controllers/admin/postController.js
+import mongoose from "mongoose";
 import Post from "../../models/Post.js";
 import Author from "../../models/Author.js";
 import Category from "../../models/Category.js";
@@ -6,7 +7,8 @@ import { uploadToCloudinary } from "../../../config/cloudinary.js";
 
 /* ---------- Helpers ---------- */
 const parseJSONField = (val, fallback) => {
-  if (!val) return fallback;
+  if (val === undefined || val === null || val === "") return fallback;
+  if (typeof val !== "string") return val;
   try {
     return JSON.parse(val);
   } catch {
@@ -14,11 +16,126 @@ const parseJSONField = (val, fallback) => {
   }
 };
 
+const parseBool = (val, fallback) => {
+  if (val === undefined || val === null || val === "") return fallback;
+  if (typeof val === "boolean") return val;
+  return String(val).toLowerCase() === "true";
+};
+
 const calculateReadingTime = (html = "") => {
   const text = html.replace(/<[^>]*>/g, " ");
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.ceil(words / 220));
 };
+
+/* Build the write payload.
+   - On create (partial = false), fill in schema defaults.
+   - On update (partial = true), ONLY include keys the client actually sent.
+     This is what prevents a one-field toggle from wiping metadata. */
+const buildPostPayload = (body, { partial = false } = {}) => {
+  const payload = {};
+
+  const copyString = (key) => {
+    if (body[key] !== undefined) {
+      payload[key] =
+        typeof body[key] === "string" ? body[key] : String(body[key]);
+    }
+  };
+
+  [
+    "title",
+    "slug",
+    "subtitle",
+    "excerpt",
+    "content",
+    "image",
+    "videoUrl",
+    "audioUrl",
+    "metaDescription",
+    "metaKeywords",
+  ].forEach(copyString);
+
+  if (body.categoryId !== undefined) {
+    payload.categoryId = body.categoryId || null;
+  }
+  if (body.authorId !== undefined) {
+    payload.authorId = body.authorId || null;
+  }
+  if (body.reviewedBy !== undefined) {
+    payload.reviewedBy = body.reviewedBy || null;
+  }
+  if (body.status !== undefined) {
+    payload.status = body.status;
+  }
+
+  if (body.featured !== undefined) {
+    payload.featured = parseBool(body.featured, false);
+  }
+  if (body.editorsPick !== undefined) {
+    payload.editorsPick = parseBool(body.editorsPick, false);
+  }
+  if (body.medicallyReviewed !== undefined) {
+    payload.medicallyReviewed = parseBool(body.medicallyReviewed, false);
+  }
+
+  if (body.tags !== undefined) {
+    payload.tags = parseJSONField(body.tags, []);
+  }
+  if (body.references !== undefined) {
+    payload.references = parseJSONField(body.references, []);
+  }
+  if (body.learningObjectives !== undefined) {
+    payload.learningObjectives = parseJSONField(body.learningObjectives, []);
+  }
+  if (body.statistics !== undefined) {
+    payload.statistics = parseJSONField(body.statistics, []);
+  }
+  if (body.relatedPosts !== undefined) {
+    payload.relatedPosts = parseJSONField(body.relatedPosts, []);
+  }
+
+  if (body.publishedAt !== undefined) {
+    const d = new Date(body.publishedAt);
+    if (!Number.isNaN(d.getTime())) payload.publishedAt = d;
+  }
+
+  if (payload.content !== undefined) {
+    payload.readingTime = calculateReadingTime(payload.content);
+  }
+
+  if (!partial) {
+    if (payload.status === undefined) payload.status = "draft";
+    if (payload.featured === undefined) payload.featured = false;
+    if (payload.editorsPick === undefined) payload.editorsPick = false;
+    if (payload.medicallyReviewed === undefined) payload.medicallyReviewed = false;
+  }
+
+  return payload;
+};
+
+/* Consistent shape for every response that returns a post */
+const shapePost = (p) => ({
+  ...p,
+  id: p._id,
+  author: p.authorId,
+  authorId: p.authorId?._id || p.authorId,
+  reviewer: p.reviewedBy,
+  category: p.categoryId,
+  categoryId: p.categoryId?._id || p.categoryId,
+  categoryName: p.categoryId?.name || null,
+  categorySlug: p.categoryId?.slug || null,
+  status: p.status || "published",
+  featured: p.featured === true,
+  editorsPick: p.editorsPick === true,
+  medicallyReviewed: p.medicallyReviewed === true,
+});
+
+/* Populate + shape in one call */
+const findPopulated = (id) =>
+  Post.findById(id)
+    .populate("authorId", "name slug avatar role credentials title specialties social")
+    .populate("categoryId", "name slug")
+    .lean();
 
 /* ---------- List ---------- */
 export const getPosts = async (req, res) => {
@@ -48,53 +165,54 @@ export const getPosts = async (req, res) => {
     }
 
     const sortMap = {
-      newest: { publishedAt: -1 },
-      oldest: { publishedAt: 1 },
+      newest: { publishedAt: -1, createdAt: -1 },
+      oldest: { publishedAt: 1, createdAt: 1 },
       title: { title: 1 },
       views: { views: -1 },
       likes: { likes: -1 },
     };
 
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 500);
+    const safePage = Math.max(Number(page) || 1, 1);
+
     const [posts, total] = await Promise.all([
       Post.find(filter)
-        .populate("authorId", "name avatar role credentials")
+        .populate("authorId", "name slug avatar role credentials title specialties social")
         .populate("categoryId", "name slug")
-        .sort(sortMap[sort] || { publishedAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(Number(limit))
+        .sort(sortMap[sort] || sortMap.newest)
+        .skip((safePage - 1) * safeLimit)
+        .limit(safeLimit)
         .lean(),
       Post.countDocuments(filter),
     ]);
 
-    // Attach full author as `author` for the frontend shape
-    const shaped = posts.map((p) => ({
-      ...p,
-      author: p.authorId,
-      category: p.categoryId?.name || null,
-      categorySlug: p.categoryId?.slug || null,
-    }));
-
     res.json({
       success: true,
       data: {
-        posts: shaped,
+        posts: posts.map(shapePost),
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: safePage,
+          limit: safeLimit,
           total,
-          totalPages: Math.ceil(total / limit),
+          totalPages: Math.ceil(total / safeLimit),
         },
       },
     });
   } catch (err) {
+    console.error("getPosts error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
+/* ---------- Featured (public) ---------- */
 export const getFeaturedPost = async (req, res) => {
   try {
     const featured =
-      (await Post.findOne({ featured: true, editorsPick: true, status: "published" })
+      (await Post.findOne({
+        featured: true,
+        editorsPick: true,
+        status: "published",
+      })
         .populate("authorId", "name avatar role")
         .populate("categoryId", "name slug")
         .lean()) ||
@@ -103,13 +221,13 @@ export const getFeaturedPost = async (req, res) => {
         .populate("categoryId", "name slug")
         .lean());
 
-    res.json({ success: true, data: featured || null });
+    res.json({ success: true, data: featured ? shapePost(featured) : null });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-/* ---------- Read one ---------- */
+/* ---------- Read one (admin, full populate) ---------- */
 export const getPostById = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
@@ -125,19 +243,13 @@ export const getPostById = async (req, res) => {
         .json({ success: false, message: "Post not found" });
     }
 
-    res.json({
-      success: true,
-      data: {
-        ...post,
-        author: post.authorId,
-        reviewer: post.reviewedBy,
-      },
-    });
+    res.json({ success: true, data: shapePost(post) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
+/* ---------- Public read by slug ---------- */
 export const getPostBySlug = async (req, res) => {
   try {
     const post = await Post.findOne({ slug: req.params.slug })
@@ -156,13 +268,10 @@ export const getPostBySlug = async (req, res) => {
         .json({ success: false, message: "Post not found" });
     }
 
-    // Attach the related posts as `related` for the frontend
     res.json({
       success: true,
       data: {
-        ...post,
-        author: post.authorId,
-        reviewer: post.reviewedBy,
+        ...shapePost(post),
         related: post.relatedPosts || [],
       },
     });
@@ -174,24 +283,30 @@ export const getPostBySlug = async (req, res) => {
 /* ---------- Create ---------- */
 export const createPost = async (req, res) => {
   try {
-    const payload = { ...req.body };
+    const payload = buildPostPayload(req.body);
 
-    // Parse JSON-encoded fields
-    payload.tags = parseJSONField(req.body.tags, []);
-    payload.references = parseJSONField(req.body.references, []);
-    payload.learningObjectives = parseJSONField(req.body.learningObjectives, []);
-    payload.statistics = parseJSONField(req.body.statistics, []);
-    payload.relatedPosts = parseJSONField(req.body.relatedPosts, []);
+    if (!payload.title) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Title is required." });
+    }
+    if (!payload.content) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Content is required." });
+    }
+    if (!payload.authorId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Author is required." });
+    }
+    if (!payload.categoryId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Category is required." });
+    }
 
-    // Booleans from FormData arrive as strings
-    payload.featured = req.body.featured === "true" || req.body.featured === true;
-    payload.editorsPick = req.body.editorsPick === "true" || req.body.editorsPick === true;
-    payload.medicallyReviewed = req.body.medicallyReviewed === "true" || req.body.medicallyReviewed === true;
-
-    // Auto reading time
-    payload.readingTime = calculateReadingTime(payload.content || "");
-
-    // Featured image upload
+    // Featured image — file upload wins over a pasted URL
     if (req.files?.featuredImage?.[0]) {
       const result = await uploadToCloudinary(
         req.files.featuredImage[0].buffer,
@@ -200,58 +315,58 @@ export const createPost = async (req, res) => {
       payload.image = result.secure_url;
     }
 
-    // Gallery images
-    if (req.files?.galleryImages) {
-      const uploaded = await Promise.all(
-        req.files.galleryImages.map((f) =>
-          uploadToCloudinary(f.buffer, { folder: "blog/posts/gallery" })
+    // Gallery: merge pasted URLs (JSON string) + uploaded files
+    const existingGalleryUrls = parseJSONField(req.body.galleryImages, []);
+    const uploadedGallery = req.files?.galleryImages
+      ? await Promise.all(
+          req.files.galleryImages.map((f) =>
+            uploadToCloudinary(f.buffer, { folder: "blog/posts/gallery" })
+          )
         )
-      );
-      payload.gallery = uploaded.map((r) => r.secure_url);
-    } else {
-      payload.gallery = parseJSONField(req.body.galleryImages, []);
-    }
-
-    // Reviewer: clear if empty string
-    if (!payload.reviewedBy) payload.reviewedBy = null;
+      : [];
+    payload.gallery = [
+      ...existingGalleryUrls,
+      ...uploadedGallery.map((r) => r.secure_url),
+    ];
 
     const post = await Post.create(payload);
 
-    // Update author's post count
-    await Author.findByIdAndUpdate(payload.authorId, {
-      $inc: { postCount: 1 },
-    });
+    if (payload.authorId) {
+      await Author.findByIdAndUpdate(payload.authorId, {
+        $inc: { postCount: 1 },
+      });
+    }
 
-    res.status(201).json({ success: true, data: post });
+    const populated = await findPopulated(post._id);
+    res.status(201).json({ success: true, data: shapePost(populated) });
   } catch (err) {
+    console.error("createPost error:", err);
+
     if (err.code === 11000) {
       return res
-        .status(400)
-        .json({ success: false, message: "Slug already in use" });
+        .status(409)
+        .json({ success: false, message: "Slug already in use." });
+    }
+    if (err instanceof mongoose.Error.ValidationError) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        fields: Object.keys(err.errors).reduce((a, k) => {
+          a[k] = err.errors[k].message;
+          return a;
+        }, {}),
+      });
     }
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-/* ---------- Update ---------- */
+/* ---------- Update (partial-aware) ---------- */
 export const updatePost = async (req, res) => {
   try {
-    const payload = { ...req.body };
+    const payload = buildPostPayload(req.body, { partial: true });
 
-    payload.tags = parseJSONField(req.body.tags, []);
-    payload.references = parseJSONField(req.body.references, []);
-    payload.learningObjectives = parseJSONField(req.body.learningObjectives, []);
-    payload.statistics = parseJSONField(req.body.statistics, []);
-    payload.relatedPosts = parseJSONField(req.body.relatedPosts, []);
-
-    payload.featured = req.body.featured === "true" || req.body.featured === true;
-    payload.editorsPick = req.body.editorsPick === "true" || req.body.editorsPick === true;
-    payload.medicallyReviewed = req.body.medicallyReviewed === "true" || req.body.medicallyReviewed === true;
-
-    if (payload.content) {
-      payload.readingTime = calculateReadingTime(payload.content);
-    }
-
+    // Cover: file wins; otherwise keep whatever the client sent as `image`
     if (req.files?.featuredImage?.[0]) {
       const result = await uploadToCloudinary(
         req.files.featuredImage[0].buffer,
@@ -260,16 +375,26 @@ export const updatePost = async (req, res) => {
       payload.image = result.secure_url;
     }
 
-    if (req.files?.galleryImages) {
-      const uploaded = await Promise.all(
-        req.files.galleryImages.map((f) =>
-          uploadToCloudinary(f.buffer, { folder: "blog/posts/gallery" })
-        )
-      );
-      payload.gallery = uploaded.map((r) => r.secure_url);
-    }
+    // Gallery: only touch it if the client sent something for it
+    const sentGalleryField = req.body.galleryImages !== undefined;
+    const sentGalleryFiles =
+      Array.isArray(req.files?.galleryImages) &&
+      req.files.galleryImages.length > 0;
 
-    if (!payload.reviewedBy) payload.reviewedBy = null;
+    if (sentGalleryField || sentGalleryFiles) {
+      const existingUrls = parseJSONField(req.body.galleryImages, []);
+      const uploaded = sentGalleryFiles
+        ? await Promise.all(
+            req.files.galleryImages.map((f) =>
+              uploadToCloudinary(f.buffer, { folder: "blog/posts/gallery" })
+            )
+          )
+        : [];
+      payload.gallery = [
+        ...existingUrls,
+        ...uploaded.map((r) => r.secure_url),
+      ];
+    }
 
     const post = await Post.findByIdAndUpdate(req.params.id, payload, {
       new: true,
@@ -282,8 +407,26 @@ export const updatePost = async (req, res) => {
         .json({ success: false, message: "Post not found" });
     }
 
-    res.json({ success: true, data: post });
+    const populated = await findPopulated(post._id);
+    res.json({ success: true, data: shapePost(populated) });
   } catch (err) {
+    console.error("updatePost error:", err);
+
+    if (err.code === 11000) {
+      return res
+        .status(409)
+        .json({ success: false, message: "Slug already in use." });
+    }
+    if (err instanceof mongoose.Error.ValidationError) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        fields: Object.keys(err.errors).reduce((a, k) => {
+          a[k] = err.errors[k].message;
+          return a;
+        }, {}),
+      });
+    }
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -308,32 +451,80 @@ export const deletePost = async (req, res) => {
   }
 };
 
-/* ---------- Bulk actions ---------- */
+/* ---------- Bulk update ---------- */
 export const bulkUpdatePosts = async (req, res) => {
   try {
     const { ids, updates } = req.body;
-    if (!ids?.length) {
+    if (!Array.isArray(ids) || !ids.length) {
       return res
         .status(400)
         .json({ success: false, message: "No ids provided" });
     }
-    await Post.updateMany({ _id: { $in: ids } }, { $set: updates });
-    res.json({ success: true, message: `${ids.length} posts updated` });
+
+    // Whitelist — only these fields can be bulk-updated.
+    const allowed = ["status", "featured", "editorsPick", "medicallyReviewed"];
+    const clean = {};
+    Object.keys(updates || {}).forEach((k) => {
+      if (!allowed.includes(k)) return;
+      if (k === "status") {
+        clean.status = updates[k];
+      } else {
+        clean[k] = parseBool(updates[k], false);
+      }
+    });
+
+    if (Object.keys(clean).length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No valid fields to update" });
+    }
+
+    const result = await Post.updateMany(
+      { _id: { $in: ids } },
+      { $set: clean }
+    );
+    res.json({
+      success: true,
+      message: `${result.modifiedCount} posts updated`,
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
+/* ---------- Bulk delete ---------- */
 export const bulkDeletePosts = async (req, res) => {
   try {
     const { ids } = req.body;
-    if (!ids?.length) {
+    if (!Array.isArray(ids) || !ids.length) {
       return res
         .status(400)
         .json({ success: false, message: "No ids provided" });
     }
-    await Post.deleteMany({ _id: { $in: ids } });
-    res.json({ success: true, message: `${ids.length} posts deleted` });
+
+    const posts = await Post.find({ _id: { $in: ids } })
+      .select("authorId")
+      .lean();
+    const result = await Post.deleteMany({ _id: { $in: ids } });
+
+    const countsByAuthor = new Map();
+    posts.forEach((p) => {
+      if (!p.authorId) return;
+      const key = String(p.authorId);
+      countsByAuthor.set(key, (countsByAuthor.get(key) || 0) + 1);
+    });
+    await Promise.all(
+      [...countsByAuthor.entries()].map(([authorId, n]) =>
+        Author.findByIdAndUpdate(authorId, { $inc: { postCount: -n } })
+      )
+    );
+
+    res.json({
+      success: true,
+      message: `${result.deletedCount} posts deleted`,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -361,7 +552,6 @@ export const toggleLike = async (req, res) => {
     }
 
     const hasLiked = post.likedBy.some((id) => id.equals(userId));
-
     if (hasLiked) {
       post.likedBy.pull(userId);
       post.likes = Math.max(0, post.likes - 1);
@@ -369,10 +559,25 @@ export const toggleLike = async (req, res) => {
       post.likedBy.push(userId);
       post.likes += 1;
     }
-
     await post.save();
     res.json({ success: true, likes: post.likes, liked: !hasLiked });
   } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/* ---------- Admin archive (all statuses) ---------- */
+export const getArchive = async (req, res) => {
+  try {
+    const posts = await Post.find()
+      .populate("authorId", "name avatar role")
+      .populate("categoryId", "name slug")
+      .sort({ publishedAt: -1, createdAt: -1 })
+      .lean();
+
+    res.json({ success: true, data: posts.map(shapePost) });
+  } catch (err) {
+    console.error("getArchive error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };

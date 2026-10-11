@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogPosts.jsx — EDITORIAL ADMIN
-// Post management for The Alveoly Journal.
+// src/pages/admin/blog/AdminBlogPosts.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,12 +10,7 @@ import {
   Shield, Copy, Send, Archive,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend is ready
-import {
-  posts as mockPosts,
-  authors as mockAuthors,
-  categories as mockCategories,
-} from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
@@ -68,14 +62,32 @@ const STATUSES = {
   },
 };
 
+/* Normalize a post from the API */
+const normalizePost = (p) => ({
+  ...p,
+  id: p._id || p.id,
+  status: p.status || "published",
+  featured: p.featured === true,
+  editorsPick: p.editorsPick === true,
+  medicallyReviewed: p.medicallyReviewed === true,
+  author: p.author || p.authorId,
+  authorId: p.authorId?._id || p.authorId,
+  category: p.category || p.categoryId,
+  categoryId: p.categoryId?._id || p.categoryId,
+  categoryName: p.categoryName || p.category?.name || null,
+  publishedAt:
+    p.publishedAt instanceof Date
+      ? p.publishedAt.toISOString()
+      : p.publishedAt || p.createdAt,
+});
+
 /* ============================================================
-   PRIMITIVES
+   PRIMITIVES (unchanged from your original)
 ============================================================ */
 
 const Avatar = ({ author, size = "sm" }) => {
   const [broken, setBroken] = useState(false);
-  const cls =
-    size === "sm" ? "w-7 h-7 text-[10px]" : "w-9 h-9 text-xs";
+  const cls = size === "sm" ? "w-7 h-7 text-[10px]" : "w-9 h-9 text-xs";
   if (!author) return null;
   if (author.avatar && !broken) {
     return (
@@ -122,7 +134,15 @@ const StatusBadge = ({ status }) => {
    BULK ACTION BAR
 ============================================================ */
 
-const BulkBar = ({ count, onClear, onPublish, onUnpublish, onFeature, onUnfeature, onDelete }) => (
+const BulkBar = ({
+  count,
+  onClear,
+  onPublish,
+  onUnpublish,
+  onFeature,
+  onUnfeature,
+  onDelete,
+}) => (
   <AnimatePresence>
     {count > 0 && (
       <motion.div
@@ -189,7 +209,7 @@ const BulkBar = ({ count, onClear, onPublish, onUnpublish, onFeature, onUnfeatur
 );
 
 /* ============================================================
-   CONFIRM DELETE
+   CONFIRM DELETE (unchanged)
 ============================================================ */
 
 const ConfirmBulkDelete = ({ open, count, onCancel, onConfirm, deleting }) => (
@@ -252,7 +272,7 @@ const ConfirmBulkDelete = ({ open, count, onCancel, onConfirm, deleting }) => (
 );
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const AdminBlogPosts = () => {
@@ -271,35 +291,31 @@ const AdminBlogPosts = () => {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [postsRes, authorsRes, catsRes] = await Promise.all([
+        blogAPI.getAdminPosts({ limit: 500, publishedOnly: false }),
+        blogAPI.getAuthors(),
+        blogAPI.getCategories(),
+      ]);
+      setPosts((postsRes.data?.posts || []).map(normalizePost));
+      setAuthors(authorsRes.data || []);
+      setCategories(catsRes.data || []);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load stories");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Replace with blogAPI.getPosts({ publishedOnly: false }) + getAuthors + getCategories
-    const normalized = mockPosts.map((p) => ({
-      ...p,
-      status: p.status || "published", // mock data doesn't ship a status
-      featured: !!p.featured,
-      editorsPick: !!p.editorsPick,
-      medicallyReviewed: !!p.medicallyReviewed,
-    }));
-    setPosts(normalized);
-    setAuthors(mockAuthors);
-    setCategories(mockCategories);
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
-  const authorById = useMemo(() => {
-    const m = new Map();
-    authors.forEach((a) => m.set(a.id, a));
-    return m;
-  }, [authors]);
-
-  const categoryById = useMemo(() => {
-    const m = new Map();
-    categories.forEach((c) => m.set(c.id, c));
-    return m;
-  }, [categories]);
-
   const statusCounts = useMemo(() => {
     const base = {
       all: posts.length,
@@ -324,10 +340,8 @@ const AdminBlogPosts = () => {
         (p) =>
           p.title.toLowerCase().includes(q) ||
           (p.excerpt || "").toLowerCase().includes(q) ||
-          (p.tags || []).some((t) => t.toLowerCase().includes(q)) ||
-          (authorById.get(p.authorId)?.name || "")
-            .toLowerCase()
-            .includes(q)
+          (p.tags || []).some((t) => String(t).toLowerCase().includes(q)) ||
+          (p.author?.name || "").toLowerCase().includes(q)
       );
     }
 
@@ -362,7 +376,6 @@ const AdminBlogPosts = () => {
     categoryFilter,
     authorFilter,
     sortBy,
-    authorById,
   ]);
 
   /* ---------- Selection ---------- */
@@ -383,82 +396,135 @@ const AdminBlogPosts = () => {
   const clearSelection = () => setSelected(new Set());
 
   /* ---------- Row Actions ---------- */
-  const toggleFeature = (post) => {
-    setPosts((prev) =>
-      prev.map((p) => (p.id === post.id ? { ...p, featured: !p.featured } : p))
+  const toggleFeature = async (post) => {
+    const next = !post.featured;
+    const prev = posts;
+    setPosts((list) =>
+      list.map((p) => (p.id === post.id ? { ...p, featured: next } : p))
     );
-    toast.success(`${post.title} ${post.featured ? "unfeatured" : "featured"}`);
+    try {
+      await blogAPI.updatePostJSON(post.id, { featured: next });
+      toast.success(
+        `${post.title} ${next ? "featured" : "unfeatured"}`
+      );
+    } catch (err) {
+      setPosts(prev);
+      toast.error(err.response?.data?.message || "Failed to update");
+    }
   };
 
-  const togglePublish = (post) => {
+  const togglePublish = async (post) => {
     const nextStatus = post.status === "published" ? "draft" : "published";
-    setPosts((prev) =>
-      prev.map((p) => (p.id === post.id ? { ...p, status: nextStatus } : p))
+    const prev = posts;
+    setPosts((list) =>
+      list.map((p) => (p.id === post.id ? { ...p, status: nextStatus } : p))
     );
-    toast.success(
-      nextStatus === "published" ? "Published" : "Moved back to draft"
-    );
+    try {
+      await blogAPI.updatePostJSON(post.id, { status: nextStatus });
+      toast.success(
+        nextStatus === "published" ? "Published" : "Moved back to draft"
+      );
+    } catch (err) {
+      setPosts(prev);
+      toast.error(err.response?.data?.message || "Failed to update");
+    }
   };
 
-  const deleteOne = (post) => {
-    // In a real app, this opens a confirm modal. Here we do an optimistic delete.
-    if (!window.confirm(`Delete "${post.title}"? This cannot be undone.`)) return;
-    setPosts((prev) => prev.filter((p) => p.id !== post.id));
-    toast.success("Story deleted");
+  const deleteOne = async (post) => {
+    if (!window.confirm(`Delete "${post.title}"? This cannot be undone.`))
+      return;
+    const prev = posts;
+    setPosts((list) => list.filter((p) => p.id !== post.id));
+    try {
+      await blogAPI.deletePost(post.id);
+      toast.success("Story deleted");
+    } catch (err) {
+      setPosts(prev);
+      toast.error(err.response?.data?.message || "Delete failed");
+    }
   };
 
-  const duplicate = (post) => {
-    const copy = {
-      ...post,
-      id: `${post.id}-copy-${Date.now()}`,
-      title: `${post.title} (copy)`,
-      status: "draft",
-      publishedAt: new Date().toISOString(),
-      views: 0,
-      likes: 0,
-      comments: 0,
-    };
-    setPosts((prev) => [copy, ...prev]);
-    toast.success("Duplicated as draft");
+  const duplicate = async (post) => {
+    try {
+      const formData = new FormData();
+      formData.append("title", `${post.title} (copy)`);
+      formData.append("slug", `${post.slug}-copy-${Date.now()}`);
+      formData.append("excerpt", post.excerpt || "");
+      formData.append("content", post.content || "");
+      if (post.categoryId) formData.append("categoryId", post.categoryId);
+      if (post.authorId) formData.append("authorId", post.authorId);
+      formData.append("tags", JSON.stringify(post.tags || []));
+      formData.append("status", "draft");
+
+      await blogAPI.createPost(formData);
+      toast.success("Duplicated as draft");
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to duplicate");
+    }
   };
 
   /* ---------- Bulk Actions ---------- */
-  const applyBulkStatus = (status) => {
-    setPosts((prev) =>
-      prev.map((p) => (selected.has(p.id) ? { ...p, status } : p))
+  const applyBulkStatus = async (status) => {
+    const ids = [...selected];
+    const prev = posts;
+    setPosts((list) =>
+      list.map((p) => (selected.has(p.id) ? { ...p, status } : p))
     );
-    toast.success(
-      `${selected.size} ${selected.size === 1 ? "story" : "stories"} updated`
-    );
-    clearSelection();
+    try {
+      await blogAPI.bulkUpdatePosts(ids, { status });
+      toast.success(
+        `${ids.length} ${ids.length === 1 ? "story" : "stories"} updated`
+      );
+      clearSelection();
+    } catch (err) {
+      setPosts(prev);
+      toast.error(err.response?.data?.message || "Bulk update failed");
+    }
   };
 
-  const applyBulkFeature = (featured) => {
-    setPosts((prev) =>
-      prev.map((p) => (selected.has(p.id) ? { ...p, featured } : p))
+  const applyBulkFeature = async (featured) => {
+    const ids = [...selected];
+    const prev = posts;
+    setPosts((list) =>
+      list.map((p) => (selected.has(p.id) ? { ...p, featured } : p))
     );
-    toast.success(
-      `${selected.size} ${selected.size === 1 ? "story" : "stories"} updated`
-    );
-    clearSelection();
+    try {
+      await blogAPI.bulkUpdatePosts(ids, { featured });
+      toast.success(
+        `${ids.length} ${ids.length === 1 ? "story" : "stories"} updated`
+      );
+      clearSelection();
+    } catch (err) {
+      setPosts(prev);
+      toast.error(err.response?.data?.message || "Bulk update failed");
+    }
   };
 
   const confirmBulkDelete = async () => {
+    const ids = [...selected];
     setBulkDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setPosts((prev) => prev.filter((p) => !selected.has(p.id)));
-    toast.success(
-      `${selected.size} ${selected.size === 1 ? "story" : "stories"} deleted`
-    );
-    setBulkDeleting(false);
-    setBulkDeleteOpen(false);
-    clearSelection();
+    const prev = posts;
+    setPosts((list) => list.filter((p) => !selected.has(p.id)));
+    try {
+      await blogAPI.bulkDeletePosts(ids);
+      toast.success(
+        `${ids.length} ${ids.length === 1 ? "story" : "stories"} deleted`
+      );
+      setBulkDeleteOpen(false);
+      clearSelection();
+    } catch (err) {
+      setPosts(prev);
+      toast.error(err.response?.data?.message || "Bulk delete failed");
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (same UI as before) ---------- */
   return (
     <div className="space-y-6 pb-24">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400 font-semibold mb-2">
@@ -482,7 +548,7 @@ const AdminBlogPosts = () => {
         </Link>
       </div>
 
-      {/* ---------- STATUS TABS ---------- */}
+      {/* STATUS TABS */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-1 px-1">
         {[
           { key: "all", label: "All", count: statusCounts.all },
@@ -520,7 +586,7 @@ const AdminBlogPosts = () => {
           ))}
       </div>
 
-      {/* ---------- TOOLBAR ---------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -540,7 +606,7 @@ const AdminBlogPosts = () => {
           >
             <option value="all">All categories</option>
             {categories.map((c) => (
-              <option key={c.id} value={c.id}>
+              <option key={c._id || c.id} value={c._id || c.id}>
                 {c.name}
               </option>
             ))}
@@ -553,7 +619,7 @@ const AdminBlogPosts = () => {
           >
             <option value="all">All authors</option>
             {authors.map((a) => (
-              <option key={a.id} value={a.id}>
+              <option key={a._id || a.id} value={a._id || a.id}>
                 {a.name}
               </option>
             ))}
@@ -573,7 +639,7 @@ const AdminBlogPosts = () => {
         </div>
       </div>
 
-      {/* ---------- LIST ---------- */}
+      {/* LIST */}
       {loading ? (
         <div className="py-20 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
@@ -600,7 +666,6 @@ const AdminBlogPosts = () => {
         </div>
       ) : (
         <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 overflow-hidden">
-          {/* Column headers */}
           <div className="hidden lg:grid grid-cols-12 gap-4 px-5 py-3 bg-stone-50 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-800 text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold">
             <div className="col-span-1 flex items-center">
               <input
@@ -622,8 +687,6 @@ const AdminBlogPosts = () => {
           </div>
 
           {filtered.map((p, i) => {
-            const author = authorById.get(p.authorId);
-            const category = categoryById.get(p.categoryId);
             const isSelected = selected.has(p.id);
             return (
               <motion.div
@@ -632,10 +695,11 @@ const AdminBlogPosts = () => {
                 animate={{ opacity: 1 }}
                 transition={{ delay: Math.min(i * 0.015, 0.25) }}
                 className={`grid grid-cols-1 lg:grid-cols-12 gap-4 px-5 py-4 items-start lg:items-center group hover:bg-stone-50/60 dark:hover:bg-stone-900/30 transition ${
-                  i > 0 ? "border-t border-stone-100 dark:border-stone-900" : ""
+                  i > 0
+                    ? "border-t border-stone-100 dark:border-stone-900"
+                    : ""
                 } ${isSelected ? "bg-stone-50 dark:bg-stone-900/50" : ""}`}
               >
-                {/* Checkbox */}
                 <div className="lg:col-span-1 flex items-center">
                   <input
                     type="checkbox"
@@ -645,7 +709,6 @@ const AdminBlogPosts = () => {
                   />
                 </div>
 
-                {/* Story */}
                 <div className="lg:col-span-6 min-w-0 flex gap-3">
                   {p.image && (
                     <img
@@ -656,9 +719,9 @@ const AdminBlogPosts = () => {
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mb-1">
-                      {category && (
+                      {p.categoryName && (
                         <span className="text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold">
-                          {category.name}
+                          {p.categoryName}
                         </span>
                       )}
                       {p.featured && (
@@ -681,10 +744,7 @@ const AdminBlogPosts = () => {
                       )}
                     </div>
 
-                    <Link
-                      to={`/admin/blog/edit/${p.id}`}
-                      className="block"
-                    >
+                    <Link to={`/admin/blog/edit/${p.id}`} className="block">
                       <h3 className="font-serif text-base font-bold text-stone-900 dark:text-stone-50 leading-snug hover:text-rose-700 dark:hover:text-rose-400 transition line-clamp-2">
                         {p.title}
                       </h3>
@@ -715,25 +775,22 @@ const AdminBlogPosts = () => {
                   </div>
                 </div>
 
-                {/* Author */}
                 <div className="lg:col-span-2 flex items-center gap-2.5 min-w-0">
-                  <Avatar author={author} size="sm" />
+                  <Avatar author={p.author} size="sm" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-stone-800 dark:text-stone-200 truncate">
-                      {author?.name || "Unassigned"}
+                      {p.author?.name || "Unassigned"}
                     </p>
                     <p className="text-xs text-stone-500 truncate">
-                      {author?.role || "—"}
+                      {p.author?.role || "—"}
                     </p>
                   </div>
                 </div>
 
-                {/* Status */}
                 <div className="lg:col-span-2">
                   <StatusBadge status={p.status} />
                 </div>
 
-                {/* Actions */}
                 <div className="lg:col-span-1 flex items-center lg:justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition">
                   <Link
                     to={`/admin/blog/edit/${p.id}`}
@@ -790,7 +847,6 @@ const AdminBlogPosts = () => {
         </div>
       )}
 
-      {/* ---------- FOOTER HINT ---------- */}
       {!loading && filtered.length > 0 && (
         <p className="text-xs text-stone-500 dark:text-stone-500 text-center">
           {filtered.length} {filtered.length === 1 ? "story" : "stories"} shown
@@ -800,7 +856,6 @@ const AdminBlogPosts = () => {
         </p>
       )}
 
-      {/* ---------- BULK BAR ---------- */}
       <BulkBar
         count={selected.size}
         onClear={clearSelection}
@@ -811,7 +866,6 @@ const AdminBlogPosts = () => {
         onDelete={() => setBulkDeleteOpen(true)}
       />
 
-      {/* ---------- BULK DELETE MODAL ---------- */}
       <ConfirmBulkDelete
         open={bulkDeleteOpen}
         count={selected.size}

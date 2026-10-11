@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogMedia.jsx — EDITORIAL ADMIN
-// Media library for The Alveoly Journal.
+// src/pages/admin/blog/AdminBlogMedia.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,13 +9,7 @@ import {
   Calendar, HardDrive, Sparkles, CheckCircle, AlertTriangle,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend ready
-import {
-  posts as mockPosts,
-  podcasts as mockPodcasts,
-  videos as mockVideos,
-  authors as mockAuthors,
-} from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
@@ -35,99 +28,20 @@ const fileNameFromUrl = (url = "") => {
   try {
     const u = new URL(url);
     const last = u.pathname.split("/").filter(Boolean).pop() || "";
-    return decodeURIComponent(last);
+    return decodeURIComponent(last) || "image";
   } catch {
     return url.split("/").pop() || "image";
   }
 };
 
-/* ============================================================
-   BUILD MOCK LIBRARY FROM EXISTING DATA
-   Every image in the journal is pulled into a single catalog
-   with a usage map so we can warn before deleting.
-============================================================ */
-
-const buildLibrary = () => {
-  const catalog = new Map();
-
-  const register = (url, source) => {
-    if (!url || typeof url !== "string") return;
-    if (!/^https?:\/\//i.test(url)) return;
-    if (!catalog.has(url)) {
-      catalog.set(url, {
-        id: `img-${catalog.size + 1}-${Date.now()}`,
-        url,
-        fileName: fileNameFromUrl(url),
-        size: null,
-        width: null,
-        height: null,
-        uploadedAt: new Date(
-          Date.now() - Math.random() * 90 * 86400 * 1000
-        ).toISOString(),
-        usages: [],
-        tags: [],
-      });
-    }
-    catalog.get(url).usages.push(source);
-  };
-
-  // Post covers
-  mockPosts.forEach((p) => {
-    if (p.image)
-      register(p.image, {
-        type: "post-cover",
-        id: p.id,
-        title: p.title,
-        slug: p.slug,
-      });
-    // Gallery images
-    (p.gallery || []).forEach((g) =>
-      register(g, {
-        type: "post-gallery",
-        id: p.id,
-        title: p.title,
-        slug: p.slug,
-      })
-    );
-  });
-
-  // Podcast covers
-  mockPodcasts.forEach((pod) => {
-    if (pod.image)
-      register(pod.image, {
-        type: "podcast-cover",
-        id: pod.id,
-        title: pod.title,
-      });
-  });
-
-  // Video thumbnails — derived from the youtubeId
-  mockVideos.forEach((v) => {
-    if (v.youtubeId) {
-      const url = `https://img.youtube.com/vi/${v.youtubeId}/maxresdefault.jpg`;
-      register(url, {
-        type: "video-thumbnail",
-        id: v.id,
-        title: v.title,
-      });
-    }
-  });
-
-  // Author avatars
-  mockAuthors.forEach((a) => {
-    if (a.avatar)
-      register(a.avatar, {
-        type: "author-avatar",
-        id: a.id,
-        title: a.name,
-      });
-  });
-
-  // Sort by most recent
-  return [...catalog.values()].sort(
-    (a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)
-  );
-};
+/* Normalize an asset coming from either getMedia or uploadMedia */
+const normalizeAsset = (a) => ({
+  ...a,
+  id: a.id || a.url,
+  fileName: a.fileName || fileNameFromUrl(a.url),
+  usages: Array.isArray(a.usages) ? a.usages : [],
+  uploadedAt: a.uploadedAt || new Date().toISOString(),
+});
 
 /* ============================================================
    PRIMITIVES
@@ -197,7 +111,7 @@ const UsageBadge = ({ type }) => {
 };
 
 /* ============================================================
-   UPLOAD DROPZONE
+   UPLOAD DROPZONE — posts to the API
 ============================================================ */
 
 const UploadZone = ({ onUpload }) => {
@@ -208,30 +122,21 @@ const UploadZone = ({ onUpload }) => {
   const handleFiles = async (files) => {
     if (!files || files.length === 0) return;
     setProcessing(true);
-    const uploaded = [];
-    for (const file of Array.from(files)) {
-      // Simulate an upload — in production this posts to your storage
-      await new Promise((r) => setTimeout(r, 300));
-      const url = URL.createObjectURL(file);
-      uploaded.push({
-        id: `img-new-${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2, 8)}`,
-        url,
-        fileName: file.name,
-        size: file.size,
-        width: null,
-        height: null,
-        uploadedAt: new Date().toISOString(),
-        usages: [],
-        tags: [],
-      });
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach((f) => formData.append("files", f));
+      const res = await blogAPI.uploadMedia(formData);
+      const uploaded = (res.data || []).map(normalizeAsset);
+      onUpload(uploaded);
+      toast.success(
+        `${uploaded.length} ${uploaded.length === 1 ? "image" : "images"} uploaded`
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Upload failed");
+    } finally {
+      setProcessing(false);
     }
-    onUpload(uploaded);
-    setProcessing(false);
-    toast.success(
-      `${uploaded.length} ${uploaded.length === 1 ? "image" : "images"} uploaded`
-    );
   };
 
   return (
@@ -255,7 +160,8 @@ const UploadZone = ({ onUpload }) => {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full p-8 md:p-10 flex flex-col items-center text-center"
+        disabled={processing}
+        className="w-full p-8 md:p-10 flex flex-col items-center text-center disabled:opacity-60"
       >
         <div className="w-14 h-14 rounded-full bg-stone-100 dark:bg-stone-900 flex items-center justify-center mb-4">
           {processing ? (
@@ -290,7 +196,7 @@ const UploadZone = ({ onUpload }) => {
    DETAIL DRAWER
 ============================================================ */
 
-const MediaDrawer = ({ asset, onClose, onDelete, usedCount }) => {
+const MediaDrawer = ({ asset, onClose, onDelete, usedCount, deleting }) => {
   const [copied, setCopied] = useState(false);
 
   const copyUrl = () => {
@@ -318,7 +224,6 @@ const MediaDrawer = ({ asset, onClose, onDelete, usedCount }) => {
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
             className="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-white dark:bg-stone-950 z-50 flex flex-col border-l border-stone-200 dark:border-stone-800"
           >
-            {/* Header */}
             <div className="flex-shrink-0 px-6 py-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400 font-semibold mb-1">
@@ -336,9 +241,7 @@ const MediaDrawer = ({ asset, onClose, onDelete, usedCount }) => {
               </button>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              {/* Preview */}
               <div className="rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
                 <Thumb
                   url={asset.url}
@@ -347,7 +250,6 @@ const MediaDrawer = ({ asset, onClose, onDelete, usedCount }) => {
                 />
               </div>
 
-              {/* URL row */}
               <div className="p-4 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800">
                 <p className="text-xs uppercase tracking-wider text-stone-500 dark:text-stone-400 font-semibold mb-2">
                   Image URL
@@ -386,7 +288,6 @@ const MediaDrawer = ({ asset, onClose, onDelete, usedCount }) => {
                 </div>
               </div>
 
-              {/* Metadata */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-800">
                   <p className="text-xs uppercase tracking-wider text-stone-500 dark:text-stone-400 font-semibold mb-2">
@@ -406,7 +307,6 @@ const MediaDrawer = ({ asset, onClose, onDelete, usedCount }) => {
                 </div>
               </div>
 
-              {/* Usage */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs uppercase tracking-wider text-stone-500 dark:text-stone-400 font-semibold">
@@ -473,7 +373,6 @@ const MediaDrawer = ({ asset, onClose, onDelete, usedCount }) => {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="flex-shrink-0 px-6 py-4 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3">
               <p className="text-xs text-stone-500 dark:text-stone-500">
                 {usedCount > 0
@@ -482,7 +381,7 @@ const MediaDrawer = ({ asset, onClose, onDelete, usedCount }) => {
               </p>
               <button
                 onClick={() => onDelete(asset)}
-                disabled={usedCount > 0}
+                disabled={usedCount > 0 || deleting}
                 title={
                   usedCount > 0
                     ? "Remove this image from stories first"
@@ -490,8 +389,17 @@ const MediaDrawer = ({ asset, onClose, onDelete, usedCount }) => {
                 }
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-rose-600 text-white text-sm font-medium hover:bg-rose-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Deleting…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </>
+                )}
               </button>
             </div>
           </motion.aside>
@@ -578,7 +486,7 @@ const ConfirmBulkDelete = ({ open, count, inUseCount, onCancel, onConfirm, delet
 );
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const AdminBlogMedia = () => {
@@ -593,11 +501,24 @@ const AdminBlogMedia = () => {
   const [activeAsset, setActiveAsset] = useState(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [singleDeleting, setSingleDeleting] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await blogAPI.getMedia();
+      setAssets((res.data || []).map(normalizeAsset));
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load media");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setAssets(buildLibrary());
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
@@ -662,12 +583,18 @@ const AdminBlogMedia = () => {
       toast.error("This asset is in use — remove it from stories first");
       return;
     }
-    setDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setAssets((prev) => prev.filter((a) => a.id !== asset.id));
-    setActiveAsset(null);
-    setDeleting(false);
-    toast.success("Asset deleted");
+    setSingleDeleting(true);
+    try {
+      await blogAPI.deleteMedia([asset.url]);
+      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+      setActiveAsset(null);
+      toast.success("Asset deleted");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Delete failed");
+    } finally {
+      setSingleDeleting(false);
+    }
   };
 
   const toggleSelect = (id) => {
@@ -697,21 +624,30 @@ const AdminBlogMedia = () => {
   );
 
   const confirmBulkDelete = async () => {
+    const urls = selectedAssets.map((a) => a.url);
+    if (!urls.length) return;
+
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setAssets((prev) => prev.filter((a) => !selectedIds.has(a.id)));
-    toast.success(
-      `${selectedIds.size} ${selectedIds.size === 1 ? "asset" : "assets"} deleted`
-    );
-    setDeleting(false);
-    setBulkDeleteOpen(false);
-    clearSelection();
+    try {
+      await blogAPI.deleteMedia(urls);
+      setAssets((prev) => prev.filter((a) => !selectedIds.has(a.id)));
+      toast.success(
+        `${selectedIds.size} ${selectedIds.size === 1 ? "asset" : "assets"} deleted`
+      );
+      setBulkDeleteOpen(false);
+      clearSelection();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Bulk delete failed");
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (same UI as before) ---------- */
   return (
     <div className="space-y-6 pb-24">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400 font-semibold mb-2">
@@ -728,7 +664,7 @@ const AdminBlogMedia = () => {
         </div>
       </div>
 
-      {/* ---------- STATS ---------- */}
+      {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total assets", value: stats.total },
@@ -750,10 +686,10 @@ const AdminBlogMedia = () => {
         ))}
       </div>
 
-      {/* ---------- UPLOAD ---------- */}
+      {/* UPLOAD */}
       <UploadZone onUpload={handleUpload} />
 
-      {/* ---------- TOOLBAR ---------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -788,7 +724,6 @@ const AdminBlogMedia = () => {
             <option value="name">Sort: A–Z</option>
           </select>
 
-          {/* View toggle */}
           <div className="flex items-center gap-1 border border-stone-200 dark:border-stone-800 rounded-lg p-0.5">
             <button
               onClick={() => setViewMode("grid")}
@@ -816,7 +751,7 @@ const AdminBlogMedia = () => {
         </div>
       </div>
 
-      {/* ---------- SELECT-ALL + COUNT ---------- */}
+      {/* SELECT-ALL + COUNT */}
       {!loading && filtered.length > 0 && (
         <div className="flex items-center justify-between gap-3 px-1">
           <div className="flex items-center gap-3">
@@ -829,8 +764,7 @@ const AdminBlogMedia = () => {
               className="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:ring-0"
             />
             <span className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold">
-              {filtered.length}{" "}
-              {filtered.length === 1 ? "asset" : "assets"}
+              {filtered.length} {filtered.length === 1 ? "asset" : "assets"}
               {usageFilter !== "all" && ` · ${usageFilter}`}
             </span>
           </div>
@@ -845,7 +779,7 @@ const AdminBlogMedia = () => {
         </div>
       )}
 
-      {/* ---------- LIST / GRID ---------- */}
+      {/* LIST / GRID */}
       {loading ? (
         <div className="py-20 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
@@ -878,7 +812,6 @@ const AdminBlogMedia = () => {
                     : "border-stone-200 dark:border-stone-800"
                 }`}
               >
-                {/* Checkbox */}
                 <div
                   className="absolute top-2 left-2 z-10"
                   onClick={(e) => e.stopPropagation()}
@@ -891,7 +824,6 @@ const AdminBlogMedia = () => {
                   />
                 </div>
 
-                {/* Usage indicator */}
                 <div className="absolute top-2 right-2 z-10">
                   {used ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-semibold">
@@ -906,7 +838,6 @@ const AdminBlogMedia = () => {
                   )}
                 </div>
 
-                {/* Thumbnail */}
                 <button
                   onClick={() => setActiveAsset(asset)}
                   className="block w-full aspect-square bg-stone-100 dark:bg-stone-900"
@@ -918,7 +849,6 @@ const AdminBlogMedia = () => {
                   />
                 </button>
 
-                {/* Meta strip */}
                 <div className="p-2.5 border-t border-stone-100 dark:border-stone-900">
                   <p className="text-[11px] text-stone-700 dark:text-stone-300 truncate font-medium">
                     {asset.fileName}
@@ -942,7 +872,6 @@ const AdminBlogMedia = () => {
         </div>
       ) : (
         <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 overflow-hidden">
-          {/* Header row */}
           <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3 bg-stone-50 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-800 text-[10px] uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold">
             <div className="col-span-1" />
             <div className="col-span-5">File</div>
@@ -966,7 +895,6 @@ const AdminBlogMedia = () => {
                     : ""
                 } ${isSelected ? "bg-stone-50 dark:bg-stone-900/50" : ""}`}
               >
-                {/* Checkbox */}
                 <div className="md:col-span-1">
                   <input
                     type="checkbox"
@@ -976,7 +904,6 @@ const AdminBlogMedia = () => {
                   />
                 </div>
 
-                {/* File */}
                 <div className="md:col-span-5 flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setActiveAsset(asset)}
@@ -998,7 +925,6 @@ const AdminBlogMedia = () => {
                   </div>
                 </div>
 
-                {/* Usage */}
                 <div className="md:col-span-3 min-w-0">
                   {used ? (
                     <div className="flex items-center flex-wrap gap-1.5">
@@ -1019,12 +945,10 @@ const AdminBlogMedia = () => {
                   )}
                 </div>
 
-                {/* Date */}
                 <div className="md:col-span-2 text-xs text-stone-500 dark:text-stone-500">
                   {formatShortDate(asset.uploadedAt)}
                 </div>
 
-                {/* Actions */}
                 <div className="md:col-span-1 flex items-center md:justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
                   <button
                     onClick={() => copyUrl(asset.url)}
@@ -1047,7 +971,7 @@ const AdminBlogMedia = () => {
         </div>
       )}
 
-      {/* ---------- BULK BAR ---------- */}
+      {/* BULK BAR */}
       <AnimatePresence>
         {selectedIds.size > 0 && (
           <motion.div
@@ -1085,15 +1009,16 @@ const AdminBlogMedia = () => {
         )}
       </AnimatePresence>
 
-      {/* ---------- DETAIL DRAWER ---------- */}
+      {/* DETAIL DRAWER */}
       <MediaDrawer
         asset={activeAsset}
         onClose={() => setActiveAsset(null)}
         onDelete={deleteOne}
         usedCount={activeAsset ? activeAsset.usages.length : 0}
+        deleting={singleDeleting}
       />
 
-      {/* ---------- BULK DELETE ---------- */}
+      {/* BULK DELETE */}
       <ConfirmBulkDelete
         open={bulkDeleteOpen}
         count={selectedIds.size}

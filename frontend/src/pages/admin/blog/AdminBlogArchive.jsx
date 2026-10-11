@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogArchive.jsx — EDITORIAL ADMIN
-// Full chronological archive of everything the journal has published.
+// src/pages/admin/blog/AdminBlogArchive.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,12 +8,7 @@ import {
   Archive as ArchiveIcon, ArrowUpDown, FileText, Copy,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend ready
-import {
-  posts as mockPosts,
-  authors as mockAuthors,
-  categories as mockCategories,
-} from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
@@ -46,7 +40,6 @@ const monthLabel = (d) =>
       })
     : "Unscheduled";
 
-/* Group posts by month, newest first */
 const groupByMonth = (posts) => {
   const groups = {};
   posts.forEach((p) => {
@@ -61,8 +54,24 @@ const groupByMonth = (posts) => {
   );
 };
 
+/* Normalize a post from the API */
+const normalizePost = (p) => ({
+  ...p,
+  id: p._id || p.id,
+  status: p.status || "published",
+  featured: p.featured === true,
+  publishedAt:
+    p.publishedAt instanceof Date
+      ? p.publishedAt.toISOString()
+      : p.publishedAt || p.createdAt,
+  authorId: p.authorId?._id || p.authorId,
+  categoryId: p.categoryId?._id || p.categoryId,
+  author: p.author || p.authorId,       // populated object
+  category: p.category || p.categoryId, // populated object
+});
+
 /* ============================================================
-   SMALL PRIMITIVES
+   SMALL PRIMITIVES (unchanged)
 ============================================================ */
 
 const Avatar = ({ author, size = "sm" }) => {
@@ -118,7 +127,7 @@ const StatusBadge = ({ status }) => {
 };
 
 /* ============================================================
-   CONFIRM DELETE
+   CONFIRM DELETE (unchanged)
 ============================================================ */
 
 const ConfirmDelete = ({ open, post, onCancel, onConfirm, deleting }) => (
@@ -181,13 +190,11 @@ const ConfirmDelete = ({ open, post, onCancel, onConfirm, deleting }) => (
 );
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const AdminBlogArchive = () => {
   const [posts, setPosts] = useState([]);
-  const [authors, setAuthors] = useState([]);
-  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
@@ -199,32 +206,35 @@ const AdminBlogArchive = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await blogAPI.getArchive();
+      setPosts((res.data || []).map(normalizePost));
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load archive");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setPosts(
-      mockPosts.map((p) => ({
-        ...p,
-        status: p.status || "published",
-        featured: !!p.featured,
-      }))
-    );
-    setAuthors(mockAuthors);
-    setCategories(mockCategories);
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
-  const authorById = useMemo(() => {
-    const m = new Map();
-    authors.forEach((a) => m.set(a.id, a));
-    return m;
-  }, [authors]);
-
-  const categoryById = useMemo(() => {
-    const m = new Map();
-    categories.forEach((c) => m.set(c.id, c));
-    return m;
-  }, [categories]);
+  const categories = useMemo(() => {
+    const map = new Map();
+    posts.forEach((p) => {
+      const c = p.category;
+      if (c && c._id && !map.has(c._id)) {
+        map.set(c._id, { id: c._id, name: c.name, slug: c.slug });
+      }
+    });
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [posts]);
 
   const years = useMemo(() => {
     const set = new Set();
@@ -245,9 +255,7 @@ const AdminBlogArchive = () => {
           p.title.toLowerCase().includes(q) ||
           (p.excerpt || "").toLowerCase().includes(q) ||
           (p.tags || []).some((t) => t.toLowerCase().includes(q)) ||
-          (authorById.get(p.authorId)?.name || "")
-            .toLowerCase()
-            .includes(q)
+          (p.author?.name || "").toLowerCase().includes(q)
       );
     }
 
@@ -274,11 +282,10 @@ const AdminBlogArchive = () => {
     });
 
     return list;
-  }, [posts, search, yearFilter, categoryFilter, sortBy, authorById]);
+  }, [posts, search, yearFilter, categoryFilter, sortBy]);
 
   const grouped = useMemo(() => groupByMonth(filtered), [filtered]);
 
-  /* Auto-expand the first month on first load */
   useEffect(() => {
     if (grouped.length > 0 && expandedMonths.size === 0) {
       setExpandedMonths(new Set([grouped[0][0]]));
@@ -296,43 +303,69 @@ const AdminBlogArchive = () => {
   };
 
   /* ---------- Handlers ---------- */
-  const toggleFeatured = (post) => {
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === post.id ? { ...p, featured: !p.featured } : p
-      )
+  const toggleFeatured = async (post) => {
+    const next = !post.featured;
+    const prev = posts;
+    setPosts((list) =>
+      list.map((p) => (p.id === post.id ? { ...p, featured: next } : p))
     );
-    toast.success(post.featured ? "Unfeatured" : "Featured");
+    try {
+      await blogAPI.updatePost(post.id, { featured: next });
+      toast.success(next ? "Featured" : "Unfeatured");
+    } catch (err) {
+      setPosts(prev);
+      toast.error(err.response?.data?.message || "Failed to update");
+    }
   };
 
-  const togglePublish = (post) => {
+  const togglePublish = async (post) => {
     const next = post.status === "published" ? "draft" : "published";
-    setPosts((prev) =>
-      prev.map((p) => (p.id === post.id ? { ...p, status: next } : p))
+    const prev = posts;
+    setPosts((list) =>
+      list.map((p) => (p.id === post.id ? { ...p, status: next } : p))
     );
-    toast.success(next === "published" ? "Published" : "Moved to draft");
+    try {
+      await blogAPI.updatePost(post.id, { status: next });
+      toast.success(next === "published" ? "Published" : "Moved to draft");
+    } catch (err) {
+      setPosts(prev);
+      toast.error(err.response?.data?.message || "Failed to update");
+    }
   };
 
-  const duplicate = (post) => {
-    const copy = {
-      ...post,
-      id: `${post.id}-copy-${Date.now()}`,
-      title: `${post.title} (copy)`,
-      slug: `${post.slug}-copy`,
-      status: "draft",
-      publishedAt: new Date().toISOString(),
-    };
-    setPosts((prev) => [copy, ...prev]);
-    toast.success("Duplicated as draft");
+  const duplicate = async (post) => {
+    try {
+      const copy = {
+        title: `${post.title} (copy)`,
+        slug: `${post.slug}-copy-${Date.now()}`,
+        excerpt: post.excerpt || "",
+        content: post.content || "",
+        categoryId: post.categoryId || null,
+        authorId: post.authorId || null,
+        tags: post.tags || [],
+        status: "draft",
+        featured: false,
+      };
+      await blogAPI.createPost(copy);
+      toast.success("Duplicated as draft");
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to duplicate");
+    }
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setPosts((prev) => prev.filter((p) => p.id !== deleteTarget.id));
-    toast.success("Story deleted");
-    setDeleting(false);
-    setDeleteTarget(null);
+    try {
+      await blogAPI.deletePost(deleteTarget.id);
+      setPosts((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      toast.success("Story deleted");
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const stats = useMemo(
@@ -345,7 +378,7 @@ const AdminBlogArchive = () => {
     [posts]
   );
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (same UI as before) ---------- */
   return (
     <div className="space-y-6 pb-24">
       {/* HEADER */}
@@ -505,13 +538,11 @@ const AdminBlogArchive = () => {
                       className="overflow-hidden border-t border-stone-100 dark:border-stone-900"
                     >
                       {monthPosts.map((p, i) => {
-                        const author = authorById.get(p.authorId);
-                        const category = categoryById.get(p.categoryId);
                         const day = p.publishedAt
-                          ? new Date(p.publishedAt)
-                              .toLocaleDateString("en-US", {
-                                day: "2-digit",
-                              })
+                          ? new Date(p.publishedAt).toLocaleDateString(
+                              "en-US",
+                              { day: "2-digit" }
+                            )
                           : "—";
                         return (
                           <div
@@ -540,9 +571,9 @@ const AdminBlogArchive = () => {
                               )}
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mb-1">
-                                  {category && (
+                                  {p.category?.name && (
                                     <span className="text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-semibold">
-                                      {category.name}
+                                      {p.category.name}
                                     </span>
                                   )}
                                   {p.featured && (
@@ -566,10 +597,10 @@ const AdminBlogArchive = () => {
 
                             {/* Author */}
                             <div className="md:col-span-2 flex items-center gap-2 min-w-0">
-                              <Avatar author={author} />
+                              <Avatar author={p.author} />
                               <div className="min-w-0">
                                 <p className="text-xs font-medium text-stone-800 dark:text-stone-200 truncate">
-                                  {author?.name || "Unassigned"}
+                                  {p.author?.name || "Unassigned"}
                                 </p>
                                 <p className="text-[10px] text-stone-500 truncate">
                                   {p.readingTime || 5} min ·{" "}

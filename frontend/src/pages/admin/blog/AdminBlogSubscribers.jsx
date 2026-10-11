@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogSubscribers.jsx — EDITORIAL ADMIN
-// Newsletter subscriber list for The Alveoly Letter.
+// src/pages/admin/blog/AdminBlogSubscribers.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -10,41 +9,7 @@ import {
   ChevronDown, Sparkles,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend ready
-
-/* ============================================================
-   MOCK SUBSCRIBERS — replace with API
-============================================================ */
-
-const buildMockSubscribers = () => {
-  const seeds = [
-    { email: "ngozi.adeyemi@gmail.com", name: "Ngozi Adeyemi", source: "footer", status: "active", days: 3 },
-    { email: "samuel.kalu@outlook.com", name: "Dr. Samuel Kalu", source: "article", status: "active", days: 5 },
-    { email: "fatima.bello@yahoo.com", name: "Fatima Bello", source: "footer", status: "active", days: 8 },
-    { email: "bola.a@gmail.com", name: "Bola Akinyemi", source: "article", status: "active", days: 12 },
-    { email: "adaeze.nwosu@clinic.ng", name: "Adaeze Nwosu", source: "podcast", status: "active", days: 20 },
-    { email: "grace.otieno@chw.org", name: "Grace Otieno", source: "footer", status: "active", days: 26 },
-    { email: "invalid-email", name: "", source: "footer", status: "bounced", days: 30 },
-    { email: "chidi.n@example.com", name: "Chidi N.", source: "sidebar", status: "unsubscribed", days: 45 },
-    { email: "tunde.o@example.com", name: "", source: "footer", status: "pending", days: 2 },
-    { email: "amara.new@clinic.ng", name: "Amara New", source: "article", status: "active", days: 1 },
-  ];
-  return seeds.map((s, i) => ({
-    id: `sub-${i + 1}`,
-    email: s.email,
-    name: s.name,
-    source: s.source,
-    status: s.status,
-    tags: [],
-    subscribedAt: new Date(Date.now() - s.days * 86400 * 1000).toISOString(),
-    lastOpenedAt:
-      s.status === "active"
-        ? new Date(Date.now() - Math.random() * 10 * 86400 * 1000).toISOString()
-        : null,
-    opens: s.status === "active" ? Math.floor(Math.random() * 40) + 1 : 0,
-    clicks: s.status === "active" ? Math.floor(Math.random() * 10) : 0,
-  }));
-};
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
@@ -72,26 +37,46 @@ const formatRelative = (d) => {
   return formatShortDate(d);
 };
 
+/* Normalize a subscriber from the API */
+const normalizeSubscriber = (s) => ({
+  ...s,
+  id: s._id || s.id,
+  name: s.name || "",
+  tags: Array.isArray(s.tags) ? s.tags : [],
+  opens: typeof s.opens === "number" ? s.opens : 0,
+  clicks: typeof s.clicks === "number" ? s.clicks : 0,
+  status: s.status || "active",
+  source: s.source || "footer",
+  subscribedAt:
+    s.subscribedAt instanceof Date
+      ? s.subscribedAt.toISOString()
+      : s.subscribedAt || new Date().toISOString(),
+});
+
 const StatusBadge = ({ status }) => {
   const map = {
     active: {
       label: "Active",
-      tone: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400",
+      tone:
+        "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400",
       icon: CheckCircle,
     },
     pending: {
       label: "Pending",
-      tone: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400",
+      tone:
+        "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400",
       icon: Clock,
     },
     unsubscribed: {
       label: "Unsubscribed",
-      tone: "bg-stone-100 dark:bg-stone-900 text-stone-600 dark:text-stone-400",
+      tone:
+        "bg-stone-100 dark:bg-stone-900 text-stone-600 dark:text-stone-400",
       icon: UserMinus,
     },
     bounced: {
       label: "Bounced",
-      tone: "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400",
+      tone:
+        "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400",
       icon: AlertTriangle,
     },
   };
@@ -359,7 +344,9 @@ const ConfirmBulk = ({ open, count, action, onCancel, onConfirm, running }) => {
             exit={{ opacity: 0, scale: 0.96 }}
             className="fixed z-[60] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800 p-6"
           >
-            <div className={`w-12 h-12 rounded-full ${copy.bg} flex items-center justify-center mb-4`}>
+            <div
+              className={`w-12 h-12 rounded-full ${copy.bg} flex items-center justify-center mb-4`}
+            >
               <Icon className={`w-5 h-5 ${copy.tone}`} />
             </div>
             <h3 className="font-serif text-xl font-bold text-stone-900 dark:text-stone-50 mb-2">
@@ -402,7 +389,7 @@ const ConfirmBulk = ({ open, count, action, onCancel, onConfirm, running }) => {
 };
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const STATUS_TABS = [
@@ -436,10 +423,24 @@ const AdminBlogSubscribers = () => {
   const [bulkConfirm, setBulkConfirm] = useState(null);
   const [bulkRunning, setBulkRunning] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      // Fetch everything; filter client-side for snappy UX. If you grow past
+      // a few thousand subscribers, move status/source/search to the server.
+      const res = await blogAPI.getSubscribers({});
+      setSubscribers((res.data || []).map(normalizeSubscriber));
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load subscribers");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setSubscribers(buildMockSubscribers());
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
@@ -511,40 +512,49 @@ const AdminBlogSubscribers = () => {
   /* ---------- Handlers ---------- */
   const handleAdd = async (payload) => {
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setSubscribers((prev) => [
-      {
-        id: `sub-${Date.now()}`,
+    try {
+      const body = {
         email: payload.email,
         name: payload.name || "",
+        tags: payload.tags || [],
         source: "manual",
         status: "active",
-        tags: payload.tags || [],
-        subscribedAt: new Date().toISOString(),
-        lastOpenedAt: null,
-        opens: 0,
-        clicks: 0,
-      },
-      ...prev,
-    ]);
-    toast.success("Subscriber added");
-    setSaving(false);
-    setDrawerOpen(false);
+      };
+      const res = await blogAPI.createSubscriber(body);
+      const created = normalizeSubscriber(res.data);
+      setSubscribers((prev) => [created, ...prev]);
+      toast.success("Subscriber added");
+      setDrawerOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to add subscriber");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const toggleStatus = (s) => {
+  const toggleStatus = async (s) => {
     const next =
       s.status === "active"
         ? "unsubscribed"
         : s.status === "unsubscribed" || s.status === "bounced"
         ? "active"
         : "active";
-    setSubscribers((prev) =>
-      prev.map((x) => (x.id === s.id ? { ...x, status: next } : x))
+
+    // optimistic
+    const prev = subscribers;
+    setSubscribers((list) =>
+      list.map((x) => (x.id === s.id ? { ...x, status: next } : x))
     );
-    toast.success(
-      next === "active" ? "Reactivated" : "Marked as unsubscribed"
-    );
+    try {
+      await blogAPI.updateSubscriber(s.id, { status: next });
+      toast.success(
+        next === "active" ? "Reactivated" : "Marked as unsubscribed"
+      );
+    } catch (err) {
+      setSubscribers(prev);
+      toast.error(err.response?.data?.message || "Update failed");
+    }
   };
 
   const copyEmail = (email) => {
@@ -554,43 +564,68 @@ const AdminBlogSubscribers = () => {
 
   const exportCSV = () => {
     const rows = filtered.map((s) =>
-      [s.email, s.name, s.source, s.status, s.subscribedAt].join(",")
+      [
+        s.email,
+        (s.name || "").replace(/,/g, " "),
+        s.source,
+        s.status,
+        s.subscribedAt,
+      ].join(",")
     );
     const csv = ["email,name,source,status,subscribed_at", ...rows].join("\n");
     navigator.clipboard.writeText(csv);
     toast.success(`${filtered.length} rows copied as CSV`);
   };
 
-  const runBulk = async (action) => {
-    setBulkRunning(true);
-    await new Promise((r) => setTimeout(r, 400));
-    const ids = [...selectedIds];
-
-    if (action === "delete") {
-      setSubscribers((prev) => prev.filter((s) => !selectedIds.has(s.id)));
-      toast.success(`${ids.length} deleted`);
-    } else if (action === "unsubscribe") {
-      setSubscribers((prev) =>
-        prev.map((s) =>
-          selectedIds.has(s.id) ? { ...s, status: "unsubscribed" } : s
-        )
-      );
-      toast.success(`${ids.length} unsubscribed`);
-    } else if (action === "activate") {
-      setSubscribers((prev) =>
-        prev.map((s) =>
-          selectedIds.has(s.id) ? { ...s, status: "active" } : s
-        )
-      );
-      toast.success(`${ids.length} activated`);
+  const deleteOne = async (s) => {
+    const prev = subscribers;
+    setSubscribers((list) => list.filter((x) => x.id !== s.id));
+    try {
+      await blogAPI.deleteSubscriber(s.id);
+      toast.success("Subscriber deleted");
+    } catch (err) {
+      setSubscribers(prev);
+      toast.error(err.response?.data?.message || "Delete failed");
     }
-
-    setBulkRunning(false);
-    setBulkConfirm(null);
-    clearSelection();
   };
 
-  /* ---------- Render ---------- */
+  const runBulk = async (action) => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+
+    setBulkRunning(true);
+    try {
+      if (action === "delete") {
+        await blogAPI.bulkDeleteSubscribers(ids);
+        setSubscribers((prev) => prev.filter((s) => !selectedIds.has(s.id)));
+        toast.success(`${ids.length} deleted`);
+      } else if (action === "unsubscribe") {
+        await blogAPI.bulkUpdateSubscribers(ids, "unsubscribed");
+        setSubscribers((prev) =>
+          prev.map((s) =>
+            selectedIds.has(s.id) ? { ...s, status: "unsubscribed" } : s
+          )
+        );
+        toast.success(`${ids.length} unsubscribed`);
+      } else if (action === "activate") {
+        await blogAPI.bulkUpdateSubscribers(ids, "active");
+        setSubscribers((prev) =>
+          prev.map((s) =>
+            selectedIds.has(s.id) ? { ...s, status: "active" } : s
+          )
+        );
+        toast.success(`${ids.length} activated`);
+      }
+      setBulkConfirm(null);
+      clearSelection();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Bulk action failed");
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  /* ---------- Render (same UI as before) ---------- */
   return (
     <div className="space-y-6 pb-24">
       {/* HEADER */}
@@ -744,7 +779,9 @@ const AdminBlogSubscribers = () => {
             <div className="col-span-1">
               <input
                 type="checkbox"
-                checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                checked={
+                  filtered.length > 0 && selectedIds.size === filtered.length
+                }
                 onChange={selectAll}
                 className="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:ring-0"
               />
@@ -767,7 +804,9 @@ const AdminBlogSubscribers = () => {
                 animate={{ opacity: 1 }}
                 transition={{ delay: Math.min(i * 0.01, 0.2) }}
                 className={`grid grid-cols-1 lg:grid-cols-12 gap-4 px-5 py-4 items-start lg:items-center group hover:bg-stone-50/60 dark:hover:bg-stone-900/30 transition ${
-                  i > 0 ? "border-t border-stone-100 dark:border-stone-900" : ""
+                  i > 0
+                    ? "border-t border-stone-100 dark:border-stone-900"
+                    : ""
                 } ${isSelected ? "bg-stone-50 dark:bg-stone-900/50" : ""}`}
               >
                 <div className="lg:col-span-1">
@@ -811,9 +850,7 @@ const AdminBlogSubscribers = () => {
                   <button
                     onClick={() => toggleStatus(s)}
                     title={
-                      s.status === "active"
-                        ? "Unsubscribe"
-                        : "Reactivate"
+                      s.status === "active" ? "Unsubscribe" : "Reactivate"
                     }
                     className="w-8 h-8 rounded-full flex items-center justify-center text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-900 transition"
                   >
@@ -831,12 +868,7 @@ const AdminBlogSubscribers = () => {
                     <Copy className="w-3.5 h-3.5" />
                   </button>
                   <button
-                    onClick={() => {
-                      setSubscribers((prev) =>
-                        prev.filter((x) => x.id !== s.id)
-                      );
-                      toast.success("Subscriber deleted");
-                    }}
+                    onClick={() => deleteOne(s)}
                     title="Delete"
                     className="w-8 h-8 rounded-full flex items-center justify-center text-stone-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition"
                   >
@@ -851,7 +883,8 @@ const AdminBlogSubscribers = () => {
 
       {!loading && filtered.length > 0 && (
         <p className="text-xs text-stone-500 dark:text-stone-500 text-center">
-          {filtered.length} {filtered.length === 1 ? "subscriber" : "subscribers"} shown
+          {filtered.length}{" "}
+          {filtered.length === 1 ? "subscriber" : "subscribers"} shown
         </p>
       )}
 

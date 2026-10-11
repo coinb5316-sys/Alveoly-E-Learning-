@@ -1,5 +1,4 @@
-// src/pages/admin/blog/AdminBlogComments.jsx — EDITORIAL ADMIN
-// Comment moderation for The Alveoly Journal.
+// src/pages/admin/blog/AdminBlogComments.jsx — WIRED TO LIVE API
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,11 +9,7 @@ import {
   CheckCircle, AlertTriangle, Sparkles, Filter, ChevronDown,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-// import blogAPI from "../../../api/blogApi"; // ← enable when backend ready
-import {
-  posts as mockPosts,
-  authors as mockAuthors,
-} from "../../../data/blogData";
+import { adminBlogAPI as blogAPI } from "../../../api/blogApi";
 
 /* ============================================================
    HELPERS
@@ -55,119 +50,39 @@ const formatShortDate = (d) =>
       })
     : "";
 
-/* ---------- Mock comment set — replace with API ---------- */
-const buildMockComments = (posts) => {
-  const seeds = [
-    {
-      author: "Ngozi A.",
-      role: "RN, Lagos",
-      body: "I read this twice. The section on lifestyle changes being as effective as medication for some people finally made me book the appointment I'd been putting off. Thank you for writing it plainly.",
-      status: "approved",
-      likes: 14,
-      hours: 6,
-    },
-    {
-      author: "Dr. Samuel K.",
-      role: "Family physician",
-      body: "I recommend articles like this to my patients constantly. The DASH diet explanation is the clearest I've seen in a mainstream piece — no hand-waving, no overselling.",
-      status: "approved",
-      likes: 27,
-      hours: 14,
-    },
-    {
-      author: "Anonymous reader",
-      role: "",
-      body: "Has anyone tried the supplement recommended in the other article? Thinking of ordering the one with the discount code.",
-      status: "pending",
-      likes: 0,
-      hours: 2,
-      flag: "possible-spam",
-    },
-    {
-      author: "Chinedu O.",
-      role: "",
-      body: "The medical advice here contradicts what my GP told me. Should I follow this instead?",
-      status: "pending",
-      likes: 3,
-      hours: 4,
-    },
-    {
-      author: "Fatima R.",
-      role: "Public health student",
-      body: "Could you link the WHO source you're referencing in paragraph three? I want to read the primary paper.",
-      status: "pending",
-      likes: 1,
-      hours: 9,
-    },
-    {
-      author: "Troll Account",
-      role: "",
-      body: "This is completely wrong. Doctors are just trying to sell you drugs. Real medicine is in nature, not in a pharmacy.",
-      status: "spam",
-      likes: 0,
-      hours: 20,
-      flag: "low-quality",
-    },
-    {
-      author: "Adaeze N.",
-      role: "Pharmacist",
-      body: "One small correction: the article says lisinopril is an ARB, but it's actually an ACE inhibitor. Easy to swap those two.",
-      status: "approved",
-      likes: 42,
-      hours: 30,
-    },
-    {
-      author: "Bola A.",
-      role: "",
-      body: "Thank you so much for this. My mother has hypertension and I've been trying to explain the diet changes to her for months. I'll send her this.",
-      status: "approved",
-      likes: 18,
-      hours: 48,
-    },
-  ];
-
-  const out = [];
-  seeds.forEach((s, i) => {
-    const post = posts[i % posts.length];
-    out.push({
-      id: `cmt-${i + 1}`,
-      postId: post.id,
-      postSlug: post.slug,
-      postTitle: post.title,
-      authorName: s.author,
-      authorRole: s.role,
-      authorAvatar: null,
-      body: s.body,
-      status: s.status,
-      likes: s.likes,
-      flag: s.flag || null,
-      createdAt: new Date(
-        Date.now() - s.hours * 3600 * 1000
-      ).toISOString(),
-      replies: i === 1
-        ? [
-            {
-              id: `cmt-${i + 1}-r1`,
-              authorName: "Alveoly Editorial",
-              body: "Thank you, Doctor. That means a lot coming from someone who prescribes this conversation every day.",
-              createdAt: new Date(
-                Date.now() - (s.hours - 1) * 3600 * 1000
-              ).toISOString(),
-            },
-          ]
-        : [],
-    });
-  });
-  return out;
-};
+/* Normalize a comment from the API into the shape the UI expects. */
+const normalizeComment = (c) => ({
+  id: c.id || c._id,
+  _id: c._id,
+  postId: c.postId?._id || c.postId,
+  postSlug: c.postSlug || c.postId?.slug || "",
+  postTitle: c.postTitle || c.postId?.title || "Unknown",
+  postImage: c.postImage || c.postId?.image || "",
+  authorName: c.authorName || "Anonymous",
+  authorRole: c.authorRole || "",
+  authorAvatar: c.authorAvatar || "",
+  authorEmail: c.authorEmail || "",
+  body: c.body || "",
+  status: c.status || "pending",
+  flag: c.flag || null,
+  likes: c.likes || 0,
+  createdAt:
+    c.createdAt instanceof Date ? c.createdAt.toISOString() : c.createdAt,
+  replies: (c.replies || []).map((r) => ({
+    id: r._id || r.id,
+    authorName: r.authorName,
+    body: r.body,
+    createdAt:
+      r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+  })),
+});
 
 /* ============================================================
    PRIMITIVES
 ============================================================ */
 
 const Avatar = ({ name, avatar, size = "sm" }) => {
-  const cls =
-    size === "sm" ? "w-8 h-8 text-[11px]" : "w-9 h-9 text-xs";
+  const cls = size === "sm" ? "w-8 h-8 text-[11px]" : "w-9 h-9 text-xs";
   if (avatar) {
     return (
       <img
@@ -225,7 +140,7 @@ const StatusBadge = ({ status }) => {
 };
 
 /* ============================================================
-   REPLY MODAL
+   REPLY BOX
 ============================================================ */
 
 const ReplyBox = ({ comment, onSend, sending }) => {
@@ -290,8 +205,7 @@ const ConfirmBulk = ({ open, count, action, onCancel, onConfirm, running }) => {
       tone: "text-rose-600 dark:text-rose-400",
       bg: "bg-rose-50 dark:bg-rose-950/30",
       title: `Delete ${count} ${count === 1 ? "comment" : "comments"}?`,
-      body:
-        "This is permanent. If you just want them hidden from the public, mark them as Spam instead.",
+      body: "This is permanent. If you just want them hidden from the public, mark them as Spam instead.",
       cta: "Delete permanently",
       ctaTone: "bg-rose-600 hover:bg-rose-700",
     },
@@ -300,8 +214,7 @@ const ConfirmBulk = ({ open, count, action, onCancel, onConfirm, running }) => {
       tone: "text-rose-600 dark:text-rose-400",
       bg: "bg-rose-50 dark:bg-rose-950/30",
       title: `Mark ${count} as spam?`,
-      body:
-        "These comments will be hidden from the public and moved to the spam folder. Authors who post spam repeatedly can be blocked at the IP level.",
+      body: "These comments will be hidden from the public and moved to the spam folder. Authors who post spam repeatedly can be blocked at the IP level.",
       cta: "Mark as spam",
       ctaTone: "bg-rose-600 hover:bg-rose-700",
     },
@@ -310,8 +223,7 @@ const ConfirmBulk = ({ open, count, action, onCancel, onConfirm, running }) => {
       tone: "text-emerald-600 dark:text-emerald-400",
       bg: "bg-emerald-50 dark:bg-emerald-950/30",
       title: `Approve ${count} ${count === 1 ? "comment" : "comments"}?`,
-      body:
-        "Approved comments appear publicly under the story they were posted on.",
+      body: "Approved comments appear publicly under the story they were posted on.",
       cta: "Approve",
       ctaTone: "bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900",
     },
@@ -382,7 +294,7 @@ const ConfirmBulk = ({ open, count, action, onCancel, onConfirm, running }) => {
 };
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API
 ============================================================ */
 
 const STATUS_TABS = [
@@ -395,7 +307,6 @@ const STATUS_TABS = [
 const AdminBlogComments = () => {
   const [comments, setComments] = useState([]);
   const [posts, setPosts] = useState([]);
-  const [authors, setAuthors] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [statusFilter, setStatusFilter] = useState("pending");
@@ -407,26 +318,40 @@ const AdminBlogComments = () => {
   const [activeId, setActiveId] = useState(null);
   const [replying, setReplying] = useState(false);
 
-  const [bulkConfirm, setBulkConfirm] = useState(null); // "approve" | "spam" | "delete"
+  const [bulkConfirm, setBulkConfirm] = useState(null);
   const [bulkRunning, setBulkRunning] = useState(false);
 
-  /* ---------- Load ---------- */
+  /* ---------- Load from API ---------- */
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [commentsRes, postsRes] = await Promise.all([
+        blogAPI.getAdminComments({}),         // fetch all, filter client-side
+        blogAPI.getAdminPosts({ limit: 500, publishedOnly: false }),
+      ]);
+      setComments((commentsRes.data || []).map(normalizeComment));
+      setPosts(postsRes.data?.posts || []);
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to load comments");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setPosts(mockPosts);
-    setAuthors(mockAuthors);
-    setComments(buildMockComments(mockPosts));
-    setTimeout(() => setLoading(false), 300);
+    fetchData();
   }, []);
 
   /* ---------- Derived ---------- */
-  const postById = useMemo(() => {
-    const m = new Map();
-    posts.forEach((p) => m.set(p.id, p));
-    return m;
-  }, [posts]);
-
   const statusCounts = useMemo(() => {
-    const base = { all: comments.length, pending: 0, approved: 0, spam: 0, deleted: 0 };
+    const base = {
+      all: comments.length,
+      pending: 0,
+      approved: 0,
+      spam: 0,
+      deleted: 0,
+    };
     comments.forEach((c) => {
       base[c.status] = (base[c.status] || 0) + 1;
     });
@@ -469,7 +394,12 @@ const AdminBlogComments = () => {
     [comments, activeId]
   );
 
-  const activePost = activeComment ? postById.get(activeComment.postId) : null;
+  const activePost = useMemo(() => {
+    if (!activeComment) return null;
+    return posts.find(
+      (p) => (p._id || p.id) === activeComment.postId
+    ) || null;
+  }, [posts, activeComment]);
 
   /* ---------- Selection ---------- */
   const toggleSelect = (id) => {
@@ -489,85 +419,104 @@ const AdminBlogComments = () => {
   const clearSelection = () => setSelectedIds(new Set());
 
   /* ---------- Row actions ---------- */
-  const updateStatus = (id, status) => {
-    setComments((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status } : c))
+  const updateStatus = async (id, status) => {
+    // optimistic
+    const prev = comments;
+    setComments((list) =>
+      list.map((c) => (c.id === id ? { ...c, status } : c))
     );
-    const labels = {
-      approved: "approved",
-      spam: "marked as spam",
-      pending: "moved back to pending",
-      deleted: "deleted",
-    };
-    toast.success(`Comment ${labels[status] || "updated"}`);
+    try {
+      const res = await blogAPI.updateCommentStatus(id, status);
+      // reconcile with server response (in case fields changed)
+      if (res?.data) {
+        setComments((list) =>
+          list.map((c) => (c.id === id ? normalizeComment(res.data) : c))
+        );
+      }
+      const labels = {
+        approved: "approved",
+        spam: "marked as spam",
+        pending: "moved back to pending",
+        deleted: "deleted",
+      };
+      toast.success(`Comment ${labels[status] || "updated"}`);
+    } catch (err) {
+      setComments(prev);
+      toast.error(err.response?.data?.message || "Failed to update status");
+    }
   };
 
-  const deleteComment = (id) => {
-    setComments((prev) => prev.filter((c) => c.id !== id));
+  const deleteComment = async (id) => {
+    const prev = comments;
+    setComments((list) => list.filter((c) => c.id !== id));
     if (activeId === id) setActiveId(null);
-    toast.success("Comment deleted");
+    try {
+      await blogAPI.deleteComment(id);
+      toast.success("Comment deleted");
+    } catch (err) {
+      setComments(prev);
+      toast.error(err.response?.data?.message || "Delete failed");
+    }
   };
 
   const sendReply = async (comment, body) => {
     setReplying(true);
-    await new Promise((r) => setTimeout(r, 400));
-    setComments((prev) =>
-      prev.map((c) =>
-        c.id === comment.id
-          ? {
-              ...c,
-              replies: [
-                ...(c.replies || []),
-                {
-                  id: `${c.id}-r-${Date.now()}`,
-                  authorName: "Alveoly Editorial",
-                  body,
-                  createdAt: new Date().toISOString(),
-                },
-              ],
-            }
-          : c
-      )
-    );
-    setReplying(false);
-    toast.success("Reply sent");
+    try {
+      const res = await blogAPI.replyToComment(comment.id, body);
+      if (res?.data) {
+        setComments((list) =>
+          list.map((c) => (c.id === comment.id ? normalizeComment(res.data) : c))
+        );
+      }
+      toast.success("Reply sent");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Reply failed");
+    } finally {
+      setReplying(false);
+    }
   };
 
   /* ---------- Bulk ---------- */
   const runBulk = async (action) => {
-    setBulkRunning(true);
-    await new Promise((r) => setTimeout(r, 400));
-
     const ids = [...selectedIds];
+    if (!ids.length) return;
 
-    if (action === "delete") {
-      setComments((prev) => prev.filter((c) => !selectedIds.has(c.id)));
-      toast.success(`${ids.length} deleted`);
-    } else if (action === "spam") {
-      setComments((prev) =>
-        prev.map((c) =>
-          selectedIds.has(c.id) ? { ...c, status: "spam" } : c
-        )
-      );
-      toast.success(`${ids.length} marked as spam`);
-    } else if (action === "approve") {
-      setComments((prev) =>
-        prev.map((c) =>
-          selectedIds.has(c.id) ? { ...c, status: "approved" } : c
-        )
-      );
-      toast.success(`${ids.length} approved`);
+    setBulkRunning(true);
+    try {
+      if (action === "delete") {
+        await blogAPI.bulkDeleteComments(ids);
+        setComments((prev) => prev.filter((c) => !selectedIds.has(c.id)));
+        toast.success(`${ids.length} deleted`);
+      } else if (action === "spam") {
+        await blogAPI.bulkUpdateComments(ids, "spam");
+        setComments((prev) =>
+          prev.map((c) =>
+            selectedIds.has(c.id) ? { ...c, status: "spam" } : c
+          )
+        );
+        toast.success(`${ids.length} marked as spam`);
+      } else if (action === "approve") {
+        await blogAPI.bulkUpdateComments(ids, "approved");
+        setComments((prev) =>
+          prev.map((c) =>
+            selectedIds.has(c.id) ? { ...c, status: "approved" } : c
+          )
+        );
+        toast.success(`${ids.length} approved`);
+      }
+      setBulkConfirm(null);
+      clearSelection();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Bulk action failed");
+    } finally {
+      setBulkRunning(false);
     }
-
-    setBulkRunning(false);
-    setBulkConfirm(null);
-    clearSelection();
   };
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (same UI as before) ---------- */
   return (
     <div className="space-y-6 pb-24">
-      {/* ---------- HEADER ---------- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-rose-600 dark:text-rose-400 font-semibold mb-2">
@@ -583,7 +532,7 @@ const AdminBlogComments = () => {
         </div>
       </div>
 
-      {/* ---------- STATUS TABS ---------- */}
+      {/* STATUS TABS */}
       <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-1 px-1">
         {STATUS_TABS.map((t) => {
           const count =
@@ -618,7 +567,7 @@ const AdminBlogComments = () => {
         })}
       </div>
 
-      {/* ---------- TOOLBAR ---------- */}
+      {/* TOOLBAR */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
         <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -637,13 +586,16 @@ const AdminBlogComments = () => {
             className="px-3 py-2 rounded-lg bg-transparent border border-stone-200 dark:border-stone-800 text-sm text-stone-700 dark:text-stone-300 focus:outline-none cursor-pointer max-w-[220px]"
           >
             <option value="all">All stories</option>
-            {posts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title.length > 40
-                  ? p.title.slice(0, 40) + "…"
-                  : p.title}
-              </option>
-            ))}
+            {posts.map((p) => {
+              const pid = p._id || p.id;
+              return (
+                <option key={pid} value={pid}>
+                  {p.title.length > 40
+                    ? p.title.slice(0, 40) + "…"
+                    : p.title}
+                </option>
+              );
+            })}
           </select>
 
           <select
@@ -658,7 +610,7 @@ const AdminBlogComments = () => {
         </div>
       </div>
 
-      {/* ---------- LIST + DETAIL ---------- */}
+      {/* LIST + DETAIL */}
       {loading ? (
         <div className="py-20 flex items-center justify-center">
           <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
@@ -685,7 +637,6 @@ const AdminBlogComments = () => {
           {/* LEFT — list */}
           <div className="lg:col-span-7">
             <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 overflow-hidden">
-              {/* Select-all header */}
               <div className="flex items-center gap-3 px-5 py-3 bg-stone-50 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-800">
                 <input
                   type="checkbox"
@@ -722,7 +673,6 @@ const AdminBlogComments = () => {
                         : "hover:bg-stone-50/50 dark:hover:bg-stone-900/30"
                     }`}
                   >
-                    {/* Checkbox */}
                     <div
                       className="pt-1"
                       onClick={(e) => e.stopPropagation()}
@@ -735,7 +685,6 @@ const AdminBlogComments = () => {
                       />
                     </div>
 
-                    {/* Body */}
                     <div className="min-w-0">
                       <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mb-1.5">
                         <Avatar name={c.authorName} avatar={c.authorAvatar} />
@@ -782,7 +731,6 @@ const AdminBlogComments = () => {
                       </div>
                     </div>
 
-                    {/* Quick actions */}
                     <div
                       className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition"
                       onClick={(e) => e.stopPropagation()}
@@ -824,7 +772,6 @@ const AdminBlogComments = () => {
             <div className="lg:sticky lg:top-24 space-y-4">
               {activeComment ? (
                 <>
-                  {/* Comment context */}
                   <div className="p-6 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
                     <div className="flex items-center justify-between mb-4">
                       <p className="text-xs uppercase tracking-widest text-rose-600 dark:text-rose-400 font-semibold">
@@ -903,7 +850,6 @@ const AdminBlogComments = () => {
                       </button>
                     </div>
 
-                    {/* Replies */}
                     {activeComment.replies?.length > 0 && (
                       <div className="mt-5 pt-4 border-t border-stone-200 dark:border-stone-800 space-y-3">
                         <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold">
@@ -932,7 +878,6 @@ const AdminBlogComments = () => {
                       </div>
                     )}
 
-                    {/* Reply box */}
                     <ReplyBox
                       comment={activeComment}
                       onSend={(body) => sendReply(activeComment, body)}
@@ -940,14 +885,13 @@ const AdminBlogComments = () => {
                     />
                   </div>
 
-                  {/* Post context */}
                   {activePost && (
                     <div className="p-5 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
                       <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-semibold mb-3">
                         On story
                       </p>
                       <Link
-                        to={`/admin/blog/edit/${activePost.id}`}
+                        to={`/admin/blog/edit/${activePost._id || activePost.id}`}
                         className="block group"
                       >
                         <div className="flex items-start gap-3">
@@ -970,7 +914,7 @@ const AdminBlogComments = () => {
                       </Link>
                       <div className="flex items-center gap-3 mt-4 pt-4 border-t border-stone-200 dark:border-stone-800">
                         <Link
-                          to={`/admin/blog/edit/${activePost.id}`}
+                          to={`/admin/blog/edit/${activePost._id || activePost.id}`}
                           className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition"
                         >
                           <MessageSquare className="w-3 h-3" />
@@ -1006,7 +950,7 @@ const AdminBlogComments = () => {
         </div>
       )}
 
-      {/* ---------- BULK BAR ---------- */}
+      {/* BULK BAR */}
       <AnimatePresence>
         {selectedIds.size > 0 && (
           <motion.div
@@ -1058,7 +1002,6 @@ const AdminBlogComments = () => {
         )}
       </AnimatePresence>
 
-      {/* ---------- BULK CONFIRM ---------- */}
       <ConfirmBulk
         open={!!bulkConfirm}
         count={selectedIds.size}
