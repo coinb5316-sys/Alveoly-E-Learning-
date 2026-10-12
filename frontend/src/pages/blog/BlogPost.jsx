@@ -684,11 +684,10 @@ const PostGallery = ({ images, title }) => {
 };
 
 /* ============================================================
-   CONTACT ADMIN POPUP
+   CONTACT ADMIN POPUP — centered on ALL devices, compact card
 ============================================================ */
 
 const ContactAdminPopup = ({ open, onClose, postTitle }) => {
-  // Build the WhatsApp link with a nice prefilled message
   const message = encodeURIComponent(
     postTitle
       ? `Hi! I just read "${postTitle}" on The Alveoly Journal and I'd like to learn more. Could you share detailed tutorials with me?`
@@ -697,14 +696,12 @@ const ContactAdminPopup = ({ open, onClose, postTitle }) => {
 
   const whatsappUrl = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${message}`;
 
-  // Close on Escape
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    // Lock scroll while open
     document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
@@ -714,14 +711,13 @@ const ContactAdminPopup = ({ open, onClose, postTitle }) => {
 
   const handleWhatsApp = () => {
     window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-    // Close after a short delay so the user sees the click registered
     setTimeout(() => onClose(), 400);
   };
 
   return (
     <AnimatePresence>
       {open && (
-        <>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -729,23 +725,20 @@ const ContactAdminPopup = ({ open, onClose, postTitle }) => {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 z-[120] bg-stone-900/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-stone-900/70 backdrop-blur-sm"
             aria-hidden="true"
           />
 
-          {/* Card — slides up on mobile, centered on desktop */}
+          {/* Card */}
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 40 }}
-            transition={{ type: "spring", damping: 26, stiffness: 280 }}
+            initial={{ opacity: 0, scale: 0.92, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 12 }}
+            transition={{ type: "spring", damping: 24, stiffness: 320, mass: 0.9 }}
             className="
-              fixed z-[121]
-              bottom-0 left-0 right-0
-              md:bottom-auto md:top-1/2 md:left-1/2 md:right-auto
-              md:-translate-x-1/2 md:-translate-y-1/2
-              w-full md:max-w-md
-              rounded-t-3xl md:rounded-3xl
+              relative z-[121]
+              w-full max-w-[340px]
+              rounded-2xl
               bg-white dark:bg-stone-900
               border border-stone-200 dark:border-stone-800
               shadow-2xl
@@ -758,71 +751,116 @@ const ContactAdminPopup = ({ open, onClose, postTitle }) => {
             {/* Close */}
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full flex items-center justify-center text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
+              className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
               aria-label="Close"
             >
-              <FaTimes className="w-4 h-4" />
+              <FaTimes className="w-3.5 h-3.5" />
             </button>
 
-            {/* Header with gradient accent */}
-            <div className="relative px-6 pt-8 pb-6 text-center bg-gradient-to-b from-amber-50 to-white dark:from-stone-800 dark:to-stone-900">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-[#25D366] flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <FaWhatsapp className="text-white text-3xl" />
+            {/* Header */}
+            <div className="relative px-5 pt-6 pb-4 text-center bg-gradient-to-b from-amber-50/70 to-white dark:from-stone-800/60 dark:to-stone-900">
+              <div className="w-12 h-12 mx-auto rounded-xl bg-[#25D366] flex items-center justify-center shadow-md shadow-emerald-500/20">
+                <FaWhatsapp className="text-white text-xl" />
               </div>
 
-              <p className="mt-4 text-xs uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400 font-semibold">
-                Ready for the next step?
-              </p>
-
-              <h3 className="mt-2 font-serif text-2xl font-bold text-stone-900 dark:text-stone-50 leading-tight">
+              <h3 className="mt-3 font-serif text-lg font-bold text-stone-900 dark:text-stone-50 leading-tight">
                 Want to learn more?
               </h3>
 
-              <p className="mt-3 text-sm text-stone-600 dark:text-stone-400 leading-relaxed max-w-xs mx-auto">
-                Reach out to the admin on WhatsApp for detailed tutorials,
-                guided practice, and personalised support for this topic.
+              <p className="mt-2 text-[12.5px] text-stone-600 dark:text-stone-400 leading-relaxed">
+                Chat with the admin on WhatsApp for detailed tutorials and
+                personalised support.
               </p>
             </div>
 
             {/* Actions */}
-            <div className="px-6 pb-6 space-y-2.5">
+            <div className="px-5 pb-5 space-y-1.5">
               <button
                 onClick={handleWhatsApp}
                 className="
-                  w-full inline-flex items-center justify-center gap-2.5
-                  px-5 py-3.5 rounded-full
+                  w-full inline-flex items-center justify-center gap-2
+                  px-4 py-2.5 rounded-full
                   bg-[#25D366] hover:bg-[#1fb757]
-                  text-white font-semibold text-sm
+                  text-white font-semibold text-[13px]
                   transition-colors
-                  shadow-lg shadow-emerald-500/20
+                  shadow-sm shadow-emerald-500/20
                 "
               >
-                <FaWhatsapp className="text-lg" />
-                Chat with Admin on WhatsApp
+                <FaWhatsapp className="text-base" />
+                Chat with Admin
               </button>
 
               <button
                 onClick={onClose}
                 className="
                   w-full inline-flex items-center justify-center
-                  px-5 py-3 rounded-full
-                  text-stone-600 dark:text-stone-400
+                  px-4 py-2 rounded-full
+                  text-stone-500 dark:text-stone-400
                   hover:text-stone-900 dark:hover:text-stone-100
-                  text-sm font-medium
+                  text-[12px] font-medium
                   transition-colors
                 "
               >
                 Maybe later
               </button>
-
-              <p className="text-[11px] text-center text-stone-400 dark:text-stone-500 pt-1">
-                We typically reply within a few minutes during working hours.
-              </p>
             </div>
           </motion.div>
-        </>
+        </div>
       )}
     </AnimatePresence>
+  );
+};
+
+/* ============================================================
+   END-OF-ARTICLE CTA — always visible, can re-open the popup
+============================================================ */
+
+const EndOfArticleCTA = ({ onOpen, postTitle }) => {
+  const message = encodeURIComponent(
+    postTitle
+      ? `Hi! I just read "${postTitle}" on The Alveoly Journal and I'd like to learn more. Could you share detailed tutorials with me?`
+      : "Hi! I just read an article on The Alveoly Journal and I'd like to learn more."
+  );
+  const whatsappUrl = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${message}`;
+
+  return (
+    <section className="mt-14 pt-10 border-t border-stone-200 dark:border-stone-800">
+      <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50 p-5 md:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-[#25D366]/10 dark:bg-[#25D366]/15 flex items-center justify-center flex-shrink-0">
+            <FaWhatsapp className="text-[#25D366] text-lg" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] sm:text-sm font-semibold text-stone-900 dark:text-stone-100">
+              Want to learn more about this topic?
+            </p>
+            <p className="text-[12px] sm:text-[13px] text-stone-500 dark:text-stone-400 mt-0.5 leading-snug">
+              Reach out for detailed tutorials, guided practice, and
+              personalised support.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#25D366] hover:bg-[#1fb757] text-white text-[12.5px] font-semibold transition-colors"
+            >
+              <FaWhatsapp className="text-sm" />
+              Chat
+            </a>
+            <button
+              onClick={onOpen}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:border-stone-900 dark:hover:border-stone-100 text-[12px] font-medium transition-colors"
+              title="Open the contact card"
+            >
+              <FaComments className="text-[11px]" />
+              More
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 };
 
@@ -1069,6 +1107,13 @@ const BlogPost = () => {
     } catch {
       /* noop */
     }
+  };
+
+  // 5. Manual re-open from the EndOfArticleCTA.
+  //    This bypasses the session flag on purpose — the reader
+  //    explicitly asked to see the card again.
+  const reopenContactPopup = () => {
+    setShowContactPopup(true);
   };
 
   /* ---------- Derived ---------- */
@@ -1529,8 +1574,14 @@ const BlogPost = () => {
 
         <CommentSection postId={post.id} initialComments={comments} />
 
+        {/* END-OF-ARTICLE CTA — always visible, re-opens the popup */}
+        <EndOfArticleCTA
+          onOpen={reopenContactPopup}
+          postTitle={post.title}
+        />
+
         {/* END-OF-ARTICLE TRIGGER (invisible)
-            When this scrolls into view, the contact popup shows. */}
+            When this scrolls into view, the contact popup auto-shows. */}
         <div
           ref={endOfArticleRef}
           aria-hidden="true"
