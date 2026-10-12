@@ -1,4 +1,4 @@
-// src/pages/blog/BlogPost.jsx — WIRED TO LIVE API
+// src/pages/blog/BlogPost.jsx — WIRED TO LIVE API (with gallery)
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -493,6 +493,193 @@ const ShareBar = ({ post }) => {
 };
 
 /* ============================================================
+   GALLERY + LIGHTBOX
+============================================================ */
+
+const GalleryLightbox = ({ images, index, onClose, onNavigate }) => {
+  useEffect(() => {
+    if (index === null || index === undefined) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") onNavigate((index + 1) % images.length);
+      if (e.key === "ArrowLeft")
+        onNavigate((index - 1 + images.length) % images.length);
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [index, images.length, onClose, onNavigate]);
+
+  return (
+    <AnimatePresence>
+      {index !== null && index !== undefined && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center"
+          onClick={onClose}
+        >
+          {/* Close */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition z-10"
+            aria-label="Close gallery"
+          >
+            <FaTimes />
+          </button>
+
+          {/* Counter */}
+          <div className="absolute top-4 left-4 px-3 py-1.5 rounded-full bg-white/10 text-white text-xs font-medium tracking-wider">
+            {index + 1} / {images.length}
+          </div>
+
+          {/* Prev */}
+          {images.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate((index - 1 + images.length) % images.length);
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+              aria-label="Previous image"
+            >
+              <FaChevronUp className="-rotate-90 text-lg" />
+            </button>
+          )}
+
+          {/* Image */}
+          <motion.img
+            key={index}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2 }}
+            src={images[index]}
+            alt=""
+            className="max-w-[92vw] max-h-[88vh] object-contain rounded-lg select-none"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {/* Next */}
+          {images.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate((index + 1) % images.length);
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+              aria-label="Next image"
+            >
+              <FaChevronUp className="rotate-90 text-lg" />
+            </button>
+          )}
+
+          {/* Thumbnails strip */}
+          {images.length > 1 && (
+            <div
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-2 rounded-full bg-white/10 backdrop-blur-sm max-w-[90vw] overflow-x-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {images.map((src, i) => (
+                <button
+                  key={i}
+                  onClick={() => onNavigate(i)}
+                  className={`w-12 h-12 rounded-md overflow-hidden flex-shrink-0 border-2 transition ${
+                    i === index
+                      ? "border-white"
+                      : "border-transparent opacity-60 hover:opacity-100"
+                  }`}
+                  aria-label={`View image ${i + 1}`}
+                >
+                  <img
+                    src={src}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+const PostGallery = ({ images, title }) => {
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+
+  if (!Array.isArray(images) || images.length === 0) return null;
+
+  // Responsive column strategy: 1 image full width, 2 side by side,
+  // 3 or 4 as a row on desktop, more as a grid.
+  const count = images.length;
+  const gridCols =
+    count === 1
+      ? "grid-cols-1"
+      : count === 2
+      ? "grid-cols-1 sm:grid-cols-2"
+      : count === 3
+      ? "grid-cols-2 sm:grid-cols-3"
+      : "grid-cols-2 sm:grid-cols-3";
+
+  return (
+    <>
+      <section className="mt-14 pt-10 border-t border-stone-200 dark:border-stone-800">
+        <SectionLabel>From the article</SectionLabel>
+        <h3 className="font-serif text-2xl font-bold text-stone-900 dark:text-stone-100 mb-6">
+          Gallery
+        </h3>
+
+        <div className={`grid ${gridCols} gap-3`}>
+          {images.map((src, i) => (
+            <motion.button
+              key={`${src}-${i}`}
+              type="button"
+              onClick={() => setLightboxIndex(i)}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: Math.min(i * 0.04, 0.3) }}
+              className={`group relative overflow-hidden rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-900 dark:focus:ring-stone-100 ${
+                count === 1 ? "aspect-[16/10]" : "aspect-square"
+              }`}
+              aria-label={`Open image ${i + 1} of ${count}`}
+            >
+              <img
+                src={src}
+                alt={`${title} — image ${i + 1}`}
+                loading="lazy"
+                className="w-full h-full object-cover group-hover:scale-[1.03] transition duration-500"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                <span className="opacity-0 group-hover:opacity-100 transition text-white text-xs font-medium px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-sm">
+                  View
+                </span>
+              </div>
+            </motion.button>
+          ))}
+        </div>
+
+        <p className="mt-4 text-xs text-stone-500 dark:text-stone-500 italic">
+          Click any image to enlarge. Use the arrow keys to move between
+          images, Esc to close.
+        </p>
+      </section>
+
+      <GalleryLightbox
+        images={images}
+        index={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+        onNavigate={(next) => setLightboxIndex(next)}
+      />
+    </>
+  );
+};
+
+/* ============================================================
    COMMENT SECTION
 ============================================================ */
 
@@ -650,6 +837,7 @@ const BlogPost = () => {
             reviewer: p.reviewer || p.reviewedBy,
             category: p.categoryId?.name || p.category || "",
             categorySlug: p.categoryId?.slug || "",
+            gallery: Array.isArray(p.gallery) ? p.gallery : [],
           });
           setRelatedPosts(p.related || []);
           setComments(p.comments || []);
@@ -684,6 +872,13 @@ const BlogPost = () => {
         : null,
     [post]
   );
+
+  const gallery = useMemo(() => {
+    if (!post?.gallery) return [];
+    return post.gallery.filter(
+      (g) => typeof g === "string" && g.trim().length > 0
+    );
+  }, [post]);
 
   const htmlWithIds = useMemo(
     () => (post?.content ? injectHeadingIds(post.content) : ""),
@@ -963,6 +1158,9 @@ const BlogPost = () => {
           className="prose-editorial text-[17px] sm:text-[19px]"
           dangerouslySetInnerHTML={{ __html: htmlWithIds }}
         />
+
+        {/* GALLERY */}
+        <PostGallery images={gallery} title={post.title} />
 
         {post.tags?.length > 0 && (
           <div className="mt-12 flex flex-wrap items-center gap-2">
