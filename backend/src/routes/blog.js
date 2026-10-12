@@ -521,6 +521,58 @@ router.get("/policies/:key", async (req, res) => {
   }
 });
 
+/* ---------- Sitemap data (published posts, minimal shape) ---------- */
+router.get("/sitemap-data", async (req, res) => {
+  try {
+    const [posts, categories, authors] = await Promise.all([
+      Post.find({ status: "published" })
+        .select("title slug excerpt tags readingTime views publishedAt authorId categoryId")
+        .sort({ publishedAt: -1 })
+        .lean(),
+      Category.find({ active: true })
+        .select("name slug order")
+        .sort({ order: 1, name: 1 })
+        .lean(),
+      Author.find({ active: true })
+        .select("name slug avatar role")
+        .sort({ name: 1 })
+        .lean(),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        posts: posts.map((p) => ({
+          id: p._id,
+          title: p.title,
+          slug: p.slug,
+          excerpt: p.excerpt,
+          tags: p.tags || [],
+          readingTime: p.readingTime,
+          views: p.views,
+          publishedAt: p.publishedAt,
+          authorId: p.authorId?._id || p.authorId,
+          categoryId: p.categoryId?._id || p.categoryId,
+        })),
+        categories: categories.map((c) => ({
+          id: c._id,
+          name: c.name,
+          slug: c.slug,
+        })),
+        authors: authors.map((a) => ({
+          id: a._id,
+          name: a.name,
+          slug: a.slug,
+          avatar: a.avatar,
+          role: a.role,
+        })),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.post("/subscribe", subscriberCtrl.subscribe);
 
 export default router;

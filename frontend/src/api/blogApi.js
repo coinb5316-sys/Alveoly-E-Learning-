@@ -138,6 +138,8 @@ const publicBlogAPI = {
   getFeaturedTestimonials: () =>
     api.get("/blog/testimonials/featured").then((r) => r.data),
   getPolicy: (key) => api.get(`/blog/policies/${key}`).then((r) => r.data),
+  getSitemapData: () =>
+  api.get("/blog/sitemap-data").then((r) => r.data),
   subscribe: (data) => api.post("/blog/subscribe", data).then((r) => r.data),
   incrementViews: (id) => api.post(`/blog/posts/${id}/view`).then((r) => r.data),
   toggleLike: (id) => api.post(`/blog/posts/${id}/like`).then((r) => r.data),

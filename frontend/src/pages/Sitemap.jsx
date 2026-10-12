@@ -1,6 +1,5 @@
-// src/pages/Sitemap.jsx — THE ALVEOLY INDEX
-// A structured map of everything on Alveoly. Mock data. No component imports.
-import React, { useMemo, useState } from "react";
+// src/pages/Sitemap.jsx — THE ALVEOLY INDEX (WIRED TO LIVE API, defensive fetch)
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -8,11 +7,7 @@ import {
   FaLinkedin, FaInstagram, FaYoutube, FaRss, FaStream,
   FaMicrophone, FaVideo, FaTag, FaBookOpen, FaCheckCircle,
 } from "react-icons/fa";
-import {
-  posts as allPosts,
-  categories,
-  authors,
-} from "../data/blogData";
+import { publicBlogAPI as blogAPI } from "../api/blogApi";
 
 /* ============================================================
    UTILITIES
@@ -25,7 +20,7 @@ const slugify = (s) =>
     .replace(/[^\w\s-]/g, "")
     .replace(/\s+/g, "-");
 
-const initials = (name) =>
+const initials = (name = "") =>
   name
     .split(" ")
     .filter(Boolean)
@@ -70,7 +65,7 @@ const SectionLabel = ({ icon: Icon, children }) => (
 );
 
 /* ============================================================
-   NAV + FOOTER — identical to every other journal page
+   NAV + FOOTER
 ============================================================ */
 
 const JournalNav = () => {
@@ -285,7 +280,7 @@ const JournalFooter = () => {
 };
 
 /* ============================================================
-   SITEMAP DATA
+   SITEMAP DATA — static sections (marketing pages)
 ============================================================ */
 
 const ALVEOLY_SECTIONS = [
@@ -359,36 +354,124 @@ const JOURNAL_SECTIONS = [
 ];
 
 /* ============================================================
-   MAIN
+   MAIN — WIRED TO LIVE API (Promise.allSettled)
 ============================================================ */
 
 const Sitemap = () => {
-  /* Group journal articles by category for a proper editorial index */
+  /* ---------- Live data ---------- */
+  const [posts, setPosts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [authors, setAuthors] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setLoading(true);
+
+        // Promise.allSettled lets each request succeed or fail
+        // independently. If one endpoint is broken (e.g. the authors
+        // route isn't deployed yet), the other two sections still
+        // populate instead of the whole page going blank.
+        const results = await Promise.allSettled([
+          blogAPI.getPosts({ limit: 500, publishedOnly: true, sort: "newest" }),
+          blogAPI.getCategories(),
+          blogAPI.getAuthors(),
+        ]);
+
+        if (cancelled) return;
+
+        // Helper: extract the resolved value, or log and return a fallback.
+        const unwrap = (result, label, fallback) => {
+          if (result.status === "fulfilled") return result.value;
+          console.warn(
+            `Sitemap: ${label} failed to load —`,
+            result.reason?.response?.data?.message ||
+              result.reason?.message ||
+              result.reason
+          );
+          return fallback;
+        };
+
+        const postsRes = unwrap(results[0], "posts", {
+          data: { posts: [] },
+        });
+        const catsRes = unwrap(results[1], "categories", { data: [] });
+        const authorsRes = unwrap(results[2], "authors", { data: [] });
+
+        // Normalize posts: `_id` → `id`, keep the populated authorId /
+        // categoryId references so lookups work with either form.
+        const normalizedPosts = (postsRes.data?.posts || []).map((p) => ({
+          ...p,
+          id: p._id || p.id,
+          authorId: p.authorId?._id || p.authorId,
+          categoryId: p.categoryId?._id || p.categoryId,
+        }));
+
+        setPosts(normalizedPosts);
+        setCategories(
+          (catsRes.data || []).map((c) => ({ ...c, id: c._id || c.id }))
+        );
+        setAuthors(
+          (authorsRes.data || []).map((a) => ({ ...a, id: a._id || a.id }))
+        );
+      } catch (err) {
+        console.error("Failed to load sitemap data:", err);
+        if (!cancelled) {
+          setPosts([]);
+          setCategories([]);
+          setAuthors([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* ---------- Group articles by category ---------- */
   const postsByCategory = useMemo(() => {
     return categories
       .map((cat) => {
-        const posts = allPosts
+        const catPosts = posts
           .filter((p) => p.categoryId === cat.id)
           .sort(
             (a, b) =>
               new Date(b.publishedAt) - new Date(a.publishedAt)
           );
-        return { category: cat, posts };
+        return { category: cat, posts: catPosts };
       })
       .filter((g) => g.posts.length > 0);
-  }, []);
+  }, [posts, categories]);
 
+  /* ---------- Aggregate tags across all posts ---------- */
   const allTags = useMemo(() => {
     const map = new Map();
-    allPosts.forEach((p) =>
+    posts.forEach((p) =>
       (p.tags || []).forEach((t) => map.set(t, (map.get(t) || 0) + 1))
     );
     return [...map.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count }));
-  }, []);
+  }, [posts]);
 
   const [openSection, setOpenSection] = useState(null);
+
+  /* ---------- Loading screen ---------- */
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-stone-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-900 dark:border-stone-700 dark:border-t-stone-100 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100">
@@ -423,9 +506,9 @@ const Sitemap = () => {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-stone-500 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-800">
             <span>
               <strong className="font-semibold text-stone-900 dark:text-stone-100">
-                {allPosts.length}
+                {posts.length}
               </strong>{" "}
-              {allPosts.length === 1 ? "article" : "articles"}
+              {posts.length === 1 ? "article" : "articles"}
             </span>
             <span className="text-stone-300 dark:text-stone-700">·</span>
             <span>
@@ -495,27 +578,33 @@ const Sitemap = () => {
           <h3 className="font-serif text-xl md:text-2xl font-bold text-stone-900 dark:text-stone-50 mb-6">
             Every section in the journal
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-4">
-            {categories.map((c) => {
-              const count = allPosts.filter(
-                (p) => p.categoryId === c.id
-              ).length;
-              return (
-                <Link
-                  key={c.id}
-                  to={`/blog/category/${c.slug || slugify(c.name)}`}
-                  className="group flex items-baseline justify-between gap-3 py-2 border-b border-stone-100 dark:border-stone-900 hover:border-stone-300 dark:hover:border-stone-700 transition"
-                >
-                  <span className="font-serif text-base text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition">
-                    {c.name}
-                  </span>
-                  <span className="text-xs text-stone-400 dark:text-stone-600">
-                    {count}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
+          {categories.length === 0 ? (
+            <p className="text-sm text-stone-500 dark:text-stone-500 italic">
+              No sections yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-4">
+              {categories.map((c) => {
+                const count = posts.filter(
+                  (p) => p.categoryId === c.id
+                ).length;
+                return (
+                  <Link
+                    key={c.id}
+                    to={`/blog/category/${c.slug || slugify(c.name)}`}
+                    className="group flex items-baseline justify-between gap-3 py-2 border-b border-stone-100 dark:border-stone-900 hover:border-stone-300 dark:hover:border-stone-700 transition"
+                  >
+                    <span className="font-serif text-base text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition">
+                      {c.name}
+                    </span>
+                    <span className="text-xs text-stone-400 dark:text-stone-600">
+                      {count}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Contributors */}
@@ -526,35 +615,41 @@ const Sitemap = () => {
           <h3 className="font-serif text-xl md:text-2xl font-bold text-stone-900 dark:text-stone-50 mb-6">
             Everyone on the desk
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {authors.map((a) => {
-              const aPosts = allPosts.filter((p) => p.authorId === a.id);
-              return (
-                <Link
-                  key={a.id}
-                  to={`/blog/author/${a.id}`}
-                  className="group flex items-start gap-3 py-3 border-b border-stone-100 dark:border-stone-900 hover:border-stone-300 dark:hover:border-stone-700 transition"
-                >
-                  <Avatar author={a} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-serif text-base text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition">
-                      {a.name}
-                    </p>
-                    <p className="text-xs text-stone-500 mt-0.5 truncate">
-                      {a.role}
-                      {aPosts.length > 0 && (
-                        <>
-                          {" · "}
-                          {aPosts.length}{" "}
-                          {aPosts.length === 1 ? "story" : "stories"}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+          {authors.length === 0 ? (
+            <p className="text-sm text-stone-500 dark:text-stone-500 italic">
+              No contributors yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {authors.map((a) => {
+                const aPosts = posts.filter((p) => p.authorId === a.id);
+                return (
+                  <Link
+                    key={a.id}
+                    to={`/blog/author/${a.id}`}
+                    className="group flex items-start gap-3 py-3 border-b border-stone-100 dark:border-stone-900 hover:border-stone-300 dark:hover:border-stone-700 transition"
+                  >
+                    <Avatar author={a} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-serif text-base text-stone-900 dark:text-stone-100 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition">
+                        {a.name}
+                      </p>
+                      <p className="text-xs text-stone-500 mt-0.5 truncate">
+                        {a.role}
+                        {aPosts.length > 0 && (
+                          <>
+                            {" · "}
+                            {aPosts.length}{" "}
+                            {aPosts.length === 1 ? "story" : "stories"}
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Topics */}
@@ -566,18 +661,24 @@ const Sitemap = () => {
           <h3 className="font-serif text-xl md:text-2xl font-bold text-stone-900 dark:text-stone-50 mb-6">
             Every tag the journal has used
           </h3>
-          <div className="flex flex-wrap gap-2">
-            {allTags.map(({ name, count }) => (
-              <Link
-                key={name}
-                to={`/blog/tag/${slugify(name)}`}
-                className="inline-flex items-baseline gap-1.5 px-3.5 py-2 rounded-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 text-sm font-medium hover:border-stone-900 dark:hover:border-stone-100 hover:text-stone-900 dark:hover:text-stone-100 transition"
-              >
-                <span>#{name}</span>
-                <span className="text-[10px] text-stone-400">{count}</span>
-              </Link>
-            ))}
-          </div>
+          {allTags.length === 0 ? (
+            <p className="text-sm text-stone-500 dark:text-stone-500 italic">
+              No tags yet.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {allTags.map(({ name, count }) => (
+                <Link
+                  key={name}
+                  to={`/blog/tag/${slugify(name)}`}
+                  className="inline-flex items-baseline gap-1.5 px-3.5 py-2 rounded-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 text-sm font-medium hover:border-stone-900 dark:hover:border-stone-100 hover:text-stone-900 dark:hover:text-stone-100 transition"
+                >
+                  <span>#{name}</span>
+                  <span className="text-[10px] text-stone-400">{count}</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -593,71 +694,77 @@ const Sitemap = () => {
             its stories.
           </p>
 
-          <div className="border-t border-stone-200 dark:border-stone-800">
-            {postsByCategory.map(({ category: cat, posts }) => {
-              const isOpen = openSection === cat.id;
-              return (
-                <div
-                  key={cat.id}
-                  className="border-b border-stone-200 dark:border-stone-800"
-                >
-                  <button
-                    onClick={() => setOpenSection(isOpen ? null : cat.id)}
-                    className="w-full flex items-center justify-between gap-4 py-5 text-left group"
+          {postsByCategory.length === 0 ? (
+            <p className="text-sm text-stone-500 dark:text-stone-500 italic">
+              No published articles yet.
+            </p>
+          ) : (
+            <div className="border-t border-stone-200 dark:border-stone-800">
+              {postsByCategory.map(({ category: cat, posts: catPosts }) => {
+                const isOpen = openSection === cat.id;
+                return (
+                  <div
+                    key={cat.id}
+                    className="border-b border-stone-200 dark:border-stone-800"
                   >
-                    <div className="flex items-baseline gap-4 min-w-0">
-                      <h3 className="font-serif text-xl md:text-2xl font-bold text-stone-900 dark:text-stone-50 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition">
-                        {cat.name}
-                      </h3>
-                      <span className="text-xs text-stone-500 dark:text-stone-500">
-                        {posts.length}{" "}
-                        {posts.length === 1 ? "story" : "stories"}
+                    <button
+                      onClick={() => setOpenSection(isOpen ? null : cat.id)}
+                      className="w-full flex items-center justify-between gap-4 py-5 text-left group"
+                    >
+                      <div className="flex items-baseline gap-4 min-w-0">
+                        <h3 className="font-serif text-xl md:text-2xl font-bold text-stone-900 dark:text-stone-50 group-hover:text-rose-700 dark:group-hover:text-rose-400 transition">
+                          {cat.name}
+                        </h3>
+                        <span className="text-xs text-stone-500 dark:text-stone-500">
+                          {catPosts.length}{" "}
+                          {catPosts.length === 1 ? "story" : "stories"}
+                        </span>
+                      </div>
+                      <span className="text-stone-400 flex-shrink-0">
+                        {isOpen ? "−" : "+"}
                       </span>
-                    </div>
-                    <span className="text-stone-400 flex-shrink-0">
-                      {isOpen ? "−" : "+"}
-                    </span>
-                  </button>
+                    </button>
 
-                  <AnimatePresence initial={false}>
-                    {isOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <ul className="pb-6 space-y-3">
-                          {posts.map((p) => {
-                            const a = authors.find(
-                              (x) => x.id === p.authorId
-                            );
-                            return (
-                              <li
-                                key={p.id}
-                                className="flex items-baseline justify-between gap-4"
-                              >
-                                <Link
-                                  to={`/blog/${p.slug}`}
-                                  className="text-sm text-stone-700 dark:text-stone-300 hover:text-rose-600 dark:hover:text-rose-400 transition"
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <ul className="pb-6 space-y-3">
+                            {catPosts.map((p) => {
+                              const a = authors.find(
+                                (x) => x.id === p.authorId
+                              );
+                              return (
+                                <li
+                                  key={p.id}
+                                  className="flex items-baseline justify-between gap-4"
                                 >
-                                  {p.title}
-                                </Link>
-                                <span className="text-xs text-stone-400 dark:text-stone-600 whitespace-nowrap">
-                                  {a?.name?.split(" ").slice(-1)[0]} ·{" "}
-                                  {p.readingTime} min
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
-          </div>
+                                  <Link
+                                    to={`/blog/${p.slug || p.id}`}
+                                    className="text-sm text-stone-700 dark:text-stone-300 hover:text-rose-600 dark:hover:text-rose-400 transition"
+                                  >
+                                    {p.title}
+                                  </Link>
+                                  <span className="text-xs text-stone-400 dark:text-stone-600 whitespace-nowrap">
+                                    {a?.name?.split(" ").slice(-1)[0] || "—"} ·{" "}
+                                    {p.readingTime || 5} min
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
