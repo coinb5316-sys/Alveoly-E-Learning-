@@ -20,6 +20,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProtectedRoute from "./components/ProtectedRoutes";
 import CookieBanner from "./components/CookieBanner";
 import SplashScreen from "./components/SplashScreen";
+import ScrollToTop from "./components/ScrollToTop";
 
 /* ---------- Student ---------- */
 import StudentDashboard from "./pages/StudentDashboard";
@@ -207,6 +208,9 @@ function App() {
           pauseOnHover
           theme="light"
         />
+
+        {/* Scrolls to top on every route change */}
+        <ScrollToTop />
 
         <Routes>
           {/* ============================================================

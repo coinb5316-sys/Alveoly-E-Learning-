@@ -1,4 +1,4 @@
-// src/pages/blog/BlogPost.jsx — WIRED TO LIVE API (with gallery)
+// src/pages/blog/BlogPost.jsx — WIRED TO LIVE API (with gallery + contact popup)
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,8 +9,24 @@ import {
   FaWhatsapp, FaEnvelope, FaHome, FaSearch, FaChevronDown, FaChevronUp,
   FaListUl, FaTimes, FaMicrophone, FaVideo, FaStream, FaInstagram,
   FaYoutube, FaRss, FaArrowUp, FaBookOpen, FaGraduationCap,
+  FaGraduationCap as FaGrad, FaComments,
 } from "react-icons/fa";
 import { publicBlogAPI as blogAPI } from "../../api/blogApi";
+
+/* ============================================================
+   CONSTANTS
+============================================================ */
+
+// Same admin number used on the homepage WhatsApp button.
+const ADMIN_WHATSAPP_NUMBER = "233549556116";
+
+// How long (in ms) before the popup auto-shows even if the reader
+// hasn't reached the end of the article. 45 seconds.
+const POPUP_DELAY_MS = 45000;
+
+// sessionStorage key prefix. Each post gets its own key, so a reader
+// who jumps between posts will see the popup once per post per session.
+const POPUP_SESSION_KEY_PREFIX = "alveoly_blog_popup_seen_";
 
 /* ============================================================
    UTILITIES
@@ -523,7 +539,6 @@ const GalleryLightbox = ({ images, index, onClose, onNavigate }) => {
           className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center"
           onClick={onClose}
         >
-          {/* Close */}
           <button
             onClick={onClose}
             className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition z-10"
@@ -532,12 +547,10 @@ const GalleryLightbox = ({ images, index, onClose, onNavigate }) => {
             <FaTimes />
           </button>
 
-          {/* Counter */}
           <div className="absolute top-4 left-4 px-3 py-1.5 rounded-full bg-white/10 text-white text-xs font-medium tracking-wider">
             {index + 1} / {images.length}
           </div>
 
-          {/* Prev */}
           {images.length > 1 && (
             <button
               onClick={(e) => {
@@ -551,7 +564,6 @@ const GalleryLightbox = ({ images, index, onClose, onNavigate }) => {
             </button>
           )}
 
-          {/* Image */}
           <motion.img
             key={index}
             initial={{ opacity: 0, scale: 0.98 }}
@@ -563,7 +575,6 @@ const GalleryLightbox = ({ images, index, onClose, onNavigate }) => {
             onClick={(e) => e.stopPropagation()}
           />
 
-          {/* Next */}
           {images.length > 1 && (
             <button
               onClick={(e) => {
@@ -577,7 +588,6 @@ const GalleryLightbox = ({ images, index, onClose, onNavigate }) => {
             </button>
           )}
 
-          {/* Thumbnails strip */}
           {images.length > 1 && (
             <div
               className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-2 rounded-full bg-white/10 backdrop-blur-sm max-w-[90vw] overflow-x-auto"
@@ -594,11 +604,7 @@ const GalleryLightbox = ({ images, index, onClose, onNavigate }) => {
                   }`}
                   aria-label={`View image ${i + 1}`}
                 >
-                  <img
-                    src={src}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={src} alt="" className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
@@ -614,8 +620,6 @@ const PostGallery = ({ images, title }) => {
 
   if (!Array.isArray(images) || images.length === 0) return null;
 
-  // Responsive column strategy: 1 image full width, 2 side by side,
-  // 3 or 4 as a row on desktop, more as a grid.
   const count = images.length;
   const gridCols =
     count === 1
@@ -676,6 +680,149 @@ const PostGallery = ({ images, title }) => {
         onNavigate={(next) => setLightboxIndex(next)}
       />
     </>
+  );
+};
+
+/* ============================================================
+   CONTACT ADMIN POPUP
+============================================================ */
+
+const ContactAdminPopup = ({ open, onClose, postTitle }) => {
+  // Build the WhatsApp link with a nice prefilled message
+  const message = encodeURIComponent(
+    postTitle
+      ? `Hi! I just read "${postTitle}" on The Alveoly Journal and I'd like to learn more. Could you share detailed tutorials with me?`
+      : "Hi! I just finished reading an article on The Alveoly Journal and I'd like to learn more. Could you share detailed tutorials with me?"
+  );
+
+  const whatsappUrl = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${message}`;
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    // Lock scroll while open
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  const handleWhatsApp = () => {
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    // Close after a short delay so the user sees the click registered
+    setTimeout(() => onClose(), 400);
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+            className="fixed inset-0 z-[120] bg-stone-900/60 backdrop-blur-sm"
+            aria-hidden="true"
+          />
+
+          {/* Card — slides up on mobile, centered on desktop */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 40 }}
+            transition={{ type: "spring", damping: 26, stiffness: 280 }}
+            className="
+              fixed z-[121]
+              bottom-0 left-0 right-0
+              md:bottom-auto md:top-1/2 md:left-1/2 md:right-auto
+              md:-translate-x-1/2 md:-translate-y-1/2
+              w-full md:max-w-md
+              rounded-t-3xl md:rounded-3xl
+              bg-white dark:bg-stone-900
+              border border-stone-200 dark:border-stone-800
+              shadow-2xl
+              overflow-hidden
+            "
+            role="dialog"
+            aria-modal="true"
+            aria-label="Learn more with the admin"
+          >
+            {/* Close */}
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full flex items-center justify-center text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
+              aria-label="Close"
+            >
+              <FaTimes className="w-4 h-4" />
+            </button>
+
+            {/* Header with gradient accent */}
+            <div className="relative px-6 pt-8 pb-6 text-center bg-gradient-to-b from-amber-50 to-white dark:from-stone-800 dark:to-stone-900">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-[#25D366] flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                <FaWhatsapp className="text-white text-3xl" />
+              </div>
+
+              <p className="mt-4 text-xs uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400 font-semibold">
+                Ready for the next step?
+              </p>
+
+              <h3 className="mt-2 font-serif text-2xl font-bold text-stone-900 dark:text-stone-50 leading-tight">
+                Want to learn more?
+              </h3>
+
+              <p className="mt-3 text-sm text-stone-600 dark:text-stone-400 leading-relaxed max-w-xs mx-auto">
+                Reach out to the admin on WhatsApp for detailed tutorials,
+                guided practice, and personalised support for this topic.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 pb-6 space-y-2.5">
+              <button
+                onClick={handleWhatsApp}
+                className="
+                  w-full inline-flex items-center justify-center gap-2.5
+                  px-5 py-3.5 rounded-full
+                  bg-[#25D366] hover:bg-[#1fb757]
+                  text-white font-semibold text-sm
+                  transition-colors
+                  shadow-lg shadow-emerald-500/20
+                "
+              >
+                <FaWhatsapp className="text-lg" />
+                Chat with Admin on WhatsApp
+              </button>
+
+              <button
+                onClick={onClose}
+                className="
+                  w-full inline-flex items-center justify-center
+                  px-5 py-3 rounded-full
+                  text-stone-600 dark:text-stone-400
+                  hover:text-stone-900 dark:hover:text-stone-100
+                  text-sm font-medium
+                  transition-colors
+                "
+              >
+                Maybe later
+              </button>
+
+              <p className="text-[11px] text-center text-stone-400 dark:text-stone-500 pt-1">
+                We typically reply within a few minutes during working hours.
+              </p>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 };
 
@@ -811,6 +958,7 @@ const CommentSection = ({ postId, initialComments }) => {
 const BlogPost = () => {
   const { slug } = useParams();
   const contentRef = useRef(null);
+  const endOfArticleRef = useRef(null);
 
   const [post, setPost] = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -820,6 +968,10 @@ const BlogPost = () => {
   const [showMobileTOC, setShowMobileTOC] = useState(false);
   const [relatedPosts, setRelatedPosts] = useState([]);
   const [comments, setComments] = useState([]);
+
+  // Contact popup state
+  const [showContactPopup, setShowContactPopup] = useState(false);
+  const [popupDismissed, setPopupDismissed] = useState(false);
 
   /* ---------- Load ---------- */
   useEffect(() => {
@@ -858,6 +1010,66 @@ const BlogPost = () => {
     load();
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [slug]);
+
+  /* ---------- Contact popup: timers + scroll trigger ---------- */
+
+  // 1. Session-storage check: don't show again in the same session
+  useEffect(() => {
+    if (!slug) return;
+    try {
+      const key = `${POPUP_SESSION_KEY_PREFIX}${slug}`;
+      const seen = sessionStorage.getItem(key);
+      if (seen === "1") setPopupDismissed(true);
+    } catch {
+      /* sessionStorage may be unavailable (private mode) — noop */
+    }
+  }, [slug]);
+
+  // 2. Show after POPUP_DELAY_MS if the reader hasn't already reached the end
+  useEffect(() => {
+    if (popupDismissed || loading || notFound || !post) return;
+
+    const timer = setTimeout(() => {
+      setShowContactPopup(true);
+    }, POPUP_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [popupDismissed, loading, notFound, post]);
+
+  // 3. Show when the reader reaches the end of the article
+  useEffect(() => {
+    if (popupDismissed || loading || notFound || !post) return;
+    const el = endOfArticleRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setShowContactPopup(true);
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: 0.4 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [popupDismissed, loading, notFound, post]);
+
+  // 4. When the popup closes, mark it seen for this session + this post
+  const dismissContactPopup = () => {
+    setShowContactPopup(false);
+    setPopupDismissed(true);
+    try {
+      if (slug) {
+        sessionStorage.setItem(`${POPUP_SESSION_KEY_PREFIX}${slug}`, "1");
+      }
+    } catch {
+      /* noop */
+    }
+  };
 
   /* ---------- Derived ---------- */
   const author = post?.author;
@@ -1317,6 +1529,14 @@ const BlogPost = () => {
 
         <CommentSection postId={post.id} initialComments={comments} />
 
+        {/* END-OF-ARTICLE TRIGGER (invisible)
+            When this scrolls into view, the contact popup shows. */}
+        <div
+          ref={endOfArticleRef}
+          aria-hidden="true"
+          className="h-1 w-full"
+        />
+
         <div className="mt-16 flex justify-center">
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -1329,6 +1549,13 @@ const BlogPost = () => {
       </div>
 
       <JournalFooter />
+
+      {/* CONTACT ADMIN POPUP */}
+      <ContactAdminPopup
+        open={showContactPopup}
+        onClose={dismissContactPopup}
+        postTitle={post?.title}
+      />
     </div>
   );
 };
