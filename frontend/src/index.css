@@ -428,6 +428,9 @@
   font-kerning: normal;
   font-variant-ligatures: common-ligatures;
   font-feature-settings: 'kern' 1, 'liga' 1, 'onum' 1;
+  /* Prevent content from being clipped on mobile */
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 @media (min-width: 768px) {
@@ -574,11 +577,14 @@
 .prose-editorial ol {
   margin: 0 0 1.4em 0;
   padding-left: 1.6em;
+  /* Never clip list content on mobile */
+  overflow: visible;
 }
 
 .prose-editorial li {
   margin: 0 0 0.5em 0;
   line-height: 1.65;
+  overflow: visible;
 }
 
 .prose-editorial li:last-child {
@@ -616,21 +622,26 @@
   list-style-type: lower-roman;
 }
 
-/* MCQ option lists — bulletproof A./B./C./D. letters
-   The letters are literal content inside <strong> tags, so they render
-   regardless of what a CSS reset does to <ol> markers.
-   The negative text-indent creates a clean hanging indent. */
+/* ============================================================
+   MCQ OPTIONS — bulletproof on every device.
+   Uses flex layout instead of text-indent so nothing can be
+   clipped by the container on mobile Safari / Chrome.
+   ============================================================ */
+
 .prose-editorial ul.mcq-options {
-  list-style: none;
-  padding-left: 0;
-  margin: 0.75em 0 1.4em 0;
+  list-style: none !important;
+  padding-left: 0 !important;
+  margin: 1em 0 1.4em 0;
 }
 
 .prose-editorial ul.mcq-options li {
-  margin: 0 0 0.5em 0;
-  padding-left: 2em;
-  text-indent: -2em;
-  text-align: left;
+  display: flex !important;
+  align-items: flex-start;
+  gap: 0.6em;
+  margin: 0 0 0.6em 0;
+  padding: 0 !important;
+  text-indent: 0 !important;
+  text-align: left !important;
   line-height: 1.65;
   color: inherit;
 }
@@ -639,15 +650,30 @@
   margin-bottom: 0;
 }
 
-.prose-editorial ul.mcq-options li strong {
+/* The letter — A. B. C. D. — gets a fixed minimum width so all
+   options align cleanly regardless of how long the option text is. */
+.prose-editorial ul.mcq-options li > strong:first-child {
   display: inline-block;
-  min-width: 1.5em;
+  flex-shrink: 0;
+  min-width: 1.4em;
   font-weight: 700;
   color: #0f0f0f;
+  text-indent: 0 !important;
+  white-space: nowrap;
 }
 
-.dark .prose-editorial ul.mcq-options li strong {
+.dark .prose-editorial ul.mcq-options li > strong:first-child {
   color: #fafaf9;
+}
+
+/* Kill any marker rendering that some resets or mobile browsers
+   apply to list items inside the article. */
+.prose-editorial ul.mcq-options li::marker {
+  content: none !important;
+}
+
+.prose-editorial ul.mcq-options li::before {
+  content: none !important;
 }
 
 /* Optional: the "Answer:" line that follows each MCQ */
@@ -744,6 +770,82 @@
 
 .dark .prose-editorial figcaption {
   color: #a8a29e;
+}
+
+/* ============================================================
+   JOURNAL TABLES
+   Styled to match the AJA / OJS default table look:
+   thin borders, light header fill, generous cell padding.
+   ============================================================ */
+
+.prose-editorial table {
+  width: 100%;
+  margin: 2em 0;
+  border-collapse: collapse;
+  font-size: 0.95em;
+  line-height: 1.5;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+  /* Horizontal scroll on mobile so 4-col tables don't overflow */
+  display: block;
+  overflow-x: auto;
+  white-space: normal;
+}
+
+@media (min-width: 640px) {
+  .prose-editorial table {
+    display: table;
+    overflow-x: visible;
+  }
+}
+
+.prose-editorial thead {
+  background: #f5f5f4;
+}
+
+.dark .prose-editorial thead {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.prose-editorial th,
+.prose-editorial td {
+  padding: 0.75em 1em;
+  text-align: left;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  vertical-align: top;
+}
+
+.dark .prose-editorial th,
+.dark .prose-editorial td {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.prose-editorial th {
+  font-family: 'Charter', 'Iowan Old Style', Georgia, serif;
+  font-weight: 700;
+  color: #0f0f0f;
+  letter-spacing: -0.005em;
+}
+
+.dark .prose-editorial th {
+  color: #fafaf9;
+}
+
+.prose-editorial tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.dark .prose-editorial tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.prose-editorial tbody tr:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.dark .prose-editorial tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* Horizontal rule — decorative diamond */
